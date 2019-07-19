@@ -1,0 +1,435 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>tcp_vtw.h source code [netbsd/objdir.amd64/destdir.amd64/usr/include/netinet/tcp_vtw.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="fatp_ctl,fatp_mi,vestigial_inpcb,vtw_common,vtw_ctl,vtw_stats,vtw_v4,vtw_v6 "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/objdir.amd64/destdir.amd64/usr/include/netinet/tcp_vtw.h'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>objdir.amd64</a>/<a href='../../..'>destdir.amd64</a>/<a href='../..'>usr</a>/<a href='..'>include</a>/<a href='./'>netinet</a>/<a href='tcp_vtw.h.html'>tcp_vtw.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: tcp_vtw.h,v 1.9 2018/04/19 21:21:44 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td><i>/*</i></td></tr>
+<tr><th id="3">3</th><td><i> * Copyright (c) 2011 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="4">4</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="7">7</th><td><i> * by Coyote Point Systems, Inc.</i></td></tr>
+<tr><th id="8">8</th><td><i> *</i></td></tr>
+<tr><th id="9">9</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="10">10</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="11">11</th><td><i> * are met:</i></td></tr>
+<tr><th id="12">12</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="13">13</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="14">14</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="15">15</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="16">16</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="17">17</th><td><i> *</i></td></tr>
+<tr><th id="18">18</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="19">19</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="20">20</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="21">21</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="22">22</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="23">23</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="24">24</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="25">25</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="26">26</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="27">27</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="28">28</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="29">29</th><td><i> */</i></td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><i>/*</i></td></tr>
+<tr><th id="32">32</th><td><i> * Vestigial time-wait.</i></td></tr>
+<tr><th id="33">33</th><td><i> *</i></td></tr>
+<tr><th id="34">34</th><td><i> * This implementation uses cache-efficient techniques, which will</i></td></tr>
+<tr><th id="35">35</th><td><i> * appear somewhat peculiar.  The main philosophy is to optimise the</i></td></tr>
+<tr><th id="36">36</th><td><i> * amount of information available within a cache line.  Cache miss is</i></td></tr>
+<tr><th id="37">37</th><td><i> * expensive.  So we employ ad-hoc techniques to pull a series of</i></td></tr>
+<tr><th id="38">38</th><td><i> * linked-list follows into a cache line.  One cache line, multiple</i></td></tr>
+<tr><th id="39">39</th><td><i> * linked-list equivalents.</i></td></tr>
+<tr><th id="40">40</th><td><i> *</i></td></tr>
+<tr><th id="41">41</th><td><i> * One such ad-hoc technique is fat pointers.  Additional degrees of</i></td></tr>
+<tr><th id="42">42</th><td><i> * ad-hoqueness result from having to hand tune it for pointer size</i></td></tr>
+<tr><th id="43">43</th><td><i> * and for cache line size.</i></td></tr>
+<tr><th id="44">44</th><td><i> *</i></td></tr>
+<tr><th id="45">45</th><td><i> * The 'fat pointer' approach aggregates, for x86_32, 15 linked-list</i></td></tr>
+<tr><th id="46">46</th><td><i> * data structures into one cache line.  The additional 32 bits in the</i></td></tr>
+<tr><th id="47">47</th><td><i> * cache line are used for linking fat pointers, and for</i></td></tr>
+<tr><th id="48">48</th><td><i> * allocation/bookkeeping.</i></td></tr>
+<tr><th id="49">49</th><td><i> *</i></td></tr>
+<tr><th id="50">50</th><td><i> * The 15 32-bit tags encode the pointers to the linked list elements,</i></td></tr>
+<tr><th id="51">51</th><td><i> * and also encode the results of a search comparison.</i></td></tr>
+<tr><th id="52">52</th><td><i> *</i></td></tr>
+<tr><th id="53">53</th><td><i> * First, some more assumptions/restrictions.</i></td></tr>
+<tr><th id="54">54</th><td><i> *</i></td></tr>
+<tr><th id="55">55</th><td><i> * All the fat pointers are from a contiguous allocation arena.  Thus,</i></td></tr>
+<tr><th id="56">56</th><td><i> * we can refer to them by offset from a base, not as full pointers.</i></td></tr>
+<tr><th id="57">57</th><td><i> *</i></td></tr>
+<tr><th id="58">58</th><td><i> * All the linked list data elements are also from a contiguous</i></td></tr>
+<tr><th id="59">59</th><td><i> * allocation arena, again so that we can refer to them as offset from</i></td></tr>
+<tr><th id="60">60</th><td><i> * a base.</i></td></tr>
+<tr><th id="61">61</th><td><i> *</i></td></tr>
+<tr><th id="62">62</th><td><i> * In order to add a data element to a fat pointer, a key value is</i></td></tr>
+<tr><th id="63">63</th><td><i> * computed, based on unique data within the data element.  It is the</i></td></tr>
+<tr><th id="64">64</th><td><i> * linear searching of the linked lists of these elements based on</i></td></tr>
+<tr><th id="65">65</th><td><i> * these unique data that are being optimised here.</i></td></tr>
+<tr><th id="66">66</th><td><i> *</i></td></tr>
+<tr><th id="67">67</th><td><i> * Lets call the function that computes the key k(e), where e is the</i></td></tr>
+<tr><th id="68">68</th><td><i> * data element.  In this example, k(e) returns 32-bits.</i></td></tr>
+<tr><th id="69">69</th><td><i> *</i></td></tr>
+<tr><th id="70">70</th><td><i> * Consider a set E (say of order 15) of data elements.  Let K be</i></td></tr>
+<tr><th id="71">71</th><td><i> * the set of the k(e) for e in E.</i></td></tr>
+<tr><th id="72">72</th><td><i> *</i></td></tr>
+<tr><th id="73">73</th><td><i> * Let O be the set of the offsets from the base of the data elements in E.</i></td></tr>
+<tr><th id="74">74</th><td><i> *</i></td></tr>
+<tr><th id="75">75</th><td><i> * For each x in K, for each matching o in O, let t be x ^ o.  These</i></td></tr>
+<tr><th id="76">76</th><td><i> * are the tags. (More or less).</i></td></tr>
+<tr><th id="77">77</th><td><i> *</i></td></tr>
+<tr><th id="78">78</th><td><i> * In order to search all the data elements in E, we compute the</i></td></tr>
+<tr><th id="79">79</th><td><i> * search key, and one at a time, XOR the key into the tags.  If any</i></td></tr>
+<tr><th id="80">80</th><td><i> * result is a valid data element index, we have a possible match.  If</i></td></tr>
+<tr><th id="81">81</th><td><i> * not, there is no match.</i></td></tr>
+<tr><th id="82">82</th><td><i> *</i></td></tr>
+<tr><th id="83">83</th><td><i> * The no-match cases mean we do not have to de-reference the pointer</i></td></tr>
+<tr><th id="84">84</th><td><i> * to the data element in question.  We save cache miss penalty and</i></td></tr>
+<tr><th id="85">85</th><td><i> * cache load decreases.  Only in the case of a valid looking data</i></td></tr>
+<tr><th id="86">86</th><td><i> * element index, do we have to look closer.</i></td></tr>
+<tr><th id="87">87</th><td><i> *</i></td></tr>
+<tr><th id="88">88</th><td><i> * Thus, in the absence of false positives, 15 data elements can be</i></td></tr>
+<tr><th id="89">89</th><td><i> * searched with one cache line fill, as opposed to 15 cache line</i></td></tr>
+<tr><th id="90">90</th><td><i> * fills for the usual implementation.</i></td></tr>
+<tr><th id="91">91</th><td><i> *</i></td></tr>
+<tr><th id="92">92</th><td><i> * The vestigial time waits (vtw_t), the data elements in the above, are</i></td></tr>
+<tr><th id="93">93</th><td><i> * searched by faddr, fport, laddr, lport.  The key is a function of</i></td></tr>
+<tr><th id="94">94</th><td><i> * these values.</i></td></tr>
+<tr><th id="95">95</th><td><i> *</i></td></tr>
+<tr><th id="96">96</th><td><i> * We hash these keys into the traditional hash chains to reduce the</i></td></tr>
+<tr><th id="97">97</th><td><i> * search time, and use fat pointers to reduce the cache impacts of</i></td></tr>
+<tr><th id="98">98</th><td><i> * searching.</i></td></tr>
+<tr><th id="99">99</th><td><i> *</i></td></tr>
+<tr><th id="100">100</th><td><i> * The vtw_t are, per requirement, in a contiguous chunk.  Allocation</i></td></tr>
+<tr><th id="101">101</th><td><i> * is done with a clock hand, and all vtw_t within one allocation</i></td></tr>
+<tr><th id="102">102</th><td><i> * domain have the same lifetime, so they will always be sorted by</i></td></tr>
+<tr><th id="103">103</th><td><i> * age.</i></td></tr>
+<tr><th id="104">104</th><td><i> *</i></td></tr>
+<tr><th id="105">105</th><td><i> * A vtw_t will be allocated, timestamped, and have a fixed future</i></td></tr>
+<tr><th id="106">106</th><td><i> * expiration.  It will be added to a hash bucket implemented with fat</i></td></tr>
+<tr><th id="107">107</th><td><i> * pointers, which means that a cache line will be allocated in the</i></td></tr>
+<tr><th id="108">108</th><td><i> * hash bucket, placed at the head (more recent in time) and the vtw_t</i></td></tr>
+<tr><th id="109">109</th><td><i> * will be added to this.  As more entries are added, the fat pointer</i></td></tr>
+<tr><th id="110">110</th><td><i> * cache line will fill, requiring additional cache lines for fat</i></td></tr>
+<tr><th id="111">111</th><td><i> * pointers to be allocated. These will be added at the head, and the</i></td></tr>
+<tr><th id="112">112</th><td><i> * aged entries will hang down, tapeworm like.  As the vtw_t entries</i></td></tr>
+<tr><th id="113">113</th><td><i> * expire, the corresponding slot in the fat pointer will be</i></td></tr>
+<tr><th id="114">114</th><td><i> * reclaimed, and eventually the cache line will completely empty and</i></td></tr>
+<tr><th id="115">115</th><td><i> * be re-cycled, if not at the head of the chain.</i></td></tr>
+<tr><th id="116">116</th><td><i> *</i></td></tr>
+<tr><th id="117">117</th><td><i> * At times, a time-wait timer is restarted.  This corresponds to</i></td></tr>
+<tr><th id="118">118</th><td><i> * deleting the current entry and re-adding it.</i></td></tr>
+<tr><th id="119">119</th><td><i> *</i></td></tr>
+<tr><th id="120">120</th><td><i> * Most of the time, they are just placed here to die.</i></td></tr>
+<tr><th id="121">121</th><td><i> */</i></td></tr>
+<tr><th id="122">122</th><td><u>#<span data-ppcond="122">ifndef</span> <span class="macro" data-ref="_M/_NETINET_TCP_VTW_H">_NETINET_TCP_VTW_H</span></u></td></tr>
+<tr><th id="123">123</th><td><u>#define <dfn class="macro" id="_M/_NETINET_TCP_VTW_H" data-ref="_M/_NETINET_TCP_VTW_H">_NETINET_TCP_VTW_H</dfn></u></td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td><u>#include <a href="../sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="126">126</th><td><u>#include <a href="../sys/socket.h.html">&lt;sys/socket.h&gt;</a></u></td></tr>
+<tr><th id="127">127</th><td><u>#include <a href="../sys/sysctl.h.html">&lt;sys/sysctl.h&gt;</a></u></td></tr>
+<tr><th id="128">128</th><td><u>#include <a href="../net/if.h.html">&lt;net/if.h&gt;</a></u></td></tr>
+<tr><th id="129">129</th><td><u>#include <a href="in.h.html">&lt;netinet/in.h&gt;</a></u></td></tr>
+<tr><th id="130">130</th><td><u>#include <a href="in_systm.h.html">&lt;netinet/in_systm.h&gt;</a></u></td></tr>
+<tr><th id="131">131</th><td><u>#include <a href="ip.h.html">&lt;netinet/ip.h&gt;</a></u></td></tr>
+<tr><th id="132">132</th><td><u>#include <a href="in_pcb.h.html">&lt;netinet/in_pcb.h&gt;</a></u></td></tr>
+<tr><th id="133">133</th><td><u>#include <a href="in_var.h.html">&lt;netinet/in_var.h&gt;</a></u></td></tr>
+<tr><th id="134">134</th><td><u>#include <a href="ip_var.h.html">&lt;netinet/ip_var.h&gt;</a></u></td></tr>
+<tr><th id="135">135</th><td><u>#include <a href="in.h.html">&lt;netinet/in.h&gt;</a></u></td></tr>
+<tr><th id="136">136</th><td><u>#include <a href="tcp.h.html">&lt;netinet/tcp.h&gt;</a></u></td></tr>
+<tr><th id="137">137</th><td><u>#include <a href="tcp_timer.h.html">&lt;netinet/tcp_timer.h&gt;</a></u></td></tr>
+<tr><th id="138">138</th><td><u>#include <a href="tcp_var.h.html">&lt;netinet/tcp_var.h&gt;</a></u></td></tr>
+<tr><th id="139">139</th><td><u>#include <a href="../netinet6/in6.h.html">&lt;netinet6/in6.h&gt;</a></u></td></tr>
+<tr><th id="140">140</th><td><u>#include <a href="ip6.h.html">&lt;netinet/ip6.h&gt;</a></u></td></tr>
+<tr><th id="141">141</th><td><u>#include <a href="../netinet6/ip6_var.h.html">&lt;netinet6/ip6_var.h&gt;</a></u></td></tr>
+<tr><th id="142">142</th><td><u>#include <a href="../netinet6/in6_pcb.h.html">&lt;netinet6/in6_pcb.h&gt;</a></u></td></tr>
+<tr><th id="143">143</th><td><u>#include <a href="../netinet6/ip6_var.h.html">&lt;netinet6/ip6_var.h&gt;</a></u></td></tr>
+<tr><th id="144">144</th><td><u>#include <a href="../netinet6/in6_var.h.html">&lt;netinet6/in6_var.h&gt;</a></u></td></tr>
+<tr><th id="145">145</th><td><u>#include <a href="icmp6.h.html">&lt;netinet/icmp6.h&gt;</a></u></td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><u>#define	<dfn class="macro" id="_M/VTW_NCLASS" data-ref="_M/VTW_NCLASS">VTW_NCLASS</dfn>	(1+3)		/* # different classes */</u></td></tr>
+<tr><th id="148">148</th><td></td></tr>
+<tr><th id="149">149</th><td><i>/*</i></td></tr>
+<tr><th id="150">150</th><td><i> * fat pointers, MI.</i></td></tr>
+<tr><th id="151">151</th><td><i> */</i></td></tr>
+<tr><th id="152">152</th><td><b>struct</b> <a class="type" href="#fatp_mi" title='fatp_mi' data-ref="fatp_mi" data-ref-filename="fatp_mi">fatp_mi</a>;</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><b>typedef</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="typedef" id="fatp_word_t" title='fatp_word_t' data-type='uint32_t' data-ref="fatp_word_t" data-ref-filename="fatp_word_t">fatp_word_t</dfn>;</td></tr>
+<tr><th id="155">155</th><td></td></tr>
+<tr><th id="156">156</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#fatp_mi" title='fatp_mi' data-ref="fatp_mi" data-ref-filename="fatp_mi">fatp_mi</a>	<dfn class="typedef" id="fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</dfn>;</td></tr>
+<tr><th id="157">157</th><td></td></tr>
+<tr><th id="158">158</th><td><i>/* Supported cacheline sizes: 32 64 128 bytes.  See fatp_key(),</i></td></tr>
+<tr><th id="159">159</th><td><i> * fatp_slot_from_key(), fatp_xtra[].</i></td></tr>
+<tr><th id="160">160</th><td><i> */</i></td></tr>
+<tr><th id="161">161</th><td><u>#define	<dfn class="macro" id="_M/FATP_NTAGS" data-ref="_M/FATP_NTAGS">FATP_NTAGS</dfn>	(CACHE_LINE_SIZE / sizeof(<a class="typedef" href="#fatp_word_t" title='fatp_word_t' data-type='uint32_t' data-ref="fatp_word_t" data-ref-filename="fatp_word_t">fatp_word_t</a>) - 1)</u></td></tr>
+<tr><th id="162">162</th><td><u>#define	<dfn class="macro" id="_M/FATP_NXT_WIDTH" data-ref="_M/FATP_NXT_WIDTH">FATP_NXT_WIDTH</dfn>	(sizeof(<a class="typedef" href="#fatp_word_t" title='fatp_word_t' data-type='uint32_t' data-ref="fatp_word_t" data-ref-filename="fatp_word_t">fatp_word_t</a>) * NBBY - FATP_NTAGS)</u></td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td><u>#define	<dfn class="macro" id="_M/FATP_MAX" data-ref="_M/FATP_MAX">FATP_MAX</dfn>	(1 &lt;&lt; FATP_NXT_WIDTH)</u></td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td><i>/* Worked example: ULP32 with 64-byte cacheline (32-bit x86):</i></td></tr>
+<tr><th id="167">167</th><td><i> * 15 tags per cacheline.  At most 2^17 fat pointers per fatp_ctl_t.</i></td></tr>
+<tr><th id="168">168</th><td><i> * The comments on the fatp_mi members, below, correspond to the worked</i></td></tr>
+<tr><th id="169">169</th><td><i> * example.</i></td></tr>
+<tr><th id="170">170</th><td><i> */</i></td></tr>
+<tr><th id="171">171</th><td><b>struct</b> <dfn class="type def" id="fatp_mi" title='fatp_mi' data-ref="fatp_mi" data-ref-filename="fatp_mi">fatp_mi</dfn> {</td></tr>
+<tr><th id="172">172</th><td>	<a class="typedef" href="#fatp_word_t" title='fatp_word_t' data-type='uint32_t' data-ref="fatp_word_t" data-ref-filename="fatp_word_t">fatp_word_t</a>	<dfn class="decl field" id="fatp_mi::inuse" title='fatp_mi::inuse' data-ref="fatp_mi::inuse" data-ref-filename="fatp_mi..inuse">inuse</dfn>	: <a class="macro" href="#161" title="(64 / sizeof(fatp_word_t) - 1)" data-ref="_M/FATP_NTAGS">FATP_NTAGS</a>;	<i>/* (1+15)*4 == CL_SIZE */</i></td></tr>
+<tr><th id="173">173</th><td>	<a class="typedef" href="#fatp_word_t" title='fatp_word_t' data-type='uint32_t' data-ref="fatp_word_t" data-ref-filename="fatp_word_t">fatp_word_t</a>	<dfn class="decl field" id="fatp_mi::nxt" title='fatp_mi::nxt' data-ref="fatp_mi::nxt" data-ref-filename="fatp_mi..nxt">nxt</dfn>	: <a class="macro" href="#162" title="(sizeof(fatp_word_t) * 8 - (64 / sizeof(fatp_word_t) - 1))" data-ref="_M/FATP_NXT_WIDTH">FATP_NXT_WIDTH</a>;<i>/* at most 2^17 fat pointers */</i></td></tr>
+<tr><th id="174">174</th><td>	<a class="typedef" href="#fatp_word_t" title='fatp_word_t' data-type='uint32_t' data-ref="fatp_word_t" data-ref-filename="fatp_word_t">fatp_word_t</a>	<dfn class="decl field" id="fatp_mi::tag" title='fatp_mi::tag' data-ref="fatp_mi::tag" data-ref-filename="fatp_mi..tag">tag</dfn>[<a class="macro" href="#161" title="(64 / sizeof(fatp_word_t) - 1)" data-ref="_M/FATP_NTAGS">FATP_NTAGS</a>];	<i>/* 15 tags per CL */</i></td></tr>
+<tr><th id="175">175</th><td>};</td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td><em>static</em> <b>__inline</b> <em>int</em></td></tr>
+<tr><th id="178">178</th><td><dfn class="decl def fn" id="fatp_ntags" title='fatp_ntags' data-ref="fatp_ntags" data-ref-filename="fatp_ntags">fatp_ntags</dfn>(<em>void</em>)</td></tr>
+<tr><th id="179">179</th><td>{</td></tr>
+<tr><th id="180">180</th><td>	<b>return</b> <a class="macro" href="#161" title="(64 / sizeof(fatp_word_t) - 1)" data-ref="_M/FATP_NTAGS">FATP_NTAGS</a>;</td></tr>
+<tr><th id="181">181</th><td>}</td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td><em>static</em> <b>__inline</b> <em>int</em></td></tr>
+<tr><th id="184">184</th><td><dfn class="decl def fn" id="fatp_full" title='fatp_full' data-ref="fatp_full" data-ref-filename="fatp_full">fatp_full</dfn>(<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a> *<dfn class="local col1 decl" id="1fp" title='fp' data-type='fatp_t *' data-ref="1fp" data-ref-filename="1fp">fp</dfn>) </td></tr>
+<tr><th id="185">185</th><td>{</td></tr>
+<tr><th id="186">186</th><td>	<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a> <dfn class="local col2 decl" id="2full" title='full' data-type='fatp_t' data-ref="2full" data-ref-filename="2full">full</dfn>;</td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td>	<a class="local col2 ref" href="#2full" title='full' data-ref="2full" data-ref-filename="2full">full</a>.<a class="ref field" href="#fatp_mi::inuse" title='fatp_mi::inuse' data-ref="fatp_mi::inuse" data-ref-filename="fatp_mi..inuse">inuse</a> = (<var>1U</var> &lt;&lt; <a class="macro" href="#161" title="(64 / sizeof(fatp_word_t) - 1)" data-ref="_M/FATP_NTAGS">FATP_NTAGS</a>) - <var>1U</var>;</td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>	<b>return</b> (<a class="local col1 ref" href="#1fp" title='fp' data-ref="1fp" data-ref-filename="1fp">fp</a>-&gt;<a class="ref field" href="#fatp_mi::inuse" title='fatp_mi::inuse' data-ref="fatp_mi::inuse" data-ref-filename="fatp_mi..inuse">inuse</a> == <a class="local col2 ref" href="#2full" title='full' data-ref="2full" data-ref-filename="2full">full</a>.<a class="ref field" href="#fatp_mi::inuse" title='fatp_mi::inuse' data-ref="fatp_mi::inuse" data-ref-filename="fatp_mi..inuse">inuse</a>);</td></tr>
+<tr><th id="191">191</th><td>}</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td><b>struct</b> <a class="type" href="#vtw_common" title='vtw_common' data-ref="vtw_common" data-ref-filename="vtw_common">vtw_common</a>;</td></tr>
+<tr><th id="194">194</th><td><b>struct</b> <a class="type" href="#vtw_v4" title='vtw_v4' data-ref="vtw_v4" data-ref-filename="vtw_v4">vtw_v4</a>;</td></tr>
+<tr><th id="195">195</th><td><b>struct</b> <a class="type" href="#vtw_v6" title='vtw_v6' data-ref="vtw_v6" data-ref-filename="vtw_v6">vtw_v6</a>;</td></tr>
+<tr><th id="196">196</th><td><b>struct</b> <a class="type" href="#vtw_ctl" title='vtw_ctl' data-ref="vtw_ctl" data-ref-filename="vtw_ctl">vtw_ctl</a>;</td></tr>
+<tr><th id="197">197</th><td></td></tr>
+<tr><th id="198">198</th><td><i class="doc">/*!<span class="command">\brief</span> common to all vtw</i></td></tr>
+<tr><th id="199">199</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="200">200</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="vtw_common" title='vtw_common' data-ref="vtw_common" data-ref-filename="vtw_common"><a class="type" href="#vtw_common" title='vtw_common' data-ref="vtw_common" data-ref-filename="vtw_common">vtw_common</a></dfn> {</td></tr>
+<tr><th id="201">201</th><td>	<b>struct</b> <a class="type" href="../sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a>	<dfn class="decl field" id="vtw_common::expire" title='vtw_common::expire' data-ref="vtw_common::expire" data-ref-filename="vtw_common..expire">expire</dfn>;		<i>/* date of birth+msl */</i></td></tr>
+<tr><th id="202">202</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::key" title='vtw_common::key' data-ref="vtw_common::key" data-ref-filename="vtw_common..key">key</dfn>;		<i>/* hash key: full hash */</i></td></tr>
+<tr><th id="203">203</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::port_key" title='vtw_common::port_key' data-ref="vtw_common::port_key" data-ref-filename="vtw_common..port_key">port_key</dfn>;	<i>/* hash key: local port hash */</i></td></tr>
+<tr><th id="204">204</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::rcv_nxt" title='vtw_common::rcv_nxt' data-ref="vtw_common::rcv_nxt" data-ref-filename="vtw_common..rcv_nxt">rcv_nxt</dfn>;</td></tr>
+<tr><th id="205">205</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::rcv_wnd" title='vtw_common::rcv_wnd' data-ref="vtw_common::rcv_wnd" data-ref-filename="vtw_common..rcv_wnd">rcv_wnd</dfn>;</td></tr>
+<tr><th id="206">206</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::snd_nxt" title='vtw_common::snd_nxt' data-ref="vtw_common::snd_nxt" data-ref-filename="vtw_common..snd_nxt">snd_nxt</dfn>;</td></tr>
+<tr><th id="207">207</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::snd_scale" title='vtw_common::snd_scale' data-ref="vtw_common::snd_scale" data-ref-filename="vtw_common..snd_scale">snd_scale</dfn>	: <var>8</var>;	<i>/* window scaling for send win */</i></td></tr>
+<tr><th id="208">208</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::msl_class" title='vtw_common::msl_class' data-ref="vtw_common::msl_class" data-ref-filename="vtw_common..msl_class">msl_class</dfn>	: <var>2</var>;	<i>/* TCP MSL class {0,1,2,3} */</i></td></tr>
+<tr><th id="209">209</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::reuse_port" title='vtw_common::reuse_port' data-ref="vtw_common::reuse_port" data-ref-filename="vtw_common..reuse_port">reuse_port</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="210">210</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::reuse_addr" title='vtw_common::reuse_addr' data-ref="vtw_common::reuse_addr" data-ref-filename="vtw_common..reuse_addr">reuse_addr</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="211">211</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::v6only" title='vtw_common::v6only' data-ref="vtw_common::v6only" data-ref-filename="vtw_common..v6only">v6only</dfn>		: <var>1</var>;</td></tr>
+<tr><th id="212">212</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::hashed" title='vtw_common::hashed' data-ref="vtw_common::hashed" data-ref-filename="vtw_common..hashed">hashed</dfn>		: <var>1</var>;	<i>/* reachable via FATP */</i></td></tr>
+<tr><th id="213">213</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_common::uid" title='vtw_common::uid' data-ref="vtw_common::uid" data-ref-filename="vtw_common..uid">uid</dfn>;</td></tr>
+<tr><th id="214">214</th><td>} <dfn class="typedef" id="vtw_t" title='vtw_t' data-type='struct vtw_common' data-ref="vtw_t" data-ref-filename="vtw_t">vtw_t</dfn>;</td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td><i class="doc">/*!<span class="command">\brief</span> vestigial timewait for IPv4</i></td></tr>
+<tr><th id="217">217</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="218">218</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="vtw_v4" title='vtw_v4' data-ref="vtw_v4" data-ref-filename="vtw_v4"><a class="type" href="#vtw_v4" title='vtw_v4' data-ref="vtw_v4" data-ref-filename="vtw_v4">vtw_v4</a></dfn> {</td></tr>
+<tr><th id="219">219</th><td>	<a class="typedef" href="#vtw_t" title='vtw_t' data-type='struct vtw_common' data-ref="vtw_t" data-ref-filename="vtw_t">vtw_t</a>		<dfn class="decl field" id="vtw_v4::common" title='vtw_v4::common' data-ref="vtw_v4::common" data-ref-filename="vtw_v4..common">common</dfn>;		<i>/*  must be first */</i></td></tr>
+<tr><th id="220">220</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a>	<dfn class="decl field" id="vtw_v4::lport" title='vtw_v4::lport' data-ref="vtw_v4::lport" data-ref-filename="vtw_v4..lport">lport</dfn>;</td></tr>
+<tr><th id="221">221</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a>	<dfn class="decl field" id="vtw_v4::fport" title='vtw_v4::fport' data-ref="vtw_v4::fport" data-ref-filename="vtw_v4..fport">fport</dfn>;</td></tr>
+<tr><th id="222">222</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_v4::laddr" title='vtw_v4::laddr' data-ref="vtw_v4::laddr" data-ref-filename="vtw_v4..laddr">laddr</dfn>;</td></tr>
+<tr><th id="223">223</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_v4::faddr" title='vtw_v4::faddr' data-ref="vtw_v4::faddr" data-ref-filename="vtw_v4..faddr">faddr</dfn>;</td></tr>
+<tr><th id="224">224</th><td>} <dfn class="typedef" id="vtw_v4_t" title='vtw_v4_t' data-type='struct vtw_v4' data-ref="vtw_v4_t" data-ref-filename="vtw_v4_t">vtw_v4_t</dfn>;</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td><i class="doc">/*!<span class="command">\brief</span> vestigial timewait for IPv6</i></td></tr>
+<tr><th id="227">227</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="228">228</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="vtw_v6" title='vtw_v6' data-ref="vtw_v6" data-ref-filename="vtw_v6"><a class="type" href="#vtw_v6" title='vtw_v6' data-ref="vtw_v6" data-ref-filename="vtw_v6">vtw_v6</a></dfn> {</td></tr>
+<tr><th id="229">229</th><td>	<a class="typedef" href="#vtw_t" title='vtw_t' data-type='struct vtw_common' data-ref="vtw_t" data-ref-filename="vtw_t">vtw_t</a>		<dfn class="decl field" id="vtw_v6::common" title='vtw_v6::common' data-ref="vtw_v6::common" data-ref-filename="vtw_v6..common">common</dfn>;		<i>/* must be first */</i></td></tr>
+<tr><th id="230">230</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a>	<dfn class="decl field" id="vtw_v6::lport" title='vtw_v6::lport' data-ref="vtw_v6::lport" data-ref-filename="vtw_v6..lport">lport</dfn>;</td></tr>
+<tr><th id="231">231</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a>	<dfn class="decl field" id="vtw_v6::fport" title='vtw_v6::fport' data-ref="vtw_v6::fport" data-ref-filename="vtw_v6..fport">fport</dfn>;</td></tr>
+<tr><th id="232">232</th><td>	<b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a>	<dfn class="decl field" id="vtw_v6::laddr" title='vtw_v6::laddr' data-ref="vtw_v6::laddr" data-ref-filename="vtw_v6..laddr">laddr</dfn>;</td></tr>
+<tr><th id="233">233</th><td>	<b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a>	<dfn class="decl field" id="vtw_v6::faddr" title='vtw_v6::faddr' data-ref="vtw_v6::faddr" data-ref-filename="vtw_v6..faddr">faddr</dfn>;</td></tr>
+<tr><th id="234">234</th><td>} <dfn class="typedef" id="vtw_v6_t" title='vtw_v6_t' data-type='struct vtw_v6' data-ref="vtw_v6_t" data-ref-filename="vtw_v6_t">vtw_v6_t</dfn>;</td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td><b>struct</b> <a class="type" href="#fatp_ctl" title='fatp_ctl' data-ref="fatp_ctl" data-ref-filename="fatp_ctl">fatp_ctl</a>;</td></tr>
+<tr><th id="237">237</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#vtw_ctl" title='vtw_ctl' data-ref="vtw_ctl" data-ref-filename="vtw_ctl">vtw_ctl</a>		<dfn class="typedef" id="vtw_ctl_t" title='vtw_ctl_t' data-type='struct vtw_ctl' data-ref="vtw_ctl_t" data-ref-filename="vtw_ctl_t">vtw_ctl_t</dfn>;</td></tr>
+<tr><th id="238">238</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#fatp_ctl" title='fatp_ctl' data-ref="fatp_ctl" data-ref-filename="fatp_ctl">fatp_ctl</a>		<dfn class="typedef" id="fatp_ctl_t" title='fatp_ctl_t' data-type='struct fatp_ctl' data-ref="fatp_ctl_t" data-ref-filename="fatp_ctl_t">fatp_ctl_t</dfn>;</td></tr>
+<tr><th id="239">239</th><td></td></tr>
+<tr><th id="240">240</th><td><i>/*</i></td></tr>
+<tr><th id="241">241</th><td><i> * The vestigial time waits are kept in a contiguous chunk.</i></td></tr>
+<tr><th id="242">242</th><td><i> * Allocation and free pointers run as clock hands thru this array.</i></td></tr>
+<tr><th id="243">243</th><td><i> */</i></td></tr>
+<tr><th id="244">244</th><td><b>struct</b> <dfn class="type def" id="vtw_ctl" title='vtw_ctl' data-ref="vtw_ctl" data-ref-filename="vtw_ctl">vtw_ctl</dfn> {</td></tr>
+<tr><th id="245">245</th><td>	<a class="typedef" href="#fatp_ctl_t" title='fatp_ctl_t' data-type='struct fatp_ctl' data-ref="fatp_ctl_t" data-ref-filename="fatp_ctl_t">fatp_ctl_t</a>	*<dfn class="decl field" id="vtw_ctl::fat" title='vtw_ctl::fat' data-ref="vtw_ctl::fat" data-ref-filename="vtw_ctl..fat">fat</dfn>;		<i>/* collection of fatp to use	*/</i></td></tr>
+<tr><th id="246">246</th><td>	<a class="typedef" href="#vtw_ctl_t" title='vtw_ctl_t' data-type='struct vtw_ctl' data-ref="vtw_ctl_t" data-ref-filename="vtw_ctl_t">vtw_ctl_t</a>	*<dfn class="decl field" id="vtw_ctl::ctl" title='vtw_ctl::ctl' data-ref="vtw_ctl::ctl" data-ref-filename="vtw_ctl..ctl">ctl</dfn>;		<i>/* &lt;! controller's controller	*/</i></td></tr>
+<tr><th id="247">247</th><td>	<b>union</b> {</td></tr>
+<tr><th id="248">248</th><td>		<a class="typedef" href="#vtw_t" title='vtw_t' data-type='struct vtw_common' data-ref="vtw_t" data-ref-filename="vtw_t">vtw_t</a>		*<dfn class="decl field" id="vtw_ctl::(anonymous)::v" title='vtw_ctl::(anonymous union)::v' data-ref="vtw_ctl::(anonymous)::v" data-ref-filename="vtw_ctl..(anonymous)..v">v</dfn>;	<i>/* common			*/</i></td></tr>
+<tr><th id="249">249</th><td>		<b>struct</b> <a class="type" href="#vtw_v4" title='vtw_v4' data-ref="vtw_v4" data-ref-filename="vtw_v4">vtw_v4</a>	*<dfn class="decl field" id="vtw_ctl::(anonymous)::v4" title='vtw_ctl::(anonymous union)::v4' data-ref="vtw_ctl::(anonymous)::v4" data-ref-filename="vtw_ctl..(anonymous)..v4">v4</dfn>;	<i>/* IPv4 resources		*/</i></td></tr>
+<tr><th id="250">250</th><td>		<b>struct</b> <a class="type" href="#vtw_v6" title='vtw_v6' data-ref="vtw_v6" data-ref-filename="vtw_v6">vtw_v6</a>	*<dfn class="decl field" id="vtw_ctl::(anonymous)::v6" title='vtw_ctl::(anonymous union)::v6' data-ref="vtw_ctl::(anonymous)::v6" data-ref-filename="vtw_ctl..(anonymous)..v6">v6</dfn>;	<i>/* IPv6 resources		*/</i></td></tr>
+<tr><th id="251">251</th><td>	}		<dfn class="decl field" id="vtw_ctl::base" title='vtw_ctl::base' data-ref="vtw_ctl::base" data-ref-filename="vtw_ctl..base">base</dfn>,		<i>/* base of vtw_t array		*/</i></td></tr>
+<tr><th id="252">252</th><td>		<i class="doc">/**/</i>	<dfn class="decl field" id="vtw_ctl::lim" title='vtw_ctl::lim' data-ref="vtw_ctl::lim" data-ref-filename="vtw_ctl..lim">lim</dfn>,		<i>/* extent of vtw_t array	*/</i></td></tr>
+<tr><th id="253">253</th><td>		<i class="doc">/**/</i>	<dfn class="decl field" id="vtw_ctl::alloc" title='vtw_ctl::alloc' data-ref="vtw_ctl::alloc" data-ref-filename="vtw_ctl..alloc">alloc</dfn>,		<i>/* allocation pointer		*/</i></td></tr>
+<tr><th id="254">254</th><td>		<i class="doc">/**/</i>	<dfn class="decl field" id="vtw_ctl::oldest" title='vtw_ctl::oldest' data-ref="vtw_ctl::oldest" data-ref-filename="vtw_ctl..oldest">oldest</dfn>;		<i>/* ^ to oldest			*/</i></td></tr>
+<tr><th id="255">255</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::nfree" title='vtw_ctl::nfree' data-ref="vtw_ctl::nfree" data-ref-filename="vtw_ctl..nfree">nfree</dfn>;		<i>/* # free			*/</i></td></tr>
+<tr><th id="256">256</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::nalloc" title='vtw_ctl::nalloc' data-ref="vtw_ctl::nalloc" data-ref-filename="vtw_ctl..nalloc">nalloc</dfn>;		<i>/* # allocated			*/</i></td></tr>
+<tr><th id="257">257</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::idx_mask" title='vtw_ctl::idx_mask' data-ref="vtw_ctl::idx_mask" data-ref-filename="vtw_ctl..idx_mask">idx_mask</dfn>;	<i>/* mask capturing all index bits*/</i></td></tr>
+<tr><th id="258">258</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::is_v4" title='vtw_ctl::is_v4' data-ref="vtw_ctl::is_v4" data-ref-filename="vtw_ctl..is_v4">is_v4</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="259">259</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::is_v6" title='vtw_ctl::is_v6' data-ref="vtw_ctl::is_v6" data-ref-filename="vtw_ctl..is_v6">is_v6</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="260">260</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::idx_bits" title='vtw_ctl::idx_bits' data-ref="vtw_ctl::idx_bits" data-ref-filename="vtw_ctl..idx_bits">idx_bits</dfn>: <var>6</var>;</td></tr>
+<tr><th id="261">261</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="vtw_ctl::clidx" title='vtw_ctl::clidx' data-ref="vtw_ctl::clidx" data-ref-filename="vtw_ctl..clidx">clidx</dfn>	: <var>3</var>;	<i>/* &lt;! class index */</i></td></tr>
+<tr><th id="262">262</th><td>};</td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td><i class="doc">/*!<span class="command">\brief</span> Collections of fat pointers.</i></td></tr>
+<tr><th id="265">265</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="266">266</th><td><b>struct</b> <dfn class="type def" id="fatp_ctl" title='fatp_ctl' data-ref="fatp_ctl" data-ref-filename="fatp_ctl">fatp_ctl</dfn> {</td></tr>
+<tr><th id="267">267</th><td>	<a class="typedef" href="#vtw_ctl_t" title='vtw_ctl_t' data-type='struct vtw_ctl' data-ref="vtw_ctl_t" data-ref-filename="vtw_ctl_t">vtw_ctl_t</a>	*<dfn class="decl field" id="fatp_ctl::vtw" title='fatp_ctl::vtw' data-ref="fatp_ctl::vtw" data-ref-filename="fatp_ctl..vtw">vtw</dfn>;		<i>/* associated VTWs		*/</i></td></tr>
+<tr><th id="268">268</th><td>	<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a>		*<dfn class="decl field" id="fatp_ctl::base" title='fatp_ctl::base' data-ref="fatp_ctl::base" data-ref-filename="fatp_ctl..base">base</dfn>;		<i>/* base of fatp_t array		*/</i></td></tr>
+<tr><th id="269">269</th><td>	<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a>		*<dfn class="decl field" id="fatp_ctl::lim" title='fatp_ctl::lim' data-ref="fatp_ctl::lim" data-ref-filename="fatp_ctl..lim">lim</dfn>;		<i>/* extent of fatp_t array	*/</i></td></tr>
+<tr><th id="270">270</th><td>	<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a>		*<dfn class="decl field" id="fatp_ctl::free" title='fatp_ctl::free' data-ref="fatp_ctl::free" data-ref-filename="fatp_ctl..free">free</dfn>;		<i>/* free list			*/</i></td></tr>
+<tr><th id="271">271</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="fatp_ctl::mask" title='fatp_ctl::mask' data-ref="fatp_ctl::mask" data-ref-filename="fatp_ctl..mask">mask</dfn>;		<i>/* hash mask			*/</i></td></tr>
+<tr><th id="272">272</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="fatp_ctl::nfree" title='fatp_ctl::nfree' data-ref="fatp_ctl::nfree" data-ref-filename="fatp_ctl..nfree">nfree</dfn>;		<i>/* # free			*/</i></td></tr>
+<tr><th id="273">273</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="fatp_ctl::nalloc" title='fatp_ctl::nalloc' data-ref="fatp_ctl::nalloc" data-ref-filename="fatp_ctl..nalloc">nalloc</dfn>;		<i>/* # allocated			*/</i></td></tr>
+<tr><th id="274">274</th><td>	<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a>		**<dfn class="decl field" id="fatp_ctl::hash" title='fatp_ctl::hash' data-ref="fatp_ctl::hash" data-ref-filename="fatp_ctl..hash">hash</dfn>;		<i>/* hash anchors			*/</i></td></tr>
+<tr><th id="275">275</th><td>	<a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a>		**<dfn class="decl field" id="fatp_ctl::port" title='fatp_ctl::port' data-ref="fatp_ctl::port" data-ref-filename="fatp_ctl..port">port</dfn>;		<i>/* port hash anchors		*/</i></td></tr>
+<tr><th id="276">276</th><td>};</td></tr>
+<tr><th id="277">277</th><td></td></tr>
+<tr><th id="278">278</th><td><i class="doc">/*!<span class="command">\brief</span> stats</i></td></tr>
+<tr><th id="279">279</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="280">280</th><td><b>struct</b> <dfn class="type def" id="vtw_stats" title='vtw_stats' data-ref="vtw_stats" data-ref-filename="vtw_stats">vtw_stats</dfn> {</td></tr>
+<tr><th id="281">281</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::ins" title='vtw_stats::ins' data-ref="vtw_stats::ins" data-ref-filename="vtw_stats..ins">ins</dfn>;		<i>/* &lt;! inserts */</i></td></tr>
+<tr><th id="282">282</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::del" title='vtw_stats::del' data-ref="vtw_stats::del" data-ref-filename="vtw_stats..del">del</dfn>;		<i>/* &lt;! deleted */</i></td></tr>
+<tr><th id="283">283</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::kill" title='vtw_stats::kill' data-ref="vtw_stats::kill" data-ref-filename="vtw_stats..kill">kill</dfn>;		<i>/* &lt;! assassination */</i></td></tr>
+<tr><th id="284">284</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::look" title='vtw_stats::look' data-ref="vtw_stats::look" data-ref-filename="vtw_stats..look">look</dfn>[<var>2</var>];	<i>/* &lt;! lookup: full hash, port hash */</i></td></tr>
+<tr><th id="285">285</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::hit" title='vtw_stats::hit' data-ref="vtw_stats::hit" data-ref-filename="vtw_stats..hit">hit</dfn>[<var>2</var>];		<i>/* &lt;! lookups that hit */</i></td></tr>
+<tr><th id="286">286</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::miss" title='vtw_stats::miss' data-ref="vtw_stats::miss" data-ref-filename="vtw_stats..miss">miss</dfn>[<var>2</var>];	<i>/* &lt;! lookups that miss */</i></td></tr>
+<tr><th id="287">287</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::probe" title='vtw_stats::probe' data-ref="vtw_stats::probe" data-ref-filename="vtw_stats..probe">probe</dfn>[<var>2</var>];	<i>/* &lt;! hits+miss */</i></td></tr>
+<tr><th id="288">288</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::losing" title='vtw_stats::losing' data-ref="vtw_stats::losing" data-ref-filename="vtw_stats..losing">losing</dfn>[<var>2</var>];	<i>/* &lt;! misses requiring dereference */</i></td></tr>
+<tr><th id="289">289</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::max_chain" title='vtw_stats::max_chain' data-ref="vtw_stats::max_chain" data-ref-filename="vtw_stats..max_chain">max_chain</dfn>[<var>2</var>];	<i>/* &lt;! max fatp chain traversed */</i></td></tr>
+<tr><th id="290">290</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::max_probe" title='vtw_stats::max_probe' data-ref="vtw_stats::max_probe" data-ref-filename="vtw_stats..max_probe">max_probe</dfn>[<var>2</var>];	<i>/* &lt;! max probes in any one chain */</i></td></tr>
+<tr><th id="291">291</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="decl field" id="vtw_stats::max_loss" title='vtw_stats::max_loss' data-ref="vtw_stats::max_loss" data-ref-filename="vtw_stats..max_loss">max_loss</dfn>[<var>2</var>];	<i>/* &lt;! max losing probes in any one</i></td></tr>
+<tr><th id="292">292</th><td><i>					 * chain</i></td></tr>
+<tr><th id="293">293</th><td><i>					 */</i></td></tr>
+<tr><th id="294">294</th><td>};</td></tr>
+<tr><th id="295">295</th><td></td></tr>
+<tr><th id="296">296</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#vtw_stats" title='vtw_stats' data-ref="vtw_stats" data-ref-filename="vtw_stats">vtw_stats</a>	<dfn class="typedef" id="vtw_stats_t" title='vtw_stats_t' data-type='struct vtw_stats' data-ref="vtw_stats_t" data-ref-filename="vtw_stats_t">vtw_stats_t</dfn>;</td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td><i class="doc">/*!<span class="command">\brief</span>	follow fatp next 'pointer'</i></td></tr>
+<tr><th id="299">299</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="300">300</th><td><em>static</em> <b>__inline</b> <a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a> *</td></tr>
+<tr><th id="301">301</th><td><dfn class="decl def fn" id="fatp_next" title='fatp_next' data-ref="fatp_next" data-ref-filename="fatp_next">fatp_next</dfn>(<a class="typedef" href="#fatp_ctl_t" title='fatp_ctl_t' data-type='struct fatp_ctl' data-ref="fatp_ctl_t" data-ref-filename="fatp_ctl_t">fatp_ctl_t</a> *<dfn class="local col3 decl" id="3fat" title='fat' data-type='fatp_ctl_t *' data-ref="3fat" data-ref-filename="3fat">fat</dfn>, <a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a> *<dfn class="local col4 decl" id="4fp" title='fp' data-type='fatp_t *' data-ref="4fp" data-ref-filename="4fp">fp</dfn>)</td></tr>
+<tr><th id="302">302</th><td>{</td></tr>
+<tr><th id="303">303</th><td>	<b>return</b> <a class="local col4 ref" href="#4fp" title='fp' data-ref="4fp" data-ref-filename="4fp">fp</a>-&gt;<a class="ref field" href="#fatp_mi::nxt" title='fatp_mi::nxt' data-ref="fatp_mi::nxt" data-ref-filename="fatp_mi..nxt">nxt</a> ? <a class="local col3 ref" href="#3fat" title='fat' data-ref="3fat" data-ref-filename="3fat">fat</a>-&gt;<a class="ref field" href="#fatp_ctl::base" title='fatp_ctl::base' data-ref="fatp_ctl::base" data-ref-filename="fatp_ctl..base">base</a> + <a class="local col4 ref" href="#4fp" title='fp' data-ref="4fp" data-ref-filename="4fp">fp</a>-&gt;<a class="ref field" href="#fatp_mi::nxt" title='fatp_mi::nxt' data-ref="fatp_mi::nxt" data-ref-filename="fatp_mi..nxt">nxt</a>-<var>1</var> : <var>0</var>;</td></tr>
+<tr><th id="304">304</th><td>}</td></tr>
+<tr><th id="305">305</th><td></td></tr>
+<tr><th id="306">306</th><td><i class="doc">/*!<span class="command">\brief</span> determine a collection-relative fat pointer index.</i></td></tr>
+<tr><th id="307">307</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="308">308</th><td><em>static</em> <b>__inline</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></td></tr>
+<tr><th id="309">309</th><td><dfn class="decl def fn" id="fatp_index" title='fatp_index' data-ref="fatp_index" data-ref-filename="fatp_index">fatp_index</dfn>(<a class="typedef" href="#fatp_ctl_t" title='fatp_ctl_t' data-type='struct fatp_ctl' data-ref="fatp_ctl_t" data-ref-filename="fatp_ctl_t">fatp_ctl_t</a> *<dfn class="local col5 decl" id="5fat" title='fat' data-type='fatp_ctl_t *' data-ref="5fat" data-ref-filename="5fat">fat</dfn>, <a class="typedef" href="#fatp_t" title='fatp_t' data-type='struct fatp_mi' data-ref="fatp_t" data-ref-filename="fatp_t">fatp_t</a> *<dfn class="local col6 decl" id="6fp" title='fp' data-type='fatp_t *' data-ref="6fp" data-ref-filename="6fp">fp</dfn>)</td></tr>
+<tr><th id="310">310</th><td>{</td></tr>
+<tr><th id="311">311</th><td>	<b>return</b> <a class="local col6 ref" href="#6fp" title='fp' data-ref="6fp" data-ref-filename="6fp">fp</a> ? <var>1</var> + (<a class="local col6 ref" href="#6fp" title='fp' data-ref="6fp" data-ref-filename="6fp">fp</a> - <a class="local col5 ref" href="#5fat" title='fat' data-ref="5fat" data-ref-filename="5fat">fat</a>-&gt;<a class="ref field" href="#fatp_ctl::base" title='fatp_ctl::base' data-ref="fatp_ctl::base" data-ref-filename="fatp_ctl..base">base</a>) : <var>0</var>;</td></tr>
+<tr><th id="312">312</th><td>}</td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td></td></tr>
+<tr><th id="315">315</th><td><em>static</em> <b>__inline</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></td></tr>
+<tr><th id="316">316</th><td><dfn class="decl def fn" id="v4_tag" title='v4_tag' data-ref="v4_tag" data-ref-filename="v4_tag">v4_tag</dfn>(<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col7 decl" id="7faddr" title='faddr' data-type='uint32_t' data-ref="7faddr" data-ref-filename="7faddr">faddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col8 decl" id="8fport" title='fport' data-type='uint32_t' data-ref="8fport" data-ref-filename="8fport">fport</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col9 decl" id="9laddr" title='laddr' data-type='uint32_t' data-ref="9laddr" data-ref-filename="9laddr">laddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="10lport" title='lport' data-type='uint32_t' data-ref="10lport" data-ref-filename="10lport">lport</dfn>)</td></tr>
+<tr><th id="317">317</th><td>{</td></tr>
+<tr><th id="318">318</th><td>	<b>return</b> (<a class="macro" href="../sys/endian.h.html#125" title="((uint32_t)(__builtin_constant_p((((uint32_t)((faddr))))) ? (((uint32_t)(((((((uint32_t)((faddr)))) &amp; 0xff000000) &gt;&gt; 24) | (((((uint32_t)((faddr)))) &amp; 0x00ff0000) &gt;&gt; 8) | (((((uint32_t)((faddr)))) &amp; 0x0000ff00) &lt;&lt; 8) | (((((uint32_t)((faddr)))) &amp; 0x000000ff) &lt;&lt; 24))))) : __byte_swap_u32_variable(((uint32_t)((faddr))))))" data-ref="_M/ntohl">ntohl</a>(<a class="local col7 ref" href="#7faddr" title='faddr' data-ref="7faddr" data-ref-filename="7faddr">faddr</a>)   + <a class="macro" href="../sys/endian.h.html#126" title="((uint16_t)(__builtin_constant_p((((uint16_t)((fport))))) ? (((uint16_t)(((((((uint16_t)((fport)))) &amp; 0xff00) &gt;&gt; 8) | (((((uint16_t)((fport)))) &amp; 0x00ff) &lt;&lt; 8))))) : __byte_swap_u16_variable(((uint16_t)((fport))))))" data-ref="_M/ntohs">ntohs</a>(<a class="local col8 ref" href="#8fport" title='fport' data-ref="8fport" data-ref-filename="8fport">fport</a>)</td></tr>
+<tr><th id="319">319</th><td>		+ <a class="macro" href="../sys/endian.h.html#125" title="((uint32_t)(__builtin_constant_p((((uint32_t)((laddr))))) ? (((uint32_t)(((((((uint32_t)((laddr)))) &amp; 0xff000000) &gt;&gt; 24) | (((((uint32_t)((laddr)))) &amp; 0x00ff0000) &gt;&gt; 8) | (((((uint32_t)((laddr)))) &amp; 0x0000ff00) &lt;&lt; 8) | (((((uint32_t)((laddr)))) &amp; 0x000000ff) &lt;&lt; 24))))) : __byte_swap_u32_variable(((uint32_t)((laddr))))))" data-ref="_M/ntohl">ntohl</a>(<a class="local col9 ref" href="#9laddr" title='laddr' data-ref="9laddr" data-ref-filename="9laddr">laddr</a>) + <a class="macro" href="../sys/endian.h.html#126" title="((uint16_t)(__builtin_constant_p((((uint16_t)((lport))))) ? (((uint16_t)(((((((uint16_t)((lport)))) &amp; 0xff00) &gt;&gt; 8) | (((((uint16_t)((lport)))) &amp; 0x00ff) &lt;&lt; 8))))) : __byte_swap_u16_variable(((uint16_t)((lport))))))" data-ref="_M/ntohs">ntohs</a>(<a class="local col0 ref" href="#10lport" title='lport' data-ref="10lport" data-ref-filename="10lport">lport</a>));</td></tr>
+<tr><th id="320">320</th><td>}</td></tr>
+<tr><th id="321">321</th><td></td></tr>
+<tr><th id="322">322</th><td><em>static</em> <b>__inline</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></td></tr>
+<tr><th id="323">323</th><td><dfn class="decl def fn" id="v6_tag" title='v6_tag' data-ref="v6_tag" data-ref-filename="v6_tag">v6_tag</dfn>(<em>const</em> <b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a> *<dfn class="local col1 decl" id="11faddr" title='faddr' data-type='const struct in6_addr *' data-ref="11faddr" data-ref-filename="11faddr">faddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col2 decl" id="12fport" title='fport' data-type='uint16_t' data-ref="12fport" data-ref-filename="12fport">fport</dfn>,</td></tr>
+<tr><th id="324">324</th><td>       <em>const</em> <b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a> *<dfn class="local col3 decl" id="13laddr" title='laddr' data-type='const struct in6_addr *' data-ref="13laddr" data-ref-filename="13laddr">laddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col4 decl" id="14lport" title='lport' data-type='uint16_t' data-ref="14lport" data-ref-filename="14lport">lport</dfn>)</td></tr>
+<tr><th id="325">325</th><td>{</td></tr>
+<tr><th id="326">326</th><td><u>#<span data-ppcond="326">ifdef</span> <span class="macro" data-ref="_M/IN6_HASH">IN6_HASH</span></u></td></tr>
+<tr><th id="327">327</th><td>	<b>return</b> IN6_HASH(faddr, fport, laddr, lport);</td></tr>
+<tr><th id="328">328</th><td><u>#<span data-ppcond="326">else</span></u></td></tr>
+<tr><th id="329">329</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="330">330</th><td><u>#<span data-ppcond="326">endif</span></u></td></tr>
+<tr><th id="331">331</th><td>}</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td><em>static</em> <b>__inline</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></td></tr>
+<tr><th id="334">334</th><td><dfn class="decl def fn" id="v4_port_tag" title='v4_port_tag' data-ref="v4_port_tag" data-ref-filename="v4_port_tag">v4_port_tag</dfn>(<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col5 decl" id="15lport" title='lport' data-type='uint16_t' data-ref="15lport" data-ref-filename="15lport">lport</dfn>)</td></tr>
+<tr><th id="335">335</th><td>{</td></tr>
+<tr><th id="336">336</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col6 decl" id="16tag" title='tag' data-type='uint32_t' data-ref="16tag" data-ref-filename="16tag">tag</dfn> = <a class="local col5 ref" href="#15lport" title='lport' data-ref="15lport" data-ref-filename="15lport">lport</a> ^ (<a class="local col5 ref" href="#15lport" title='lport' data-ref="15lport" data-ref-filename="15lport">lport</a> &lt;&lt; <var>11</var>);</td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td>	<a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> ^= <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> &lt;&lt; <var>3</var>;</td></tr>
+<tr><th id="339">339</th><td>	<a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> += <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> &gt;&gt; <var>5</var>;</td></tr>
+<tr><th id="340">340</th><td>	<a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> ^= <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> &lt;&lt; <var>4</var>;</td></tr>
+<tr><th id="341">341</th><td>	<a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> += <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> &gt;&gt; <var>17</var>;</td></tr>
+<tr><th id="342">342</th><td>	<a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> ^= <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> &lt;&lt; <var>25</var>;</td></tr>
+<tr><th id="343">343</th><td>	<a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> += <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a> &gt;&gt; <var>6</var>;</td></tr>
+<tr><th id="344">344</th><td></td></tr>
+<tr><th id="345">345</th><td>	<b>return</b> <a class="local col6 ref" href="#16tag" title='tag' data-ref="16tag" data-ref-filename="16tag">tag</a>;</td></tr>
+<tr><th id="346">346</th><td>}</td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td><em>static</em> <b>__inline</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></td></tr>
+<tr><th id="349">349</th><td><dfn class="decl def fn" id="v6_port_tag" title='v6_port_tag' data-ref="v6_port_tag" data-ref-filename="v6_port_tag">v6_port_tag</dfn>(<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col7 decl" id="17lport" title='lport' data-type='uint16_t' data-ref="17lport" data-ref-filename="17lport">lport</dfn>)</td></tr>
+<tr><th id="350">350</th><td>{</td></tr>
+<tr><th id="351">351</th><td>	<b>return</b> <a class="ref fn" href="#v4_port_tag" title='v4_port_tag' data-ref="v4_port_tag" data-ref-filename="v4_port_tag">v4_port_tag</a>(<a class="local col7 ref" href="#17lport" title='lport' data-ref="17lport" data-ref-filename="17lport">lport</a>);</td></tr>
+<tr><th id="352">352</th><td>}</td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td><b>struct</b> <a class="type" href="tcp_var.h.html#tcpcb" title='tcpcb' data-ref="tcpcb" data-ref-filename="tcpcb" id="tcpcb">tcpcb</a>;</td></tr>
+<tr><th id="355">355</th><td><b>struct</b> <a class="type" href="tcp.h.html#tcphdr" title='tcphdr' data-ref="tcphdr" data-ref-filename="tcphdr" id="tcphdr">tcphdr</a>;</td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td><em>int</em>  <dfn class="decl fn" id="vtw_add" title='vtw_add' data-ref="vtw_add" data-ref-filename="vtw_add">vtw_add</dfn>(<em>int</em>, <b>struct</b> <a class="type" href="tcp_var.h.html#tcpcb" title='tcpcb' data-ref="tcpcb" data-ref-filename="tcpcb">tcpcb</a> *);</td></tr>
+<tr><th id="358">358</th><td><em>void</em> <dfn class="decl fn" id="vtw_del" title='vtw_del' data-ref="vtw_del" data-ref-filename="vtw_del">vtw_del</dfn>(<a class="typedef" href="#vtw_ctl_t" title='vtw_ctl_t' data-type='struct vtw_ctl' data-ref="vtw_ctl_t" data-ref-filename="vtw_ctl_t">vtw_ctl_t</a> *, <a class="typedef" href="#vtw_t" title='vtw_t' data-type='struct vtw_common' data-ref="vtw_t" data-ref-filename="vtw_t">vtw_t</a> *);</td></tr>
+<tr><th id="359">359</th><td><em>int</em> <dfn class="decl fn" id="vtw_lookup_v4" title='vtw_lookup_v4' data-ref="vtw_lookup_v4" data-ref-filename="vtw_lookup_v4">vtw_lookup_v4</dfn>(<em>const</em> <b>struct</b> <a class="type" href="ip.h.html#ip" title='ip' data-ref="ip" data-ref-filename="ip">ip</a> *<dfn class="local col8 decl" id="18ip" title='ip' data-type='const struct ip *' data-ref="18ip" data-ref-filename="18ip">ip</dfn>, <em>const</em> <b>struct</b> <a class="type" href="tcp.h.html#tcphdr" title='tcphdr' data-ref="tcphdr" data-ref-filename="tcphdr">tcphdr</a> *<dfn class="local col9 decl" id="19th" title='th' data-type='const struct tcphdr *' data-ref="19th" data-ref-filename="19th">th</dfn>,</td></tr>
+<tr><th id="360">360</th><td>		  <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="20faddr" title='faddr' data-type='uint32_t' data-ref="20faddr" data-ref-filename="20faddr">faddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col1 decl" id="21fport" title='fport' data-type='uint16_t' data-ref="21fport" data-ref-filename="21fport">fport</dfn>,</td></tr>
+<tr><th id="361">361</th><td>		  <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col2 decl" id="22laddr" title='laddr' data-type='uint32_t' data-ref="22laddr" data-ref-filename="22laddr">laddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col3 decl" id="23lport" title='lport' data-type='uint16_t' data-ref="23lport" data-ref-filename="23lport">lport</dfn>);</td></tr>
+<tr><th id="362">362</th><td><b>struct</b> <a class="type" href="ip6.h.html#ip6_hdr" title='ip6_hdr' data-ref="ip6_hdr" data-ref-filename="ip6_hdr" id="ip6_hdr">ip6_hdr</a>;</td></tr>
+<tr><th id="363">363</th><td><b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr" id="in6_addr">in6_addr</a>;</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td><em>int</em> <dfn class="decl fn" id="vtw_lookup_v6" title='vtw_lookup_v6' data-ref="vtw_lookup_v6" data-ref-filename="vtw_lookup_v6">vtw_lookup_v6</dfn>(<em>const</em> <b>struct</b> <a class="type" href="ip6.h.html#ip6_hdr" title='ip6_hdr' data-ref="ip6_hdr" data-ref-filename="ip6_hdr">ip6_hdr</a> *<dfn class="local col4 decl" id="24ip" title='ip' data-type='const struct ip6_hdr *' data-ref="24ip" data-ref-filename="24ip">ip</dfn>, <em>const</em> <b>struct</b> <a class="type" href="tcp.h.html#tcphdr" title='tcphdr' data-ref="tcphdr" data-ref-filename="tcphdr">tcphdr</a> *<dfn class="local col5 decl" id="25th" title='th' data-type='const struct tcphdr *' data-ref="25th" data-ref-filename="25th">th</dfn>,</td></tr>
+<tr><th id="366">366</th><td>		  <em>const</em> <b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a> *<dfn class="local col6 decl" id="26faddr" title='faddr' data-type='const struct in6_addr *' data-ref="26faddr" data-ref-filename="26faddr">faddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col7 decl" id="27fport" title='fport' data-type='uint16_t' data-ref="27fport" data-ref-filename="27fport">fport</dfn>,</td></tr>
+<tr><th id="367">367</th><td>		  <em>const</em> <b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a> *<dfn class="local col8 decl" id="28laddr" title='laddr' data-type='const struct in6_addr *' data-ref="28laddr" data-ref-filename="28laddr">laddr</dfn>, <a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col9 decl" id="29lport" title='lport' data-type='uint16_t' data-ref="29lport" data-ref-filename="29lport">lport</dfn>);</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="vestigial_inpcb" title='vestigial_inpcb' data-ref="vestigial_inpcb" data-ref-filename="vestigial_inpcb"><a class="type" href="#vestigial_inpcb" title='vestigial_inpcb' data-ref="vestigial_inpcb" data-ref-filename="vestigial_inpcb">vestigial_inpcb</a></dfn> {</td></tr>
+<tr><th id="370">370</th><td>	<b>union</b> {</td></tr>
+<tr><th id="371">371</th><td>		<b>struct</b> <a class="type" href="in.h.html#in_addr" title='in_addr' data-ref="in_addr" data-ref-filename="in_addr">in_addr</a>	<dfn class="decl field" id="vestigial_inpcb::(anonymous)::v4" title='vestigial_inpcb::(anonymous union)::v4' data-ref="vestigial_inpcb::(anonymous)::v4" data-ref-filename="vestigial_inpcb..(anonymous)..v4">v4</dfn>;</td></tr>
+<tr><th id="372">372</th><td>		<b>struct</b> <a class="type" href="../netinet6/in6.h.html#in6_addr" title='in6_addr' data-ref="in6_addr" data-ref-filename="in6_addr">in6_addr</a>	<dfn class="decl field" id="vestigial_inpcb::(anonymous)::v6" title='vestigial_inpcb::(anonymous union)::v6' data-ref="vestigial_inpcb::(anonymous)::v6" data-ref-filename="vestigial_inpcb..(anonymous)..v6">v6</dfn>;</td></tr>
+<tr><th id="373">373</th><td>	} <dfn class="decl field" id="vestigial_inpcb::faddr" title='vestigial_inpcb::faddr' data-ref="vestigial_inpcb::faddr" data-ref-filename="vestigial_inpcb..faddr">faddr</dfn>, <dfn class="decl field" id="vestigial_inpcb::laddr" title='vestigial_inpcb::laddr' data-ref="vestigial_inpcb::laddr" data-ref-filename="vestigial_inpcb..laddr">laddr</dfn>;</td></tr>
+<tr><th id="374">374</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a>		<dfn class="decl field" id="vestigial_inpcb::fport" title='vestigial_inpcb::fport' data-ref="vestigial_inpcb::fport" data-ref-filename="vestigial_inpcb..fport">fport</dfn>, <dfn class="decl field" id="vestigial_inpcb::lport" title='vestigial_inpcb::lport' data-ref="vestigial_inpcb::lport" data-ref-filename="vestigial_inpcb..lport">lport</dfn>;</td></tr>
+<tr><th id="375">375</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::valid" title='vestigial_inpcb::valid' data-ref="vestigial_inpcb::valid" data-ref-filename="vestigial_inpcb..valid">valid</dfn>		: <var>1</var>;</td></tr>
+<tr><th id="376">376</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::v4" title='vestigial_inpcb::v4' data-ref="vestigial_inpcb::v4" data-ref-filename="vestigial_inpcb..v4">v4</dfn>		: <var>1</var>;</td></tr>
+<tr><th id="377">377</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::reuse_addr" title='vestigial_inpcb::reuse_addr' data-ref="vestigial_inpcb::reuse_addr" data-ref-filename="vestigial_inpcb..reuse_addr">reuse_addr</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="378">378</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::reuse_port" title='vestigial_inpcb::reuse_port' data-ref="vestigial_inpcb::reuse_port" data-ref-filename="vestigial_inpcb..reuse_port">reuse_port</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="379">379</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::v6only" title='vestigial_inpcb::v6only' data-ref="vestigial_inpcb::v6only" data-ref-filename="vestigial_inpcb..v6only">v6only</dfn>		: <var>1</var>;</td></tr>
+<tr><th id="380">380</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::more_tbd" title='vestigial_inpcb::more_tbd' data-ref="vestigial_inpcb::more_tbd" data-ref-filename="vestigial_inpcb..more_tbd">more_tbd</dfn>	: <var>1</var>;</td></tr>
+<tr><th id="381">381</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::uid" title='vestigial_inpcb::uid' data-ref="vestigial_inpcb::uid" data-ref-filename="vestigial_inpcb..uid">uid</dfn>;</td></tr>
+<tr><th id="382">382</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::rcv_nxt" title='vestigial_inpcb::rcv_nxt' data-ref="vestigial_inpcb::rcv_nxt" data-ref-filename="vestigial_inpcb..rcv_nxt">rcv_nxt</dfn>;</td></tr>
+<tr><th id="383">383</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::rcv_wnd" title='vestigial_inpcb::rcv_wnd' data-ref="vestigial_inpcb::rcv_wnd" data-ref-filename="vestigial_inpcb..rcv_wnd">rcv_wnd</dfn>;</td></tr>
+<tr><th id="384">384</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>		<dfn class="decl field" id="vestigial_inpcb::snd_nxt" title='vestigial_inpcb::snd_nxt' data-ref="vestigial_inpcb::snd_nxt" data-ref-filename="vestigial_inpcb..snd_nxt">snd_nxt</dfn>;</td></tr>
+<tr><th id="385">385</th><td>	<b>struct</b> <a class="type" href="#vtw_common" title='vtw_common' data-ref="vtw_common" data-ref-filename="vtw_common">vtw_common</a>	*<dfn class="decl field" id="vestigial_inpcb::vtw" title='vestigial_inpcb::vtw' data-ref="vestigial_inpcb::vtw" data-ref-filename="vestigial_inpcb..vtw">vtw</dfn>;</td></tr>
+<tr><th id="386">386</th><td>	<b>struct</b> <a class="type" href="#vtw_ctl" title='vtw_ctl' data-ref="vtw_ctl" data-ref-filename="vtw_ctl">vtw_ctl</a>		*<dfn class="decl field" id="vestigial_inpcb::ctl" title='vestigial_inpcb::ctl' data-ref="vestigial_inpcb::ctl" data-ref-filename="vestigial_inpcb..ctl">ctl</dfn>;</td></tr>
+<tr><th id="387">387</th><td>} <dfn class="typedef" id="vestigial_inpcb_t" title='vestigial_inpcb_t' data-type='struct vestigial_inpcb' data-ref="vestigial_inpcb_t" data-ref-filename="vestigial_inpcb_t">vestigial_inpcb_t</dfn>;</td></tr>
+<tr><th id="388">388</th><td></td></tr>
+<tr><th id="389">389</th><td><u>#<span data-ppcond="389">ifdef</span> <span class="macro" data-ref="_M/_KERNEL">_KERNEL</span></u></td></tr>
+<tr><th id="390">390</th><td><em>void</em> vtw_restart(vestigial_inpcb_t*);</td></tr>
+<tr><th id="391">391</th><td><em>int</em> vtw_earlyinit(<em>void</em>);</td></tr>
+<tr><th id="392">392</th><td><em>int</em> sysctl_tcp_vtw_enable(SYSCTLFN_PROTO);</td></tr>
+<tr><th id="393">393</th><td><u>#<span data-ppcond="389">endif</span> /* _KERNEL */</u></td></tr>
+<tr><th id="394">394</th><td></td></tr>
+<tr><th id="395">395</th><td><u>#<span data-ppcond="395">ifdef</span> <span class="macro" data-ref="_M/VTW_DEBUG">VTW_DEBUG</span></u></td></tr>
+<tr><th id="396">396</th><td><b>typedef</b> <b>struct</b> sin_either {</td></tr>
+<tr><th id="397">397</th><td>	uint8_t		sin_len;</td></tr>
+<tr><th id="398">398</th><td>	uint8_t		sin_family;</td></tr>
+<tr><th id="399">399</th><td>	uint16_t	sin_port;</td></tr>
+<tr><th id="400">400</th><td>	<b>union</b> {</td></tr>
+<tr><th id="401">401</th><td>		<b>struct</b> in_addr	v4;</td></tr>
+<tr><th id="402">402</th><td>		<b>struct</b> in6_addr	v6;</td></tr>
+<tr><th id="403">403</th><td>	}		sin_addr;</td></tr>
+<tr><th id="404">404</th><td>} sin_either_t;</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td><em>int</em> vtw_debug_add(<em>int</em> af, sin_either_t *, sin_either_t *, <em>int</em>, <em>int</em>);</td></tr>
+<tr><th id="407">407</th><td></td></tr>
+<tr><th id="408">408</th><td><b>typedef</b> <b>struct</b> vtw_sysargs {</td></tr>
+<tr><th id="409">409</th><td>	uint32_t	op;</td></tr>
+<tr><th id="410">410</th><td>	sin_either_t	fa;</td></tr>
+<tr><th id="411">411</th><td>	sin_either_t	la;</td></tr>
+<tr><th id="412">412</th><td>} vtw_sysargs_t;</td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td><u>#<span data-ppcond="395">endif</span> /* VTW_DEBUG */</u></td></tr>
+<tr><th id="415">415</th><td></td></tr>
+<tr><th id="416">416</th><td><u>#<span data-ppcond="122">endif</span> /* _NETINET_TCP_VTW_H */</u></td></tr>
+<tr><th id="417">417</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../../../../../usr.bin/netstat/inet.c.html'>netbsd/usr.bin/netstat/inet.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

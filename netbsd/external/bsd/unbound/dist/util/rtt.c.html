@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>rtt.c source code [netbsd/external/bsd/unbound/dist/util/rtt.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/unbound/dist/util/rtt.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>unbound</a>/<a href='..'>dist</a>/<a href='./'>util</a>/<a href='rtt.c.html'>rtt.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * util/rtt.c - UDP round trip time estimator for resend timeouts.</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This software is open source.</i></td></tr>
+<tr><th id="7">7</th><td><i> * </i></td></tr>
+<tr><th id="8">8</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="9">9</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="10">10</th><td><i> * are met:</i></td></tr>
+<tr><th id="11">11</th><td><i> * </i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistributions of source code must retain the above copyright notice,</i></td></tr>
+<tr><th id="13">13</th><td><i> * this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="14">14</th><td><i> * </i></td></tr>
+<tr><th id="15">15</th><td><i> * Redistributions in binary form must reproduce the above copyright notice,</i></td></tr>
+<tr><th id="16">16</th><td><i> * this list of conditions and the following disclaimer in the documentation</i></td></tr>
+<tr><th id="17">17</th><td><i> * and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> * </i></td></tr>
+<tr><th id="19">19</th><td><i> * Neither the name of the NLNET LABS nor the names of its contributors may</i></td></tr>
+<tr><th id="20">20</th><td><i> * be used to endorse or promote products derived from this software without</i></td></tr>
+<tr><th id="21">21</th><td><i> * specific prior written permission.</i></td></tr>
+<tr><th id="22">22</th><td><i> * </i></td></tr>
+<tr><th id="23">23</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="24">24</th><td><i> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="25">25</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="26">26</th><td><i> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="27">27</th><td><i> * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="28">28</th><td><i> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="29">29</th><td><i> * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR</i></td></tr>
+<tr><th id="30">30</th><td><i> * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF</i></td></tr>
+<tr><th id="31">31</th><td><i> * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING</i></td></tr>
+<tr><th id="32">32</th><td><i> * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS</i></td></tr>
+<tr><th id="33">33</th><td><i> * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="34">34</th><td><i> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> *<span class="command"> \file</span></i></td></tr>
+<tr><th id="38">38</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> * This file contains a data type and functions to help estimate good</i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> * round trip times for UDP resend timeout values.</i></td></tr>
+<tr><th id="41">41</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../../include/config.h.html">"config.h"</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="rtt.h.html">"util/rtt.h"</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../iterator/iterator.h.html">"iterator/iterator.h"</a></u></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><i>/* overwritten by config: infra_cache_min_rtt: */</i></td></tr>
+<tr><th id="47">47</th><td><em>int</em> <dfn class="decl def" id="RTT_MIN_TIMEOUT" title='RTT_MIN_TIMEOUT' data-ref="RTT_MIN_TIMEOUT" data-ref-filename="RTT_MIN_TIMEOUT">RTT_MIN_TIMEOUT</dfn> = <var>50</var>;</td></tr>
+<tr><th id="48">48</th><td><i class="doc" data-doc="calc_rto">/** calculate RTO from rtt information */</i></td></tr>
+<tr><th id="49">49</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="50">50</th><td><dfn class="tu decl def fn" id="calc_rto" title='calc_rto' data-type='int calc_rto(const struct rtt_info * rtt)' data-ref="calc_rto" data-ref-filename="calc_rto">calc_rto</dfn>(<em>const</em> <b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col1 decl" id="1rtt" title='rtt' data-type='const struct rtt_info *' data-ref="1rtt" data-ref-filename="1rtt">rtt</dfn>)</td></tr>
+<tr><th id="51">51</th><td>{</td></tr>
+<tr><th id="52">52</th><td>	<i>/* From Stevens, Unix Network Programming, Vol1, 3rd ed., p.598 */</i></td></tr>
+<tr><th id="53">53</th><td>	<em>int</em> <dfn class="local col2 decl" id="2rto" title='rto' data-type='int' data-ref="2rto" data-ref-filename="2rto">rto</dfn> = <a class="local col1 ref" href="#1rtt" title='rtt' data-ref="1rtt" data-ref-filename="1rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::srtt" title='rtt_info::srtt' data-ref="rtt_info::srtt" data-ref-filename="rtt_info..srtt">srtt</a> + <var>4</var>*<a class="local col1 ref" href="#1rtt" title='rtt' data-ref="1rtt" data-ref-filename="1rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rttvar" title='rtt_info::rttvar' data-ref="rtt_info::rttvar" data-ref-filename="rtt_info..rttvar">rttvar</a>;</td></tr>
+<tr><th id="54">54</th><td>	<b>if</b>(<a class="local col2 ref" href="#2rto" title='rto' data-ref="2rto" data-ref-filename="2rto">rto</a> &lt; <a class="ref" href="rtt.h.html#RTT_MIN_TIMEOUT" title='RTT_MIN_TIMEOUT' data-ref="RTT_MIN_TIMEOUT" data-ref-filename="RTT_MIN_TIMEOUT">RTT_MIN_TIMEOUT</a>)</td></tr>
+<tr><th id="55">55</th><td>		<a class="local col2 ref" href="#2rto" title='rto' data-ref="2rto" data-ref-filename="2rto">rto</a> = <a class="ref" href="rtt.h.html#RTT_MIN_TIMEOUT" title='RTT_MIN_TIMEOUT' data-ref="RTT_MIN_TIMEOUT" data-ref-filename="RTT_MIN_TIMEOUT">RTT_MIN_TIMEOUT</a>;</td></tr>
+<tr><th id="56">56</th><td>	<b>if</b>(<a class="local col2 ref" href="#2rto" title='rto' data-ref="2rto" data-ref-filename="2rto">rto</a> &gt; <a class="macro" href="rtt.h.html#61" title="120000" data-ref="_M/RTT_MAX_TIMEOUT">RTT_MAX_TIMEOUT</a>)</td></tr>
+<tr><th id="57">57</th><td>		<a class="local col2 ref" href="#2rto" title='rto' data-ref="2rto" data-ref-filename="2rto">rto</a> = <a class="macro" href="rtt.h.html#61" title="120000" data-ref="_M/RTT_MAX_TIMEOUT">RTT_MAX_TIMEOUT</a>;</td></tr>
+<tr><th id="58">58</th><td>	<b>return</b> <a class="local col2 ref" href="#2rto" title='rto' data-ref="2rto" data-ref-filename="2rto">rto</a>;</td></tr>
+<tr><th id="59">59</th><td>}</td></tr>
+<tr><th id="60">60</th><td></td></tr>
+<tr><th id="61">61</th><td><em>void</em> </td></tr>
+<tr><th id="62">62</th><td><dfn class="decl def fn" id="rtt_init" title='rtt_init' data-ref="rtt_init" data-ref-filename="rtt_init">rtt_init</dfn>(<b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col3 decl" id="3rtt" title='rtt' data-type='struct rtt_info *' data-ref="3rtt" data-ref-filename="3rtt">rtt</dfn>)</td></tr>
+<tr><th id="63">63</th><td>{</td></tr>
+<tr><th id="64">64</th><td>	<a class="local col3 ref" href="#3rtt" title='rtt' data-ref="3rtt" data-ref-filename="3rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::srtt" title='rtt_info::srtt' data-ref="rtt_info::srtt" data-ref-filename="rtt_info..srtt">srtt</a> = <var>0</var>;</td></tr>
+<tr><th id="65">65</th><td>	<a class="local col3 ref" href="#3rtt" title='rtt' data-ref="3rtt" data-ref-filename="3rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rttvar" title='rtt_info::rttvar' data-ref="rtt_info::rttvar" data-ref-filename="rtt_info..rttvar">rttvar</a> = <a class="ref" href="../iterator/iterator.h.html#UNKNOWN_SERVER_NICENESS" title='UNKNOWN_SERVER_NICENESS' data-ref="UNKNOWN_SERVER_NICENESS" data-ref-filename="UNKNOWN_SERVER_NICENESS">UNKNOWN_SERVER_NICENESS</a>/<var>4</var>;</td></tr>
+<tr><th id="66">66</th><td>	<a class="local col3 ref" href="#3rtt" title='rtt' data-ref="3rtt" data-ref-filename="3rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> = <a class="tu ref fn" href="#calc_rto" title='calc_rto' data-use='c' data-ref="calc_rto" data-ref-filename="calc_rto">calc_rto</a>(<a class="local col3 ref" href="#3rtt" title='rtt' data-ref="3rtt" data-ref-filename="3rtt">rtt</a>);</td></tr>
+<tr><th id="67">67</th><td>	<i>/* default value from the book is 0 + 4*0.75 = 3 seconds */</i></td></tr>
+<tr><th id="68">68</th><td>	<i>/* first RTO is 0 + 4*0.094 = 0.376 seconds */</i></td></tr>
+<tr><th id="69">69</th><td>}</td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><em>int</em> </td></tr>
+<tr><th id="72">72</th><td><dfn class="decl def fn" id="rtt_timeout" title='rtt_timeout' data-ref="rtt_timeout" data-ref-filename="rtt_timeout">rtt_timeout</dfn>(<em>const</em> <b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col4 decl" id="4rtt" title='rtt' data-type='const struct rtt_info *' data-ref="4rtt" data-ref-filename="4rtt">rtt</dfn>)</td></tr>
+<tr><th id="73">73</th><td>{</td></tr>
+<tr><th id="74">74</th><td>	<b>return</b> <a class="local col4 ref" href="#4rtt" title='rtt' data-ref="4rtt" data-ref-filename="4rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a>;</td></tr>
+<tr><th id="75">75</th><td>}</td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td><em>int</em> </td></tr>
+<tr><th id="78">78</th><td><dfn class="decl def fn" id="rtt_unclamped" title='rtt_unclamped' data-ref="rtt_unclamped" data-ref-filename="rtt_unclamped">rtt_unclamped</dfn>(<em>const</em> <b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col5 decl" id="5rtt" title='rtt' data-type='const struct rtt_info *' data-ref="5rtt" data-ref-filename="5rtt">rtt</dfn>)</td></tr>
+<tr><th id="79">79</th><td>{</td></tr>
+<tr><th id="80">80</th><td>	<b>if</b>(<a class="tu ref fn" href="#calc_rto" title='calc_rto' data-use='c' data-ref="calc_rto" data-ref-filename="calc_rto">calc_rto</a>(<a class="local col5 ref" href="#5rtt" title='rtt' data-ref="5rtt" data-ref-filename="5rtt">rtt</a>) != <a class="local col5 ref" href="#5rtt" title='rtt' data-ref="5rtt" data-ref-filename="5rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a>) {</td></tr>
+<tr><th id="81">81</th><td>		<i>/* timeout fallback has happened */</i></td></tr>
+<tr><th id="82">82</th><td>		<b>return</b> <a class="local col5 ref" href="#5rtt" title='rtt' data-ref="5rtt" data-ref-filename="5rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a>;</td></tr>
+<tr><th id="83">83</th><td>	}</td></tr>
+<tr><th id="84">84</th><td>	<i>/* return unclamped value */</i></td></tr>
+<tr><th id="85">85</th><td>	<b>return</b> <a class="local col5 ref" href="#5rtt" title='rtt' data-ref="5rtt" data-ref-filename="5rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::srtt" title='rtt_info::srtt' data-ref="rtt_info::srtt" data-ref-filename="rtt_info..srtt">srtt</a> + <var>4</var>*<a class="local col5 ref" href="#5rtt" title='rtt' data-ref="5rtt" data-ref-filename="5rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rttvar" title='rtt_info::rttvar' data-ref="rtt_info::rttvar" data-ref-filename="rtt_info..rttvar">rttvar</a>;</td></tr>
+<tr><th id="86">86</th><td>}</td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><em>void</em> </td></tr>
+<tr><th id="89">89</th><td><dfn class="decl def fn" id="rtt_update" title='rtt_update' data-ref="rtt_update" data-ref-filename="rtt_update">rtt_update</dfn>(<b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col6 decl" id="6rtt" title='rtt' data-type='struct rtt_info *' data-ref="6rtt" data-ref-filename="6rtt">rtt</dfn>, <em>int</em> <dfn class="local col7 decl" id="7ms" title='ms' data-type='int' data-ref="7ms" data-ref-filename="7ms">ms</dfn>)</td></tr>
+<tr><th id="90">90</th><td>{</td></tr>
+<tr><th id="91">91</th><td>	<em>int</em> <dfn class="local col8 decl" id="8delta" title='delta' data-type='int' data-ref="8delta" data-ref-filename="8delta">delta</dfn> = <a class="local col7 ref" href="#7ms" title='ms' data-ref="7ms" data-ref-filename="7ms">ms</a> - <a class="local col6 ref" href="#6rtt" title='rtt' data-ref="6rtt" data-ref-filename="6rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::srtt" title='rtt_info::srtt' data-ref="rtt_info::srtt" data-ref-filename="rtt_info..srtt">srtt</a>;</td></tr>
+<tr><th id="92">92</th><td>	<a class="local col6 ref" href="#6rtt" title='rtt' data-ref="6rtt" data-ref-filename="6rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::srtt" title='rtt_info::srtt' data-ref="rtt_info::srtt" data-ref-filename="rtt_info..srtt">srtt</a> += <a class="local col8 ref" href="#8delta" title='delta' data-ref="8delta" data-ref-filename="8delta">delta</a> / <var>8</var>; <i>/* g = 1/8 */</i></td></tr>
+<tr><th id="93">93</th><td>	<b>if</b>(<a class="local col8 ref" href="#8delta" title='delta' data-ref="8delta" data-ref-filename="8delta">delta</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="94">94</th><td>		<a class="local col8 ref" href="#8delta" title='delta' data-ref="8delta" data-ref-filename="8delta">delta</a> = -<a class="local col8 ref" href="#8delta" title='delta' data-ref="8delta" data-ref-filename="8delta">delta</a>; <i>/* |delta| */</i></td></tr>
+<tr><th id="95">95</th><td>	<a class="local col6 ref" href="#6rtt" title='rtt' data-ref="6rtt" data-ref-filename="6rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rttvar" title='rtt_info::rttvar' data-ref="rtt_info::rttvar" data-ref-filename="rtt_info..rttvar">rttvar</a> += (<a class="local col8 ref" href="#8delta" title='delta' data-ref="8delta" data-ref-filename="8delta">delta</a> - <a class="local col6 ref" href="#6rtt" title='rtt' data-ref="6rtt" data-ref-filename="6rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rttvar" title='rtt_info::rttvar' data-ref="rtt_info::rttvar" data-ref-filename="rtt_info..rttvar">rttvar</a>) / <var>4</var>; <i>/* h = 1/4 */</i></td></tr>
+<tr><th id="96">96</th><td>	<a class="local col6 ref" href="#6rtt" title='rtt' data-ref="6rtt" data-ref-filename="6rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> = <a class="tu ref fn" href="#calc_rto" title='calc_rto' data-use='c' data-ref="calc_rto" data-ref-filename="calc_rto">calc_rto</a>(<a class="local col6 ref" href="#6rtt" title='rtt' data-ref="6rtt" data-ref-filename="6rtt">rtt</a>);</td></tr>
+<tr><th id="97">97</th><td>}</td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td><em>void</em> </td></tr>
+<tr><th id="100">100</th><td><dfn class="decl def fn" id="rtt_lost" title='rtt_lost' data-ref="rtt_lost" data-ref-filename="rtt_lost">rtt_lost</dfn>(<b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col9 decl" id="9rtt" title='rtt' data-type='struct rtt_info *' data-ref="9rtt" data-ref-filename="9rtt">rtt</dfn>, <em>int</em> <dfn class="local col0 decl" id="10orig" title='orig' data-type='int' data-ref="10orig" data-ref-filename="10orig">orig</dfn>)</td></tr>
+<tr><th id="101">101</th><td>{</td></tr>
+<tr><th id="102">102</th><td>	<i>/* exponential backoff */</i></td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td>	<i>/* if a query succeeded and put down the rto meanwhile, ignore this */</i></td></tr>
+<tr><th id="105">105</th><td>	<b>if</b>(<a class="local col9 ref" href="#9rtt" title='rtt' data-ref="9rtt" data-ref-filename="9rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> &lt; <a class="local col0 ref" href="#10orig" title='orig' data-ref="10orig" data-ref-filename="10orig">orig</a>)</td></tr>
+<tr><th id="106">106</th><td>		<b>return</b>;</td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td>	<i>/* the original rto is doubled, not the current one to make sure</i></td></tr>
+<tr><th id="109">109</th><td><i>	 * that the values in the cache are not increased by lots of</i></td></tr>
+<tr><th id="110">110</th><td><i>	 * queries simultaneously as they time out at the same time */</i></td></tr>
+<tr><th id="111">111</th><td>	<a class="local col0 ref" href="#10orig" title='orig' data-ref="10orig" data-ref-filename="10orig">orig</a> *= <var>2</var>;</td></tr>
+<tr><th id="112">112</th><td>	<b>if</b>(<a class="local col9 ref" href="#9rtt" title='rtt' data-ref="9rtt" data-ref-filename="9rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> &lt;= <a class="local col0 ref" href="#10orig" title='orig' data-ref="10orig" data-ref-filename="10orig">orig</a>) {</td></tr>
+<tr><th id="113">113</th><td>		<a class="local col9 ref" href="#9rtt" title='rtt' data-ref="9rtt" data-ref-filename="9rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> = <a class="local col0 ref" href="#10orig" title='orig' data-ref="10orig" data-ref-filename="10orig">orig</a>;</td></tr>
+<tr><th id="114">114</th><td>		<b>if</b>(<a class="local col9 ref" href="#9rtt" title='rtt' data-ref="9rtt" data-ref-filename="9rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> &gt; <a class="macro" href="rtt.h.html#61" title="120000" data-ref="_M/RTT_MAX_TIMEOUT">RTT_MAX_TIMEOUT</a>)</td></tr>
+<tr><th id="115">115</th><td>			<a class="local col9 ref" href="#9rtt" title='rtt' data-ref="9rtt" data-ref-filename="9rtt">rtt</a>-&gt;<a class="ref field" href="rtt.h.html#rtt_info::rto" title='rtt_info::rto' data-ref="rtt_info::rto" data-ref-filename="rtt_info..rto">rto</a> = <a class="macro" href="rtt.h.html#61" title="120000" data-ref="_M/RTT_MAX_TIMEOUT">RTT_MAX_TIMEOUT</a>;</td></tr>
+<tr><th id="116">116</th><td>	}</td></tr>
+<tr><th id="117">117</th><td>}</td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td><em>int</em> <dfn class="decl def fn" id="rtt_notimeout" title='rtt_notimeout' data-ref="rtt_notimeout" data-ref-filename="rtt_notimeout">rtt_notimeout</dfn>(<em>const</em> <b>struct</b> <a class="type" href="rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col1 decl" id="11rtt" title='rtt' data-type='const struct rtt_info *' data-ref="11rtt" data-ref-filename="11rtt">rtt</dfn>)</td></tr>
+<tr><th id="120">120</th><td>{</td></tr>
+<tr><th id="121">121</th><td>	<b>return</b> <a class="tu ref fn" href="#calc_rto" title='calc_rto' data-use='c' data-ref="calc_rto" data-ref-filename="calc_rto">calc_rto</a>(<a class="local col1 ref" href="#11rtt" title='rtt' data-ref="11rtt" data-ref-filename="11rtt">rtt</a>);</td></tr>
+<tr><th id="122">122</th><td>}</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

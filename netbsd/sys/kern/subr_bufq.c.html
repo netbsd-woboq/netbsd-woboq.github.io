@@ -1,0 +1,421 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>subr_bufq.c source code [netbsd/sys/kern/subr_bufq.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/subr_bufq.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='subr_bufq.c.html'>subr_bufq.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: subr_bufq.c,v 1.27 2019/02/17 23:17:41 bad Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td><i>/*	NetBSD: subr_disk.c,v 1.70 2005/08/20 12:00:01 yamt Exp $	*/</i></td></tr>
+<tr><th id="3">3</th><td></td></tr>
+<tr><th id="4">4</th><td><i>/*-</i></td></tr>
+<tr><th id="5">5</th><td><i> * Copyright (c) 1996, 1997, 1999, 2000 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="6">6</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="9">9</th><td><i> * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,</i></td></tr>
+<tr><th id="10">10</th><td><i> * NASA Ames Research Center.</i></td></tr>
+<tr><th id="11">11</th><td><i> *</i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="13">13</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="14">14</th><td><i> * are met:</i></td></tr>
+<tr><th id="15">15</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="17">17</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="18">18</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="19">19</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="20">20</th><td><i> *</i></td></tr>
+<tr><th id="21">21</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="22">22</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="23">23</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="24">24</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="25">25</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="26">26</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="27">27</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="28">28</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="29">29</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="30">30</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="31">31</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="32">32</th><td><i> */</i></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/*</i></td></tr>
+<tr><th id="35">35</th><td><i> * Copyright (c) 1982, 1986, 1988, 1993</i></td></tr>
+<tr><th id="36">36</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="37">37</th><td><i> * (c) UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="38">38</th><td><i> * All or some portions of this file are derived from material licensed</i></td></tr>
+<tr><th id="39">39</th><td><i> * to the University of California by American Telephone and Telegraph</i></td></tr>
+<tr><th id="40">40</th><td><i> * Co. or Unix System Laboratories, Inc. and are reproduced herein with</i></td></tr>
+<tr><th id="41">41</th><td><i> * the permission of UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="42">42</th><td><i> *</i></td></tr>
+<tr><th id="43">43</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="44">44</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="45">45</th><td><i> * are met:</i></td></tr>
+<tr><th id="46">46</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="47">47</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="48">48</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="49">49</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="50">50</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="51">51</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="52">52</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="53">53</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="54">54</th><td><i> *</i></td></tr>
+<tr><th id="55">55</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="56">56</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="57">57</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="58">58</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="59">59</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="60">60</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="61">61</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="62">62</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="63">63</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="64">64</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="65">65</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="66">66</th><td><i> *</i></td></tr>
+<tr><th id="67">67</th><td><i> *	@(#)ufs_disksubr.c	8.5 (Berkeley) 1/21/94</i></td></tr>
+<tr><th id="68">68</th><td><i> */</i></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="71">71</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: subr_bufq.c,v 1.27 2019/02/17 23:17:41 bad Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: subr_bufq.c,v 1.27 2019/02/17 23:17:41 bad Exp $"</q>);</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="74">74</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="75">75</th><td><u>#include <a href="../sys/buf.h.html">&lt;sys/buf.h&gt;</a></u></td></tr>
+<tr><th id="76">76</th><td><u>#include <a href="../sys/bufq.h.html">&lt;sys/bufq.h&gt;</a></u></td></tr>
+<tr><th id="77">77</th><td><u>#include <a href="../sys/bufq_impl.h.html">&lt;sys/bufq_impl.h&gt;</a></u></td></tr>
+<tr><th id="78">78</th><td><u>#include <a href="../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="79">79</th><td><u>#include <a href="../sys/sysctl.h.html">&lt;sys/sysctl.h&gt;</a></u></td></tr>
+<tr><th id="80">80</th><td><u>#include <a href="../sys/module.h.html">&lt;sys/module.h&gt;</a></u></td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><u>#define	<dfn class="macro" id="_M/STRAT_MATCH" data-ref="_M/STRAT_MATCH">STRAT_MATCH</dfn>(id, bs)	(strcmp((id), (bs)-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_name" title='bufq_strat::bs_name' data-ref="bufq_strat::bs_name" data-ref-filename="bufq_strat..bs_name">bs_name</a>) == 0)</u></td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td><em>static</em> <em>void</em> <a class="tu decl fn" href="#sysctl_kern_bufq_strategies_setup" title='sysctl_kern_bufq_strategies_setup' data-type='void sysctl_kern_bufq_strategies_setup(struct sysctllog ** )' data-ref="sysctl_kern_bufq_strategies_setup" data-ref-filename="sysctl_kern_bufq_strategies_setup">sysctl_kern_bufq_strategies_setup</a>(<b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctllog" title='sysctllog' data-ref="sysctllog" data-ref-filename="sysctllog">sysctllog</a> **);</td></tr>
+<tr><th id="85">85</th><td><em>static</em> <a class="macro" href="../sys/queue.h.html#113" title="struct { struct bufq_strat *slh_first; }" data-ref="_M/SLIST_HEAD">SLIST_HEAD</a>(, <a class="type" href="../sys/bufq_impl.h.html#bufq_strat" title='bufq_strat' data-ref="bufq_strat" data-ref-filename="bufq_strat">bufq_strat</a>) <dfn class="tu decl def" id="bufq_strat_list" title='bufq_strat_list' data-type='struct (anonymous struct at /___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/subr_bufq.c:85:8)' data-ref="bufq_strat_list" data-ref-filename="bufq_strat_list">bufq_strat_list</dfn> =</td></tr>
+<tr><th id="86">86</th><td>    <a class="macro" href="../sys/queue.h.html#118" title="{ ((void *)0) }" data-ref="_M/SLIST_HEAD_INITIALIZER">SLIST_HEAD_INITIALIZER</a>(bufq_strat_list);</td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><em>static</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="tu decl def" id="bufq_mutex" title='bufq_mutex' data-type='kmutex_t' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</dfn>;</td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctllog" title='sysctllog' data-ref="sysctllog" data-ref-filename="sysctllog">sysctllog</a> *<dfn class="tu decl def" id="sysctllog" title='sysctllog' data-type='struct sysctllog *' data-ref="sysctllog" data-ref-filename="sysctllog">sysctllog</dfn>;</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td><em>void</em></td></tr>
+<tr><th id="93">93</th><td><dfn class="decl def fn" id="bufq_init" title='bufq_init' data-ref="bufq_init" data-ref-filename="bufq_init">bufq_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="94">94</th><td>{</td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_init" title='mutex_init' data-ref="mutex_init" data-ref-filename="mutex_init">mutex_init</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>, <a class="enum" href="../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>, <a class="macro" href="../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a>);</td></tr>
+<tr><th id="97">97</th><td>	<a class="tu ref fn" href="#sysctl_kern_bufq_strategies_setup" title='sysctl_kern_bufq_strategies_setup' data-use='c' data-ref="sysctl_kern_bufq_strategies_setup" data-ref-filename="sysctl_kern_bufq_strategies_setup">sysctl_kern_bufq_strategies_setup</a>(&amp;<a class="tu ref" href="#sysctllog" title='sysctllog' data-use='a' data-ref="sysctllog" data-ref-filename="sysctllog">sysctllog</a>);</td></tr>
+<tr><th id="98">98</th><td>}</td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td><em>int</em></td></tr>
+<tr><th id="101">101</th><td><dfn class="decl def fn" id="bufq_register" title='bufq_register' data-ref="bufq_register" data-ref-filename="bufq_register">bufq_register</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_strat" title='bufq_strat' data-ref="bufq_strat" data-ref-filename="bufq_strat">bufq_strat</a> *<dfn class="local col1 decl" id="1bs" title='bs' data-type='struct bufq_strat *' data-ref="1bs" data-ref-filename="1bs">bs</dfn>)</td></tr>
+<tr><th id="102">102</th><td>{</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="105">105</th><td>	<a class="macro" href="../sys/queue.h.html#157" title="do { (bs)-&gt;bs_next.sle_next = (&amp;bufq_strat_list)-&gt;slh_first; (&amp;bufq_strat_list)-&gt;slh_first = (bs); } while ( 0)" data-ref="_M/SLIST_INSERT_HEAD">SLIST_INSERT_HEAD</a>(&amp;<a class="tu ref" href="#bufq_strat_list" title='bufq_strat_list' data-use='a' data-ref="bufq_strat_list" data-ref-filename="bufq_strat_list">bufq_strat_list</a>, <a class="local col1 ref" href="#1bs" title='bs' data-ref="1bs" data-ref-filename="1bs">bs</a>, <a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_next" title='bufq_strat::bs_next' data-ref="bufq_strat::bs_next" data-ref-filename="bufq_strat..bs_next">bs_next</a>);</td></tr>
+<tr><th id="106">106</th><td>	<a class="local col1 ref" href="#1bs" title='bs' data-ref="1bs" data-ref-filename="1bs">bs</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_refcnt" title='bufq_strat::bs_refcnt' data-ref="bufq_strat::bs_refcnt" data-ref-filename="bufq_strat..bs_refcnt">bs_refcnt</a> = <var>0</var>;</td></tr>
+<tr><th id="107">107</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="110">110</th><td>}</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td><em>int</em></td></tr>
+<tr><th id="113">113</th><td><dfn class="decl def fn" id="bufq_unregister" title='bufq_unregister' data-ref="bufq_unregister" data-ref-filename="bufq_unregister">bufq_unregister</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_strat" title='bufq_strat' data-ref="bufq_strat" data-ref-filename="bufq_strat">bufq_strat</a> *<dfn class="local col2 decl" id="2bs" title='bs' data-type='struct bufq_strat *' data-ref="2bs" data-ref-filename="2bs">bs</dfn>)</td></tr>
+<tr><th id="114">114</th><td>{</td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="117">117</th><td>	<b>if</b> (<a class="local col2 ref" href="#2bs" title='bs' data-ref="2bs" data-ref-filename="2bs">bs</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_refcnt" title='bufq_strat::bs_refcnt' data-ref="bufq_strat::bs_refcnt" data-ref-filename="bufq_strat..bs_refcnt">bs_refcnt</a> != <var>0</var>) {</td></tr>
+<tr><th id="118">118</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="119">119</th><td>		<b>return</b> <a class="macro" href="../sys/errno.h.html#58" title="16" data-ref="_M/EBUSY">EBUSY</a>;</td></tr>
+<tr><th id="120">120</th><td>	}</td></tr>
+<tr><th id="121">121</th><td>	<a class="macro" href="../sys/queue.h.html#171" title="do { if ((&amp;bufq_strat_list)-&gt;slh_first == (bs)) { do { ((&amp;bufq_strat_list))-&gt;slh_first = ((&amp;bufq_strat_list))-&gt;slh_first-&gt;bs_next.sle_next; } while ( 0); } else { struct bufq_strat *curelm = (&amp;bufq_strat_list)-&gt;slh_first; while(curelm-&gt;bs_next.sle_next != (bs)) curelm = curelm-&gt;bs_next.sle_next; curelm-&gt;bs_next.sle_next = curelm-&gt;bs_next.sle_next-&gt;bs_next.sle_next; } } while ( 0)" data-ref="_M/SLIST_REMOVE">SLIST_REMOVE</a>(&amp;<a class="tu ref" href="#bufq_strat_list" title='bufq_strat_list' data-use='a' data-ref="bufq_strat_list" data-ref-filename="bufq_strat_list">bufq_strat_list</a>, <a class="local col2 ref" href="#2bs" title='bs' data-ref="2bs" data-ref-filename="2bs">bs</a>, <a class="type" href="../sys/bufq_impl.h.html#bufq_strat" title='bufq_strat' data-ref="bufq_strat" data-ref-filename="bufq_strat">bufq_strat</a>, <a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_next" title='bufq_strat::bs_next' data-ref="bufq_strat::bs_next" data-ref-filename="bufq_strat..bs_next">bs_next</a>);</td></tr>
+<tr><th id="122">122</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="125">125</th><td>}</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td><i>/*</i></td></tr>
+<tr><th id="128">128</th><td><i> * Create a device buffer queue.</i></td></tr>
+<tr><th id="129">129</th><td><i> */</i></td></tr>
+<tr><th id="130">130</th><td><em>int</em></td></tr>
+<tr><th id="131">131</th><td><dfn class="decl def fn" id="bufq_alloc" title='bufq_alloc' data-ref="bufq_alloc" data-ref-filename="bufq_alloc">bufq_alloc</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> **<dfn class="local col3 decl" id="3bufqp" title='bufqp' data-type='struct bufq_state **' data-ref="3bufqp" data-ref-filename="3bufqp">bufqp</dfn>, <em>const</em> <em>char</em> *<dfn class="local col4 decl" id="4strategy" title='strategy' data-type='const char *' data-ref="4strategy" data-ref-filename="4strategy">strategy</dfn>, <em>int</em> <dfn class="local col5 decl" id="5flags" title='flags' data-type='int' data-ref="5flags" data-ref-filename="5flags">flags</dfn>)</td></tr>
+<tr><th id="132">132</th><td>{</td></tr>
+<tr><th id="133">133</th><td>	<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_strat" title='bufq_strat' data-ref="bufq_strat" data-ref-filename="bufq_strat">bufq_strat</a> *<dfn class="local col6 decl" id="6bsp" title='bsp' data-type='struct bufq_strat *' data-ref="6bsp" data-ref-filename="6bsp">bsp</dfn>, *<dfn class="local col7 decl" id="7it" title='it' data-type='struct bufq_strat *' data-ref="7it" data-ref-filename="7it">it</dfn>;</td></tr>
+<tr><th id="134">134</th><td>	<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col8 decl" id="8bufq" title='bufq' data-type='struct bufq_state *' data-ref="8bufq" data-ref-filename="8bufq">bufq</dfn>;</td></tr>
+<tr><th id="135">135</th><td>	<em>int</em> <dfn class="local col9 decl" id="9error" title='error' data-type='int' data-ref="9error" data-ref-filename="9error">error</dfn> = <var>0</var>;</td></tr>
+<tr><th id="136">136</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col0 decl" id="10gen" title='gen' data-type='u_int' data-ref="10gen" data-ref-filename="10gen">gen</dfn>;</td></tr>
+<tr><th id="137">137</th><td>	<a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col1 decl" id="11found_exact" title='found_exact' data-type='_Bool' data-ref="11found_exact" data-ref-filename="11found_exact">found_exact</dfn>;</td></tr>
+<tr><th id="138">138</th><td>	<em>char</em> <dfn class="local col2 decl" id="12strategy_module_name" title='strategy_module_name' data-type='char [1024]' data-ref="12strategy_module_name" data-ref-filename="12strategy_module_name">strategy_module_name</dfn>[<a class="macro" href="../sys/param.h.html#368" title="1024" data-ref="_M/MAXPATHLEN">MAXPATHLEN</a>];</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect((((flags &amp; 0x0010) == 0 || strategy != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;(flags &amp; BUFQ_EXACT) == 0 || strategy != BUFQ_STRAT_ANY&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/subr_bufq.c&quot;, 140))" data-ref="_M/KASSERT">KASSERT</a>((<a class="local col5 ref" href="#5flags" title='flags' data-ref="5flags" data-ref-filename="5flags">flags</a> &amp; <a class="macro" href="../sys/bufq.h.html#91" title="0x0010" data-ref="_M/BUFQ_EXACT">BUFQ_EXACT</a>) == <var>0</var> || <a class="local col4 ref" href="#4strategy" title='strategy' data-ref="4strategy" data-ref-filename="4strategy">strategy</a> != <a class="macro" href="../sys/bufq.h.html#80" title="((void *)0)" data-ref="_M/BUFQ_STRAT_ANY">BUFQ_STRAT_ANY</a>);</td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td>	<b>switch</b> (<a class="local col5 ref" href="#5flags" title='flags' data-ref="5flags" data-ref-filename="5flags">flags</a> &amp; <a class="macro" href="../sys/bufq.h.html#89" title="0x000f" data-ref="_M/BUFQ_SORT_MASK">BUFQ_SORT_MASK</a>) {</td></tr>
+<tr><th id="143">143</th><td>	<b>case</b> <a class="macro" href="../sys/bufq.h.html#86" title="0x0001" data-ref="_M/BUFQ_SORT_RAWBLOCK">BUFQ_SORT_RAWBLOCK</a>:</td></tr>
+<tr><th id="144">144</th><td>	<b>case</b> <a class="macro" href="../sys/bufq.h.html#87" title="0x0002" data-ref="_M/BUFQ_SORT_CYLINDER">BUFQ_SORT_CYLINDER</a>:</td></tr>
+<tr><th id="145">145</th><td>		<b>break</b>;</td></tr>
+<tr><th id="146">146</th><td>	<b>case</b> <var>0</var>:</td></tr>
+<tr><th id="147">147</th><td>		<i>/*</i></td></tr>
+<tr><th id="148">148</th><td><i>		 * for strategies which don't care about block numbers.</i></td></tr>
+<tr><th id="149">149</th><td><i>		 * eg. fcfs</i></td></tr>
+<tr><th id="150">150</th><td><i>		 */</i></td></tr>
+<tr><th id="151">151</th><td>		<a class="local col5 ref" href="#5flags" title='flags' data-ref="5flags" data-ref-filename="5flags">flags</a> |= <a class="macro" href="../sys/bufq.h.html#86" title="0x0001" data-ref="_M/BUFQ_SORT_RAWBLOCK">BUFQ_SORT_RAWBLOCK</a>;</td></tr>
+<tr><th id="152">152</th><td>		<b>break</b>;</td></tr>
+<tr><th id="153">153</th><td>	<b>default</b>:</td></tr>
+<tr><th id="154">154</th><td>		<a class="ref fn" href="../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"bufq_alloc: sort out of range"</q>);</td></tr>
+<tr><th id="155">155</th><td>	}</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>	<i>/*</i></td></tr>
+<tr><th id="158">158</th><td><i>	 * select strategy.</i></td></tr>
+<tr><th id="159">159</th><td><i>	 * if a strategy specified by flags is found, use it.</i></td></tr>
+<tr><th id="160">160</th><td><i>	 * otherwise, select one with the largest bs_prio.</i></td></tr>
+<tr><th id="161">161</th><td><i>	 */</i></td></tr>
+<tr><th id="162">162</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="163">163</th><td>	<b>do</b> {</td></tr>
+<tr><th id="164">164</th><td>		<a class="local col0 ref" href="#10gen" title='gen' data-ref="10gen" data-ref-filename="10gen">gen</a> = <a class="ref" href="../sys/module.h.html#module_gen" title='module_gen' data-ref="module_gen" data-ref-filename="module_gen">module_gen</a>;</td></tr>
+<tr><th id="165">165</th><td>		<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="166">166</th><td>		<a class="local col1 ref" href="#11found_exact" title='found_exact' data-ref="11found_exact" data-ref-filename="11found_exact">found_exact</a> = <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="167">167</th><td></td></tr>
+<tr><th id="168">168</th><td>		<a class="macro" href="../sys/queue.h.html#134" title="for((it) = (&amp;bufq_strat_list)-&gt;slh_first; (it) != ((void *)0); (it) = (it)-&gt;bs_next.sle_next)" data-ref="_M/SLIST_FOREACH">SLIST_FOREACH</a>(<a class="local col7 ref" href="#7it" title='it' data-ref="7it" data-ref-filename="7it">it</a>, &amp;<a class="tu ref" href="#bufq_strat_list" title='bufq_strat_list' data-use='a' data-ref="bufq_strat_list" data-ref-filename="bufq_strat_list">bufq_strat_list</a>, <a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_next" title='bufq_strat::bs_next' data-ref="bufq_strat::bs_next" data-ref-filename="bufq_strat..bs_next">bs_next</a>) {</td></tr>
+<tr><th id="169">169</th><td>			<b>if</b> (<a class="local col4 ref" href="#4strategy" title='strategy' data-ref="4strategy" data-ref-filename="4strategy">strategy</a> != <a class="macro" href="../sys/bufq.h.html#80" title="((void *)0)" data-ref="_M/BUFQ_STRAT_ANY">BUFQ_STRAT_ANY</a> &amp;&amp;</td></tr>
+<tr><th id="170">170</th><td>			    <a class="macro" href="#82" title="(__builtin_strcmp((strategy), ((it))-&gt;bs_name) == 0)" data-ref="_M/STRAT_MATCH">STRAT_MATCH</a>(<a class="local col4 ref" href="#4strategy" title='strategy' data-ref="4strategy" data-ref-filename="4strategy">strategy</a>, (<a class="local col7 ref" href="#7it" title='it' data-ref="7it" data-ref-filename="7it">it</a>))) {</td></tr>
+<tr><th id="171">171</th><td>				<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a> = <a class="local col7 ref" href="#7it" title='it' data-ref="7it" data-ref-filename="7it">it</a>;</td></tr>
+<tr><th id="172">172</th><td>				<a class="local col1 ref" href="#11found_exact" title='found_exact' data-ref="11found_exact" data-ref-filename="11found_exact">found_exact</a> = <a class="macro" href="../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="173">173</th><td>				<b>break</b>;</td></tr>
+<tr><th id="174">174</th><td>			}</td></tr>
+<tr><th id="175">175</th><td>			<b>if</b> (<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> || (<a class="local col7 ref" href="#7it" title='it' data-ref="7it" data-ref-filename="7it">it</a>)-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_prio" title='bufq_strat::bs_prio' data-ref="bufq_strat::bs_prio" data-ref-filename="bufq_strat..bs_prio">bs_prio</a> &gt; <a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_prio" title='bufq_strat::bs_prio' data-ref="bufq_strat::bs_prio" data-ref-filename="bufq_strat..bs_prio">bs_prio</a>)</td></tr>
+<tr><th id="176">176</th><td>				<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a> = <a class="local col7 ref" href="#7it" title='it' data-ref="7it" data-ref-filename="7it">it</a>;</td></tr>
+<tr><th id="177">177</th><td>		}</td></tr>
+<tr><th id="178">178</th><td>		<b>if</b> (<a class="local col4 ref" href="#4strategy" title='strategy' data-ref="4strategy" data-ref-filename="4strategy">strategy</a> == <a class="macro" href="../sys/bufq.h.html#80" title="((void *)0)" data-ref="_M/BUFQ_STRAT_ANY">BUFQ_STRAT_ANY</a> || <a class="local col1 ref" href="#11found_exact" title='found_exact' data-ref="11found_exact" data-ref-filename="11found_exact">found_exact</a>)</td></tr>
+<tr><th id="179">179</th><td>			<b>break</b>;</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>		<i>/* Try to autoload the bufq strategy module */</i></td></tr>
+<tr><th id="182">182</th><td>		<a class="ref fn" href="../lib/libkern/libkern.h.html#strlcpy" title='strlcpy' data-ref="strlcpy" data-ref-filename="strlcpy">strlcpy</a>(<a class="local col2 ref" href="#12strategy_module_name" title='strategy_module_name' data-ref="12strategy_module_name" data-ref-filename="12strategy_module_name">strategy_module_name</a>, <q>"bufq_"</q>,</td></tr>
+<tr><th id="183">183</th><td>			<b>sizeof</b>(<a class="local col2 ref" href="#12strategy_module_name" title='strategy_module_name' data-ref="12strategy_module_name" data-ref-filename="12strategy_module_name">strategy_module_name</a>));</td></tr>
+<tr><th id="184">184</th><td>		<a class="ref fn" href="../lib/libkern/libkern.h.html#strlcat" title='strlcat' data-ref="strlcat" data-ref-filename="strlcat">strlcat</a>(<a class="local col2 ref" href="#12strategy_module_name" title='strategy_module_name' data-ref="12strategy_module_name" data-ref-filename="12strategy_module_name">strategy_module_name</a>, <a class="local col4 ref" href="#4strategy" title='strategy' data-ref="4strategy" data-ref-filename="4strategy">strategy</a>,</td></tr>
+<tr><th id="185">185</th><td>			<b>sizeof</b>(<a class="local col2 ref" href="#12strategy_module_name" title='strategy_module_name' data-ref="12strategy_module_name" data-ref-filename="12strategy_module_name">strategy_module_name</a>));</td></tr>
+<tr><th id="186">186</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="187">187</th><td>		(<em>void</em>) <a class="ref fn" href="../sys/module.h.html#module_autoload" title='module_autoload' data-ref="module_autoload" data-ref-filename="module_autoload">module_autoload</a>(<a class="local col2 ref" href="#12strategy_module_name" title='strategy_module_name' data-ref="12strategy_module_name" data-ref-filename="12strategy_module_name">strategy_module_name</a>, <a class="enum" href="../sys/module.h.html#MODULE_CLASS_BUFQ" title='MODULE_CLASS_BUFQ' data-ref="MODULE_CLASS_BUFQ" data-ref-filename="MODULE_CLASS_BUFQ">MODULE_CLASS_BUFQ</a>);</td></tr>
+<tr><th id="188">188</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="189">189</th><td>	} <b>while</b> (<a class="local col0 ref" href="#10gen" title='gen' data-ref="10gen" data-ref-filename="10gen">gen</a> != <a class="ref" href="../sys/module.h.html#module_gen" title='module_gen' data-ref="module_gen" data-ref-filename="module_gen">module_gen</a>);</td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td>	<b>if</b> (<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="192">192</th><td>		<a class="ref fn" href="../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"bufq_alloc: no strategy"</q>);</td></tr>
+<tr><th id="193">193</th><td>	}</td></tr>
+<tr><th id="194">194</th><td>	<b>if</b> (<a class="local col4 ref" href="#4strategy" title='strategy' data-ref="4strategy" data-ref-filename="4strategy">strategy</a> != <a class="macro" href="../sys/bufq.h.html#80" title="((void *)0)" data-ref="_M/BUFQ_STRAT_ANY">BUFQ_STRAT_ANY</a> &amp;&amp; !<a class="local col1 ref" href="#11found_exact" title='found_exact' data-ref="11found_exact" data-ref-filename="11found_exact">found_exact</a>) {</td></tr>
+<tr><th id="195">195</th><td>		<b>if</b> ((<a class="local col5 ref" href="#5flags" title='flags' data-ref="5flags" data-ref-filename="5flags">flags</a> &amp; <a class="macro" href="../sys/bufq.h.html#91" title="0x0010" data-ref="_M/BUFQ_EXACT">BUFQ_EXACT</a>)) {</td></tr>
+<tr><th id="196">196</th><td>			<a class="local col9 ref" href="#9error" title='error' data-ref="9error" data-ref-filename="9error">error</a> = <a class="macro" href="../sys/errno.h.html#43" title="2" data-ref="_M/ENOENT">ENOENT</a>;</td></tr>
+<tr><th id="197">197</th><td>			<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="198">198</th><td>			<b>goto</b> <a class="lbl" href="#13out" data-ref="13out" data-ref-filename="13out">out</a>;</td></tr>
+<tr><th id="199">199</th><td>		}</td></tr>
+<tr><th id="200">200</th><td><u>#<span data-ppcond="200">if</span> defined(<span class="macro" data-ref="_M/DEBUG">DEBUG</span>)</u></td></tr>
+<tr><th id="201">201</th><td>		printf(<q>"bufq_alloc: '%s' is not available. using '%s'.\n"</q>,</td></tr>
+<tr><th id="202">202</th><td>		    strategy, bsp-&gt;bs_name);</td></tr>
+<tr><th id="203">203</th><td><u>#<span data-ppcond="200">endif</span></u></td></tr>
+<tr><th id="204">204</th><td>	}</td></tr>
+<tr><th id="205">205</th><td><u>#<span data-ppcond="205">if</span> defined(<span class="macro" data-ref="_M/BUFQ_DEBUG">BUFQ_DEBUG</span>)</u></td></tr>
+<tr><th id="206">206</th><td>	<i>/* XXX aprint? */</i></td></tr>
+<tr><th id="207">207</th><td>	printf(<q>"bufq_alloc: using '%s'\n"</q>, bsp-&gt;bs_name);</td></tr>
+<tr><th id="208">208</th><td><u>#<span data-ppcond="205">endif</span></u></td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td>	<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_refcnt" title='bufq_strat::bs_refcnt' data-ref="bufq_strat::bs_refcnt" data-ref-filename="bufq_strat..bs_refcnt">bs_refcnt</a>++;</td></tr>
+<tr><th id="211">211</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="212">212</th><td>	*<a class="local col3 ref" href="#3bufqp" title='bufqp' data-ref="3bufqp" data-ref-filename="3bufqp">bufqp</a> = <a class="local col8 ref" href="#8bufq" title='bufq' data-ref="8bufq" data-ref-filename="8bufq">bufq</a> = <a class="ref fn" href="../sys/kmem.h.html#kmem_zalloc" title='kmem_zalloc' data-ref="kmem_zalloc" data-ref-filename="kmem_zalloc">kmem_zalloc</a>(<b>sizeof</b>(*<a class="local col8 ref" href="#8bufq" title='bufq' data-ref="8bufq" data-ref-filename="8bufq">bufq</a>), <a class="macro" href="../sys/kmem.h.html#57" title="0x00000001" data-ref="_M/KM_SLEEP">KM_SLEEP</a>);</td></tr>
+<tr><th id="213">213</th><td>	<a class="local col8 ref" href="#8bufq" title='bufq' data-ref="8bufq" data-ref-filename="8bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_flags" title='bufq_state::bq_flags' data-ref="bufq_state::bq_flags" data-ref-filename="bufq_state..bq_flags">bq_flags</a> = <a class="local col5 ref" href="#5flags" title='flags' data-ref="5flags" data-ref-filename="5flags">flags</a>;</td></tr>
+<tr><th id="214">214</th><td>	<a class="local col8 ref" href="#8bufq" title='bufq' data-ref="8bufq" data-ref-filename="8bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_strat" title='bufq_state::bq_strat' data-ref="bufq_state::bq_strat" data-ref-filename="bufq_state..bq_strat">bq_strat</a> = <a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a>;</td></tr>
+<tr><th id="215">215</th><td>	(*<a class="local col6 ref" href="#6bsp" title='bsp' data-ref="6bsp" data-ref-filename="6bsp">bsp</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_initfn" title='bufq_strat::bs_initfn' data-ref="bufq_strat::bs_initfn" data-ref-filename="bufq_strat..bs_initfn">bs_initfn</a>)(<a class="local col8 ref" href="#8bufq" title='bufq' data-ref="8bufq" data-ref-filename="8bufq">bufq</a>);</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><dfn class="lbl" id="13out" data-ref="13out" data-ref-filename="13out">out</dfn>:</td></tr>
+<tr><th id="218">218</th><td>	<b>return</b> <a class="local col9 ref" href="#9error" title='error' data-ref="9error" data-ref-filename="9error">error</a>;</td></tr>
+<tr><th id="219">219</th><td>}</td></tr>
+<tr><th id="220">220</th><td></td></tr>
+<tr><th id="221">221</th><td><em>void</em></td></tr>
+<tr><th id="222">222</th><td><dfn class="decl def fn" id="bufq_put" title='bufq_put' data-ref="bufq_put" data-ref-filename="bufq_put">bufq_put</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col4 decl" id="14bufq" title='bufq' data-type='struct bufq_state *' data-ref="14bufq" data-ref-filename="14bufq">bufq</dfn>, <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col5 decl" id="15bp" title='bp' data-type='struct buf *' data-ref="15bp" data-ref-filename="15bp">bp</dfn>)</td></tr>
+<tr><th id="223">223</th><td>{</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td>	(*<a class="local col4 ref" href="#14bufq" title='bufq' data-ref="14bufq" data-ref-filename="14bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_put" title='bufq_state::bq_put' data-ref="bufq_state::bq_put" data-ref-filename="bufq_state..bq_put">bq_put</a>)(<a class="local col4 ref" href="#14bufq" title='bufq' data-ref="14bufq" data-ref-filename="14bufq">bufq</a>, <a class="local col5 ref" href="#15bp" title='bp' data-ref="15bp" data-ref-filename="15bp">bp</a>);</td></tr>
+<tr><th id="226">226</th><td>}</td></tr>
+<tr><th id="227">227</th><td></td></tr>
+<tr><th id="228">228</th><td><b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *</td></tr>
+<tr><th id="229">229</th><td><dfn class="decl def fn" id="bufq_get" title='bufq_get' data-ref="bufq_get" data-ref-filename="bufq_get">bufq_get</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col6 decl" id="16bufq" title='bufq' data-type='struct bufq_state *' data-ref="16bufq" data-ref-filename="16bufq">bufq</dfn>)</td></tr>
+<tr><th id="230">230</th><td>{</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td>	<b>return</b> (*<a class="local col6 ref" href="#16bufq" title='bufq' data-ref="16bufq" data-ref-filename="16bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_get" title='bufq_state::bq_get' data-ref="bufq_state::bq_get" data-ref-filename="bufq_state..bq_get">bq_get</a>)(<a class="local col6 ref" href="#16bufq" title='bufq' data-ref="16bufq" data-ref-filename="16bufq">bufq</a>, <var>1</var>);</td></tr>
+<tr><th id="233">233</th><td>}</td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td><b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *</td></tr>
+<tr><th id="236">236</th><td><dfn class="decl def fn" id="bufq_peek" title='bufq_peek' data-ref="bufq_peek" data-ref-filename="bufq_peek">bufq_peek</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col7 decl" id="17bufq" title='bufq' data-type='struct bufq_state *' data-ref="17bufq" data-ref-filename="17bufq">bufq</dfn>)</td></tr>
+<tr><th id="237">237</th><td>{</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<b>return</b> (*<a class="local col7 ref" href="#17bufq" title='bufq' data-ref="17bufq" data-ref-filename="17bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_get" title='bufq_state::bq_get' data-ref="bufq_state::bq_get" data-ref-filename="bufq_state..bq_get">bq_get</a>)(<a class="local col7 ref" href="#17bufq" title='bufq' data-ref="17bufq" data-ref-filename="17bufq">bufq</a>, <var>0</var>);</td></tr>
+<tr><th id="240">240</th><td>}</td></tr>
+<tr><th id="241">241</th><td></td></tr>
+<tr><th id="242">242</th><td><b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *</td></tr>
+<tr><th id="243">243</th><td><dfn class="decl def fn" id="bufq_cancel" title='bufq_cancel' data-ref="bufq_cancel" data-ref-filename="bufq_cancel">bufq_cancel</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col8 decl" id="18bufq" title='bufq' data-type='struct bufq_state *' data-ref="18bufq" data-ref-filename="18bufq">bufq</dfn>, <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col9 decl" id="19bp" title='bp' data-type='struct buf *' data-ref="19bp" data-ref-filename="19bp">bp</dfn>)</td></tr>
+<tr><th id="244">244</th><td>{</td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td>	<b>return</b> (*<a class="local col8 ref" href="#18bufq" title='bufq' data-ref="18bufq" data-ref-filename="18bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_cancel" title='bufq_state::bq_cancel' data-ref="bufq_state::bq_cancel" data-ref-filename="bufq_state..bq_cancel">bq_cancel</a>)(<a class="local col8 ref" href="#18bufq" title='bufq' data-ref="18bufq" data-ref-filename="18bufq">bufq</a>, <a class="local col9 ref" href="#19bp" title='bp' data-ref="19bp" data-ref-filename="19bp">bp</a>);</td></tr>
+<tr><th id="247">247</th><td>}</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><i>/*</i></td></tr>
+<tr><th id="250">250</th><td><i> * Drain a device buffer queue.</i></td></tr>
+<tr><th id="251">251</th><td><i> */</i></td></tr>
+<tr><th id="252">252</th><td><em>void</em></td></tr>
+<tr><th id="253">253</th><td><dfn class="decl def fn" id="bufq_drain" title='bufq_drain' data-ref="bufq_drain" data-ref-filename="bufq_drain">bufq_drain</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col0 decl" id="20bufq" title='bufq' data-type='struct bufq_state *' data-ref="20bufq" data-ref-filename="20bufq">bufq</dfn>)</td></tr>
+<tr><th id="254">254</th><td>{</td></tr>
+<tr><th id="255">255</th><td>	<b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col1 decl" id="21bp" title='bp' data-type='struct buf *' data-ref="21bp" data-ref-filename="21bp">bp</dfn>;</td></tr>
+<tr><th id="256">256</th><td></td></tr>
+<tr><th id="257">257</th><td>	<b>while</b> ((<a class="local col1 ref" href="#21bp" title='bp' data-ref="21bp" data-ref-filename="21bp">bp</a> = <a class="ref fn" href="#bufq_get" title='bufq_get' data-ref="bufq_get" data-ref-filename="bufq_get">bufq_get</a>(<a class="local col0 ref" href="#20bufq" title='bufq' data-ref="20bufq" data-ref-filename="20bufq">bufq</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="258">258</th><td>		<a class="local col1 ref" href="#21bp" title='bp' data-ref="21bp" data-ref-filename="21bp">bp</a>-&gt;<a class="ref field" href="../sys/buf.h.html#buf::b_error" title='buf::b_error' data-ref="buf::b_error" data-ref-filename="buf..b_error">b_error</a> = <a class="macro" href="../sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="259">259</th><td>		<a class="local col1 ref" href="#21bp" title='bp' data-ref="21bp" data-ref-filename="21bp">bp</a>-&gt;<a class="ref field" href="../sys/buf.h.html#buf::b_resid" title='buf::b_resid' data-ref="buf::b_resid" data-ref-filename="buf..b_resid">b_resid</a> = <a class="local col1 ref" href="#21bp" title='bp' data-ref="21bp" data-ref-filename="21bp">bp</a>-&gt;<a class="ref field" href="../sys/buf.h.html#buf::b_bcount" title='buf::b_bcount' data-ref="buf::b_bcount" data-ref-filename="buf..b_bcount">b_bcount</a>;</td></tr>
+<tr><th id="260">260</th><td>		<a class="ref fn" href="../sys/buf.h.html#biodone" title='biodone' data-ref="biodone" data-ref-filename="biodone">biodone</a>(<a class="local col1 ref" href="#21bp" title='bp' data-ref="21bp" data-ref-filename="21bp">bp</a>);</td></tr>
+<tr><th id="261">261</th><td>	}</td></tr>
+<tr><th id="262">262</th><td>}</td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td><i>/*</i></td></tr>
+<tr><th id="265">265</th><td><i> * Destroy a device buffer queue.</i></td></tr>
+<tr><th id="266">266</th><td><i> */</i></td></tr>
+<tr><th id="267">267</th><td><em>void</em></td></tr>
+<tr><th id="268">268</th><td><dfn class="decl def fn" id="bufq_free" title='bufq_free' data-ref="bufq_free" data-ref-filename="bufq_free">bufq_free</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col2 decl" id="22bufq" title='bufq' data-type='struct bufq_state *' data-ref="22bufq" data-ref-filename="22bufq">bufq</dfn>)</td></tr>
+<tr><th id="269">269</th><td>{</td></tr>
+<tr><th id="270">270</th><td></td></tr>
+<tr><th id="271">271</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((bufq_peek(bufq) == ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;bufq_peek(bufq) == NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/subr_bufq.c&quot;, 271))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="#bufq_peek" title='bufq_peek' data-ref="bufq_peek" data-ref-filename="bufq_peek">bufq_peek</a>(<a class="local col2 ref" href="#22bufq" title='bufq' data-ref="22bufq" data-ref-filename="22bufq">bufq</a>) == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td>	<a class="local col2 ref" href="#22bufq" title='bufq' data-ref="22bufq" data-ref-filename="22bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_fini" title='bufq_state::bq_fini' data-ref="bufq_state::bq_fini" data-ref-filename="bufq_state..bq_fini">bq_fini</a>(<a class="local col2 ref" href="#22bufq" title='bufq' data-ref="22bufq" data-ref-filename="22bufq">bufq</a>);</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="276">276</th><td>	<a class="local col2 ref" href="#22bufq" title='bufq' data-ref="22bufq" data-ref-filename="22bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_strat" title='bufq_state::bq_strat' data-ref="bufq_state::bq_strat" data-ref-filename="bufq_state..bq_strat">bq_strat</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_refcnt" title='bufq_strat::bs_refcnt' data-ref="bufq_strat::bs_refcnt" data-ref-filename="bufq_strat..bs_refcnt">bs_refcnt</a>--;</td></tr>
+<tr><th id="277">277</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="tu ref" href="#bufq_mutex" title='bufq_mutex' data-use='a' data-ref="bufq_mutex" data-ref-filename="bufq_mutex">bufq_mutex</a>);</td></tr>
+<tr><th id="278">278</th><td>	</td></tr>
+<tr><th id="279">279</th><td>	<a class="ref fn" href="../sys/kmem.h.html#kmem_free" title='kmem_free' data-ref="kmem_free" data-ref-filename="kmem_free">kmem_free</a>(<a class="local col2 ref" href="#22bufq" title='bufq' data-ref="22bufq" data-ref-filename="22bufq">bufq</a>, <b>sizeof</b>(*<a class="local col2 ref" href="#22bufq" title='bufq' data-ref="22bufq" data-ref-filename="22bufq">bufq</a>));</td></tr>
+<tr><th id="280">280</th><td>}</td></tr>
+<tr><th id="281">281</th><td></td></tr>
+<tr><th id="282">282</th><td><i>/*</i></td></tr>
+<tr><th id="283">283</th><td><i> * get a strategy identifier of a buffer queue.</i></td></tr>
+<tr><th id="284">284</th><td><i> */</i></td></tr>
+<tr><th id="285">285</th><td><em>const</em> <em>char</em> *</td></tr>
+<tr><th id="286">286</th><td><dfn class="decl def fn" id="bufq_getstrategyname" title='bufq_getstrategyname' data-ref="bufq_getstrategyname" data-ref-filename="bufq_getstrategyname">bufq_getstrategyname</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col3 decl" id="23bufq" title='bufq' data-type='struct bufq_state *' data-ref="23bufq" data-ref-filename="23bufq">bufq</dfn>)</td></tr>
+<tr><th id="287">287</th><td>{</td></tr>
+<tr><th id="288">288</th><td></td></tr>
+<tr><th id="289">289</th><td>	<b>return</b> <a class="local col3 ref" href="#23bufq" title='bufq' data-ref="23bufq" data-ref-filename="23bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_strat" title='bufq_state::bq_strat' data-ref="bufq_state::bq_strat" data-ref-filename="bufq_state..bq_strat">bq_strat</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_name" title='bufq_strat::bs_name' data-ref="bufq_strat::bs_name" data-ref-filename="bufq_strat..bs_name">bs_name</a>;</td></tr>
+<tr><th id="290">290</th><td>}</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td><i>/*</i></td></tr>
+<tr><th id="293">293</th><td><i> * move all requests on a buffer queue to another.</i></td></tr>
+<tr><th id="294">294</th><td><i> */</i></td></tr>
+<tr><th id="295">295</th><td><em>void</em></td></tr>
+<tr><th id="296">296</th><td><dfn class="decl def fn" id="bufq_move" title='bufq_move' data-ref="bufq_move" data-ref-filename="bufq_move">bufq_move</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col4 decl" id="24dst" title='dst' data-type='struct bufq_state *' data-ref="24dst" data-ref-filename="24dst">dst</dfn>, <b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col5 decl" id="25src" title='src' data-type='struct bufq_state *' data-ref="25src" data-ref-filename="25src">src</dfn>)</td></tr>
+<tr><th id="297">297</th><td>{</td></tr>
+<tr><th id="298">298</th><td>	<b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col6 decl" id="26bp" title='bp' data-type='struct buf *' data-ref="26bp" data-ref-filename="26bp">bp</dfn>;</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td>	<b>while</b> ((<a class="local col6 ref" href="#26bp" title='bp' data-ref="26bp" data-ref-filename="26bp">bp</a> = <a class="ref fn" href="#bufq_get" title='bufq_get' data-ref="bufq_get" data-ref-filename="bufq_get">bufq_get</a>(<a class="local col5 ref" href="#25src" title='src' data-ref="25src" data-ref-filename="25src">src</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="301">301</th><td>		<a class="ref fn" href="#bufq_put" title='bufq_put' data-ref="bufq_put" data-ref-filename="bufq_put">bufq_put</a>(<a class="local col4 ref" href="#24dst" title='dst' data-ref="24dst" data-ref-filename="24dst">dst</a>, <a class="local col6 ref" href="#26bp" title='bp' data-ref="26bp" data-ref-filename="26bp">bp</a>);</td></tr>
+<tr><th id="302">302</th><td>	}</td></tr>
+<tr><th id="303">303</th><td>}</td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="306">306</th><td><dfn class="tu decl def fn" id="docopy" title='docopy' data-type='int docopy(char * buf, size_t * bufoffp, size_t buflen, const char * datap, size_t datalen)' data-ref="docopy" data-ref-filename="docopy">docopy</dfn>(<em>char</em> *<dfn class="local col7 decl" id="27buf" title='buf' data-type='char *' data-ref="27buf" data-ref-filename="27buf">buf</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> *<dfn class="local col8 decl" id="28bufoffp" title='bufoffp' data-type='size_t *' data-ref="28bufoffp" data-ref-filename="28bufoffp">bufoffp</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col9 decl" id="29buflen" title='buflen' data-type='size_t' data-ref="29buflen" data-ref-filename="29buflen">buflen</dfn>,</td></tr>
+<tr><th id="307">307</th><td>    <em>const</em> <em>char</em> *<dfn class="local col0 decl" id="30datap" title='datap' data-type='const char *' data-ref="30datap" data-ref-filename="30datap">datap</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="31datalen" title='datalen' data-type='size_t' data-ref="31datalen" data-ref-filename="31datalen">datalen</dfn>)</td></tr>
+<tr><th id="308">308</th><td>{</td></tr>
+<tr><th id="309">309</th><td>	<em>int</em> <dfn class="local col2 decl" id="32error" title='error' data-type='int' data-ref="32error" data-ref-filename="32error">error</dfn> = <var>0</var>;</td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td>	<b>if</b> (<a class="local col7 ref" href="#27buf" title='buf' data-ref="27buf" data-ref-filename="27buf">buf</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> &amp;&amp; <a class="local col1 ref" href="#31datalen" title='datalen' data-ref="31datalen" data-ref-filename="31datalen">datalen</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="312">312</th><td></td></tr>
+<tr><th id="313">313</th><td>		<b>if</b> (*<a class="local col8 ref" href="#28bufoffp" title='bufoffp' data-ref="28bufoffp" data-ref-filename="28bufoffp">bufoffp</a> + <a class="local col1 ref" href="#31datalen" title='datalen' data-ref="31datalen" data-ref-filename="31datalen">datalen</a> &gt; <a class="local col9 ref" href="#29buflen" title='buflen' data-ref="29buflen" data-ref-filename="29buflen">buflen</a>) {</td></tr>
+<tr><th id="314">314</th><td>			<b>goto</b> <a class="lbl" href="#33out" data-ref="33out" data-ref-filename="33out">out</a>;</td></tr>
+<tr><th id="315">315</th><td>		}</td></tr>
+<tr><th id="316">316</th><td>		<a class="local col2 ref" href="#32error" title='error' data-ref="32error" data-ref-filename="32error">error</a> = <a class="ref fn" href="../sys/systm.h.html#copyout" title='copyout' data-ref="copyout" data-ref-filename="copyout">copyout</a>(<a class="local col0 ref" href="#30datap" title='datap' data-ref="30datap" data-ref-filename="30datap">datap</a>, <a class="local col7 ref" href="#27buf" title='buf' data-ref="27buf" data-ref-filename="27buf">buf</a> + *<a class="local col8 ref" href="#28bufoffp" title='bufoffp' data-ref="28bufoffp" data-ref-filename="28bufoffp">bufoffp</a>, <a class="local col1 ref" href="#31datalen" title='datalen' data-ref="31datalen" data-ref-filename="31datalen">datalen</a>);</td></tr>
+<tr><th id="317">317</th><td>		<b>if</b> (<a class="local col2 ref" href="#32error" title='error' data-ref="32error" data-ref-filename="32error">error</a>) {</td></tr>
+<tr><th id="318">318</th><td>			<b>goto</b> <a class="lbl" href="#33out" data-ref="33out" data-ref-filename="33out">out</a>;</td></tr>
+<tr><th id="319">319</th><td>		}</td></tr>
+<tr><th id="320">320</th><td>	}</td></tr>
+<tr><th id="321">321</th><td><dfn class="lbl" id="33out" data-ref="33out" data-ref-filename="33out">out</dfn>:</td></tr>
+<tr><th id="322">322</th><td>	<b>if</b> (<a class="local col2 ref" href="#32error" title='error' data-ref="32error" data-ref-filename="32error">error</a> == <var>0</var>) {</td></tr>
+<tr><th id="323">323</th><td>		*<a class="local col8 ref" href="#28bufoffp" title='bufoffp' data-ref="28bufoffp" data-ref-filename="28bufoffp">bufoffp</a> += <a class="local col1 ref" href="#31datalen" title='datalen' data-ref="31datalen" data-ref-filename="31datalen">datalen</a>;</td></tr>
+<tr><th id="324">324</th><td>	}</td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td>	<b>return</b> <a class="local col2 ref" href="#32error" title='error' data-ref="32error" data-ref-filename="32error">error</a>;</td></tr>
+<tr><th id="327">327</th><td>}</td></tr>
+<tr><th id="328">328</th><td></td></tr>
+<tr><th id="329">329</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="330">330</th><td><dfn class="tu decl def fn" id="docopystr" title='docopystr' data-type='int docopystr(char * buf, size_t * bufoffp, size_t buflen, const char * datap)' data-ref="docopystr" data-ref-filename="docopystr">docopystr</dfn>(<em>char</em> *<dfn class="local col4 decl" id="34buf" title='buf' data-type='char *' data-ref="34buf" data-ref-filename="34buf">buf</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> *<dfn class="local col5 decl" id="35bufoffp" title='bufoffp' data-type='size_t *' data-ref="35bufoffp" data-ref-filename="35bufoffp">bufoffp</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="36buflen" title='buflen' data-type='size_t' data-ref="36buflen" data-ref-filename="36buflen">buflen</dfn>, <em>const</em> <em>char</em> *<dfn class="local col7 decl" id="37datap" title='datap' data-type='const char *' data-ref="37datap" data-ref-filename="37datap">datap</dfn>)</td></tr>
+<tr><th id="331">331</th><td>{</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td>	<b>return</b> <a class="tu ref fn" href="#docopy" title='docopy' data-use='c' data-ref="docopy" data-ref-filename="docopy">docopy</a>(<a class="local col4 ref" href="#34buf" title='buf' data-ref="34buf" data-ref-filename="34buf">buf</a>, <a class="local col5 ref" href="#35bufoffp" title='bufoffp' data-ref="35bufoffp" data-ref-filename="35bufoffp">bufoffp</a>, <a class="local col6 ref" href="#36buflen" title='buflen' data-ref="36buflen" data-ref-filename="36buflen">buflen</a>, <a class="local col7 ref" href="#37datap" title='datap' data-ref="37datap" data-ref-filename="37datap">datap</a>, <a class="macro" href="../lib/libkern/libkern.h.html#402" title="__builtin_strlen(datap)" data-ref="_M/strlen">strlen</a>(<a class="local col7 ref" href="#37datap" title='datap' data-ref="37datap" data-ref-filename="37datap">datap</a>));</td></tr>
+<tr><th id="334">334</th><td>}</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="337">337</th><td><dfn class="tu decl def fn" id="docopynul" title='docopynul' data-type='int docopynul(char * buf, size_t * bufoffp, size_t buflen)' data-ref="docopynul" data-ref-filename="docopynul">docopynul</dfn>(<em>char</em> *<dfn class="local col8 decl" id="38buf" title='buf' data-type='char *' data-ref="38buf" data-ref-filename="38buf">buf</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> *<dfn class="local col9 decl" id="39bufoffp" title='bufoffp' data-type='size_t *' data-ref="39bufoffp" data-ref-filename="39bufoffp">bufoffp</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="40buflen" title='buflen' data-type='size_t' data-ref="40buflen" data-ref-filename="40buflen">buflen</dfn>)</td></tr>
+<tr><th id="338">338</th><td>{</td></tr>
+<tr><th id="339">339</th><td></td></tr>
+<tr><th id="340">340</th><td>	<b>return</b> <a class="tu ref fn" href="#docopy" title='docopy' data-use='c' data-ref="docopy" data-ref-filename="docopy">docopy</a>(<a class="local col8 ref" href="#38buf" title='buf' data-ref="38buf" data-ref-filename="38buf">buf</a>, <a class="local col9 ref" href="#39bufoffp" title='bufoffp' data-ref="39bufoffp" data-ref-filename="39bufoffp">bufoffp</a>, <a class="local col0 ref" href="#40buflen" title='buflen' data-ref="40buflen" data-ref-filename="40buflen">buflen</a>, <q>""</q>, <var>1</var>);</td></tr>
+<tr><th id="341">341</th><td>}</td></tr>
+<tr><th id="342">342</th><td></td></tr>
+<tr><th id="343">343</th><td><i  data-doc="sysctl_kern_bufq_strategies">/*</i></td></tr>
+<tr><th id="344">344</th><td><i  data-doc="sysctl_kern_bufq_strategies"> * sysctl function that will print all bufq strategies</i></td></tr>
+<tr><th id="345">345</th><td><i  data-doc="sysctl_kern_bufq_strategies"> * currently available to the kernel.</i></td></tr>
+<tr><th id="346">346</th><td><i  data-doc="sysctl_kern_bufq_strategies"> */</i></td></tr>
+<tr><th id="347">347</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="348">348</th><td><dfn class="tu decl def fn" id="sysctl_kern_bufq_strategies" title='sysctl_kern_bufq_strategies' data-type='int sysctl_kern_bufq_strategies(const int * name, u_int namelen, void * oldp, size_t * oldlenp, const void * newp, size_t newlen, const int * oname, struct lwp * l, const struct sysctlnode * rnode)' data-ref="sysctl_kern_bufq_strategies" data-ref-filename="sysctl_kern_bufq_strategies">sysctl_kern_bufq_strategies</dfn>(<a class="macro" href="../sys/sysctl.h.html#957" title="const int *name, u_int namelen, void *oldp, size_t *oldlenp, const void *newp, size_t newlen, const int *oname, struct lwp *l, const struct sysctlnode *rnode" data-ref="_M/SYSCTLFN_ARGS">SYSCTLFN_ARGS</a>)</td></tr>
+<tr><th id="349">349</th><td>{</td></tr>
+<tr><th id="350">350</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_strat" title='bufq_strat' data-ref="bufq_strat" data-ref-filename="bufq_strat">bufq_strat</a> *<dfn class="local col1 decl" id="41bq_strat" title='bq_strat' data-type='const struct bufq_strat *' data-ref="41bq_strat" data-ref-filename="41bq_strat">bq_strat</dfn>;</td></tr>
+<tr><th id="351">351</th><td>	<em>const</em> <em>char</em> *<dfn class="local col2 decl" id="42delim" title='delim' data-type='const char *' data-ref="42delim" data-ref-filename="42delim">delim</dfn> = <q>""</q>;</td></tr>
+<tr><th id="352">352</th><td>	<a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="43off" title='off' data-type='size_t' data-ref="43off" data-ref-filename="43off">off</dfn> = <var>0</var>;</td></tr>
+<tr><th id="353">353</th><td>	<a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="44buflen" title='buflen' data-type='size_t' data-ref="44buflen" data-ref-filename="44buflen">buflen</dfn> = *<a class="local col5 ref" href="#348" title='oldlenp' data-ref="45oldlenp" data-ref-filename="45oldlenp">oldlenp</a>;</td></tr>
+<tr><th id="354">354</th><td>	<em>int</em> <dfn class="local col6 decl" id="46error" title='error' data-type='int' data-ref="46error" data-ref-filename="46error">error</dfn>;</td></tr>
+<tr><th id="355">355</th><td></td></tr>
+<tr><th id="356">356</th><td>	<a class="macro" href="../sys/queue.h.html#134" title="for((bq_strat) = (&amp;bufq_strat_list)-&gt;slh_first; (bq_strat) != ((void *)0); (bq_strat) = (bq_strat)-&gt;bs_next.sle_next)" data-ref="_M/SLIST_FOREACH">SLIST_FOREACH</a>(<a class="local col1 ref" href="#41bq_strat" title='bq_strat' data-ref="41bq_strat" data-ref-filename="41bq_strat">bq_strat</a>, &amp;<a class="tu ref" href="#bufq_strat_list" title='bufq_strat_list' data-use='a' data-ref="bufq_strat_list" data-ref-filename="bufq_strat_list">bufq_strat_list</a>, <a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_next" title='bufq_strat::bs_next' data-ref="bufq_strat::bs_next" data-ref-filename="bufq_strat..bs_next">bs_next</a>) {</td></tr>
+<tr><th id="357">357</th><td>		<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a> = <a class="tu ref fn" href="#docopystr" title='docopystr' data-use='c' data-ref="docopystr" data-ref-filename="docopystr">docopystr</a>(<a class="local col7 ref" href="#348" title='oldp' data-ref="47oldp" data-ref-filename="47oldp">oldp</a>, &amp;<a class="local col3 ref" href="#43off" title='off' data-ref="43off" data-ref-filename="43off">off</a>, <a class="local col4 ref" href="#44buflen" title='buflen' data-ref="44buflen" data-ref-filename="44buflen">buflen</a>, <a class="local col2 ref" href="#42delim" title='delim' data-ref="42delim" data-ref-filename="42delim">delim</a>);</td></tr>
+<tr><th id="358">358</th><td>		<b>if</b> (<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a>) {</td></tr>
+<tr><th id="359">359</th><td>			<b>goto</b> <a class="lbl" href="#48out" data-ref="48out" data-ref-filename="48out">out</a>;</td></tr>
+<tr><th id="360">360</th><td>		}</td></tr>
+<tr><th id="361">361</th><td>		<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a> = <a class="tu ref fn" href="#docopystr" title='docopystr' data-use='c' data-ref="docopystr" data-ref-filename="docopystr">docopystr</a>(<a class="local col7 ref" href="#348" title='oldp' data-ref="47oldp" data-ref-filename="47oldp">oldp</a>, &amp;<a class="local col3 ref" href="#43off" title='off' data-ref="43off" data-ref-filename="43off">off</a>, <a class="local col4 ref" href="#44buflen" title='buflen' data-ref="44buflen" data-ref-filename="44buflen">buflen</a>, (<a class="local col1 ref" href="#41bq_strat" title='bq_strat' data-ref="41bq_strat" data-ref-filename="41bq_strat">bq_strat</a>)-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_strat::bs_name" title='bufq_strat::bs_name' data-ref="bufq_strat::bs_name" data-ref-filename="bufq_strat..bs_name">bs_name</a>);</td></tr>
+<tr><th id="362">362</th><td>		<b>if</b> (<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a>) {</td></tr>
+<tr><th id="363">363</th><td>			<b>goto</b> <a class="lbl" href="#48out" data-ref="48out" data-ref-filename="48out">out</a>;</td></tr>
+<tr><th id="364">364</th><td>		}</td></tr>
+<tr><th id="365">365</th><td>		<a class="local col2 ref" href="#42delim" title='delim' data-ref="42delim" data-ref-filename="42delim">delim</a> = <q>" "</q>;</td></tr>
+<tr><th id="366">366</th><td>	}</td></tr>
+<tr><th id="367">367</th><td></td></tr>
+<tr><th id="368">368</th><td>	<i>/* In case there are no registered strategies ... */</i></td></tr>
+<tr><th id="369">369</th><td>	<b>if</b> (<a class="local col3 ref" href="#43off" title='off' data-ref="43off" data-ref-filename="43off">off</a> == <var>0</var>) {</td></tr>
+<tr><th id="370">370</th><td>		<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a> = <a class="tu ref fn" href="#docopystr" title='docopystr' data-use='c' data-ref="docopystr" data-ref-filename="docopystr">docopystr</a>(<a class="local col7 ref" href="#348" title='oldp' data-ref="47oldp" data-ref-filename="47oldp">oldp</a>, &amp;<a class="local col3 ref" href="#43off" title='off' data-ref="43off" data-ref-filename="43off">off</a>, <a class="local col4 ref" href="#44buflen" title='buflen' data-ref="44buflen" data-ref-filename="44buflen">buflen</a>, <q>"NULL"</q>);</td></tr>
+<tr><th id="371">371</th><td>		<b>if</b> (<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a>) {</td></tr>
+<tr><th id="372">372</th><td>			<b>goto</b> <a class="lbl" href="#48out" data-ref="48out" data-ref-filename="48out">out</a>;</td></tr>
+<tr><th id="373">373</th><td>		}</td></tr>
+<tr><th id="374">374</th><td>	}</td></tr>
+<tr><th id="375">375</th><td></td></tr>
+<tr><th id="376">376</th><td>	<i>/* NUL terminate */</i></td></tr>
+<tr><th id="377">377</th><td>	<a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a> = <a class="tu ref fn" href="#docopynul" title='docopynul' data-use='c' data-ref="docopynul" data-ref-filename="docopynul">docopynul</a>(<a class="local col7 ref" href="#348" title='oldp' data-ref="47oldp" data-ref-filename="47oldp">oldp</a>, &amp;<a class="local col3 ref" href="#43off" title='off' data-ref="43off" data-ref-filename="43off">off</a>, <a class="local col4 ref" href="#44buflen" title='buflen' data-ref="44buflen" data-ref-filename="44buflen">buflen</a>);</td></tr>
+<tr><th id="378">378</th><td><dfn class="lbl" id="48out" data-ref="48out" data-ref-filename="48out">out</dfn>:</td></tr>
+<tr><th id="379">379</th><td>	*<a class="local col5 ref" href="#348" title='oldlenp' data-ref="45oldlenp" data-ref-filename="45oldlenp">oldlenp</a> = <a class="local col3 ref" href="#43off" title='off' data-ref="43off" data-ref-filename="43off">off</a>;</td></tr>
+<tr><th id="380">380</th><td>	<b>return</b> <a class="local col6 ref" href="#46error" title='error' data-ref="46error" data-ref-filename="46error">error</a>;</td></tr>
+<tr><th id="381">381</th><td>}</td></tr>
+<tr><th id="382">382</th><td></td></tr>
+<tr><th id="383">383</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="384">384</th><td><dfn class="tu decl def fn" id="sysctl_kern_bufq_strategies_setup" title='sysctl_kern_bufq_strategies_setup' data-type='void sysctl_kern_bufq_strategies_setup(struct sysctllog ** clog)' data-ref="sysctl_kern_bufq_strategies_setup" data-ref-filename="sysctl_kern_bufq_strategies_setup">sysctl_kern_bufq_strategies_setup</dfn>(<b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctllog" title='sysctllog' data-ref="sysctllog" data-ref-filename="sysctllog">sysctllog</a> **<dfn class="local col9 decl" id="49clog" title='clog' data-type='struct sysctllog **' data-ref="49clog" data-ref-filename="49clog">clog</dfn>)</td></tr>
+<tr><th id="385">385</th><td>{</td></tr>
+<tr><th id="386">386</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctlnode" title='sysctlnode' data-ref="sysctlnode" data-ref-filename="sysctlnode">sysctlnode</a> *<dfn class="local col0 decl" id="50node" title='node' data-type='const struct sysctlnode *' data-ref="50node" data-ref-filename="50node">node</dfn>;</td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td>	<a class="local col0 ref" href="#50node" title='node' data-ref="50node" data-ref-filename="50node">node</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="389">389</th><td>	<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(clog, 0, ((void *)0), &amp;node, 0x00000200, 1, &quot;bufq&quot;, ((void *)0), ((void *)0), 0, __sysctl_verify_CTLTYPE_NODE_arg(((void *)0)), 0, 1, (-3), (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(<a class="local col9 ref" href="#49clog" title='clog' data-ref="49clog" data-ref-filename="49clog">clog</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, &amp;<a class="local col0 ref" href="#50node" title='node' data-ref="50node" data-ref-filename="50node">node</a>,</td></tr>
+<tr><th id="390">390</th><td>			<a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="391">391</th><td>			<a class="macro" href="../sys/sysctl.h.html#92" title="1" data-ref="_M/CTLTYPE_NODE">CTLTYPE_NODE</a>, <q>"bufq"</q>,</td></tr>
+<tr><th id="392">392</th><td>			<a class="macro" href="../sys/sysctl.h.html#1128" title="((void *)0)" data-ref="_M/SYSCTL_DESCR">SYSCTL_DESCR</a>(<q>"buffer queue subtree"</q>),</td></tr>
+<tr><th id="393">393</th><td>			<a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>,</td></tr>
+<tr><th id="394">394</th><td>			<a class="macro" href="../sys/sysctl.h.html#170" title="1" data-ref="_M/CTL_KERN">CTL_KERN</a>, <a class="macro" href="../sys/sysctl.h.html#160" title="(-3)" data-ref="_M/CTL_CREATE">CTL_CREATE</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="395">395</th><td>	<b>if</b> (<a class="local col0 ref" href="#50node" title='node' data-ref="50node" data-ref-filename="50node">node</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="396">396</th><td>		<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(clog, 0, ((void *)0), ((void *)0), 0x00000200, 3, &quot;strategies&quot;, ((void *)0), sysctl_kern_bufq_strategies, 0, __sysctl_verify_CTLTYPE_STRING_arg(((void *)0)), 0, 1, node-&gt;sysctl_num, (-3), (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(<a class="local col9 ref" href="#49clog" title='clog' data-ref="49clog" data-ref-filename="49clog">clog</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="397">397</th><td>			<a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="398">398</th><td>			<a class="macro" href="../sys/sysctl.h.html#94" title="3" data-ref="_M/CTLTYPE_STRING">CTLTYPE_STRING</a>, <q>"strategies"</q>,</td></tr>
+<tr><th id="399">399</th><td>			<a class="macro" href="../sys/sysctl.h.html#1128" title="((void *)0)" data-ref="_M/SYSCTL_DESCR">SYSCTL_DESCR</a>(<q>"List of bufq strategies present"</q>),</td></tr>
+<tr><th id="400">400</th><td>			<a class="tu ref fn" href="#sysctl_kern_bufq_strategies" title='sysctl_kern_bufq_strategies' data-use='r' data-ref="sysctl_kern_bufq_strategies" data-ref-filename="sysctl_kern_bufq_strategies">sysctl_kern_bufq_strategies</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>,</td></tr>
+<tr><th id="401">401</th><td>			<a class="macro" href="../sys/sysctl.h.html#170" title="1" data-ref="_M/CTL_KERN">CTL_KERN</a>, <a class="local col0 ref" href="#50node" title='node' data-ref="50node" data-ref-filename="50node">node</a>-&gt;<a class="ref field" href="../sys/sysctl.h.html#sysctlnode::sysctl_num" title='sysctlnode::sysctl_num' data-ref="sysctlnode::sysctl_num" data-ref-filename="sysctlnode..sysctl_num">sysctl_num</a>, <a class="macro" href="../sys/sysctl.h.html#160" title="(-3)" data-ref="_M/CTL_CREATE">CTL_CREATE</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="402">402</th><td>	}</td></tr>
+<tr><th id="403">403</th><td>}</td></tr>
+<tr><th id="404">404</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

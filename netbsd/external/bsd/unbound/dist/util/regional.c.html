@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>regional.c source code [netbsd/external/bsd/unbound/dist/util/regional.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/unbound/dist/util/regional.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>unbound</a>/<a href='..'>dist</a>/<a href='./'>util</a>/<a href='regional.c.html'>regional.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * regional.c -- region based memory allocator.</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2001-2006, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Copyright (c) 2007, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="7">7</th><td><i> * </i></td></tr>
+<tr><th id="8">8</th><td><i> * This software is open source.</i></td></tr>
+<tr><th id="9">9</th><td><i> * </i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * </i></td></tr>
+<tr><th id="14">14</th><td><i> * Redistributions of source code must retain the above copyright notice,</i></td></tr>
+<tr><th id="15">15</th><td><i> * this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="16">16</th><td><i> * </i></td></tr>
+<tr><th id="17">17</th><td><i> * Redistributions in binary form must reproduce the above copyright notice,</i></td></tr>
+<tr><th id="18">18</th><td><i> * this list of conditions and the following disclaimer in the documentation</i></td></tr>
+<tr><th id="19">19</th><td><i> * and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="20">20</th><td><i> * </i></td></tr>
+<tr><th id="21">21</th><td><i> * Neither the name of the NLNET LABS nor the names of its contributors may</i></td></tr>
+<tr><th id="22">22</th><td><i> * be used to endorse or promote products derived from this software without</i></td></tr>
+<tr><th id="23">23</th><td><i> * specific prior written permission.</i></td></tr>
+<tr><th id="24">24</th><td><i> * </i></td></tr>
+<tr><th id="25">25</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="26">26</th><td><i> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="27">27</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="28">28</th><td><i> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="29">29</th><td><i> * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="30">30</th><td><i> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="31">31</th><td><i> * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR</i></td></tr>
+<tr><th id="32">32</th><td><i> * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF</i></td></tr>
+<tr><th id="33">33</th><td><i> * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING</i></td></tr>
+<tr><th id="34">34</th><td><i> * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS</i></td></tr>
+<tr><th id="35">35</th><td><i> * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="36">36</th><td><i> */</i></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> *<span class="command"> \file</span></i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> * Regional allocator. Allocates small portions of of larger chunks.</i></td></tr>
+<tr><th id="41">41</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../../include/config.h.html">"config.h"</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="log.h.html">"util/log.h"</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="regional.h.html">"util/regional.h"</a></u></td></tr>
+<tr><th id="46">46</th><td></td></tr>
+<tr><th id="47">47</th><td><u>#<span data-ppcond="47">ifdef</span> <span class="macro" data-ref="_M/ALIGNMENT">ALIGNMENT</span></u></td></tr>
+<tr><th id="48">48</th><td><u>#  undef ALIGNMENT</u></td></tr>
+<tr><th id="49">49</th><td><u>#<span data-ppcond="47">endif</span></u></td></tr>
+<tr><th id="50">50</th><td><i class="doc">/** increase size until it fits alignment of s bytes */</i></td></tr>
+<tr><th id="51">51</th><td><u>#define <dfn class="macro" id="_M/ALIGN_UP" data-ref="_M/ALIGN_UP">ALIGN_UP</dfn>(x, s)     (((x) + s - 1) &amp; (~(s - 1)))</u></td></tr>
+<tr><th id="52">52</th><td><i class="doc">/** what size to align on; make sure a char* fits in it. */</i></td></tr>
+<tr><th id="53">53</th><td><u>#define <dfn class="macro" id="_M/ALIGNMENT" data-ref="_M/ALIGNMENT">ALIGNMENT</dfn>          (sizeof(<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>))</u></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><i class="doc">/** Default reasonable size for chunks */</i></td></tr>
+<tr><th id="56">56</th><td><u>#define <dfn class="macro" id="_M/REGIONAL_CHUNK_SIZE" data-ref="_M/REGIONAL_CHUNK_SIZE">REGIONAL_CHUNK_SIZE</dfn>         8192</u></td></tr>
+<tr><th id="57">57</th><td><u>#<span data-ppcond="57">ifdef</span> <span class="macro" data-ref="_M/UNBOUND_ALLOC_NONREGIONAL">UNBOUND_ALLOC_NONREGIONAL</span></u></td></tr>
+<tr><th id="58">58</th><td><i class="doc">/** All objects allocated outside of chunks, for debug */</i></td></tr>
+<tr><th id="59">59</th><td><u>#define REGIONAL_LARGE_OBJECT_SIZE  0</u></td></tr>
+<tr><th id="60">60</th><td><u>#<span data-ppcond="57">else</span></u></td></tr>
+<tr><th id="61">61</th><td><i class="doc">/** Default size for large objects - allocated outside of chunks. */</i></td></tr>
+<tr><th id="62">62</th><td><u>#define <dfn class="macro" id="_M/REGIONAL_LARGE_OBJECT_SIZE" data-ref="_M/REGIONAL_LARGE_OBJECT_SIZE">REGIONAL_LARGE_OBJECT_SIZE</dfn>  2048</u></td></tr>
+<tr><th id="63">63</th><td><u>#<span data-ppcond="57">endif</span></u></td></tr>
+<tr><th id="64">64</th><td></td></tr>
+<tr><th id="65">65</th><td><b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* </td></tr>
+<tr><th id="66">66</th><td><dfn class="decl def fn" id="regional_create" title='regional_create' data-ref="regional_create" data-ref-filename="regional_create">regional_create</dfn>(<em>void</em>)</td></tr>
+<tr><th id="67">67</th><td>{</td></tr>
+<tr><th id="68">68</th><td>	<b>return</b> <a class="ref fn" href="#regional_create_custom" title='regional_create_custom' data-ref="regional_create_custom" data-ref-filename="regional_create_custom">regional_create_custom</a>(<a class="macro" href="#56" title="8192" data-ref="_M/REGIONAL_CHUNK_SIZE">REGIONAL_CHUNK_SIZE</a>);</td></tr>
+<tr><th id="69">69</th><td>}</td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><i class="doc" data-doc="regional_init">/** init regional struct with first block */</i></td></tr>
+<tr><th id="72">72</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="73">73</th><td><dfn class="tu decl def fn" id="regional_init" title='regional_init' data-type='void regional_init(struct regional * r)' data-ref="regional_init" data-ref-filename="regional_init">regional_init</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* <dfn class="local col1 decl" id="1r" title='r' data-type='struct regional *' data-ref="1r" data-ref-filename="1r">r</dfn>)</td></tr>
+<tr><th id="74">74</th><td>{</td></tr>
+<tr><th id="75">75</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col2 decl" id="2a" title='a' data-type='size_t' data-ref="2a" data-ref-filename="2a">a</dfn> = <a class="macro" href="#51" title="(((sizeof(struct regional)) + (sizeof(uint64_t)) - 1) &amp; (~((sizeof(uint64_t)) - 1)))" data-ref="_M/ALIGN_UP">ALIGN_UP</a>(<b>sizeof</b>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>), <a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a>);</td></tr>
+<tr><th id="76">76</th><td>	<a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::data" title='regional::data' data-ref="regional::data" data-ref-filename="regional..data">data</a> = (<em>char</em>*)<a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a> + <a class="local col2 ref" href="#2a" title='a' data-ref="2a" data-ref-filename="2a">a</a>;</td></tr>
+<tr><th id="77">77</th><td>	<a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::available" title='regional::available' data-ref="regional::available" data-ref-filename="regional..available">available</a> = <a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::first_size" title='regional::first_size' data-ref="regional::first_size" data-ref-filename="regional..first_size">first_size</a> - <a class="local col2 ref" href="#2a" title='a' data-ref="2a" data-ref-filename="2a">a</a>;</td></tr>
+<tr><th id="78">78</th><td>	<a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::next" title='regional::next' data-ref="regional::next" data-ref-filename="regional..next">next</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="79">79</th><td>	<a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::large_list" title='regional::large_list' data-ref="regional::large_list" data-ref-filename="regional..large_list">large_list</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="80">80</th><td>	<a class="local col1 ref" href="#1r" title='r' data-ref="1r" data-ref-filename="1r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::total_large" title='regional::total_large' data-ref="regional::total_large" data-ref-filename="regional..total_large">total_large</a> = <var>0</var>;</td></tr>
+<tr><th id="81">81</th><td>}</td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td><b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* </td></tr>
+<tr><th id="84">84</th><td><dfn class="decl def fn" id="regional_create_custom" title='regional_create_custom' data-ref="regional_create_custom" data-ref-filename="regional_create_custom">regional_create_custom</dfn>(<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="3size" title='size' data-type='size_t' data-ref="3size" data-ref-filename="3size">size</dfn>)</td></tr>
+<tr><th id="85">85</th><td>{</td></tr>
+<tr><th id="86">86</th><td>	<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* <dfn class="local col4 decl" id="4r" title='r' data-type='struct regional *' data-ref="4r" data-ref-filename="4r">r</dfn> = (<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>*)<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#malloc" title='malloc' data-ref="malloc" data-ref-filename="malloc">malloc</a>(<a class="local col3 ref" href="#3size" title='size' data-ref="3size" data-ref-filename="3size">size</a>);</td></tr>
+<tr><th id="87">87</th><td>	<a class="macro" href="log.h.html#211" title="" data-ref="_M/log_assert">log_assert</a>(<b>sizeof</b>(<b>struct</b> regional) &lt;= size);</td></tr>
+<tr><th id="88">88</th><td>	<b>if</b>(!<a class="local col4 ref" href="#4r" title='r' data-ref="4r" data-ref-filename="4r">r</a>) <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="89">89</th><td>	<a class="local col4 ref" href="#4r" title='r' data-ref="4r" data-ref-filename="4r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::first_size" title='regional::first_size' data-ref="regional::first_size" data-ref-filename="regional..first_size">first_size</a> = <a class="local col3 ref" href="#3size" title='size' data-ref="3size" data-ref-filename="3size">size</a>;</td></tr>
+<tr><th id="90">90</th><td>	<a class="tu ref fn" href="#regional_init" title='regional_init' data-use='c' data-ref="regional_init" data-ref-filename="regional_init">regional_init</a>(<a class="local col4 ref" href="#4r" title='r' data-ref="4r" data-ref-filename="4r">r</a>);</td></tr>
+<tr><th id="91">91</th><td>	<b>return</b> <a class="local col4 ref" href="#4r" title='r' data-ref="4r" data-ref-filename="4r">r</a>;</td></tr>
+<tr><th id="92">92</th><td>}</td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><em>void</em> </td></tr>
+<tr><th id="95">95</th><td><dfn class="decl def fn" id="regional_free_all" title='regional_free_all' data-ref="regional_free_all" data-ref-filename="regional_free_all">regional_free_all</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a> *<dfn class="local col5 decl" id="5r" title='r' data-type='struct regional *' data-ref="5r" data-ref-filename="5r">r</dfn>)</td></tr>
+<tr><th id="96">96</th><td>{</td></tr>
+<tr><th id="97">97</th><td>	<em>char</em>* <dfn class="local col6 decl" id="6p" title='p' data-type='char *' data-ref="6p" data-ref-filename="6p">p</dfn> = <a class="local col5 ref" href="#5r" title='r' data-ref="5r" data-ref-filename="5r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::next" title='regional::next' data-ref="regional::next" data-ref-filename="regional..next">next</a>, *<dfn class="local col7 decl" id="7np" title='np' data-type='char *' data-ref="7np" data-ref-filename="7np">np</dfn>;</td></tr>
+<tr><th id="98">98</th><td>	<b>while</b>(<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a>) {</td></tr>
+<tr><th id="99">99</th><td>		<a class="local col7 ref" href="#7np" title='np' data-ref="7np" data-ref-filename="7np">np</a> = *(<em>char</em>**)<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a>;</td></tr>
+<tr><th id="100">100</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a>);</td></tr>
+<tr><th id="101">101</th><td>		<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a> = <a class="local col7 ref" href="#7np" title='np' data-ref="7np" data-ref-filename="7np">np</a>;</td></tr>
+<tr><th id="102">102</th><td>	}</td></tr>
+<tr><th id="103">103</th><td>	<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a> = <a class="local col5 ref" href="#5r" title='r' data-ref="5r" data-ref-filename="5r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::large_list" title='regional::large_list' data-ref="regional::large_list" data-ref-filename="regional..large_list">large_list</a>;</td></tr>
+<tr><th id="104">104</th><td>	<b>while</b>(<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a>) {</td></tr>
+<tr><th id="105">105</th><td>		<a class="local col7 ref" href="#7np" title='np' data-ref="7np" data-ref-filename="7np">np</a> = *(<em>char</em>**)<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a>;</td></tr>
+<tr><th id="106">106</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a>);</td></tr>
+<tr><th id="107">107</th><td>		<a class="local col6 ref" href="#6p" title='p' data-ref="6p" data-ref-filename="6p">p</a> = <a class="local col7 ref" href="#7np" title='np' data-ref="7np" data-ref-filename="7np">np</a>;</td></tr>
+<tr><th id="108">108</th><td>	}</td></tr>
+<tr><th id="109">109</th><td>	<a class="tu ref fn" href="#regional_init" title='regional_init' data-use='c' data-ref="regional_init" data-ref-filename="regional_init">regional_init</a>(<a class="local col5 ref" href="#5r" title='r' data-ref="5r" data-ref-filename="5r">r</a>);</td></tr>
+<tr><th id="110">110</th><td>}</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td><em>void</em> </td></tr>
+<tr><th id="113">113</th><td><dfn class="decl def fn" id="regional_destroy" title='regional_destroy' data-ref="regional_destroy" data-ref-filename="regional_destroy">regional_destroy</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a> *<dfn class="local col8 decl" id="8r" title='r' data-type='struct regional *' data-ref="8r" data-ref-filename="8r">r</dfn>)</td></tr>
+<tr><th id="114">114</th><td>{</td></tr>
+<tr><th id="115">115</th><td>	<b>if</b>(!<a class="local col8 ref" href="#8r" title='r' data-ref="8r" data-ref-filename="8r">r</a>) <b>return</b>;</td></tr>
+<tr><th id="116">116</th><td>	<a class="ref fn" href="#regional_free_all" title='regional_free_all' data-ref="regional_free_all" data-ref-filename="regional_free_all">regional_free_all</a>(<a class="local col8 ref" href="#8r" title='r' data-ref="8r" data-ref-filename="8r">r</a>);</td></tr>
+<tr><th id="117">117</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col8 ref" href="#8r" title='r' data-ref="8r" data-ref-filename="8r">r</a>);</td></tr>
+<tr><th id="118">118</th><td>}</td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><em>void</em> *</td></tr>
+<tr><th id="121">121</th><td><dfn class="decl def fn" id="regional_alloc" title='regional_alloc' data-ref="regional_alloc" data-ref-filename="regional_alloc">regional_alloc</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a> *<dfn class="local col9 decl" id="9r" title='r' data-type='struct regional *' data-ref="9r" data-ref-filename="9r">r</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="10size" title='size' data-type='size_t' data-ref="10size" data-ref-filename="10size">size</dfn>)</td></tr>
+<tr><th id="122">122</th><td>{</td></tr>
+<tr><th id="123">123</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="11a" title='a' data-type='size_t' data-ref="11a" data-ref-filename="11a">a</dfn> = <a class="macro" href="#51" title="(((size) + (sizeof(uint64_t)) - 1) &amp; (~((sizeof(uint64_t)) - 1)))" data-ref="_M/ALIGN_UP">ALIGN_UP</a>(<a class="local col0 ref" href="#10size" title='size' data-ref="10size" data-ref-filename="10size">size</a>, <a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a>);</td></tr>
+<tr><th id="124">124</th><td>	<em>void</em> *<dfn class="local col2 decl" id="12s" title='s' data-type='void *' data-ref="12s" data-ref-filename="12s">s</dfn>;</td></tr>
+<tr><th id="125">125</th><td>	<i>/* large objects */</i></td></tr>
+<tr><th id="126">126</th><td>	<b>if</b>(<a class="local col1 ref" href="#11a" title='a' data-ref="11a" data-ref-filename="11a">a</a> &gt; <a class="macro" href="#62" title="2048" data-ref="_M/REGIONAL_LARGE_OBJECT_SIZE">REGIONAL_LARGE_OBJECT_SIZE</a>) {</td></tr>
+<tr><th id="127">127</th><td>		<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#malloc" title='malloc' data-ref="malloc" data-ref-filename="malloc">malloc</a>(<a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a> + <a class="local col0 ref" href="#10size" title='size' data-ref="10size" data-ref-filename="10size">size</a>);</td></tr>
+<tr><th id="128">128</th><td>		<b>if</b>(!<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a>) <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="129">129</th><td>		<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::total_large" title='regional::total_large' data-ref="regional::total_large" data-ref-filename="regional..total_large">total_large</a> += <a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a>+<a class="local col0 ref" href="#10size" title='size' data-ref="10size" data-ref-filename="10size">size</a>;</td></tr>
+<tr><th id="130">130</th><td>		*(<em>char</em>**)<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a> = <a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::large_list" title='regional::large_list' data-ref="regional::large_list" data-ref-filename="regional..large_list">large_list</a>;</td></tr>
+<tr><th id="131">131</th><td>		<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::large_list" title='regional::large_list' data-ref="regional::large_list" data-ref-filename="regional..large_list">large_list</a> = (<em>char</em>*)<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a>;</td></tr>
+<tr><th id="132">132</th><td>		<b>return</b> (<em>char</em>*)<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a>+<a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a>;</td></tr>
+<tr><th id="133">133</th><td>	}</td></tr>
+<tr><th id="134">134</th><td>	<i>/* create a new chunk */</i></td></tr>
+<tr><th id="135">135</th><td>	<b>if</b>(<a class="local col1 ref" href="#11a" title='a' data-ref="11a" data-ref-filename="11a">a</a> &gt; <a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::available" title='regional::available' data-ref="regional::available" data-ref-filename="regional..available">available</a>) {</td></tr>
+<tr><th id="136">136</th><td>		<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#malloc" title='malloc' data-ref="malloc" data-ref-filename="malloc">malloc</a>(<a class="macro" href="#56" title="8192" data-ref="_M/REGIONAL_CHUNK_SIZE">REGIONAL_CHUNK_SIZE</a>);</td></tr>
+<tr><th id="137">137</th><td>		<b>if</b>(!<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a>) <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="138">138</th><td>		*(<em>char</em>**)<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a> = <a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::next" title='regional::next' data-ref="regional::next" data-ref-filename="regional..next">next</a>;</td></tr>
+<tr><th id="139">139</th><td>		<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::next" title='regional::next' data-ref="regional::next" data-ref-filename="regional..next">next</a> = (<em>char</em>*)<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a>;</td></tr>
+<tr><th id="140">140</th><td>		<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::data" title='regional::data' data-ref="regional::data" data-ref-filename="regional..data">data</a> = (<em>char</em>*)<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a> + <a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a>;</td></tr>
+<tr><th id="141">141</th><td>		<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::available" title='regional::available' data-ref="regional::available" data-ref-filename="regional..available">available</a> = <a class="macro" href="#56" title="8192" data-ref="_M/REGIONAL_CHUNK_SIZE">REGIONAL_CHUNK_SIZE</a> - <a class="macro" href="#53" title="(sizeof(uint64_t))" data-ref="_M/ALIGNMENT">ALIGNMENT</a>;</td></tr>
+<tr><th id="142">142</th><td>	}</td></tr>
+<tr><th id="143">143</th><td>	<i>/* put in this chunk */</i></td></tr>
+<tr><th id="144">144</th><td>	<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::available" title='regional::available' data-ref="regional::available" data-ref-filename="regional..available">available</a> -= <a class="local col1 ref" href="#11a" title='a' data-ref="11a" data-ref-filename="11a">a</a>;</td></tr>
+<tr><th id="145">145</th><td>	<a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a> = <a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::data" title='regional::data' data-ref="regional::data" data-ref-filename="regional..data">data</a>;</td></tr>
+<tr><th id="146">146</th><td>	<a class="local col9 ref" href="#9r" title='r' data-ref="9r" data-ref-filename="9r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::data" title='regional::data' data-ref="regional::data" data-ref-filename="regional..data">data</a> += <a class="local col1 ref" href="#11a" title='a' data-ref="11a" data-ref-filename="11a">a</a>;</td></tr>
+<tr><th id="147">147</th><td>	<b>return</b> <a class="local col2 ref" href="#12s" title='s' data-ref="12s" data-ref-filename="12s">s</a>;</td></tr>
+<tr><th id="148">148</th><td>}</td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td><em>void</em> *</td></tr>
+<tr><th id="151">151</th><td><dfn class="decl def fn" id="regional_alloc_init" title='regional_alloc_init' data-ref="regional_alloc_init" data-ref-filename="regional_alloc_init">regional_alloc_init</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* <dfn class="local col3 decl" id="13r" title='r' data-type='struct regional *' data-ref="13r" data-ref-filename="13r">r</dfn>, <em>const</em> <em>void</em> *<dfn class="local col4 decl" id="14init" title='init' data-type='const void *' data-ref="14init" data-ref-filename="14init">init</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="15size" title='size' data-type='size_t' data-ref="15size" data-ref-filename="15size">size</dfn>)</td></tr>
+<tr><th id="152">152</th><td>{</td></tr>
+<tr><th id="153">153</th><td>	<em>void</em> *<dfn class="local col6 decl" id="16s" title='s' data-type='void *' data-ref="16s" data-ref-filename="16s">s</dfn> = <a class="ref fn" href="#regional_alloc" title='regional_alloc' data-ref="regional_alloc" data-ref-filename="regional_alloc">regional_alloc</a>(<a class="local col3 ref" href="#13r" title='r' data-ref="13r" data-ref-filename="13r">r</a>, <a class="local col5 ref" href="#15size" title='size' data-ref="15size" data-ref-filename="15size">size</a>);</td></tr>
+<tr><th id="154">154</th><td>	<b>if</b>(!<a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>) <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="155">155</th><td>	<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/ssp/string.h.html#95" title="((__builtin_object_size(s, 0) != (size_t)-1) ? __builtin___memcpy_chk(s, init, size, __builtin_object_size(s, 0)) : __memcpy_ichk(s, init, size))" data-ref="_M/memcpy">memcpy</a>(<a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>, <a class="local col4 ref" href="#14init" title='init' data-ref="14init" data-ref-filename="14init">init</a>, <a class="local col5 ref" href="#15size" title='size' data-ref="15size" data-ref-filename="15size">size</a>);</td></tr>
+<tr><th id="156">156</th><td>	<b>return</b> <a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>;</td></tr>
+<tr><th id="157">157</th><td>}</td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><em>void</em> *</td></tr>
+<tr><th id="160">160</th><td><dfn class="decl def fn" id="regional_alloc_zero" title='regional_alloc_zero' data-ref="regional_alloc_zero" data-ref-filename="regional_alloc_zero">regional_alloc_zero</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a> *<dfn class="local col7 decl" id="17r" title='r' data-type='struct regional *' data-ref="17r" data-ref-filename="17r">r</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="18size" title='size' data-type='size_t' data-ref="18size" data-ref-filename="18size">size</dfn>)</td></tr>
+<tr><th id="161">161</th><td>{</td></tr>
+<tr><th id="162">162</th><td>	<em>void</em> *<dfn class="local col9 decl" id="19s" title='s' data-type='void *' data-ref="19s" data-ref-filename="19s">s</dfn> = <a class="ref fn" href="#regional_alloc" title='regional_alloc' data-ref="regional_alloc" data-ref-filename="regional_alloc">regional_alloc</a>(<a class="local col7 ref" href="#17r" title='r' data-ref="17r" data-ref-filename="17r">r</a>, <a class="local col8 ref" href="#18size" title='size' data-ref="18size" data-ref-filename="18size">size</a>);</td></tr>
+<tr><th id="163">163</th><td>	<b>if</b>(!<a class="local col9 ref" href="#19s" title='s' data-ref="19s" data-ref-filename="19s">s</a>) <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="164">164</th><td>	<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/ssp/string.h.html#97" title="((__builtin_object_size(s, 0) != (size_t)-1) ? __builtin___memset_chk(s, 0, size, __builtin_object_size(s, 0)) : __memset_ichk(s, 0, size))" data-ref="_M/memset">memset</a>(<a class="local col9 ref" href="#19s" title='s' data-ref="19s" data-ref-filename="19s">s</a>, <var>0</var>, <a class="local col8 ref" href="#18size" title='size' data-ref="18size" data-ref-filename="18size">size</a>);</td></tr>
+<tr><th id="165">165</th><td>	<b>return</b> <a class="local col9 ref" href="#19s" title='s' data-ref="19s" data-ref-filename="19s">s</a>;</td></tr>
+<tr><th id="166">166</th><td>}</td></tr>
+<tr><th id="167">167</th><td></td></tr>
+<tr><th id="168">168</th><td><em>char</em> *</td></tr>
+<tr><th id="169">169</th><td><dfn class="decl def fn" id="regional_strdup" title='regional_strdup' data-ref="regional_strdup" data-ref-filename="regional_strdup">regional_strdup</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a> *<dfn class="local col0 decl" id="20r" title='r' data-type='struct regional *' data-ref="20r" data-ref-filename="20r">r</dfn>, <em>const</em> <em>char</em> *<dfn class="local col1 decl" id="21string" title='string' data-type='const char *' data-ref="21string" data-ref-filename="21string">string</dfn>)</td></tr>
+<tr><th id="170">170</th><td>{</td></tr>
+<tr><th id="171">171</th><td>	<b>return</b> (<em>char</em>*)<a class="ref fn" href="#regional_alloc_init" title='regional_alloc_init' data-ref="regional_alloc_init" data-ref-filename="regional_alloc_init">regional_alloc_init</a>(<a class="local col0 ref" href="#20r" title='r' data-ref="20r" data-ref-filename="20r">r</a>, <a class="local col1 ref" href="#21string" title='string' data-ref="21string" data-ref-filename="21string">string</a>, <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="local col1 ref" href="#21string" title='string' data-ref="21string" data-ref-filename="21string">string</a>)+<var>1</var>);</td></tr>
+<tr><th id="172">172</th><td>}</td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td><i class="doc" data-doc="count_chunks">/**</i></td></tr>
+<tr><th id="175">175</th><td><i class="doc" data-doc="count_chunks"> * reasonably slow, but stats and get_mem are not supposed to be fast</i></td></tr>
+<tr><th id="176">176</th><td><i class="doc" data-doc="count_chunks"> * count the number of chunks in use</i></td></tr>
+<tr><th id="177">177</th><td><i class="doc" data-doc="count_chunks"> */</i></td></tr>
+<tr><th id="178">178</th><td><em>static</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a></td></tr>
+<tr><th id="179">179</th><td><dfn class="tu decl def fn" id="count_chunks" title='count_chunks' data-type='size_t count_chunks(struct regional * r)' data-ref="count_chunks" data-ref-filename="count_chunks">count_chunks</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* <dfn class="local col2 decl" id="22r" title='r' data-type='struct regional *' data-ref="22r" data-ref-filename="22r">r</dfn>)</td></tr>
+<tr><th id="180">180</th><td>{</td></tr>
+<tr><th id="181">181</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="23c" title='c' data-type='size_t' data-ref="23c" data-ref-filename="23c">c</dfn> = <var>1</var>;</td></tr>
+<tr><th id="182">182</th><td>	<em>char</em>* <dfn class="local col4 decl" id="24p" title='p' data-type='char *' data-ref="24p" data-ref-filename="24p">p</dfn> = <a class="local col2 ref" href="#22r" title='r' data-ref="22r" data-ref-filename="22r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::next" title='regional::next' data-ref="regional::next" data-ref-filename="regional..next">next</a>;</td></tr>
+<tr><th id="183">183</th><td>	<b>while</b>(<a class="local col4 ref" href="#24p" title='p' data-ref="24p" data-ref-filename="24p">p</a>) {</td></tr>
+<tr><th id="184">184</th><td>		<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>++;</td></tr>
+<tr><th id="185">185</th><td>		<a class="local col4 ref" href="#24p" title='p' data-ref="24p" data-ref-filename="24p">p</a> = *(<em>char</em>**)<a class="local col4 ref" href="#24p" title='p' data-ref="24p" data-ref-filename="24p">p</a>;</td></tr>
+<tr><th id="186">186</th><td>	}</td></tr>
+<tr><th id="187">187</th><td>	<b>return</b> <a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>;</td></tr>
+<tr><th id="188">188</th><td>}</td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td><i class="doc" data-doc="count_large">/**</i></td></tr>
+<tr><th id="191">191</th><td><i class="doc" data-doc="count_large"> * also reasonably slow, counts the number of large objects</i></td></tr>
+<tr><th id="192">192</th><td><i class="doc" data-doc="count_large"> */</i></td></tr>
+<tr><th id="193">193</th><td><em>static</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a></td></tr>
+<tr><th id="194">194</th><td><dfn class="tu decl def fn" id="count_large" title='count_large' data-type='size_t count_large(struct regional * r)' data-ref="count_large" data-ref-filename="count_large">count_large</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* <dfn class="local col5 decl" id="25r" title='r' data-type='struct regional *' data-ref="25r" data-ref-filename="25r">r</dfn>)</td></tr>
+<tr><th id="195">195</th><td>{</td></tr>
+<tr><th id="196">196</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="26c" title='c' data-type='size_t' data-ref="26c" data-ref-filename="26c">c</dfn> = <var>0</var>;</td></tr>
+<tr><th id="197">197</th><td>	<em>char</em>* <dfn class="local col7 decl" id="27p" title='p' data-type='char *' data-ref="27p" data-ref-filename="27p">p</dfn> = <a class="local col5 ref" href="#25r" title='r' data-ref="25r" data-ref-filename="25r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::large_list" title='regional::large_list' data-ref="regional::large_list" data-ref-filename="regional..large_list">large_list</a>;</td></tr>
+<tr><th id="198">198</th><td>	<b>while</b>(<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>) {</td></tr>
+<tr><th id="199">199</th><td>		<a class="local col6 ref" href="#26c" title='c' data-ref="26c" data-ref-filename="26c">c</a>++;</td></tr>
+<tr><th id="200">200</th><td>		<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a> = *(<em>char</em>**)<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>;</td></tr>
+<tr><th id="201">201</th><td>	}</td></tr>
+<tr><th id="202">202</th><td>	<b>return</b> <a class="local col6 ref" href="#26c" title='c' data-ref="26c" data-ref-filename="26c">c</a>;</td></tr>
+<tr><th id="203">203</th><td>}</td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td><em>void</em> </td></tr>
+<tr><th id="206">206</th><td><dfn class="decl def fn" id="regional_log_stats" title='regional_log_stats' data-ref="regional_log_stats" data-ref-filename="regional_log_stats">regional_log_stats</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a> *<dfn class="local col8 decl" id="28r" title='r' data-type='struct regional *' data-ref="28r" data-ref-filename="28r">r</dfn>)</td></tr>
+<tr><th id="207">207</th><td>{</td></tr>
+<tr><th id="208">208</th><td>	<i>/* some basic assertions put here (non time critical code) */</i></td></tr>
+<tr><th id="209">209</th><td>	<a class="macro" href="log.h.html#211" title="" data-ref="_M/log_assert">log_assert</a>(ALIGNMENT &gt;= <b>sizeof</b>(<em>char</em>*));</td></tr>
+<tr><th id="210">210</th><td>	<a class="macro" href="log.h.html#211" title="" data-ref="_M/log_assert">log_assert</a>(REGIONAL_CHUNK_SIZE &gt; ALIGNMENT);</td></tr>
+<tr><th id="211">211</th><td>	<a class="macro" href="log.h.html#211" title="" data-ref="_M/log_assert">log_assert</a>(REGIONAL_CHUNK_SIZE-ALIGNMENT &gt; REGIONAL_LARGE_OBJECT_SIZE);</td></tr>
+<tr><th id="212">212</th><td>	<a class="macro" href="log.h.html#211" title="" data-ref="_M/log_assert">log_assert</a>(REGIONAL_CHUNK_SIZE &gt;= <b>sizeof</b>(<b>struct</b> regional));</td></tr>
+<tr><th id="213">213</th><td>	<i>/* debug print */</i></td></tr>
+<tr><th id="214">214</th><td>	<a class="ref fn" href="log.h.html#log_info" title='log_info' data-ref="log_info" data-ref-filename="log_info">log_info</a>(<q>"regional %u chunks, %u large"</q>,</td></tr>
+<tr><th id="215">215</th><td>		(<em>unsigned</em>)<a class="tu ref fn" href="#count_chunks" title='count_chunks' data-use='c' data-ref="count_chunks" data-ref-filename="count_chunks">count_chunks</a>(<a class="local col8 ref" href="#28r" title='r' data-ref="28r" data-ref-filename="28r">r</a>), (<em>unsigned</em>)<a class="tu ref fn" href="#count_large" title='count_large' data-use='c' data-ref="count_large" data-ref-filename="count_large">count_large</a>(<a class="local col8 ref" href="#28r" title='r' data-ref="28r" data-ref-filename="28r">r</a>));</td></tr>
+<tr><th id="216">216</th><td>}</td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td><a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> </td></tr>
+<tr><th id="219">219</th><td><dfn class="decl def fn" id="regional_get_mem" title='regional_get_mem' data-ref="regional_get_mem" data-ref-filename="regional_get_mem">regional_get_mem</dfn>(<b>struct</b> <a class="type" href="regional.h.html#regional" title='regional' data-ref="regional" data-ref-filename="regional">regional</a>* <dfn class="local col9 decl" id="29r" title='r' data-type='struct regional *' data-ref="29r" data-ref-filename="29r">r</dfn>)</td></tr>
+<tr><th id="220">220</th><td>{</td></tr>
+<tr><th id="221">221</th><td>	<b>return</b> <a class="local col9 ref" href="#29r" title='r' data-ref="29r" data-ref-filename="29r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::first_size" title='regional::first_size' data-ref="regional::first_size" data-ref-filename="regional..first_size">first_size</a> + (<a class="tu ref fn" href="#count_chunks" title='count_chunks' data-use='c' data-ref="count_chunks" data-ref-filename="count_chunks">count_chunks</a>(<a class="local col9 ref" href="#29r" title='r' data-ref="29r" data-ref-filename="29r">r</a>)-<var>1</var>)*<a class="macro" href="#56" title="8192" data-ref="_M/REGIONAL_CHUNK_SIZE">REGIONAL_CHUNK_SIZE</a> </td></tr>
+<tr><th id="222">222</th><td>		+ <a class="local col9 ref" href="#29r" title='r' data-ref="29r" data-ref-filename="29r">r</a>-&gt;<a class="ref field" href="regional.h.html#regional::total_large" title='regional::total_large' data-ref="regional::total_large" data-ref-filename="regional..total_large">total_large</a>;</td></tr>
+<tr><th id="223">223</th><td>}</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

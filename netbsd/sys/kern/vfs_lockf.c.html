@@ -1,0 +1,999 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>vfs_lockf.c source code [netbsd/sys/kern/vfs_lockf.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="lockf "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/vfs_lockf.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='vfs_lockf.c.html'>vfs_lockf.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: vfs_lockf.c,v 1.73 2011/01/31 08:25:32 dholland Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 1982, 1986, 1989, 1993</i></td></tr>
+<tr><th id="5">5</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to Berkeley by</i></td></tr>
+<tr><th id="8">8</th><td><i> * Scooter Morris at Genentech Inc.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="19">19</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="20">20</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="21">21</th><td><i> *</i></td></tr>
+<tr><th id="22">22</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="23">23</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="24">24</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="25">25</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="26">26</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="27">27</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="28">28</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="29">29</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="30">30</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="31">31</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="32">32</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="33">33</th><td><i> *</i></td></tr>
+<tr><th id="34">34</th><td><i> *	@(#)ufs_lockf.c	8.4 (Berkeley) 10/26/94</i></td></tr>
+<tr><th id="35">35</th><td><i> */</i></td></tr>
+<tr><th id="36">36</th><td></td></tr>
+<tr><th id="37">37</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="38">38</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: vfs_lockf.c,v 1.73 2011/01/31 08:25:32 dholland Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: vfs_lockf.c,v 1.73 2011/01/31 08:25:32 dholland Exp $"</q>);</td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../sys/file.h.html">&lt;sys/file.h&gt;</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../sys/vnode.h.html">&lt;sys/vnode.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../sys/pool.h.html">&lt;sys/pool.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../sys/fcntl.h.html">&lt;sys/fcntl.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../sys/lockf.h.html">&lt;sys/lockf.h&gt;</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../sys/kauth.h.html">&lt;sys/kauth.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../sys/uidinfo.h.html">&lt;sys/uidinfo.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td></td></tr>
+<tr><th id="53">53</th><td><i>/*</i></td></tr>
+<tr><th id="54">54</th><td><i> * The lockf structure is a kernel structure which contains the information</i></td></tr>
+<tr><th id="55">55</th><td><i> * associated with a byte range lock.  The lockf structures are linked into</i></td></tr>
+<tr><th id="56">56</th><td><i> * the vnode structure.  Locks are sorted by the starting byte of the lock for</i></td></tr>
+<tr><th id="57">57</th><td><i> * efficiency.</i></td></tr>
+<tr><th id="58">58</th><td><i> *</i></td></tr>
+<tr><th id="59">59</th><td><i> * lf_next is used for two purposes, depending on whether the lock is</i></td></tr>
+<tr><th id="60">60</th><td><i> * being held, or is in conflict with an existing lock.  If this lock</i></td></tr>
+<tr><th id="61">61</th><td><i> * is held, it indicates the next lock on the same vnode.</i></td></tr>
+<tr><th id="62">62</th><td><i> * For pending locks, if lock-&gt;lf_next is non-NULL, then lock-&gt;lf_block</i></td></tr>
+<tr><th id="63">63</th><td><i> * must be queued on the lf_blkhd TAILQ of lock-&gt;lf_next.</i></td></tr>
+<tr><th id="64">64</th><td><i> */</i></td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td><a class="macro" href="../sys/queue.h.html#413" title="struct locklist { struct lockf *tqh_first; struct lockf * *tqh_last; }" data-ref="_M/TAILQ_HEAD">TAILQ_HEAD</a>(<dfn class="type def" id="locklist" title='locklist' data-ref="locklist" data-ref-filename="locklist">locklist</dfn>, <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a>);</td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td><b>struct</b> <dfn class="type def" id="lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</dfn> {</td></tr>
+<tr><th id="69">69</th><td>	<a class="typedef" href="../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> <dfn class="decl field" id="lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</dfn>;	 <i>/* Signalling */</i></td></tr>
+<tr><th id="70">70</th><td>	<em>short</em>	<dfn class="decl field" id="lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</dfn>;	 <i>/* Lock semantics: F_POSIX, F_FLOCK, F_WAIT */</i></td></tr>
+<tr><th id="71">71</th><td>	<em>short</em>	<dfn class="decl field" id="lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</dfn>;	 <i>/* Lock type: F_RDLCK, F_WRLCK */</i></td></tr>
+<tr><th id="72">72</th><td>	<a class="macro" href="../sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>	<dfn class="decl field" id="lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</dfn>;	 <i>/* The byte # of the start of the lock */</i></td></tr>
+<tr><th id="73">73</th><td>	<a class="macro" href="../sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>	<dfn class="decl field" id="lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</dfn>;		 <i>/* The byte # of the end of the lock (-1=EOF)*/</i></td></tr>
+<tr><th id="74">74</th><td>	<em>void</em>	*<dfn class="decl field" id="lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</dfn>;		 <i>/* process or file description holding lock */</i></td></tr>
+<tr><th id="75">75</th><td>	<b>struct</b>	<a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="decl field" id="lockf::lf_head" title='lockf::lf_head' data-ref="lockf::lf_head" data-ref-filename="lockf..lf_head">lf_head</dfn>; <i>/* Back pointer to the head of lockf list */</i></td></tr>
+<tr><th id="76">76</th><td>	<b>struct</b>	<a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="decl field" id="lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</dfn>;	 <i>/* Next lock on this vnode, or blocking lock */</i></td></tr>
+<tr><th id="77">77</th><td>	<b>struct</b>  <a class="type" href="#66" title='locklist' data-ref="locklist" data-ref-filename="locklist">locklist</a> <dfn class="decl field" id="lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</dfn>; <i>/* List of requests blocked on this lock */</i></td></tr>
+<tr><th id="78">78</th><td>	<a class="macro" href="../sys/queue.h.html#423" title="struct { struct lockf *tqe_next; struct lockf * *tqe_prev; }" data-ref="_M/TAILQ_ENTRY">TAILQ_ENTRY</a>(<a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a>) <dfn class="decl field" id="lockf::lf_block" title='lockf::lf_block' data-ref="lockf::lf_block" data-ref-filename="lockf..lf_block">lf_block</dfn>;<i>/* A request waiting for a lock */</i></td></tr>
+<tr><th id="79">79</th><td>	<a class="macro" href="../sys/types.h.html#192" title="__uid_t" data-ref="_M/uid_t">uid_t</a>	<dfn class="decl field" id="lockf::lf_uid" title='lockf::lf_uid' data-ref="lockf::lf_uid" data-ref-filename="lockf..lf_uid">lf_uid</dfn>;		 <i>/* User ID responsible */</i></td></tr>
+<tr><th id="80">80</th><td>};</td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><i>/* Maximum length of sleep chains to traverse to try and detect deadlock. */</i></td></tr>
+<tr><th id="83">83</th><td><u>#define <dfn class="macro" id="_M/MAXDEPTH" data-ref="_M/MAXDEPTH">MAXDEPTH</dfn> 50</u></td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td><em>static</em> <a class="typedef" href="../sys/pool.h.html#pool_cache_t" title='pool_cache_t' data-type='struct pool_cache *' data-ref="pool_cache_t" data-ref-filename="pool_cache_t">pool_cache_t</a> <dfn class="tu decl def" id="lockf_cache" title='lockf_cache' data-type='pool_cache_t' data-ref="lockf_cache" data-ref-filename="lockf_cache">lockf_cache</dfn>;</td></tr>
+<tr><th id="86">86</th><td><em>static</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="tu decl def" id="lockf_lock" title='lockf_lock' data-type='kmutex_t *' data-ref="lockf_lock" data-ref-filename="lockf_lock">lockf_lock</dfn>;</td></tr>
+<tr><th id="87">87</th><td><em>static</em> <em>char</em> <dfn class="tu decl def" id="lockstr" title='lockstr' data-type='char [6]' data-ref="lockstr" data-ref-filename="lockstr">lockstr</dfn>[] = <q>"lockf"</q>;</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td><i>/*</i></td></tr>
+<tr><th id="90">90</th><td><i> * This variable controls the maximum number of processes that will</i></td></tr>
+<tr><th id="91">91</th><td><i> * be checked in doing deadlock detection.</i></td></tr>
+<tr><th id="92">92</th><td><i> */</i></td></tr>
+<tr><th id="93">93</th><td><em>int</em> <dfn class="decl def" id="maxlockdepth" title='maxlockdepth' data-ref="maxlockdepth" data-ref-filename="maxlockdepth">maxlockdepth</dfn> = <a class="macro" href="#83" title="50" data-ref="_M/MAXDEPTH">MAXDEPTH</a>;</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><u>#<span data-ppcond="95">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="96">96</th><td><em>int</em>	lockf_debug = <var>0</var>;</td></tr>
+<tr><th id="97">97</th><td><u>#<span data-ppcond="95">endif</span></u></td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td><u>#define <dfn class="macro" id="_M/SELF" data-ref="_M/SELF">SELF</dfn>	0x1</u></td></tr>
+<tr><th id="100">100</th><td><u>#define <dfn class="macro" id="_M/OTHERS" data-ref="_M/OTHERS">OTHERS</dfn>	0x2</u></td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td><i>/*</i></td></tr>
+<tr><th id="103">103</th><td><i> * XXX TODO</i></td></tr>
+<tr><th id="104">104</th><td><i> * Misc cleanups: "void *id" should be visible in the API as a</i></td></tr>
+<tr><th id="105">105</th><td><i> * "struct proc *".</i></td></tr>
+<tr><th id="106">106</th><td><i> * (This requires rototilling all VFS's which support advisory locking).</i></td></tr>
+<tr><th id="107">107</th><td><i> */</i></td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td><i>/*</i></td></tr>
+<tr><th id="110">110</th><td><i> * If there's a lot of lock contention on a single vnode, locking</i></td></tr>
+<tr><th id="111">111</th><td><i> * schemes which allow for more paralleism would be needed.  Given how</i></td></tr>
+<tr><th id="112">112</th><td><i> * infrequently byte-range locks are actually used in typical BSD</i></td></tr>
+<tr><th id="113">113</th><td><i> * code, a more complex approach probably isn't worth it.</i></td></tr>
+<tr><th id="114">114</th><td><i> */</i></td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td><i>/*</i></td></tr>
+<tr><th id="117">117</th><td><i> * We enforce a limit on locks by uid, so that a single user cannot</i></td></tr>
+<tr><th id="118">118</th><td><i> * run the kernel out of memory.  For now, the limit is pretty coarse.</i></td></tr>
+<tr><th id="119">119</th><td><i> * There is no limit on root.</i></td></tr>
+<tr><th id="120">120</th><td><i> *</i></td></tr>
+<tr><th id="121">121</th><td><i> * Splitting a lock will always succeed, regardless of current allocations.</i></td></tr>
+<tr><th id="122">122</th><td><i> * If you're slightly above the limit, we still have to permit an allocation</i></td></tr>
+<tr><th id="123">123</th><td><i> * so that the unlock can succeed.  If the unlocking causes too many splits,</i></td></tr>
+<tr><th id="124">124</th><td><i> * however, you're totally cutoff.</i></td></tr>
+<tr><th id="125">125</th><td><i> */</i></td></tr>
+<tr><th id="126">126</th><td><em>int</em> <dfn class="decl def" id="maxlocksperuid" title='maxlocksperuid' data-ref="maxlocksperuid" data-ref-filename="maxlocksperuid">maxlocksperuid</dfn> = <var>1024</var>;</td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><u>#<span data-ppcond="128">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="129">129</th><td><i>/*</i></td></tr>
+<tr><th id="130">130</th><td><i> * Print out a lock.</i></td></tr>
+<tr><th id="131">131</th><td><i> */</i></td></tr>
+<tr><th id="132">132</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="133">133</th><td>lf_print(<em>const</em> <em>char</em> *tag, <b>struct</b> lockf *lock)</td></tr>
+<tr><th id="134">134</th><td>{</td></tr>
+<tr><th id="135">135</th><td></td></tr>
+<tr><th id="136">136</th><td>	printf(<q>"%s: lock %p for "</q>, tag, lock);</td></tr>
+<tr><th id="137">137</th><td>	<b>if</b> (lock-&gt;lf_flags &amp; F_POSIX)</td></tr>
+<tr><th id="138">138</th><td>		printf(<q>"proc %d"</q>, ((<b>struct</b> proc *)lock-&gt;lf_id)-&gt;p_pid);</td></tr>
+<tr><th id="139">139</th><td>	<b>else</b></td></tr>
+<tr><th id="140">140</th><td>		printf(<q>"file %p"</q>, (<b>struct</b> file *)lock-&gt;lf_id);</td></tr>
+<tr><th id="141">141</th><td>	printf(<q>" %s, start %jd, end %jd"</q>,</td></tr>
+<tr><th id="142">142</th><td>		lock-&gt;lf_type == F_RDLCK ? <q>"shared"</q> :</td></tr>
+<tr><th id="143">143</th><td>		lock-&gt;lf_type == F_WRLCK ? <q>"exclusive"</q> :</td></tr>
+<tr><th id="144">144</th><td>		lock-&gt;lf_type == F_UNLCK ? <q>"unlock"</q> :</td></tr>
+<tr><th id="145">145</th><td>		<q>"unknown"</q>, (intmax_t)lock-&gt;lf_start, (intmax_t)lock-&gt;lf_end);</td></tr>
+<tr><th id="146">146</th><td>	<b>if</b> (TAILQ_FIRST(&amp;lock-&gt;lf_blkhd))</td></tr>
+<tr><th id="147">147</th><td>		printf(<q>" block %p\n"</q>, TAILQ_FIRST(&amp;lock-&gt;lf_blkhd));</td></tr>
+<tr><th id="148">148</th><td>	<b>else</b></td></tr>
+<tr><th id="149">149</th><td>		printf(<q>"\n"</q>);</td></tr>
+<tr><th id="150">150</th><td>}</td></tr>
+<tr><th id="151">151</th><td></td></tr>
+<tr><th id="152">152</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="153">153</th><td>lf_printlist(<em>const</em> <em>char</em> *tag, <b>struct</b> lockf *lock)</td></tr>
+<tr><th id="154">154</th><td>{</td></tr>
+<tr><th id="155">155</th><td>	<b>struct</b> lockf *lf, *blk;</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>	printf(<q>"%s: Lock list:\n"</q>, tag);</td></tr>
+<tr><th id="158">158</th><td>	<b>for</b> (lf = *lock-&gt;lf_head; lf; lf = lf-&gt;lf_next) {</td></tr>
+<tr><th id="159">159</th><td>		printf(<q>"\tlock %p for "</q>, lf);</td></tr>
+<tr><th id="160">160</th><td>		<b>if</b> (lf-&gt;lf_flags &amp; F_POSIX)</td></tr>
+<tr><th id="161">161</th><td>			printf(<q>"proc %d"</q>, ((<b>struct</b> proc *)lf-&gt;lf_id)-&gt;p_pid);</td></tr>
+<tr><th id="162">162</th><td>		<b>else</b></td></tr>
+<tr><th id="163">163</th><td>			printf(<q>"file %p"</q>, (<b>struct</b> file *)lf-&gt;lf_id);</td></tr>
+<tr><th id="164">164</th><td>		printf(<q>", %s, start %jd, end %jd"</q>,</td></tr>
+<tr><th id="165">165</th><td>			lf-&gt;lf_type == F_RDLCK ? <q>"shared"</q> :</td></tr>
+<tr><th id="166">166</th><td>			lf-&gt;lf_type == F_WRLCK ? <q>"exclusive"</q> :</td></tr>
+<tr><th id="167">167</th><td>			lf-&gt;lf_type == F_UNLCK ? <q>"unlock"</q> :</td></tr>
+<tr><th id="168">168</th><td>			<q>"unknown"</q>, (intmax_t)lf-&gt;lf_start, (intmax_t)lf-&gt;lf_end);</td></tr>
+<tr><th id="169">169</th><td>		TAILQ_FOREACH(blk, &amp;lf-&gt;lf_blkhd, lf_block) {</td></tr>
+<tr><th id="170">170</th><td>			<b>if</b> (blk-&gt;lf_flags &amp; F_POSIX)</td></tr>
+<tr><th id="171">171</th><td>				printf(<q>"; proc %d"</q>,</td></tr>
+<tr><th id="172">172</th><td>				    ((<b>struct</b> proc *)blk-&gt;lf_id)-&gt;p_pid);</td></tr>
+<tr><th id="173">173</th><td>			<b>else</b></td></tr>
+<tr><th id="174">174</th><td>				printf(<q>"; file %p"</q>, (<b>struct</b> file *)blk-&gt;lf_id);</td></tr>
+<tr><th id="175">175</th><td>			printf(<q>", %s, start %jd, end %jd"</q>,</td></tr>
+<tr><th id="176">176</th><td>				blk-&gt;lf_type == F_RDLCK ? <q>"shared"</q> :</td></tr>
+<tr><th id="177">177</th><td>				blk-&gt;lf_type == F_WRLCK ? <q>"exclusive"</q> :</td></tr>
+<tr><th id="178">178</th><td>				blk-&gt;lf_type == F_UNLCK ? <q>"unlock"</q> :</td></tr>
+<tr><th id="179">179</th><td>				<q>"unknown"</q>, (intmax_t)blk-&gt;lf_start, (intmax_t)blk-&gt;lf_end);</td></tr>
+<tr><th id="180">180</th><td>			<b>if</b> (TAILQ_FIRST(&amp;blk-&gt;lf_blkhd))</td></tr>
+<tr><th id="181">181</th><td>				 panic(<q>"lf_printlist: bad list"</q>);</td></tr>
+<tr><th id="182">182</th><td>		}</td></tr>
+<tr><th id="183">183</th><td>		printf(<q>"\n"</q>);</td></tr>
+<tr><th id="184">184</th><td>	}</td></tr>
+<tr><th id="185">185</th><td>}</td></tr>
+<tr><th id="186">186</th><td><u>#<span data-ppcond="128">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td><i  data-doc="lf_alloc">/*</i></td></tr>
+<tr><th id="189">189</th><td><i  data-doc="lf_alloc"> * 3 options for allowfail.</i></td></tr>
+<tr><th id="190">190</th><td><i  data-doc="lf_alloc"> * 0 - always allocate.  1 - cutoff at limit.  2 - cutoff at double limit.</i></td></tr>
+<tr><th id="191">191</th><td><i  data-doc="lf_alloc"> */</i></td></tr>
+<tr><th id="192">192</th><td><em>static</em> <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *</td></tr>
+<tr><th id="193">193</th><td><dfn class="tu decl def fn" id="lf_alloc" title='lf_alloc' data-type='struct lockf * lf_alloc(int allowfail)' data-ref="lf_alloc" data-ref-filename="lf_alloc">lf_alloc</dfn>(<em>int</em> <dfn class="local col1 decl" id="1allowfail" title='allowfail' data-type='int' data-ref="1allowfail" data-ref-filename="1allowfail">allowfail</dfn>)</td></tr>
+<tr><th id="194">194</th><td>{</td></tr>
+<tr><th id="195">195</th><td>	<b>struct</b> <a class="type" href="../sys/uidinfo.h.html#uidinfo" title='uidinfo' data-ref="uidinfo" data-ref-filename="uidinfo">uidinfo</a> *<dfn class="local col2 decl" id="2uip" title='uip' data-type='struct uidinfo *' data-ref="2uip" data-ref-filename="2uip">uip</dfn>;</td></tr>
+<tr><th id="196">196</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col3 decl" id="3lock" title='lock' data-type='struct lockf *' data-ref="3lock" data-ref-filename="3lock">lock</dfn>;</td></tr>
+<tr><th id="197">197</th><td>	<a class="typedef" href="../sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <dfn class="local col4 decl" id="4lcnt" title='lcnt' data-type='u_long' data-ref="4lcnt" data-ref-filename="4lcnt">lcnt</dfn>;</td></tr>
+<tr><th id="198">198</th><td>	<em>const</em> <a class="macro" href="../sys/types.h.html#192" title="__uid_t" data-ref="_M/uid_t">uid_t</a> <dfn class="local col5 decl" id="5uid" title='uid' data-type='const __uid_t' data-ref="5uid" data-ref-filename="5uid">uid</dfn> = <a class="ref fn" href="../sys/kauth.h.html#kauth_cred_geteuid" title='kauth_cred_geteuid' data-ref="kauth_cred_geteuid" data-ref-filename="kauth_cred_geteuid">kauth_cred_geteuid</a>(<a class="ref fn" href="../sys/kauth.h.html#kauth_cred_get" title='kauth_cred_get' data-ref="kauth_cred_get" data-ref-filename="kauth_cred_get">kauth_cred_get</a>());</td></tr>
+<tr><th id="199">199</th><td></td></tr>
+<tr><th id="200">200</th><td>	<a class="local col2 ref" href="#2uip" title='uip' data-ref="2uip" data-ref-filename="2uip">uip</a> = <a class="ref fn" href="../sys/uidinfo.h.html#uid_find" title='uid_find' data-ref="uid_find" data-ref-filename="uid_find">uid_find</a>(<a class="local col5 ref" href="#5uid" title='uid' data-ref="5uid" data-ref-filename="5uid">uid</a>);</td></tr>
+<tr><th id="201">201</th><td>	<a class="local col4 ref" href="#4lcnt" title='lcnt' data-ref="4lcnt" data-ref-filename="4lcnt">lcnt</a> = <a class="ref fn" href="../sys/atomic.h.html#atomic_inc_ulong_nv" title='atomic_inc_ulong_nv' data-ref="atomic_inc_ulong_nv" data-ref-filename="atomic_inc_ulong_nv">atomic_inc_ulong_nv</a>(&amp;<a class="local col2 ref" href="#2uip" title='uip' data-ref="2uip" data-ref-filename="2uip">uip</a>-&gt;<a class="ref field" href="../sys/uidinfo.h.html#uidinfo::ui_lockcnt" title='uidinfo::ui_lockcnt' data-ref="uidinfo::ui_lockcnt" data-ref-filename="uidinfo..ui_lockcnt">ui_lockcnt</a>);</td></tr>
+<tr><th id="202">202</th><td>	<b>if</b> (<a class="local col5 ref" href="#5uid" title='uid' data-ref="5uid" data-ref-filename="5uid">uid</a> &amp;&amp; <a class="local col1 ref" href="#1allowfail" title='allowfail' data-ref="1allowfail" data-ref-filename="1allowfail">allowfail</a> &amp;&amp; <a class="local col4 ref" href="#4lcnt" title='lcnt' data-ref="4lcnt" data-ref-filename="4lcnt">lcnt</a> &gt;</td></tr>
+<tr><th id="203">203</th><td>	    (<a class="local col1 ref" href="#1allowfail" title='allowfail' data-ref="1allowfail" data-ref-filename="1allowfail">allowfail</a> == <var>1</var> ? <a class="ref" href="#maxlocksperuid" title='maxlocksperuid' data-ref="maxlocksperuid" data-ref-filename="maxlocksperuid">maxlocksperuid</a> : (<a class="ref" href="#maxlocksperuid" title='maxlocksperuid' data-ref="maxlocksperuid" data-ref-filename="maxlocksperuid">maxlocksperuid</a> * <var>2</var>))) {</td></tr>
+<tr><th id="204">204</th><td>		<a class="ref fn" href="../sys/atomic.h.html#atomic_dec_ulong" title='atomic_dec_ulong' data-ref="atomic_dec_ulong" data-ref-filename="atomic_dec_ulong">atomic_dec_ulong</a>(&amp;<a class="local col2 ref" href="#2uip" title='uip' data-ref="2uip" data-ref-filename="2uip">uip</a>-&gt;<a class="ref field" href="../sys/uidinfo.h.html#uidinfo::ui_lockcnt" title='uidinfo::ui_lockcnt' data-ref="uidinfo::ui_lockcnt" data-ref-filename="uidinfo..ui_lockcnt">ui_lockcnt</a>);</td></tr>
+<tr><th id="205">205</th><td>		<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="206">206</th><td>	}</td></tr>
+<tr><th id="207">207</th><td></td></tr>
+<tr><th id="208">208</th><td>	<a class="local col3 ref" href="#3lock" title='lock' data-ref="3lock" data-ref-filename="3lock">lock</a> = <a class="macro" href="../sys/pool.h.html#358" title="pool_cache_get_paddr((lockf_cache), (0x01), ((void *)0))" data-ref="_M/pool_cache_get">pool_cache_get</a>(<a class="tu ref" href="#lockf_cache" title='lockf_cache' data-use='r' data-ref="lockf_cache" data-ref-filename="lockf_cache">lockf_cache</a>, <a class="macro" href="../sys/pool.h.html#150" title="0x01" data-ref="_M/PR_WAITOK">PR_WAITOK</a>);</td></tr>
+<tr><th id="209">209</th><td>	<a class="local col3 ref" href="#3lock" title='lock' data-ref="3lock" data-ref-filename="3lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_uid" title='lockf::lf_uid' data-ref="lockf::lf_uid" data-ref-filename="lockf..lf_uid">lf_uid</a> = <a class="local col5 ref" href="#5uid" title='uid' data-ref="5uid" data-ref-filename="5uid">uid</a>;</td></tr>
+<tr><th id="210">210</th><td>	<b>return</b> <a class="local col3 ref" href="#3lock" title='lock' data-ref="3lock" data-ref-filename="3lock">lock</a>;</td></tr>
+<tr><th id="211">211</th><td>}</td></tr>
+<tr><th id="212">212</th><td></td></tr>
+<tr><th id="213">213</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="214">214</th><td><dfn class="tu decl def fn" id="lf_free" title='lf_free' data-type='void lf_free(struct lockf * lock)' data-ref="lf_free" data-ref-filename="lf_free">lf_free</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col6 decl" id="6lock" title='lock' data-type='struct lockf *' data-ref="6lock" data-ref-filename="6lock">lock</dfn>)</td></tr>
+<tr><th id="215">215</th><td>{</td></tr>
+<tr><th id="216">216</th><td>	<b>struct</b> <a class="type" href="../sys/uidinfo.h.html#uidinfo" title='uidinfo' data-ref="uidinfo" data-ref-filename="uidinfo">uidinfo</a> *<dfn class="local col7 decl" id="7uip" title='uip' data-type='struct uidinfo *' data-ref="7uip" data-ref-filename="7uip">uip</dfn>;</td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td>	<a class="local col7 ref" href="#7uip" title='uip' data-ref="7uip" data-ref-filename="7uip">uip</a> = <a class="ref fn" href="../sys/uidinfo.h.html#uid_find" title='uid_find' data-ref="uid_find" data-ref-filename="uid_find">uid_find</a>(<a class="local col6 ref" href="#6lock" title='lock' data-ref="6lock" data-ref-filename="6lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_uid" title='lockf::lf_uid' data-ref="lockf::lf_uid" data-ref-filename="lockf..lf_uid">lf_uid</a>);</td></tr>
+<tr><th id="219">219</th><td>	<a class="ref fn" href="../sys/atomic.h.html#atomic_dec_ulong" title='atomic_dec_ulong' data-ref="atomic_dec_ulong" data-ref-filename="atomic_dec_ulong">atomic_dec_ulong</a>(&amp;<a class="local col7 ref" href="#7uip" title='uip' data-ref="7uip" data-ref-filename="7uip">uip</a>-&gt;<a class="ref field" href="../sys/uidinfo.h.html#uidinfo::ui_lockcnt" title='uidinfo::ui_lockcnt' data-ref="uidinfo::ui_lockcnt" data-ref-filename="uidinfo..ui_lockcnt">ui_lockcnt</a>);</td></tr>
+<tr><th id="220">220</th><td>	<a class="macro" href="../sys/pool.h.html#359" title="pool_cache_put_paddr((lockf_cache), (lock), ((paddr_t) -1))" data-ref="_M/pool_cache_put">pool_cache_put</a>(<a class="tu ref" href="#lockf_cache" title='lockf_cache' data-use='r' data-ref="lockf_cache" data-ref-filename="lockf_cache">lockf_cache</a>, <a class="local col6 ref" href="#6lock" title='lock' data-ref="6lock" data-ref-filename="6lock">lock</a>);</td></tr>
+<tr><th id="221">221</th><td>}</td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="224">224</th><td><dfn class="tu decl def fn" id="lf_ctor" title='lf_ctor' data-type='int lf_ctor(void * arg, void * obj, int flag)' data-ref="lf_ctor" data-ref-filename="lf_ctor">lf_ctor</dfn>(<em>void</em> *<dfn class="local col8 decl" id="8arg" title='arg' data-type='void *' data-ref="8arg" data-ref-filename="8arg">arg</dfn>, <em>void</em> *<dfn class="local col9 decl" id="9obj" title='obj' data-type='void *' data-ref="9obj" data-ref-filename="9obj">obj</dfn>, <em>int</em> <dfn class="local col0 decl" id="10flag" title='flag' data-type='int' data-ref="10flag" data-ref-filename="10flag">flag</dfn>)</td></tr>
+<tr><th id="225">225</th><td>{</td></tr>
+<tr><th id="226">226</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col1 decl" id="11lock" title='lock' data-type='struct lockf *' data-ref="11lock" data-ref-filename="11lock">lock</dfn>;</td></tr>
+<tr><th id="227">227</th><td></td></tr>
+<tr><th id="228">228</th><td>	<a class="local col1 ref" href="#11lock" title='lock' data-ref="11lock" data-ref-filename="11lock">lock</a> = <a class="local col9 ref" href="#9obj" title='obj' data-ref="9obj" data-ref-filename="9obj">obj</a>;</td></tr>
+<tr><th id="229">229</th><td>	<a class="ref fn" href="../sys/condvar.h.html#cv_init" title='cv_init' data-ref="cv_init" data-ref-filename="cv_init">cv_init</a>(&amp;<a class="local col1 ref" href="#11lock" title='lock' data-ref="11lock" data-ref-filename="11lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</a>, <a class="tu ref" href="#lockstr" title='lockstr' data-use='r' data-ref="lockstr" data-ref-filename="lockstr">lockstr</a>);</td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="232">232</th><td>}</td></tr>
+<tr><th id="233">233</th><td></td></tr>
+<tr><th id="234">234</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="235">235</th><td><dfn class="tu decl def fn" id="lf_dtor" title='lf_dtor' data-type='void lf_dtor(void * arg, void * obj)' data-ref="lf_dtor" data-ref-filename="lf_dtor">lf_dtor</dfn>(<em>void</em> *<dfn class="local col2 decl" id="12arg" title='arg' data-type='void *' data-ref="12arg" data-ref-filename="12arg">arg</dfn>, <em>void</em> *<dfn class="local col3 decl" id="13obj" title='obj' data-type='void *' data-ref="13obj" data-ref-filename="13obj">obj</dfn>)</td></tr>
+<tr><th id="236">236</th><td>{</td></tr>
+<tr><th id="237">237</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col4 decl" id="14lock" title='lock' data-type='struct lockf *' data-ref="14lock" data-ref-filename="14lock">lock</dfn>;</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<a class="local col4 ref" href="#14lock" title='lock' data-ref="14lock" data-ref-filename="14lock">lock</a> = <a class="local col3 ref" href="#13obj" title='obj' data-ref="13obj" data-ref-filename="13obj">obj</a>;</td></tr>
+<tr><th id="240">240</th><td>	<a class="ref fn" href="../sys/condvar.h.html#cv_destroy" title='cv_destroy' data-ref="cv_destroy" data-ref-filename="cv_destroy">cv_destroy</a>(&amp;<a class="local col4 ref" href="#14lock" title='lock' data-ref="14lock" data-ref-filename="14lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</a>);</td></tr>
+<tr><th id="241">241</th><td>}</td></tr>
+<tr><th id="242">242</th><td></td></tr>
+<tr><th id="243">243</th><td><i  data-doc="lf_findoverlap">/*</i></td></tr>
+<tr><th id="244">244</th><td><i  data-doc="lf_findoverlap"> * Walk the list of locks for an inode to</i></td></tr>
+<tr><th id="245">245</th><td><i  data-doc="lf_findoverlap"> * find an overlapping lock (if any).</i></td></tr>
+<tr><th id="246">246</th><td><i  data-doc="lf_findoverlap"> *</i></td></tr>
+<tr><th id="247">247</th><td><i  data-doc="lf_findoverlap"> * NOTE: this returns only the FIRST overlapping lock.  There</i></td></tr>
+<tr><th id="248">248</th><td><i  data-doc="lf_findoverlap"> *	 may be more than one.</i></td></tr>
+<tr><th id="249">249</th><td><i  data-doc="lf_findoverlap"> */</i></td></tr>
+<tr><th id="250">250</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="251">251</th><td><dfn class="tu decl def fn" id="lf_findoverlap" title='lf_findoverlap' data-type='int lf_findoverlap(struct lockf * lf, struct lockf * lock, int type, struct lockf *** prev, struct lockf ** overlap)' data-ref="lf_findoverlap" data-ref-filename="lf_findoverlap">lf_findoverlap</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col5 decl" id="15lf" title='lf' data-type='struct lockf *' data-ref="15lf" data-ref-filename="15lf">lf</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col6 decl" id="16lock" title='lock' data-type='struct lockf *' data-ref="16lock" data-ref-filename="16lock">lock</dfn>, <em>int</em> <dfn class="local col7 decl" id="17type" title='type' data-type='int' data-ref="17type" data-ref-filename="17type">type</dfn>,</td></tr>
+<tr><th id="252">252</th><td>    <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> ***<dfn class="local col8 decl" id="18prev" title='prev' data-type='struct lockf ***' data-ref="18prev" data-ref-filename="18prev">prev</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col9 decl" id="19overlap" title='overlap' data-type='struct lockf **' data-ref="19overlap" data-ref-filename="19overlap">overlap</dfn>)</td></tr>
+<tr><th id="253">253</th><td>{</td></tr>
+<tr><th id="254">254</th><td>	<a class="macro" href="../sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a> <dfn class="local col0 decl" id="20start" title='start' data-type='__off_t' data-ref="20start" data-ref-filename="20start">start</dfn>, <dfn class="local col1 decl" id="21end" title='end' data-type='__off_t' data-ref="21end" data-ref-filename="21end">end</dfn>;</td></tr>
+<tr><th id="255">255</th><td></td></tr>
+<tr><th id="256">256</th><td>	*<a class="local col9 ref" href="#19overlap" title='overlap' data-ref="19overlap" data-ref-filename="19overlap">overlap</a> = <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>;</td></tr>
+<tr><th id="257">257</th><td>	<b>if</b> (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="258">258</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="259">259</th><td><u>#<span data-ppcond="259">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="260">260</th><td>	<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="261">261</th><td>		lf_print(<q>"lf_findoverlap: looking for overlap in"</q>, lock);</td></tr>
+<tr><th id="262">262</th><td><u>#<span data-ppcond="259">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="263">263</th><td>	<a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a> = <a class="local col6 ref" href="#16lock" title='lock' data-ref="16lock" data-ref-filename="16lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a>;</td></tr>
+<tr><th id="264">264</th><td>	<a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> = <a class="local col6 ref" href="#16lock" title='lock' data-ref="16lock" data-ref-filename="16lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a>;</td></tr>
+<tr><th id="265">265</th><td>	<b>while</b> (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="266">266</th><td>		<b>if</b> (((<a class="local col7 ref" href="#17type" title='type' data-ref="17type" data-ref-filename="17type">type</a> == <a class="macro" href="#99" title="0x1" data-ref="_M/SELF">SELF</a>) &amp;&amp; <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a> != <a class="local col6 ref" href="#16lock" title='lock' data-ref="16lock" data-ref-filename="16lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a>) ||</td></tr>
+<tr><th id="267">267</th><td>		    ((<a class="local col7 ref" href="#17type" title='type' data-ref="17type" data-ref-filename="17type">type</a> == <a class="macro" href="#100" title="0x2" data-ref="_M/OTHERS">OTHERS</a>) &amp;&amp; <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a> == <a class="local col6 ref" href="#16lock" title='lock' data-ref="16lock" data-ref-filename="16lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a>)) {</td></tr>
+<tr><th id="268">268</th><td>			*<a class="local col8 ref" href="#18prev" title='prev' data-ref="18prev" data-ref-filename="18prev">prev</a> = &amp;<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="269">269</th><td>			*<a class="local col9 ref" href="#19overlap" title='overlap' data-ref="19overlap" data-ref-filename="19overlap">overlap</a> = <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a> = <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="270">270</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="271">271</th><td>		}</td></tr>
+<tr><th id="272">272</th><td><u>#<span data-ppcond="272">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="273">273</th><td>		<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="274">274</th><td>			lf_print(<q>"\tchecking"</q>, lf);</td></tr>
+<tr><th id="275">275</th><td><u>#<span data-ppcond="272">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="276">276</th><td>		<i>/*</i></td></tr>
+<tr><th id="277">277</th><td><i>		 * OK, check for overlap</i></td></tr>
+<tr><th id="278">278</th><td><i>		 *</i></td></tr>
+<tr><th id="279">279</th><td><i>		 * Six cases:</i></td></tr>
+<tr><th id="280">280</th><td><i>		 *	0) no overlap</i></td></tr>
+<tr><th id="281">281</th><td><i>		 *	1) overlap == lock</i></td></tr>
+<tr><th id="282">282</th><td><i>		 *	2) overlap contains lock</i></td></tr>
+<tr><th id="283">283</th><td><i>		 *	3) lock contains overlap</i></td></tr>
+<tr><th id="284">284</th><td><i>		 *	4) overlap starts before lock</i></td></tr>
+<tr><th id="285">285</th><td><i>		 *	5) overlap ends after lock</i></td></tr>
+<tr><th id="286">286</th><td><i>		 */</i></td></tr>
+<tr><th id="287">287</th><td>		<b>if</b> ((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> != -<var>1</var> &amp;&amp; <a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a> &gt; <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a>) ||</td></tr>
+<tr><th id="288">288</th><td>		    (<a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> != -<var>1</var> &amp;&amp; <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> &gt; <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a>)) {</td></tr>
+<tr><th id="289">289</th><td>			<i>/* Case 0 */</i></td></tr>
+<tr><th id="290">290</th><td><u>#<span data-ppcond="290">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="291">291</th><td>			<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="292">292</th><td>				printf(<q>"no overlap\n"</q>);</td></tr>
+<tr><th id="293">293</th><td><u>#<span data-ppcond="290">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="294">294</th><td>			<b>if</b> ((<a class="local col7 ref" href="#17type" title='type' data-ref="17type" data-ref-filename="17type">type</a> &amp; <a class="macro" href="#99" title="0x1" data-ref="_M/SELF">SELF</a>) &amp;&amp; <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> != -<var>1</var> &amp;&amp; <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> &gt; <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a>)</td></tr>
+<tr><th id="295">295</th><td>				<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="296">296</th><td>			*<a class="local col8 ref" href="#18prev" title='prev' data-ref="18prev" data-ref-filename="18prev">prev</a> = &amp;<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="297">297</th><td>			*<a class="local col9 ref" href="#19overlap" title='overlap' data-ref="19overlap" data-ref-filename="19overlap">overlap</a> = <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a> = <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="298">298</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="299">299</th><td>		}</td></tr>
+<tr><th id="300">300</th><td>		<b>if</b> ((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> == <a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a>) &amp;&amp; (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> == <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a>)) {</td></tr>
+<tr><th id="301">301</th><td>			<i>/* Case 1 */</i></td></tr>
+<tr><th id="302">302</th><td><u>#<span data-ppcond="302">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="303">303</th><td>			<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="304">304</th><td>				printf(<q>"overlap == lock\n"</q>);</td></tr>
+<tr><th id="305">305</th><td><u>#<span data-ppcond="302">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="306">306</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="307">307</th><td>		}</td></tr>
+<tr><th id="308">308</th><td>		<b>if</b> ((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> &lt;= <a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a>) &amp;&amp;</td></tr>
+<tr><th id="309">309</th><td>		    (<a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> != -<var>1</var>) &amp;&amp;</td></tr>
+<tr><th id="310">310</th><td>		    ((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> &gt;= <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a>) || (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> == -<var>1</var>))) {</td></tr>
+<tr><th id="311">311</th><td>			<i>/* Case 2 */</i></td></tr>
+<tr><th id="312">312</th><td><u>#<span data-ppcond="312">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="313">313</th><td>			<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="314">314</th><td>				printf(<q>"overlap contains lock\n"</q>);</td></tr>
+<tr><th id="315">315</th><td><u>#<span data-ppcond="312">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="316">316</th><td>			<b>return</b> <var>2</var>;</td></tr>
+<tr><th id="317">317</th><td>		}</td></tr>
+<tr><th id="318">318</th><td>		<b>if</b> (<a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a> &lt;= <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> &amp;&amp;</td></tr>
+<tr><th id="319">319</th><td>		           (<a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> == -<var>1</var> ||</td></tr>
+<tr><th id="320">320</th><td>			   (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> != -<var>1</var> &amp;&amp; <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> &gt;= <a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a>))) {</td></tr>
+<tr><th id="321">321</th><td>			<i>/* Case 3 */</i></td></tr>
+<tr><th id="322">322</th><td><u>#<span data-ppcond="322">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="323">323</th><td>			<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="324">324</th><td>				printf(<q>"lock contains overlap\n"</q>);</td></tr>
+<tr><th id="325">325</th><td><u>#<span data-ppcond="322">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="326">326</th><td>			<b>return</b> <var>3</var>;</td></tr>
+<tr><th id="327">327</th><td>		}</td></tr>
+<tr><th id="328">328</th><td>		<b>if</b> ((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> &lt; <a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a>) &amp;&amp;</td></tr>
+<tr><th id="329">329</th><td>			((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> &gt;= <a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a>) || (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> == -<var>1</var>))) {</td></tr>
+<tr><th id="330">330</th><td>			<i>/* Case 4 */</i></td></tr>
+<tr><th id="331">331</th><td><u>#<span data-ppcond="331">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="332">332</th><td>			<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="333">333</th><td>				printf(<q>"overlap starts before lock\n"</q>);</td></tr>
+<tr><th id="334">334</th><td><u>#<span data-ppcond="331">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="335">335</th><td>			<b>return</b> <var>4</var>;</td></tr>
+<tr><th id="336">336</th><td>		}</td></tr>
+<tr><th id="337">337</th><td>		<b>if</b> ((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> &gt; <a class="local col0 ref" href="#20start" title='start' data-ref="20start" data-ref-filename="20start">start</a>) &amp;&amp;</td></tr>
+<tr><th id="338">338</th><td>			(<a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a> != -<var>1</var>) &amp;&amp;</td></tr>
+<tr><th id="339">339</th><td>			((<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> &gt; <a class="local col1 ref" href="#21end" title='end' data-ref="21end" data-ref-filename="21end">end</a>) || (<a class="local col5 ref" href="#15lf" title='lf' data-ref="15lf" data-ref-filename="15lf">lf</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> == -<var>1</var>))) {</td></tr>
+<tr><th id="340">340</th><td>			<i>/* Case 5 */</i></td></tr>
+<tr><th id="341">341</th><td><u>#<span data-ppcond="341">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="342">342</th><td>			<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="343">343</th><td>				printf(<q>"overlap ends after lock\n"</q>);</td></tr>
+<tr><th id="344">344</th><td><u>#<span data-ppcond="341">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="345">345</th><td>			<b>return</b> <var>5</var>;</td></tr>
+<tr><th id="346">346</th><td>		}</td></tr>
+<tr><th id="347">347</th><td>		<a class="ref fn" href="../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"lf_findoverlap: default"</q>);</td></tr>
+<tr><th id="348">348</th><td>	}</td></tr>
+<tr><th id="349">349</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="350">350</th><td>}</td></tr>
+<tr><th id="351">351</th><td></td></tr>
+<tr><th id="352">352</th><td><i  data-doc="lf_split">/*</i></td></tr>
+<tr><th id="353">353</th><td><i  data-doc="lf_split"> * Split a lock and a contained region into</i></td></tr>
+<tr><th id="354">354</th><td><i  data-doc="lf_split"> * two or three locks as necessary.</i></td></tr>
+<tr><th id="355">355</th><td><i  data-doc="lf_split"> */</i></td></tr>
+<tr><th id="356">356</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="357">357</th><td><dfn class="tu decl def fn" id="lf_split" title='lf_split' data-type='void lf_split(struct lockf * lock1, struct lockf * lock2, struct lockf ** sparelock)' data-ref="lf_split" data-ref-filename="lf_split">lf_split</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col2 decl" id="22lock1" title='lock1' data-type='struct lockf *' data-ref="22lock1" data-ref-filename="22lock1">lock1</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col3 decl" id="23lock2" title='lock2' data-type='struct lockf *' data-ref="23lock2" data-ref-filename="23lock2">lock2</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col4 decl" id="24sparelock" title='sparelock' data-type='struct lockf **' data-ref="24sparelock" data-ref-filename="24sparelock">sparelock</dfn>)</td></tr>
+<tr><th id="358">358</th><td>{</td></tr>
+<tr><th id="359">359</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col5 decl" id="25splitlock" title='splitlock' data-type='struct lockf *' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</dfn>;</td></tr>
+<tr><th id="360">360</th><td></td></tr>
+<tr><th id="361">361</th><td><u>#<span data-ppcond="361">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="362">362</th><td>	<b>if</b> (lockf_debug &amp; <var>2</var>) {</td></tr>
+<tr><th id="363">363</th><td>		lf_print(<q>"lf_split"</q>, lock1);</td></tr>
+<tr><th id="364">364</th><td>		lf_print(<q>"splitting from"</q>, lock2);</td></tr>
+<tr><th id="365">365</th><td>	}</td></tr>
+<tr><th id="366">366</th><td><u>#<span data-ppcond="361">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="367">367</th><td>	<i>/*</i></td></tr>
+<tr><th id="368">368</th><td><i>	 * Check to see if spliting into only two pieces.</i></td></tr>
+<tr><th id="369">369</th><td><i>	 */</i></td></tr>
+<tr><th id="370">370</th><td>	<b>if</b> (<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> == <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a>) {</td></tr>
+<tr><th id="371">371</th><td>		<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> + <var>1</var>;</td></tr>
+<tr><th id="372">372</th><td>		<a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>;</td></tr>
+<tr><th id="373">373</th><td>		<b>return</b>;</td></tr>
+<tr><th id="374">374</th><td>	}</td></tr>
+<tr><th id="375">375</th><td>	<b>if</b> (<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> == <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a>) {</td></tr>
+<tr><th id="376">376</th><td>		<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> = <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> - <var>1</var>;</td></tr>
+<tr><th id="377">377</th><td>		<a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="378">378</th><td>		<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>;</td></tr>
+<tr><th id="379">379</th><td>		<b>return</b>;</td></tr>
+<tr><th id="380">380</th><td>	}</td></tr>
+<tr><th id="381">381</th><td>	<i>/*</i></td></tr>
+<tr><th id="382">382</th><td><i>	 * Make a new lock consisting of the last part of</i></td></tr>
+<tr><th id="383">383</th><td><i>	 * the encompassing lock</i></td></tr>
+<tr><th id="384">384</th><td><i>	 */</i></td></tr>
+<tr><th id="385">385</th><td>	<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a> = *<a class="local col4 ref" href="#24sparelock" title='sparelock' data-ref="24sparelock" data-ref-filename="24sparelock">sparelock</a>;</td></tr>
+<tr><th id="386">386</th><td>	*<a class="local col4 ref" href="#24sparelock" title='sparelock' data-ref="24sparelock" data-ref-filename="24sparelock">sparelock</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="387">387</th><td>	<a class="ref fn" href="../sys/condvar.h.html#cv_destroy" title='cv_destroy' data-ref="cv_destroy" data-ref-filename="cv_destroy">cv_destroy</a>(&amp;<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>-&gt;<a class="ref field" href="#lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</a>);</td></tr>
+<tr><th id="388">388</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#380" title="__builtin_memcpy(splitlock, lock1, sizeof(*splitlock))" data-ref="_M/memcpy">memcpy</a>(<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>, <a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>, <b>sizeof</b>(*<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>));</td></tr>
+<tr><th id="389">389</th><td>	<a class="ref fn" href="../sys/condvar.h.html#cv_init" title='cv_init' data-ref="cv_init" data-ref-filename="cv_init">cv_init</a>(&amp;<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>-&gt;<a class="ref field" href="#lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</a>, <a class="tu ref" href="#lockstr" title='lockstr' data-use='r' data-ref="lockstr" data-ref-filename="lockstr">lockstr</a>);</td></tr>
+<tr><th id="390">390</th><td></td></tr>
+<tr><th id="391">391</th><td>	<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> + <var>1</var>;</td></tr>
+<tr><th id="392">392</th><td>	<a class="macro" href="../sys/queue.h.html#496" title="do { (&amp;splitlock-&gt;lf_blkhd)-&gt;tqh_first = (((void *)0)); (&amp;splitlock-&gt;lf_blkhd)-&gt;tqh_last = &amp;(&amp;splitlock-&gt;lf_blkhd)-&gt;tqh_first; } while ( 0)" data-ref="_M/TAILQ_INIT">TAILQ_INIT</a>(&amp;<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>);</td></tr>
+<tr><th id="393">393</th><td>	<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> = <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> - <var>1</var>;</td></tr>
+<tr><th id="394">394</th><td>	<i>/*</i></td></tr>
+<tr><th id="395">395</th><td><i>	 * OK, now link it in</i></td></tr>
+<tr><th id="396">396</th><td><i>	 */</i></td></tr>
+<tr><th id="397">397</th><td>	<a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="398">398</th><td>	<a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col5 ref" href="#25splitlock" title='splitlock' data-ref="25splitlock" data-ref-filename="25splitlock">splitlock</a>;</td></tr>
+<tr><th id="399">399</th><td>	<a class="local col2 ref" href="#22lock1" title='lock1' data-ref="22lock1" data-ref-filename="22lock1">lock1</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col3 ref" href="#23lock2" title='lock2' data-ref="23lock2" data-ref-filename="23lock2">lock2</a>;</td></tr>
+<tr><th id="400">400</th><td>}</td></tr>
+<tr><th id="401">401</th><td></td></tr>
+<tr><th id="402">402</th><td><i  data-doc="lf_wakelock">/*</i></td></tr>
+<tr><th id="403">403</th><td><i  data-doc="lf_wakelock"> * Wakeup a blocklist</i></td></tr>
+<tr><th id="404">404</th><td><i  data-doc="lf_wakelock"> */</i></td></tr>
+<tr><th id="405">405</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="406">406</th><td><dfn class="tu decl def fn" id="lf_wakelock" title='lf_wakelock' data-type='void lf_wakelock(struct lockf * listhead)' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col6 decl" id="26listhead" title='listhead' data-type='struct lockf *' data-ref="26listhead" data-ref-filename="26listhead">listhead</dfn>)</td></tr>
+<tr><th id="407">407</th><td>{</td></tr>
+<tr><th id="408">408</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col7 decl" id="27wakelock" title='wakelock' data-type='struct lockf *' data-ref="27wakelock" data-ref-filename="27wakelock">wakelock</dfn>;</td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td>	<b>while</b> ((<a class="local col7 ref" href="#27wakelock" title='wakelock' data-ref="27wakelock" data-ref-filename="27wakelock">wakelock</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;listhead-&gt;lf_blkhd)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="local col6 ref" href="#26listhead" title='listhead' data-ref="26listhead" data-ref-filename="26listhead">listhead</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>))) {</td></tr>
+<tr><th id="411">411</th><td>		<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((wakelock-&gt;lf_next == listhead)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;wakelock-&gt;lf_next == listhead&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/vfs_lockf.c&quot;, 411))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col7 ref" href="#27wakelock" title='wakelock' data-ref="27wakelock" data-ref-filename="27wakelock">wakelock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> == <a class="local col6 ref" href="#26listhead" title='listhead' data-ref="26listhead" data-ref-filename="26listhead">listhead</a>);</td></tr>
+<tr><th id="412">412</th><td>		<a class="macro" href="../sys/queue.h.html#540" title="do { if (((wakelock)-&gt;lf_block.tqe_next) != (((void *)0))) (wakelock)-&gt;lf_block.tqe_next-&gt;lf_block.tqe_prev = (wakelock)-&gt;lf_block.tqe_prev; else (&amp;listhead-&gt;lf_blkhd)-&gt;tqh_last = (wakelock)-&gt;lf_block.tqe_prev; *(wakelock)-&gt;lf_block.tqe_prev = (wakelock)-&gt;lf_block.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="local col6 ref" href="#26listhead" title='listhead' data-ref="26listhead" data-ref-filename="26listhead">listhead</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>, <a class="local col7 ref" href="#27wakelock" title='wakelock' data-ref="27wakelock" data-ref-filename="27wakelock">wakelock</a>, <a class="ref field" href="#lockf::lf_block" title='lockf::lf_block' data-ref="lockf::lf_block" data-ref-filename="lockf..lf_block">lf_block</a>);</td></tr>
+<tr><th id="413">413</th><td>		<a class="local col7 ref" href="#27wakelock" title='wakelock' data-ref="27wakelock" data-ref-filename="27wakelock">wakelock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="414">414</th><td><u>#<span data-ppcond="414">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="415">415</th><td>		<b>if</b> (lockf_debug &amp; <var>2</var>)</td></tr>
+<tr><th id="416">416</th><td>			lf_print(<q>"lf_wakelock: awakening"</q>, wakelock);</td></tr>
+<tr><th id="417">417</th><td><u>#<span data-ppcond="414">endif</span></u></td></tr>
+<tr><th id="418">418</th><td>		<a class="ref fn" href="../sys/condvar.h.html#cv_broadcast" title='cv_broadcast' data-ref="cv_broadcast" data-ref-filename="cv_broadcast">cv_broadcast</a>(&amp;<a class="local col7 ref" href="#27wakelock" title='wakelock' data-ref="27wakelock" data-ref-filename="27wakelock">wakelock</a>-&gt;<a class="ref field" href="#lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</a>);</td></tr>
+<tr><th id="419">419</th><td>	}</td></tr>
+<tr><th id="420">420</th><td>}</td></tr>
+<tr><th id="421">421</th><td></td></tr>
+<tr><th id="422">422</th><td><i  data-doc="lf_clearlock">/*</i></td></tr>
+<tr><th id="423">423</th><td><i  data-doc="lf_clearlock"> * Remove a byte-range lock on an inode.</i></td></tr>
+<tr><th id="424">424</th><td><i  data-doc="lf_clearlock"> *</i></td></tr>
+<tr><th id="425">425</th><td><i  data-doc="lf_clearlock"> * Generally, find the lock (or an overlap to that lock)</i></td></tr>
+<tr><th id="426">426</th><td><i  data-doc="lf_clearlock"> * and remove it (or shrink it), then wakeup anyone we can.</i></td></tr>
+<tr><th id="427">427</th><td><i  data-doc="lf_clearlock"> */</i></td></tr>
+<tr><th id="428">428</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="429">429</th><td><dfn class="tu decl def fn" id="lf_clearlock" title='lf_clearlock' data-type='int lf_clearlock(struct lockf * unlock, struct lockf ** sparelock)' data-ref="lf_clearlock" data-ref-filename="lf_clearlock">lf_clearlock</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col8 decl" id="28unlock" title='unlock' data-type='struct lockf *' data-ref="28unlock" data-ref-filename="28unlock">unlock</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col9 decl" id="29sparelock" title='sparelock' data-type='struct lockf **' data-ref="29sparelock" data-ref-filename="29sparelock">sparelock</dfn>)</td></tr>
+<tr><th id="430">430</th><td>{</td></tr>
+<tr><th id="431">431</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col0 decl" id="30head" title='head' data-type='struct lockf **' data-ref="30head" data-ref-filename="30head">head</dfn> = <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>-&gt;<a class="ref field" href="#lockf::lf_head" title='lockf::lf_head' data-ref="lockf::lf_head" data-ref-filename="lockf..lf_head">lf_head</a>;</td></tr>
+<tr><th id="432">432</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col1 decl" id="31lf" title='lf' data-type='struct lockf *' data-ref="31lf" data-ref-filename="31lf">lf</dfn> = *<a class="local col0 ref" href="#30head" title='head' data-ref="30head" data-ref-filename="30head">head</a>;</td></tr>
+<tr><th id="433">433</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col2 decl" id="32overlap" title='overlap' data-type='struct lockf *' data-ref="32overlap" data-ref-filename="32overlap">overlap</dfn>, **<dfn class="local col3 decl" id="33prev" title='prev' data-type='struct lockf **' data-ref="33prev" data-ref-filename="33prev">prev</dfn>;</td></tr>
+<tr><th id="434">434</th><td>	<em>int</em> <dfn class="local col4 decl" id="34ovcase" title='ovcase' data-type='int' data-ref="34ovcase" data-ref-filename="34ovcase">ovcase</dfn>;</td></tr>
+<tr><th id="435">435</th><td></td></tr>
+<tr><th id="436">436</th><td>	<b>if</b> (<a class="local col1 ref" href="#31lf" title='lf' data-ref="31lf" data-ref-filename="31lf">lf</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="437">437</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="438">438</th><td><u>#<span data-ppcond="438">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="439">439</th><td>	<b>if</b> (unlock-&gt;lf_type != F_UNLCK)</td></tr>
+<tr><th id="440">440</th><td>		panic(<q>"lf_clearlock: bad type"</q>);</td></tr>
+<tr><th id="441">441</th><td>	<b>if</b> (lockf_debug &amp; <var>1</var>)</td></tr>
+<tr><th id="442">442</th><td>		lf_print(<q>"lf_clearlock"</q>, unlock);</td></tr>
+<tr><th id="443">443</th><td><u>#<span data-ppcond="438">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="444">444</th><td>	<a class="local col3 ref" href="#33prev" title='prev' data-ref="33prev" data-ref-filename="33prev">prev</a> = <a class="local col0 ref" href="#30head" title='head' data-ref="30head" data-ref-filename="30head">head</a>;</td></tr>
+<tr><th id="445">445</th><td>	<b>while</b> ((<a class="local col4 ref" href="#34ovcase" title='ovcase' data-ref="34ovcase" data-ref-filename="34ovcase">ovcase</a> = <a class="tu ref fn" href="#lf_findoverlap" title='lf_findoverlap' data-use='c' data-ref="lf_findoverlap" data-ref-filename="lf_findoverlap">lf_findoverlap</a>(<a class="local col1 ref" href="#31lf" title='lf' data-ref="31lf" data-ref-filename="31lf">lf</a>, <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>, <a class="macro" href="#99" title="0x1" data-ref="_M/SELF">SELF</a>,</td></tr>
+<tr><th id="446">446</th><td>	    &amp;<a class="local col3 ref" href="#33prev" title='prev' data-ref="33prev" data-ref-filename="33prev">prev</a>, &amp;<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>)) != <var>0</var>) {</td></tr>
+<tr><th id="447">447</th><td>		<i>/*</i></td></tr>
+<tr><th id="448">448</th><td><i>		 * Wakeup the list of locks to be retried.</i></td></tr>
+<tr><th id="449">449</th><td><i>		 */</i></td></tr>
+<tr><th id="450">450</th><td>		<a class="tu ref fn" href="#lf_wakelock" title='lf_wakelock' data-use='c' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</a>(<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>);</td></tr>
+<tr><th id="451">451</th><td></td></tr>
+<tr><th id="452">452</th><td>		<b>switch</b> (<a class="local col4 ref" href="#34ovcase" title='ovcase' data-ref="34ovcase" data-ref-filename="34ovcase">ovcase</a>) {</td></tr>
+<tr><th id="453">453</th><td></td></tr>
+<tr><th id="454">454</th><td>		<b>case</b> <var>1</var>: <i>/* overlap == lock */</i></td></tr>
+<tr><th id="455">455</th><td>			*<a class="local col3 ref" href="#33prev" title='prev' data-ref="33prev" data-ref-filename="33prev">prev</a> = <a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="456">456</th><td>			<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>);</td></tr>
+<tr><th id="457">457</th><td>			<b>break</b>;</td></tr>
+<tr><th id="458">458</th><td></td></tr>
+<tr><th id="459">459</th><td>		<b>case</b> <var>2</var>: <i>/* overlap contains lock: split it */</i></td></tr>
+<tr><th id="460">460</th><td>			<b>if</b> (<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> == <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a>) {</td></tr>
+<tr><th id="461">461</th><td>				<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> + <var>1</var>;</td></tr>
+<tr><th id="462">462</th><td>				<b>break</b>;</td></tr>
+<tr><th id="463">463</th><td>			}</td></tr>
+<tr><th id="464">464</th><td>			<a class="tu ref fn" href="#lf_split" title='lf_split' data-use='c' data-ref="lf_split" data-ref-filename="lf_split">lf_split</a>(<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>, <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>, <a class="local col9 ref" href="#29sparelock" title='sparelock' data-ref="29sparelock" data-ref-filename="29sparelock">sparelock</a>);</td></tr>
+<tr><th id="465">465</th><td>			<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="466">466</th><td>			<b>break</b>;</td></tr>
+<tr><th id="467">467</th><td></td></tr>
+<tr><th id="468">468</th><td>		<b>case</b> <var>3</var>: <i>/* lock contains overlap */</i></td></tr>
+<tr><th id="469">469</th><td>			*<a class="local col3 ref" href="#33prev" title='prev' data-ref="33prev" data-ref-filename="33prev">prev</a> = <a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="470">470</th><td>			<a class="local col1 ref" href="#31lf" title='lf' data-ref="31lf" data-ref-filename="31lf">lf</a> = <a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="471">471</th><td>			<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>);</td></tr>
+<tr><th id="472">472</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="473">473</th><td></td></tr>
+<tr><th id="474">474</th><td>		<b>case</b> <var>4</var>: <i>/* overlap starts before lock */</i></td></tr>
+<tr><th id="475">475</th><td>			<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> = <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> - <var>1</var>;</td></tr>
+<tr><th id="476">476</th><td>			<a class="local col3 ref" href="#33prev" title='prev' data-ref="33prev" data-ref-filename="33prev">prev</a> = &amp;<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="477">477</th><td>			<a class="local col1 ref" href="#31lf" title='lf' data-ref="31lf" data-ref-filename="31lf">lf</a> = <a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="478">478</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="479">479</th><td></td></tr>
+<tr><th id="480">480</th><td>		<b>case</b> <var>5</var>: <i>/* overlap ends after lock */</i></td></tr>
+<tr><th id="481">481</th><td>			<a class="local col2 ref" href="#32overlap" title='overlap' data-ref="32overlap" data-ref-filename="32overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col8 ref" href="#28unlock" title='unlock' data-ref="28unlock" data-ref-filename="28unlock">unlock</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> + <var>1</var>;</td></tr>
+<tr><th id="482">482</th><td>			<b>break</b>;</td></tr>
+<tr><th id="483">483</th><td>		}</td></tr>
+<tr><th id="484">484</th><td>		<b>break</b>;</td></tr>
+<tr><th id="485">485</th><td>	}</td></tr>
+<tr><th id="486">486</th><td><u>#<span data-ppcond="486">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="487">487</th><td>	<b>if</b> (lockf_debug &amp; <var>1</var>)</td></tr>
+<tr><th id="488">488</th><td>		lf_printlist(<q>"lf_clearlock"</q>, unlock);</td></tr>
+<tr><th id="489">489</th><td><u>#<span data-ppcond="486">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="490">490</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="491">491</th><td>}</td></tr>
+<tr><th id="492">492</th><td></td></tr>
+<tr><th id="493">493</th><td><i  data-doc="lf_getblock">/*</i></td></tr>
+<tr><th id="494">494</th><td><i  data-doc="lf_getblock"> * Walk the list of locks for an inode and</i></td></tr>
+<tr><th id="495">495</th><td><i  data-doc="lf_getblock"> * return the first blocking lock.</i></td></tr>
+<tr><th id="496">496</th><td><i  data-doc="lf_getblock"> */</i></td></tr>
+<tr><th id="497">497</th><td><em>static</em> <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *</td></tr>
+<tr><th id="498">498</th><td><dfn class="tu decl def fn" id="lf_getblock" title='lf_getblock' data-type='struct lockf * lf_getblock(struct lockf * lock)' data-ref="lf_getblock" data-ref-filename="lf_getblock">lf_getblock</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col5 decl" id="35lock" title='lock' data-type='struct lockf *' data-ref="35lock" data-ref-filename="35lock">lock</dfn>)</td></tr>
+<tr><th id="499">499</th><td>{</td></tr>
+<tr><th id="500">500</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col6 decl" id="36prev" title='prev' data-type='struct lockf **' data-ref="36prev" data-ref-filename="36prev">prev</dfn>, *<dfn class="local col7 decl" id="37overlap" title='overlap' data-type='struct lockf *' data-ref="37overlap" data-ref-filename="37overlap">overlap</dfn>, *<dfn class="local col8 decl" id="38lf" title='lf' data-type='struct lockf *' data-ref="38lf" data-ref-filename="38lf">lf</dfn> = *(<a class="local col5 ref" href="#35lock" title='lock' data-ref="35lock" data-ref-filename="35lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_head" title='lockf::lf_head' data-ref="lockf::lf_head" data-ref-filename="lockf..lf_head">lf_head</a>);</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td>	<a class="local col6 ref" href="#36prev" title='prev' data-ref="36prev" data-ref-filename="36prev">prev</a> = <a class="local col5 ref" href="#35lock" title='lock' data-ref="35lock" data-ref-filename="35lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_head" title='lockf::lf_head' data-ref="lockf::lf_head" data-ref-filename="lockf..lf_head">lf_head</a>;</td></tr>
+<tr><th id="503">503</th><td>	<b>while</b> (<a class="tu ref fn" href="#lf_findoverlap" title='lf_findoverlap' data-use='c' data-ref="lf_findoverlap" data-ref-filename="lf_findoverlap">lf_findoverlap</a>(<a class="local col8 ref" href="#38lf" title='lf' data-ref="38lf" data-ref-filename="38lf">lf</a>, <a class="local col5 ref" href="#35lock" title='lock' data-ref="35lock" data-ref-filename="35lock">lock</a>, <a class="macro" href="#100" title="0x2" data-ref="_M/OTHERS">OTHERS</a>, &amp;<a class="local col6 ref" href="#36prev" title='prev' data-ref="36prev" data-ref-filename="36prev">prev</a>, &amp;<a class="local col7 ref" href="#37overlap" title='overlap' data-ref="37overlap" data-ref-filename="37overlap">overlap</a>) != <var>0</var>) {</td></tr>
+<tr><th id="504">504</th><td>		<i>/*</i></td></tr>
+<tr><th id="505">505</th><td><i>		 * We've found an overlap, see if it blocks us</i></td></tr>
+<tr><th id="506">506</th><td><i>		 */</i></td></tr>
+<tr><th id="507">507</th><td>		<b>if</b> ((<a class="local col5 ref" href="#35lock" title='lock' data-ref="35lock" data-ref-filename="35lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#204" title="3" data-ref="_M/F_WRLCK">F_WRLCK</a> || <a class="local col7 ref" href="#37overlap" title='overlap' data-ref="37overlap" data-ref-filename="37overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#204" title="3" data-ref="_M/F_WRLCK">F_WRLCK</a>))</td></tr>
+<tr><th id="508">508</th><td>			<b>return</b> <a class="local col7 ref" href="#37overlap" title='overlap' data-ref="37overlap" data-ref-filename="37overlap">overlap</a>;</td></tr>
+<tr><th id="509">509</th><td>		<i>/*</i></td></tr>
+<tr><th id="510">510</th><td><i>		 * Nope, point to the next one on the list and</i></td></tr>
+<tr><th id="511">511</th><td><i>		 * see if it blocks us</i></td></tr>
+<tr><th id="512">512</th><td><i>		 */</i></td></tr>
+<tr><th id="513">513</th><td>		<a class="local col8 ref" href="#38lf" title='lf' data-ref="38lf" data-ref-filename="38lf">lf</a> = <a class="local col7 ref" href="#37overlap" title='overlap' data-ref="37overlap" data-ref-filename="37overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="514">514</th><td>	}</td></tr>
+<tr><th id="515">515</th><td>	<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="516">516</th><td>}</td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td><i  data-doc="lf_setlock">/*</i></td></tr>
+<tr><th id="519">519</th><td><i  data-doc="lf_setlock"> * Set a byte-range lock.</i></td></tr>
+<tr><th id="520">520</th><td><i  data-doc="lf_setlock"> */</i></td></tr>
+<tr><th id="521">521</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="522">522</th><td><dfn class="tu decl def fn" id="lf_setlock" title='lf_setlock' data-type='int lf_setlock(struct lockf * lock, struct lockf ** sparelock, kmutex_t * interlock)' data-ref="lf_setlock" data-ref-filename="lf_setlock">lf_setlock</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col9 decl" id="39lock" title='lock' data-type='struct lockf *' data-ref="39lock" data-ref-filename="39lock">lock</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col0 decl" id="40sparelock" title='sparelock' data-type='struct lockf **' data-ref="40sparelock" data-ref-filename="40sparelock">sparelock</dfn>,</td></tr>
+<tr><th id="523">523</th><td>    <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col1 decl" id="41interlock" title='interlock' data-type='kmutex_t *' data-ref="41interlock" data-ref-filename="41interlock">interlock</dfn>)</td></tr>
+<tr><th id="524">524</th><td>{</td></tr>
+<tr><th id="525">525</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col2 decl" id="42block" title='block' data-type='struct lockf *' data-ref="42block" data-ref-filename="42block">block</dfn>;</td></tr>
+<tr><th id="526">526</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col3 decl" id="43head" title='head' data-type='struct lockf **' data-ref="43head" data-ref-filename="43head">head</dfn> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_head" title='lockf::lf_head' data-ref="lockf::lf_head" data-ref-filename="lockf..lf_head">lf_head</a>;</td></tr>
+<tr><th id="527">527</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col4 decl" id="44prev" title='prev' data-type='struct lockf **' data-ref="44prev" data-ref-filename="44prev">prev</dfn>, *<dfn class="local col5 decl" id="45overlap" title='overlap' data-type='struct lockf *' data-ref="45overlap" data-ref-filename="45overlap">overlap</dfn>, *<dfn class="local col6 decl" id="46ltmp" title='ltmp' data-type='struct lockf *' data-ref="46ltmp" data-ref-filename="46ltmp">ltmp</dfn>;</td></tr>
+<tr><th id="528">528</th><td>	<em>int</em> <dfn class="local col7 decl" id="47ovcase" title='ovcase' data-type='int' data-ref="47ovcase" data-ref-filename="47ovcase">ovcase</dfn>, <dfn class="local col8 decl" id="48needtolink" title='needtolink' data-type='int' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</dfn>, <dfn class="local col9 decl" id="49error" title='error' data-type='int' data-ref="49error" data-ref-filename="49error">error</dfn>;</td></tr>
+<tr><th id="529">529</th><td></td></tr>
+<tr><th id="530">530</th><td><u>#<span data-ppcond="530">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="531">531</th><td>	<b>if</b> (lockf_debug &amp; <var>1</var>)</td></tr>
+<tr><th id="532">532</th><td>		lf_print(<q>"lf_setlock"</q>, lock);</td></tr>
+<tr><th id="533">533</th><td><u>#<span data-ppcond="530">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="534">534</th><td></td></tr>
+<tr><th id="535">535</th><td>	<i>/*</i></td></tr>
+<tr><th id="536">536</th><td><i>	 * Scan lock list for this file looking for locks that would block us.</i></td></tr>
+<tr><th id="537">537</th><td><i>	 */</i></td></tr>
+<tr><th id="538">538</th><td>	<b>while</b> ((<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a> = <a class="tu ref fn" href="#lf_getblock" title='lf_getblock' data-use='c' data-ref="lf_getblock" data-ref-filename="lf_getblock">lf_getblock</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="539">539</th><td>		<i>/*</i></td></tr>
+<tr><th id="540">540</th><td><i>		 * Free the structure and return if nonblocking.</i></td></tr>
+<tr><th id="541">541</th><td><i>		 */</i></td></tr>
+<tr><th id="542">542</th><td>		<b>if</b> ((<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#206" title="0x010" data-ref="_M/F_WAIT">F_WAIT</a>) == <var>0</var>) {</td></tr>
+<tr><th id="543">543</th><td>			<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>);</td></tr>
+<tr><th id="544">544</th><td>			<b>return</b> <a class="macro" href="../sys/errno.h.html#81" title="35" data-ref="_M/EAGAIN">EAGAIN</a>;</td></tr>
+<tr><th id="545">545</th><td>		}</td></tr>
+<tr><th id="546">546</th><td>		<i>/*</i></td></tr>
+<tr><th id="547">547</th><td><i>		 * We are blocked. Since flock style locks cover</i></td></tr>
+<tr><th id="548">548</th><td><i>		 * the whole file, there is no chance for deadlock.</i></td></tr>
+<tr><th id="549">549</th><td><i>		 * For byte-range locks we must check for deadlock.</i></td></tr>
+<tr><th id="550">550</th><td><i>		 *</i></td></tr>
+<tr><th id="551">551</th><td><i>		 * Deadlock detection is done by looking through the</i></td></tr>
+<tr><th id="552">552</th><td><i>		 * wait channels to see if there are any cycles that</i></td></tr>
+<tr><th id="553">553</th><td><i>		 * involve us. MAXDEPTH is set just to make sure we</i></td></tr>
+<tr><th id="554">554</th><td><i>		 * do not go off into neverneverland.</i></td></tr>
+<tr><th id="555">555</th><td><i>		 */</i></td></tr>
+<tr><th id="556">556</th><td>		<b>if</b> ((<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#208" title="0x040" data-ref="_M/F_POSIX">F_POSIX</a>) &amp;&amp;</td></tr>
+<tr><th id="557">557</th><td>		    (<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#208" title="0x040" data-ref="_M/F_POSIX">F_POSIX</a>)) {</td></tr>
+<tr><th id="558">558</th><td>			<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col0 decl" id="50wlwp" title='wlwp' data-type='struct lwp *' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</dfn>;</td></tr>
+<tr><th id="559">559</th><td>			<em>volatile</em> <em>const</em> <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col1 decl" id="51waitblock" title='waitblock' data-type='const volatile struct lockf *' data-ref="51waitblock" data-ref-filename="51waitblock">waitblock</dfn>;</td></tr>
+<tr><th id="560">560</th><td>			<em>int</em> <dfn class="local col2 decl" id="52i" title='i' data-type='int' data-ref="52i" data-ref-filename="52i">i</dfn> = <var>0</var>;</td></tr>
+<tr><th id="561">561</th><td>			<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col3 decl" id="53p" title='p' data-type='struct proc *' data-ref="53p" data-ref-filename="53p">p</dfn>;</td></tr>
+<tr><th id="562">562</th><td></td></tr>
+<tr><th id="563">563</th><td>			<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a> = (<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *)<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a>;</td></tr>
+<tr><th id="564">564</th><td>			<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((p != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;p != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/vfs_lockf.c&quot;, 564))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="565">565</th><td>			<b>while</b> (<a class="local col2 ref" href="#52i" title='i' data-ref="52i" data-ref-filename="52i">i</a>++ &lt; <a class="ref" href="#maxlockdepth" title='maxlockdepth' data-ref="maxlockdepth" data-ref-filename="maxlockdepth">maxlockdepth</a>) {</td></tr>
+<tr><th id="566">566</th><td>				<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="567">567</th><td>				<b>if</b> (<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_nlwps" title='proc::p_nlwps' data-ref="proc::p_nlwps" data-ref-filename="proc..p_nlwps">p_nlwps</a> &gt; <var>1</var>) {</td></tr>
+<tr><th id="568">568</th><td>					<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="569">569</th><td>					<b>break</b>;</td></tr>
+<tr><th id="570">570</th><td>				}</td></tr>
+<tr><th id="571">571</th><td>				<a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a> = <a class="macro" href="../sys/queue.h.html#205" title="((&amp;p-&gt;p_lwps)-&gt;lh_first)" data-ref="_M/LIST_FIRST">LIST_FIRST</a>(&amp;<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lwps" title='proc::p_lwps' data-ref="proc::p_lwps" data-ref-filename="proc..p_lwps">p_lwps</a>);</td></tr>
+<tr><th id="572">572</th><td>				<a class="ref fn" href="../sys/lwp.h.html#lwp_lock" title='lwp_lock' data-ref="lwp_lock" data-ref-filename="lwp_lock">lwp_lock</a>(<a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a>);</td></tr>
+<tr><th id="573">573</th><td>				<b>if</b> (<a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_wchan" title='lwp::l_wchan' data-ref="lwp::l_wchan" data-ref-filename="lwp..l_wchan">l_wchan</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> ||</td></tr>
+<tr><th id="574">574</th><td>				    <a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_wmesg" title='lwp::l_wmesg' data-ref="lwp::l_wmesg" data-ref-filename="lwp..l_wmesg">l_wmesg</a> != <a class="tu ref" href="#lockstr" title='lockstr' data-use='r' data-ref="lockstr" data-ref-filename="lockstr">lockstr</a>) {</td></tr>
+<tr><th id="575">575</th><td>					<a class="ref fn" href="../sys/lwp.h.html#lwp_unlock" title='lwp_unlock' data-ref="lwp_unlock" data-ref-filename="lwp_unlock">lwp_unlock</a>(<a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a>);</td></tr>
+<tr><th id="576">576</th><td>					<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="577">577</th><td>					<b>break</b>;</td></tr>
+<tr><th id="578">578</th><td>				}</td></tr>
+<tr><th id="579">579</th><td>				<a class="local col1 ref" href="#51waitblock" title='waitblock' data-ref="51waitblock" data-ref-filename="51waitblock">waitblock</a> = <a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_wchan" title='lwp::l_wchan' data-ref="lwp::l_wchan" data-ref-filename="lwp..l_wchan">l_wchan</a>;</td></tr>
+<tr><th id="580">580</th><td>				<a class="ref fn" href="../sys/lwp.h.html#lwp_unlock" title='lwp_unlock' data-ref="lwp_unlock" data-ref-filename="lwp_unlock">lwp_unlock</a>(<a class="local col0 ref" href="#50wlwp" title='wlwp' data-ref="50wlwp" data-ref-filename="50wlwp">wlwp</a>);</td></tr>
+<tr><th id="581">581</th><td>				<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="582">582</th><td>				<i>/* Get the owner of the blocking lock */</i></td></tr>
+<tr><th id="583">583</th><td>				<a class="local col1 ref" href="#51waitblock" title='waitblock' data-ref="51waitblock" data-ref-filename="51waitblock">waitblock</a> = <a class="local col1 ref" href="#51waitblock" title='waitblock' data-ref="51waitblock" data-ref-filename="51waitblock">waitblock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="584">584</th><td>				<b>if</b> ((<a class="local col1 ref" href="#51waitblock" title='waitblock' data-ref="51waitblock" data-ref-filename="51waitblock">waitblock</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#208" title="0x040" data-ref="_M/F_POSIX">F_POSIX</a>) == <var>0</var>)</td></tr>
+<tr><th id="585">585</th><td>					<b>break</b>;</td></tr>
+<tr><th id="586">586</th><td>				<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a> = (<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *)<a class="local col1 ref" href="#51waitblock" title='waitblock' data-ref="51waitblock" data-ref-filename="51waitblock">waitblock</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a>;</td></tr>
+<tr><th id="587">587</th><td>				<b>if</b> (<a class="local col3 ref" href="#53p" title='p' data-ref="53p" data-ref-filename="53p">p</a> == <a class="macro" href="../sys/lwp.h.html#478" title="(x86_curlwp()-&gt;l_proc)" data-ref="_M/curproc">curproc</a>) {</td></tr>
+<tr><th id="588">588</th><td>					<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>);</td></tr>
+<tr><th id="589">589</th><td>					<b>return</b> <a class="macro" href="../sys/errno.h.html#52" title="11" data-ref="_M/EDEADLK">EDEADLK</a>;</td></tr>
+<tr><th id="590">590</th><td>				}</td></tr>
+<tr><th id="591">591</th><td>			}</td></tr>
+<tr><th id="592">592</th><td>			<i>/*</i></td></tr>
+<tr><th id="593">593</th><td><i>			 * If we're still following a dependency chain</i></td></tr>
+<tr><th id="594">594</th><td><i>			 * after maxlockdepth iterations, assume we're in</i></td></tr>
+<tr><th id="595">595</th><td><i>			 * a cycle to be safe.</i></td></tr>
+<tr><th id="596">596</th><td><i>			 */</i></td></tr>
+<tr><th id="597">597</th><td>			<b>if</b> (<a class="local col2 ref" href="#52i" title='i' data-ref="52i" data-ref-filename="52i">i</a> &gt;= <a class="ref" href="#maxlockdepth" title='maxlockdepth' data-ref="maxlockdepth" data-ref-filename="maxlockdepth">maxlockdepth</a>) {</td></tr>
+<tr><th id="598">598</th><td>				<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>);</td></tr>
+<tr><th id="599">599</th><td>				<b>return</b> <a class="macro" href="../sys/errno.h.html#52" title="11" data-ref="_M/EDEADLK">EDEADLK</a>;</td></tr>
+<tr><th id="600">600</th><td>			}</td></tr>
+<tr><th id="601">601</th><td>		}</td></tr>
+<tr><th id="602">602</th><td>		<i>/*</i></td></tr>
+<tr><th id="603">603</th><td><i>		 * For flock type locks, we must first remove</i></td></tr>
+<tr><th id="604">604</th><td><i>		 * any shared locks that we hold before we sleep</i></td></tr>
+<tr><th id="605">605</th><td><i>		 * waiting for an exclusive lock.</i></td></tr>
+<tr><th id="606">606</th><td><i>		 */</i></td></tr>
+<tr><th id="607">607</th><td>		<b>if</b> ((<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#207" title="0x020" data-ref="_M/F_FLOCK">F_FLOCK</a>) &amp;&amp;</td></tr>
+<tr><th id="608">608</th><td>		    <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#204" title="3" data-ref="_M/F_WRLCK">F_WRLCK</a>) {</td></tr>
+<tr><th id="609">609</th><td>			<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> = <a class="macro" href="../sys/fcntl.h.html#203" title="2" data-ref="_M/F_UNLCK">F_UNLCK</a>;</td></tr>
+<tr><th id="610">610</th><td>			(<em>void</em>) <a class="tu ref fn" href="#lf_clearlock" title='lf_clearlock' data-use='c' data-ref="lf_clearlock" data-ref-filename="lf_clearlock">lf_clearlock</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="611">611</th><td>			<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> = <a class="macro" href="../sys/fcntl.h.html#204" title="3" data-ref="_M/F_WRLCK">F_WRLCK</a>;</td></tr>
+<tr><th id="612">612</th><td>		}</td></tr>
+<tr><th id="613">613</th><td>		<i>/*</i></td></tr>
+<tr><th id="614">614</th><td><i>		 * Add our lock to the blocked list and sleep until we're free.</i></td></tr>
+<tr><th id="615">615</th><td><i>		 * Remember who blocked us (for deadlock detection).</i></td></tr>
+<tr><th id="616">616</th><td><i>		 */</i></td></tr>
+<tr><th id="617">617</th><td>		<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a>;</td></tr>
+<tr><th id="618">618</th><td>		<a class="macro" href="../sys/queue.h.html#512" title="do { (lock)-&gt;lf_block.tqe_next = (((void *)0)); (lock)-&gt;lf_block.tqe_prev = (&amp;block-&gt;lf_blkhd)-&gt;tqh_last; *(&amp;block-&gt;lf_blkhd)-&gt;tqh_last = (lock); (&amp;block-&gt;lf_blkhd)-&gt;tqh_last = &amp;(lock)-&gt;lf_block.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_TAIL">TAILQ_INSERT_TAIL</a>(&amp;<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>, <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>, <a class="ref field" href="#lockf::lf_block" title='lockf::lf_block' data-ref="lockf::lf_block" data-ref-filename="lockf..lf_block">lf_block</a>);</td></tr>
+<tr><th id="619">619</th><td><u>#<span data-ppcond="619">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="620">620</th><td>		<b>if</b> (lockf_debug &amp; <var>1</var>) {</td></tr>
+<tr><th id="621">621</th><td>			lf_print(<q>"lf_setlock: blocking on"</q>, block);</td></tr>
+<tr><th id="622">622</th><td>			lf_printlist(<q>"lf_setlock"</q>, block);</td></tr>
+<tr><th id="623">623</th><td>		}</td></tr>
+<tr><th id="624">624</th><td><u>#<span data-ppcond="619">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="625">625</th><td>		<a class="local col9 ref" href="#49error" title='error' data-ref="49error" data-ref-filename="49error">error</a> = <a class="ref fn" href="../sys/condvar.h.html#cv_wait_sig" title='cv_wait_sig' data-ref="cv_wait_sig" data-ref-filename="cv_wait_sig">cv_wait_sig</a>(&amp;<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_cv" title='lockf::lf_cv' data-ref="lockf::lf_cv" data-ref-filename="lockf..lf_cv">lf_cv</a>, <a class="local col1 ref" href="#41interlock" title='interlock' data-ref="41interlock" data-ref-filename="41interlock">interlock</a>);</td></tr>
+<tr><th id="626">626</th><td></td></tr>
+<tr><th id="627">627</th><td>		<i>/*</i></td></tr>
+<tr><th id="628">628</th><td><i>		 * We may have been awoken by a signal (in</i></td></tr>
+<tr><th id="629">629</th><td><i>		 * which case we must remove ourselves from the</i></td></tr>
+<tr><th id="630">630</th><td><i>		 * blocked list) and/or by another process</i></td></tr>
+<tr><th id="631">631</th><td><i>		 * releasing a lock (in which case we have already</i></td></tr>
+<tr><th id="632">632</th><td><i>		 * been removed from the blocked list and our</i></td></tr>
+<tr><th id="633">633</th><td><i>		 * lf_next field set to NULL).</i></td></tr>
+<tr><th id="634">634</th><td><i>		 */</i></td></tr>
+<tr><th id="635">635</th><td>		<b>if</b> (<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="636">636</th><td>			<a class="macro" href="../sys/queue.h.html#540" title="do { if (((lock)-&gt;lf_block.tqe_next) != (((void *)0))) (lock)-&gt;lf_block.tqe_next-&gt;lf_block.tqe_prev = (lock)-&gt;lf_block.tqe_prev; else (&amp;lock-&gt;lf_next-&gt;lf_blkhd)-&gt;tqh_last = (lock)-&gt;lf_block.tqe_prev; *(lock)-&gt;lf_block.tqe_prev = (lock)-&gt;lf_block.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>, <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>, <a class="ref field" href="#lockf::lf_block" title='lockf::lf_block' data-ref="lockf::lf_block" data-ref-filename="lockf..lf_block">lf_block</a>);</td></tr>
+<tr><th id="637">637</th><td>			<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="638">638</th><td>		}</td></tr>
+<tr><th id="639">639</th><td>		<b>if</b> (<a class="local col9 ref" href="#49error" title='error' data-ref="49error" data-ref-filename="49error">error</a>) {</td></tr>
+<tr><th id="640">640</th><td>			<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>);</td></tr>
+<tr><th id="641">641</th><td>			<b>return</b> <a class="local col9 ref" href="#49error" title='error' data-ref="49error" data-ref-filename="49error">error</a>;</td></tr>
+<tr><th id="642">642</th><td>		}</td></tr>
+<tr><th id="643">643</th><td>	}</td></tr>
+<tr><th id="644">644</th><td>	<i>/*</i></td></tr>
+<tr><th id="645">645</th><td><i>	 * No blocks!!  Add the lock.  Note that we will</i></td></tr>
+<tr><th id="646">646</th><td><i>	 * downgrade or upgrade any overlapping locks this</i></td></tr>
+<tr><th id="647">647</th><td><i>	 * process already owns.</i></td></tr>
+<tr><th id="648">648</th><td><i>	 *</i></td></tr>
+<tr><th id="649">649</th><td><i>	 * Skip over locks owned by other processes.</i></td></tr>
+<tr><th id="650">650</th><td><i>	 * Handle any locks that overlap and are owned by ourselves.</i></td></tr>
+<tr><th id="651">651</th><td><i>	 */</i></td></tr>
+<tr><th id="652">652</th><td>	<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = <a class="local col3 ref" href="#43head" title='head' data-ref="43head" data-ref-filename="43head">head</a>;</td></tr>
+<tr><th id="653">653</th><td>	<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a> = *<a class="local col3 ref" href="#43head" title='head' data-ref="43head" data-ref-filename="43head">head</a>;</td></tr>
+<tr><th id="654">654</th><td>	<a class="local col8 ref" href="#48needtolink" title='needtolink' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</a> = <var>1</var>;</td></tr>
+<tr><th id="655">655</th><td>	<b>for</b> (;;) {</td></tr>
+<tr><th id="656">656</th><td>		<a class="local col7 ref" href="#47ovcase" title='ovcase' data-ref="47ovcase" data-ref-filename="47ovcase">ovcase</a> = <a class="tu ref fn" href="#lf_findoverlap" title='lf_findoverlap' data-use='c' data-ref="lf_findoverlap" data-ref-filename="lf_findoverlap">lf_findoverlap</a>(<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a>, <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>, <a class="macro" href="#99" title="0x1" data-ref="_M/SELF">SELF</a>, &amp;<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a>, &amp;<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="657">657</th><td>		<b>if</b> (<a class="local col7 ref" href="#47ovcase" title='ovcase' data-ref="47ovcase" data-ref-filename="47ovcase">ovcase</a>)</td></tr>
+<tr><th id="658">658</th><td>			<a class="local col2 ref" href="#42block" title='block' data-ref="42block" data-ref-filename="42block">block</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="659">659</th><td>		<i>/*</i></td></tr>
+<tr><th id="660">660</th><td><i>		 * Six cases:</i></td></tr>
+<tr><th id="661">661</th><td><i>		 *	0) no overlap</i></td></tr>
+<tr><th id="662">662</th><td><i>		 *	1) overlap == lock</i></td></tr>
+<tr><th id="663">663</th><td><i>		 *	2) overlap contains lock</i></td></tr>
+<tr><th id="664">664</th><td><i>		 *	3) lock contains overlap</i></td></tr>
+<tr><th id="665">665</th><td><i>		 *	4) overlap starts before lock</i></td></tr>
+<tr><th id="666">666</th><td><i>		 *	5) overlap ends after lock</i></td></tr>
+<tr><th id="667">667</th><td><i>		 */</i></td></tr>
+<tr><th id="668">668</th><td>		<b>switch</b> (<a class="local col7 ref" href="#47ovcase" title='ovcase' data-ref="47ovcase" data-ref-filename="47ovcase">ovcase</a>) {</td></tr>
+<tr><th id="669">669</th><td>		<b>case</b> <var>0</var>: <i>/* no overlap */</i></td></tr>
+<tr><th id="670">670</th><td>			<b>if</b> (<a class="local col8 ref" href="#48needtolink" title='needtolink' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</a>) {</td></tr>
+<tr><th id="671">671</th><td>				*<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>;</td></tr>
+<tr><th id="672">672</th><td>				<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>;</td></tr>
+<tr><th id="673">673</th><td>			}</td></tr>
+<tr><th id="674">674</th><td>			<b>break</b>;</td></tr>
+<tr><th id="675">675</th><td></td></tr>
+<tr><th id="676">676</th><td>		<b>case</b> <var>1</var>: <i>/* overlap == lock */</i></td></tr>
+<tr><th id="677">677</th><td>			<i>/*</i></td></tr>
+<tr><th id="678">678</th><td><i>			 * If downgrading lock, others may be</i></td></tr>
+<tr><th id="679">679</th><td><i>			 * able to acquire it.</i></td></tr>
+<tr><th id="680">680</th><td><i>			 */</i></td></tr>
+<tr><th id="681">681</th><td>			<b>if</b> (<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#202" title="1" data-ref="_M/F_RDLCK">F_RDLCK</a> &amp;&amp;</td></tr>
+<tr><th id="682">682</th><td>			    <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#204" title="3" data-ref="_M/F_WRLCK">F_WRLCK</a>)</td></tr>
+<tr><th id="683">683</th><td>				<a class="tu ref fn" href="#lf_wakelock" title='lf_wakelock' data-use='c' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="684">684</th><td>			<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a>;</td></tr>
+<tr><th id="685">685</th><td>			<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>);</td></tr>
+<tr><th id="686">686</th><td>			<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>; <i>/* for debug output below */</i></td></tr>
+<tr><th id="687">687</th><td>			<b>break</b>;</td></tr>
+<tr><th id="688">688</th><td></td></tr>
+<tr><th id="689">689</th><td>		<b>case</b> <var>2</var>: <i>/* overlap contains lock */</i></td></tr>
+<tr><th id="690">690</th><td>			<i>/*</i></td></tr>
+<tr><th id="691">691</th><td><i>			 * Check for common starting point and different types.</i></td></tr>
+<tr><th id="692">692</th><td><i>			 */</i></td></tr>
+<tr><th id="693">693</th><td>			<b>if</b> (<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a>) {</td></tr>
+<tr><th id="694">694</th><td>				<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>);</td></tr>
+<tr><th id="695">695</th><td>				<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>; <i>/* for debug output below */</i></td></tr>
+<tr><th id="696">696</th><td>				<b>break</b>;</td></tr>
+<tr><th id="697">697</th><td>			}</td></tr>
+<tr><th id="698">698</th><td>			<b>if</b> (<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> == <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a>) {</td></tr>
+<tr><th id="699">699</th><td>				*<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>;</td></tr>
+<tr><th id="700">700</th><td>				<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>;</td></tr>
+<tr><th id="701">701</th><td>				<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> + <var>1</var>;</td></tr>
+<tr><th id="702">702</th><td>			} <b>else</b></td></tr>
+<tr><th id="703">703</th><td>				<a class="tu ref fn" href="#lf_split" title='lf_split' data-use='c' data-ref="lf_split" data-ref-filename="lf_split">lf_split</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>, <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>, <a class="local col0 ref" href="#40sparelock" title='sparelock' data-ref="40sparelock" data-ref-filename="40sparelock">sparelock</a>);</td></tr>
+<tr><th id="704">704</th><td>			<a class="tu ref fn" href="#lf_wakelock" title='lf_wakelock' data-use='c' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="705">705</th><td>			<b>break</b>;</td></tr>
+<tr><th id="706">706</th><td></td></tr>
+<tr><th id="707">707</th><td>		<b>case</b> <var>3</var>: <i>/* lock contains overlap */</i></td></tr>
+<tr><th id="708">708</th><td>			<i>/*</i></td></tr>
+<tr><th id="709">709</th><td><i>			 * If downgrading lock, others may be able to</i></td></tr>
+<tr><th id="710">710</th><td><i>			 * acquire it, otherwise take the list.</i></td></tr>
+<tr><th id="711">711</th><td><i>			 */</i></td></tr>
+<tr><th id="712">712</th><td>			<b>if</b> (<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#202" title="1" data-ref="_M/F_RDLCK">F_RDLCK</a> &amp;&amp;</td></tr>
+<tr><th id="713">713</th><td>			    <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> == <a class="macro" href="../sys/fcntl.h.html#204" title="3" data-ref="_M/F_WRLCK">F_WRLCK</a>) {</td></tr>
+<tr><th id="714">714</th><td>				<a class="tu ref fn" href="#lf_wakelock" title='lf_wakelock' data-use='c' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="715">715</th><td>			} <b>else</b> {</td></tr>
+<tr><th id="716">716</th><td>				<b>while</b> ((<a class="local col6 ref" href="#46ltmp" title='ltmp' data-ref="46ltmp" data-ref-filename="46ltmp">ltmp</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;overlap-&gt;lf_blkhd)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>))) {</td></tr>
+<tr><th id="717">717</th><td>					<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ltmp-&gt;lf_next == overlap)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ltmp-&gt;lf_next == overlap&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/vfs_lockf.c&quot;, 717))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col6 ref" href="#46ltmp" title='ltmp' data-ref="46ltmp" data-ref-filename="46ltmp">ltmp</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> == <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="718">718</th><td>					<a class="macro" href="../sys/queue.h.html#540" title="do { if (((ltmp)-&gt;lf_block.tqe_next) != (((void *)0))) (ltmp)-&gt;lf_block.tqe_next-&gt;lf_block.tqe_prev = (ltmp)-&gt;lf_block.tqe_prev; else (&amp;overlap-&gt;lf_blkhd)-&gt;tqh_last = (ltmp)-&gt;lf_block.tqe_prev; *(ltmp)-&gt;lf_block.tqe_prev = (ltmp)-&gt;lf_block.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>, <a class="local col6 ref" href="#46ltmp" title='ltmp' data-ref="46ltmp" data-ref-filename="46ltmp">ltmp</a>,</td></tr>
+<tr><th id="719">719</th><td>					    <a class="ref field" href="#lockf::lf_block" title='lockf::lf_block' data-ref="lockf::lf_block" data-ref-filename="lockf..lf_block">lf_block</a>);</td></tr>
+<tr><th id="720">720</th><td>					<a class="local col6 ref" href="#46ltmp" title='ltmp' data-ref="46ltmp" data-ref-filename="46ltmp">ltmp</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>;</td></tr>
+<tr><th id="721">721</th><td>					<a class="macro" href="../sys/queue.h.html#512" title="do { (ltmp)-&gt;lf_block.tqe_next = (((void *)0)); (ltmp)-&gt;lf_block.tqe_prev = (&amp;lock-&gt;lf_blkhd)-&gt;tqh_last; *(&amp;lock-&gt;lf_blkhd)-&gt;tqh_last = (ltmp); (&amp;lock-&gt;lf_blkhd)-&gt;tqh_last = &amp;(ltmp)-&gt;lf_block.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_TAIL">TAILQ_INSERT_TAIL</a>(&amp;<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>,</td></tr>
+<tr><th id="722">722</th><td>					    <a class="local col6 ref" href="#46ltmp" title='ltmp' data-ref="46ltmp" data-ref-filename="46ltmp">ltmp</a>, <a class="ref field" href="#lockf::lf_block" title='lockf::lf_block' data-ref="lockf::lf_block" data-ref-filename="lockf..lf_block">lf_block</a>);</td></tr>
+<tr><th id="723">723</th><td>				}</td></tr>
+<tr><th id="724">724</th><td>			}</td></tr>
+<tr><th id="725">725</th><td>			<i>/*</i></td></tr>
+<tr><th id="726">726</th><td><i>			 * Add the new lock if necessary and delete the overlap.</i></td></tr>
+<tr><th id="727">727</th><td><i>			 */</i></td></tr>
+<tr><th id="728">728</th><td>			<b>if</b> (<a class="local col8 ref" href="#48needtolink" title='needtolink' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</a>) {</td></tr>
+<tr><th id="729">729</th><td>				*<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>;</td></tr>
+<tr><th id="730">730</th><td>				<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="731">731</th><td>				<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = &amp;<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="732">732</th><td>				<a class="local col8 ref" href="#48needtolink" title='needtolink' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</a> = <var>0</var>;</td></tr>
+<tr><th id="733">733</th><td>			} <b>else</b></td></tr>
+<tr><th id="734">734</th><td>				*<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="735">735</th><td>			<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="736">736</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="737">737</th><td></td></tr>
+<tr><th id="738">738</th><td>		<b>case</b> <var>4</var>: <i>/* overlap starts before lock */</i></td></tr>
+<tr><th id="739">739</th><td>			<i>/*</i></td></tr>
+<tr><th id="740">740</th><td><i>			 * Add lock after overlap on the list.</i></td></tr>
+<tr><th id="741">741</th><td><i>			 */</i></td></tr>
+<tr><th id="742">742</th><td>			<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="743">743</th><td>			<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>;</td></tr>
+<tr><th id="744">744</th><td>			<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> - <var>1</var>;</td></tr>
+<tr><th id="745">745</th><td>			<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = &amp;<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a>;</td></tr>
+<tr><th id="746">746</th><td>			<a class="tu ref fn" href="#lf_wakelock" title='lf_wakelock' data-use='c' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="747">747</th><td>			<a class="local col8 ref" href="#48needtolink" title='needtolink' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</a> = <var>0</var>;</td></tr>
+<tr><th id="748">748</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="749">749</th><td></td></tr>
+<tr><th id="750">750</th><td>		<b>case</b> <var>5</var>: <i>/* overlap ends after lock */</i></td></tr>
+<tr><th id="751">751</th><td>			<i>/*</i></td></tr>
+<tr><th id="752">752</th><td><i>			 * Add the new lock before overlap.</i></td></tr>
+<tr><th id="753">753</th><td><i>			 */</i></td></tr>
+<tr><th id="754">754</th><td>			<b>if</b> (<a class="local col8 ref" href="#48needtolink" title='needtolink' data-ref="48needtolink" data-ref-filename="48needtolink">needtolink</a>) {</td></tr>
+<tr><th id="755">755</th><td>				*<a class="local col4 ref" href="#44prev" title='prev' data-ref="44prev" data-ref-filename="44prev">prev</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>;</td></tr>
+<tr><th id="756">756</th><td>				<a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = <a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>;</td></tr>
+<tr><th id="757">757</th><td>			}</td></tr>
+<tr><th id="758">758</th><td>			<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col9 ref" href="#39lock" title='lock' data-ref="39lock" data-ref-filename="39lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> + <var>1</var>;</td></tr>
+<tr><th id="759">759</th><td>			<a class="tu ref fn" href="#lf_wakelock" title='lf_wakelock' data-use='c' data-ref="lf_wakelock" data-ref-filename="lf_wakelock">lf_wakelock</a>(<a class="local col5 ref" href="#45overlap" title='overlap' data-ref="45overlap" data-ref-filename="45overlap">overlap</a>);</td></tr>
+<tr><th id="760">760</th><td>			<b>break</b>;</td></tr>
+<tr><th id="761">761</th><td>		}</td></tr>
+<tr><th id="762">762</th><td>		<b>break</b>;</td></tr>
+<tr><th id="763">763</th><td>	}</td></tr>
+<tr><th id="764">764</th><td><u>#<span data-ppcond="764">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="765">765</th><td>	<b>if</b> (lockf_debug &amp; <var>1</var>) {</td></tr>
+<tr><th id="766">766</th><td>		lf_print(<q>"lf_setlock: got the lock"</q>, lock);</td></tr>
+<tr><th id="767">767</th><td>		lf_printlist(<q>"lf_setlock"</q>, lock);</td></tr>
+<tr><th id="768">768</th><td>	}</td></tr>
+<tr><th id="769">769</th><td><u>#<span data-ppcond="764">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="770">770</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="771">771</th><td>}</td></tr>
+<tr><th id="772">772</th><td></td></tr>
+<tr><th id="773">773</th><td><i  data-doc="lf_getlock">/*</i></td></tr>
+<tr><th id="774">774</th><td><i  data-doc="lf_getlock"> * Check whether there is a blocking lock,</i></td></tr>
+<tr><th id="775">775</th><td><i  data-doc="lf_getlock"> * and if so return its process identifier.</i></td></tr>
+<tr><th id="776">776</th><td><i  data-doc="lf_getlock"> */</i></td></tr>
+<tr><th id="777">777</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="778">778</th><td><dfn class="tu decl def fn" id="lf_getlock" title='lf_getlock' data-type='int lf_getlock(struct lockf * lock, struct flock * fl)' data-ref="lf_getlock" data-ref-filename="lf_getlock">lf_getlock</dfn>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col4 decl" id="54lock" title='lock' data-type='struct lockf *' data-ref="54lock" data-ref-filename="54lock">lock</dfn>, <b>struct</b> <a class="type" href="../sys/fcntl.h.html#flock" title='flock' data-ref="flock" data-ref-filename="flock">flock</a> *<dfn class="local col5 decl" id="55fl" title='fl' data-type='struct flock *' data-ref="55fl" data-ref-filename="55fl">fl</dfn>)</td></tr>
+<tr><th id="779">779</th><td>{</td></tr>
+<tr><th id="780">780</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col6 decl" id="56block" title='block' data-type='struct lockf *' data-ref="56block" data-ref-filename="56block">block</dfn>;</td></tr>
+<tr><th id="781">781</th><td></td></tr>
+<tr><th id="782">782</th><td><u>#<span data-ppcond="782">ifdef</span> <span class="macro" data-ref="_M/LOCKF_DEBUG">LOCKF_DEBUG</span></u></td></tr>
+<tr><th id="783">783</th><td>	<b>if</b> (lockf_debug &amp; <var>1</var>)</td></tr>
+<tr><th id="784">784</th><td>		lf_print(<q>"lf_getlock"</q>, lock);</td></tr>
+<tr><th id="785">785</th><td><u>#<span data-ppcond="782">endif</span> /* LOCKF_DEBUG */</u></td></tr>
+<tr><th id="786">786</th><td></td></tr>
+<tr><th id="787">787</th><td>	<b>if</b> ((<a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a> = <a class="tu ref fn" href="#lf_getblock" title='lf_getblock' data-use='c' data-ref="lf_getblock" data-ref-filename="lf_getblock">lf_getblock</a>(<a class="local col4 ref" href="#54lock" title='lock' data-ref="54lock" data-ref-filename="54lock">lock</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="788">788</th><td>		<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_type" title='flock::l_type' data-ref="flock::l_type" data-ref-filename="flock..l_type">l_type</a> = <a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a>;</td></tr>
+<tr><th id="789">789</th><td>		<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_whence" title='flock::l_whence' data-ref="flock::l_whence" data-ref-filename="flock..l_whence">l_whence</a> = <a class="macro" href="../sys/unistd.h.html#178" title="0" data-ref="_M/SEEK_SET">SEEK_SET</a>;</td></tr>
+<tr><th id="790">790</th><td>		<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_start" title='flock::l_start' data-ref="flock::l_start" data-ref-filename="flock..l_start">l_start</a> = <a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a>;</td></tr>
+<tr><th id="791">791</th><td>		<b>if</b> (<a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> == -<var>1</var>)</td></tr>
+<tr><th id="792">792</th><td>			<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_len" title='flock::l_len' data-ref="flock::l_len" data-ref-filename="flock..l_len">l_len</a> = <var>0</var>;</td></tr>
+<tr><th id="793">793</th><td>		<b>else</b></td></tr>
+<tr><th id="794">794</th><td>			<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_len" title='flock::l_len' data-ref="flock::l_len" data-ref-filename="flock..l_len">l_len</a> = <a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> - <a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> + <var>1</var>;</td></tr>
+<tr><th id="795">795</th><td>		<b>if</b> (<a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#208" title="0x040" data-ref="_M/F_POSIX">F_POSIX</a>)</td></tr>
+<tr><th id="796">796</th><td>			<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_pid" title='flock::l_pid' data-ref="flock::l_pid" data-ref-filename="flock..l_pid">l_pid</a> = ((<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *)<a class="local col6 ref" href="#56block" title='block' data-ref="56block" data-ref-filename="56block">block</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a>)-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_pid" title='proc::p_pid' data-ref="proc::p_pid" data-ref-filename="proc..p_pid">p_pid</a>;</td></tr>
+<tr><th id="797">797</th><td>		<b>else</b></td></tr>
+<tr><th id="798">798</th><td>			<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_pid" title='flock::l_pid' data-ref="flock::l_pid" data-ref-filename="flock..l_pid">l_pid</a> = -<var>1</var>;</td></tr>
+<tr><th id="799">799</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="800">800</th><td>		<a class="local col5 ref" href="#55fl" title='fl' data-ref="55fl" data-ref-filename="55fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_type" title='flock::l_type' data-ref="flock::l_type" data-ref-filename="flock..l_type">l_type</a> = <a class="macro" href="../sys/fcntl.h.html#203" title="2" data-ref="_M/F_UNLCK">F_UNLCK</a>;</td></tr>
+<tr><th id="801">801</th><td>	}</td></tr>
+<tr><th id="802">802</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="803">803</th><td>}</td></tr>
+<tr><th id="804">804</th><td></td></tr>
+<tr><th id="805">805</th><td><i>/*</i></td></tr>
+<tr><th id="806">806</th><td><i> * Do an advisory lock operation.</i></td></tr>
+<tr><th id="807">807</th><td><i> */</i></td></tr>
+<tr><th id="808">808</th><td><em>int</em></td></tr>
+<tr><th id="809">809</th><td><dfn class="decl def fn" id="lf_advlock" title='lf_advlock' data-ref="lf_advlock" data-ref-filename="lf_advlock">lf_advlock</dfn>(<b>struct</b> <a class="type" href="../sys/vnode_if.h.html#vop_advlock_args" title='vop_advlock_args' data-ref="vop_advlock_args" data-ref-filename="vop_advlock_args">vop_advlock_args</a> *<dfn class="local col7 decl" id="57ap" title='ap' data-type='struct vop_advlock_args *' data-ref="57ap" data-ref-filename="57ap">ap</dfn>, <b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> **<dfn class="local col8 decl" id="58head" title='head' data-type='struct lockf **' data-ref="58head" data-ref-filename="58head">head</dfn>, <a class="macro" href="../sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a> <dfn class="local col9 decl" id="59size" title='size' data-type='__off_t' data-ref="59size" data-ref-filename="59size">size</dfn>)</td></tr>
+<tr><th id="810">810</th><td>{</td></tr>
+<tr><th id="811">811</th><td>	<b>struct</b> <a class="type" href="../sys/fcntl.h.html#flock" title='flock' data-ref="flock" data-ref-filename="flock">flock</a> *<dfn class="local col0 decl" id="60fl" title='fl' data-type='struct flock *' data-ref="60fl" data-ref-filename="60fl">fl</dfn> = <a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_fl" title='vop_advlock_args::a_fl' data-ref="vop_advlock_args::a_fl" data-ref-filename="vop_advlock_args..a_fl">a_fl</a>;</td></tr>
+<tr><th id="812">812</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col1 decl" id="61lock" title='lock' data-type='struct lockf *' data-ref="61lock" data-ref-filename="61lock">lock</dfn> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="813">813</th><td>	<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *<dfn class="local col2 decl" id="62sparelock" title='sparelock' data-type='struct lockf *' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</dfn>;</td></tr>
+<tr><th id="814">814</th><td>	<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="63interlock" title='interlock' data-type='kmutex_t *' data-ref="63interlock" data-ref-filename="63interlock">interlock</dfn> = <a class="tu ref" href="#lockf_lock" title='lockf_lock' data-use='r' data-ref="lockf_lock" data-ref-filename="lockf_lock">lockf_lock</a>;</td></tr>
+<tr><th id="815">815</th><td>	<a class="macro" href="../sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a> <dfn class="local col4 decl" id="64start" title='start' data-type='__off_t' data-ref="64start" data-ref-filename="64start">start</dfn>, <dfn class="local col5 decl" id="65end" title='end' data-type='__off_t' data-ref="65end" data-ref-filename="65end">end</dfn>;</td></tr>
+<tr><th id="816">816</th><td>	<em>int</em> <dfn class="local col6 decl" id="66error" title='error' data-type='int' data-ref="66error" data-ref-filename="66error">error</dfn> = <var>0</var>;</td></tr>
+<tr><th id="817">817</th><td></td></tr>
+<tr><th id="818">818</th><td>	<i>/*</i></td></tr>
+<tr><th id="819">819</th><td><i>	 * Convert the flock structure into a start and end.</i></td></tr>
+<tr><th id="820">820</th><td><i>	 */</i></td></tr>
+<tr><th id="821">821</th><td>	<b>switch</b> (<a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_whence" title='flock::l_whence' data-ref="flock::l_whence" data-ref-filename="flock..l_whence">l_whence</a>) {</td></tr>
+<tr><th id="822">822</th><td>	<b>case</b> <a class="macro" href="../sys/unistd.h.html#178" title="0" data-ref="_M/SEEK_SET">SEEK_SET</a>:</td></tr>
+<tr><th id="823">823</th><td>	<b>case</b> <a class="macro" href="../sys/unistd.h.html#179" title="1" data-ref="_M/SEEK_CUR">SEEK_CUR</a>:</td></tr>
+<tr><th id="824">824</th><td>		<i>/*</i></td></tr>
+<tr><th id="825">825</th><td><i>		 * Caller is responsible for adding any necessary offset</i></td></tr>
+<tr><th id="826">826</th><td><i>		 * when SEEK_CUR is used.</i></td></tr>
+<tr><th id="827">827</th><td><i>		 */</i></td></tr>
+<tr><th id="828">828</th><td>		<a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> = <a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_start" title='flock::l_start' data-ref="flock::l_start" data-ref-filename="flock..l_start">l_start</a>;</td></tr>
+<tr><th id="829">829</th><td>		<b>break</b>;</td></tr>
+<tr><th id="830">830</th><td></td></tr>
+<tr><th id="831">831</th><td>	<b>case</b> <a class="macro" href="../sys/unistd.h.html#180" title="2" data-ref="_M/SEEK_END">SEEK_END</a>:</td></tr>
+<tr><th id="832">832</th><td>		<a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> = <a class="local col9 ref" href="#59size" title='size' data-ref="59size" data-ref-filename="59size">size</a> + <a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_start" title='flock::l_start' data-ref="flock::l_start" data-ref-filename="flock..l_start">l_start</a>;</td></tr>
+<tr><th id="833">833</th><td>		<b>break</b>;</td></tr>
+<tr><th id="834">834</th><td></td></tr>
+<tr><th id="835">835</th><td>	<b>default</b>:</td></tr>
+<tr><th id="836">836</th><td>		<b>return</b> <a class="macro" href="../sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="837">837</th><td>	}</td></tr>
+<tr><th id="838">838</th><td></td></tr>
+<tr><th id="839">839</th><td>	<b>if</b> (<a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_len" title='flock::l_len' data-ref="flock::l_len" data-ref-filename="flock..l_len">l_len</a> == <var>0</var>)</td></tr>
+<tr><th id="840">840</th><td>		<a class="local col5 ref" href="#65end" title='end' data-ref="65end" data-ref-filename="65end">end</a> = -<var>1</var>;</td></tr>
+<tr><th id="841">841</th><td>	<b>else</b> {</td></tr>
+<tr><th id="842">842</th><td>		<b>if</b> (<a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_len" title='flock::l_len' data-ref="flock::l_len" data-ref-filename="flock..l_len">l_len</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="843">843</th><td>			<a class="local col5 ref" href="#65end" title='end' data-ref="65end" data-ref-filename="65end">end</a> = <a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> + <a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_len" title='flock::l_len' data-ref="flock::l_len" data-ref-filename="flock..l_len">l_len</a> - <var>1</var>;</td></tr>
+<tr><th id="844">844</th><td>		<b>else</b> {</td></tr>
+<tr><th id="845">845</th><td>			<i>/* lockf() allows -ve lengths */</i></td></tr>
+<tr><th id="846">846</th><td>			<a class="local col5 ref" href="#65end" title='end' data-ref="65end" data-ref-filename="65end">end</a> = <a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> - <var>1</var>;</td></tr>
+<tr><th id="847">847</th><td>			<a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> += <a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_len" title='flock::l_len' data-ref="flock::l_len" data-ref-filename="flock..l_len">l_len</a>;</td></tr>
+<tr><th id="848">848</th><td>		}</td></tr>
+<tr><th id="849">849</th><td>	}</td></tr>
+<tr><th id="850">850</th><td>	<b>if</b> (<a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="851">851</th><td>		<b>return</b> <a class="macro" href="../sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="852">852</th><td></td></tr>
+<tr><th id="853">853</th><td>	<i>/*</i></td></tr>
+<tr><th id="854">854</th><td><i>	 * Allocate locks before acquiring the interlock.  We need two</i></td></tr>
+<tr><th id="855">855</th><td><i>	 * locks in the worst case.</i></td></tr>
+<tr><th id="856">856</th><td><i>	 */</i></td></tr>
+<tr><th id="857">857</th><td>	<b>switch</b> (<a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_op" title='vop_advlock_args::a_op' data-ref="vop_advlock_args::a_op" data-ref-filename="vop_advlock_args..a_op">a_op</a>) {</td></tr>
+<tr><th id="858">858</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#188" title="8" data-ref="_M/F_SETLK">F_SETLK</a>:</td></tr>
+<tr><th id="859">859</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#203" title="2" data-ref="_M/F_UNLCK">F_UNLCK</a>:</td></tr>
+<tr><th id="860">860</th><td>		<i>/*</i></td></tr>
+<tr><th id="861">861</th><td><i>		 * XXX For F_UNLCK case, we can re-use the lock.</i></td></tr>
+<tr><th id="862">862</th><td><i>		 */</i></td></tr>
+<tr><th id="863">863</th><td>		<b>if</b> ((<a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_flags" title='vop_advlock_args::a_flags' data-ref="vop_advlock_args::a_flags" data-ref-filename="vop_advlock_args..a_flags">a_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#207" title="0x020" data-ref="_M/F_FLOCK">F_FLOCK</a>) == <var>0</var>) {</td></tr>
+<tr><th id="864">864</th><td>			<i>/*</i></td></tr>
+<tr><th id="865">865</th><td><i>			 * Byte-range lock might need one more lock.</i></td></tr>
+<tr><th id="866">866</th><td><i>			 */</i></td></tr>
+<tr><th id="867">867</th><td>			<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a> = <a class="tu ref fn" href="#lf_alloc" title='lf_alloc' data-use='c' data-ref="lf_alloc" data-ref-filename="lf_alloc">lf_alloc</a>(<var>0</var>);</td></tr>
+<tr><th id="868">868</th><td>			<b>if</b> (<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="869">869</th><td>				<a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a> = <a class="macro" href="../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="870">870</th><td>				<b>goto</b> <a class="lbl" href="#67quit" data-ref="67quit" data-ref-filename="67quit">quit</a>;</td></tr>
+<tr><th id="871">871</th><td>			}</td></tr>
+<tr><th id="872">872</th><td>			<b>break</b>;</td></tr>
+<tr><th id="873">873</th><td>		}</td></tr>
+<tr><th id="874">874</th><td>		<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="875">875</th><td></td></tr>
+<tr><th id="876">876</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#187" title="7" data-ref="_M/F_GETLK">F_GETLK</a>:</td></tr>
+<tr><th id="877">877</th><td>		<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="878">878</th><td>		<b>break</b>;</td></tr>
+<tr><th id="879">879</th><td></td></tr>
+<tr><th id="880">880</th><td>	<b>default</b>:</td></tr>
+<tr><th id="881">881</th><td>		<b>return</b> <a class="macro" href="../sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="882">882</th><td>	}</td></tr>
+<tr><th id="883">883</th><td></td></tr>
+<tr><th id="884">884</th><td>	<b>switch</b> (<a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_op" title='vop_advlock_args::a_op' data-ref="vop_advlock_args::a_op" data-ref-filename="vop_advlock_args..a_op">a_op</a>) {</td></tr>
+<tr><th id="885">885</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#188" title="8" data-ref="_M/F_SETLK">F_SETLK</a>:</td></tr>
+<tr><th id="886">886</th><td>		<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a> = <a class="tu ref fn" href="#lf_alloc" title='lf_alloc' data-use='c' data-ref="lf_alloc" data-ref-filename="lf_alloc">lf_alloc</a>(<var>1</var>);</td></tr>
+<tr><th id="887">887</th><td>		<b>break</b>;</td></tr>
+<tr><th id="888">888</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#203" title="2" data-ref="_M/F_UNLCK">F_UNLCK</a>:</td></tr>
+<tr><th id="889">889</th><td>		<b>if</b> (<a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a> == <var>0</var> || <a class="local col5 ref" href="#65end" title='end' data-ref="65end" data-ref-filename="65end">end</a> == -<var>1</var>) {</td></tr>
+<tr><th id="890">890</th><td>			<i>/* never split */</i></td></tr>
+<tr><th id="891">891</th><td>			<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a> = <a class="tu ref fn" href="#lf_alloc" title='lf_alloc' data-use='c' data-ref="lf_alloc" data-ref-filename="lf_alloc">lf_alloc</a>(<var>0</var>);</td></tr>
+<tr><th id="892">892</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="893">893</th><td>			<i>/* might split */</i></td></tr>
+<tr><th id="894">894</th><td>			<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a> = <a class="tu ref fn" href="#lf_alloc" title='lf_alloc' data-use='c' data-ref="lf_alloc" data-ref-filename="lf_alloc">lf_alloc</a>(<var>2</var>);</td></tr>
+<tr><th id="895">895</th><td>		}</td></tr>
+<tr><th id="896">896</th><td>		<b>break</b>;</td></tr>
+<tr><th id="897">897</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#187" title="7" data-ref="_M/F_GETLK">F_GETLK</a>:</td></tr>
+<tr><th id="898">898</th><td>		<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a> = <a class="tu ref fn" href="#lf_alloc" title='lf_alloc' data-use='c' data-ref="lf_alloc" data-ref-filename="lf_alloc">lf_alloc</a>(<var>0</var>);</td></tr>
+<tr><th id="899">899</th><td>		<b>break</b>;</td></tr>
+<tr><th id="900">900</th><td>	}</td></tr>
+<tr><th id="901">901</th><td>	<b>if</b> (<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="902">902</th><td>		<a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a> = <a class="macro" href="../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="903">903</th><td>		<b>goto</b> <a class="lbl" href="#67quit" data-ref="67quit" data-ref-filename="67quit">quit</a>;</td></tr>
+<tr><th id="904">904</th><td>	}</td></tr>
+<tr><th id="905">905</th><td></td></tr>
+<tr><th id="906">906</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="local col3 ref" href="#63interlock" title='interlock' data-ref="63interlock" data-ref-filename="63interlock">interlock</a>);</td></tr>
+<tr><th id="907">907</th><td></td></tr>
+<tr><th id="908">908</th><td>	<i>/*</i></td></tr>
+<tr><th id="909">909</th><td><i>	 * Avoid the common case of unlocking when inode has no locks.</i></td></tr>
+<tr><th id="910">910</th><td><i>	 */</i></td></tr>
+<tr><th id="911">911</th><td>	<b>if</b> (*<a class="local col8 ref" href="#58head" title='head' data-ref="58head" data-ref-filename="58head">head</a> == (<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *)<var>0</var>) {</td></tr>
+<tr><th id="912">912</th><td>		<b>if</b> (<a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_op" title='vop_advlock_args::a_op' data-ref="vop_advlock_args::a_op" data-ref-filename="vop_advlock_args..a_op">a_op</a> != <a class="macro" href="../sys/fcntl.h.html#188" title="8" data-ref="_M/F_SETLK">F_SETLK</a>) {</td></tr>
+<tr><th id="913">913</th><td>			<a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_type" title='flock::l_type' data-ref="flock::l_type" data-ref-filename="flock..l_type">l_type</a> = <a class="macro" href="../sys/fcntl.h.html#203" title="2" data-ref="_M/F_UNLCK">F_UNLCK</a>;</td></tr>
+<tr><th id="914">914</th><td>			<a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a> = <var>0</var>;</td></tr>
+<tr><th id="915">915</th><td>			<b>goto</b> <a class="lbl" href="#68quit_unlock" data-ref="68quit_unlock" data-ref-filename="68quit_unlock">quit_unlock</a>;</td></tr>
+<tr><th id="916">916</th><td>		}</td></tr>
+<tr><th id="917">917</th><td>	}</td></tr>
+<tr><th id="918">918</th><td></td></tr>
+<tr><th id="919">919</th><td>	<i>/*</i></td></tr>
+<tr><th id="920">920</th><td><i>	 * Create the lockf structure.</i></td></tr>
+<tr><th id="921">921</th><td><i>	 */</i></td></tr>
+<tr><th id="922">922</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_start" title='lockf::lf_start' data-ref="lockf::lf_start" data-ref-filename="lockf..lf_start">lf_start</a> = <a class="local col4 ref" href="#64start" title='start' data-ref="64start" data-ref-filename="64start">start</a>;</td></tr>
+<tr><th id="923">923</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_end" title='lockf::lf_end' data-ref="lockf::lf_end" data-ref-filename="lockf..lf_end">lf_end</a> = <a class="local col5 ref" href="#65end" title='end' data-ref="65end" data-ref-filename="65end">end</a>;</td></tr>
+<tr><th id="924">924</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_head" title='lockf::lf_head' data-ref="lockf::lf_head" data-ref-filename="lockf..lf_head">lf_head</a> = <a class="local col8 ref" href="#58head" title='head' data-ref="58head" data-ref-filename="58head">head</a>;</td></tr>
+<tr><th id="925">925</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_type" title='lockf::lf_type' data-ref="lockf::lf_type" data-ref-filename="lockf..lf_type">lf_type</a> = <a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>-&gt;<a class="ref field" href="../sys/fcntl.h.html#flock::l_type" title='flock::l_type' data-ref="flock::l_type" data-ref-filename="flock..l_type">l_type</a>;</td></tr>
+<tr><th id="926">926</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_next" title='lockf::lf_next' data-ref="lockf::lf_next" data-ref-filename="lockf..lf_next">lf_next</a> = (<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a> *)<var>0</var>;</td></tr>
+<tr><th id="927">927</th><td>	<a class="macro" href="../sys/queue.h.html#496" title="do { (&amp;lock-&gt;lf_blkhd)-&gt;tqh_first = (((void *)0)); (&amp;lock-&gt;lf_blkhd)-&gt;tqh_last = &amp;(&amp;lock-&gt;lf_blkhd)-&gt;tqh_first; } while ( 0)" data-ref="_M/TAILQ_INIT">TAILQ_INIT</a>(&amp;<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_blkhd" title='lockf::lf_blkhd' data-ref="lockf::lf_blkhd" data-ref-filename="lockf..lf_blkhd">lf_blkhd</a>);</td></tr>
+<tr><th id="928">928</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> = <a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_flags" title='vop_advlock_args::a_flags' data-ref="vop_advlock_args::a_flags" data-ref-filename="vop_advlock_args..a_flags">a_flags</a>;</td></tr>
+<tr><th id="929">929</th><td>	<b>if</b> (<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_flags" title='lockf::lf_flags' data-ref="lockf::lf_flags" data-ref-filename="lockf..lf_flags">lf_flags</a> &amp; <a class="macro" href="../sys/fcntl.h.html#208" title="0x040" data-ref="_M/F_POSIX">F_POSIX</a>) {</td></tr>
+<tr><th id="930">930</th><td>		<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect((((x86_curlwp()-&gt;l_proc) == (struct proc *)ap-&gt;a_id)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;curproc == (struct proc *)ap-&gt;a_id&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/vfs_lockf.c&quot;, 930))" data-ref="_M/KASSERT">KASSERT</a>(<a class="macro" href="../sys/lwp.h.html#478" title="(x86_curlwp()-&gt;l_proc)" data-ref="_M/curproc">curproc</a> == (<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *)<a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_id" title='vop_advlock_args::a_id' data-ref="vop_advlock_args::a_id" data-ref-filename="vop_advlock_args..a_id">a_id</a>);</td></tr>
+<tr><th id="931">931</th><td>	}</td></tr>
+<tr><th id="932">932</th><td>	<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>-&gt;<a class="ref field" href="#lockf::lf_id" title='lockf::lf_id' data-ref="lockf::lf_id" data-ref-filename="lockf..lf_id">lf_id</a> = <a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_id" title='vop_advlock_args::a_id' data-ref="vop_advlock_args::a_id" data-ref-filename="vop_advlock_args..a_id">a_id</a>;</td></tr>
+<tr><th id="933">933</th><td></td></tr>
+<tr><th id="934">934</th><td>	<i>/*</i></td></tr>
+<tr><th id="935">935</th><td><i>	 * Do the requested operation.</i></td></tr>
+<tr><th id="936">936</th><td><i>	 */</i></td></tr>
+<tr><th id="937">937</th><td>	<b>switch</b> (<a class="local col7 ref" href="#57ap" title='ap' data-ref="57ap" data-ref-filename="57ap">ap</a>-&gt;<a class="ref field" href="../sys/vnode_if.h.html#vop_advlock_args::a_op" title='vop_advlock_args::a_op' data-ref="vop_advlock_args::a_op" data-ref-filename="vop_advlock_args..a_op">a_op</a>) {</td></tr>
+<tr><th id="938">938</th><td></td></tr>
+<tr><th id="939">939</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#188" title="8" data-ref="_M/F_SETLK">F_SETLK</a>:</td></tr>
+<tr><th id="940">940</th><td>		<a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a> = <a class="tu ref fn" href="#lf_setlock" title='lf_setlock' data-use='c' data-ref="lf_setlock" data-ref-filename="lf_setlock">lf_setlock</a>(<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>, &amp;<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a>, <a class="local col3 ref" href="#63interlock" title='interlock' data-ref="63interlock" data-ref-filename="63interlock">interlock</a>);</td></tr>
+<tr><th id="941">941</th><td>		<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>; <i>/* lf_setlock freed it */</i></td></tr>
+<tr><th id="942">942</th><td>		<b>break</b>;</td></tr>
+<tr><th id="943">943</th><td></td></tr>
+<tr><th id="944">944</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#203" title="2" data-ref="_M/F_UNLCK">F_UNLCK</a>:</td></tr>
+<tr><th id="945">945</th><td>		<a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a> = <a class="tu ref fn" href="#lf_clearlock" title='lf_clearlock' data-use='c' data-ref="lf_clearlock" data-ref-filename="lf_clearlock">lf_clearlock</a>(<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>, &amp;<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a>);</td></tr>
+<tr><th id="946">946</th><td>		<b>break</b>;</td></tr>
+<tr><th id="947">947</th><td></td></tr>
+<tr><th id="948">948</th><td>	<b>case</b> <a class="macro" href="../sys/fcntl.h.html#187" title="7" data-ref="_M/F_GETLK">F_GETLK</a>:</td></tr>
+<tr><th id="949">949</th><td>		<a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a> = <a class="tu ref fn" href="#lf_getlock" title='lf_getlock' data-use='c' data-ref="lf_getlock" data-ref-filename="lf_getlock">lf_getlock</a>(<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>, <a class="local col0 ref" href="#60fl" title='fl' data-ref="60fl" data-ref-filename="60fl">fl</a>);</td></tr>
+<tr><th id="950">950</th><td>		<b>break</b>;</td></tr>
+<tr><th id="951">951</th><td></td></tr>
+<tr><th id="952">952</th><td>	<b>default</b>:</td></tr>
+<tr><th id="953">953</th><td>		<b>break</b>;</td></tr>
+<tr><th id="954">954</th><td>		<i>/* NOTREACHED */</i></td></tr>
+<tr><th id="955">955</th><td>	}</td></tr>
+<tr><th id="956">956</th><td></td></tr>
+<tr><th id="957">957</th><td><dfn class="lbl" id="68quit_unlock" data-ref="68quit_unlock" data-ref-filename="68quit_unlock">quit_unlock</dfn>:</td></tr>
+<tr><th id="958">958</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col3 ref" href="#63interlock" title='interlock' data-ref="63interlock" data-ref-filename="63interlock">interlock</a>);</td></tr>
+<tr><th id="959">959</th><td><dfn class="lbl" id="67quit" data-ref="67quit" data-ref-filename="67quit">quit</dfn>:</td></tr>
+<tr><th id="960">960</th><td>	<b>if</b> (<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>)</td></tr>
+<tr><th id="961">961</th><td>		<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col1 ref" href="#61lock" title='lock' data-ref="61lock" data-ref-filename="61lock">lock</a>);</td></tr>
+<tr><th id="962">962</th><td>	<b>if</b> (<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a>)</td></tr>
+<tr><th id="963">963</th><td>		<a class="tu ref fn" href="#lf_free" title='lf_free' data-use='c' data-ref="lf_free" data-ref-filename="lf_free">lf_free</a>(<a class="local col2 ref" href="#62sparelock" title='sparelock' data-ref="62sparelock" data-ref-filename="62sparelock">sparelock</a>);</td></tr>
+<tr><th id="964">964</th><td></td></tr>
+<tr><th id="965">965</th><td>	<b>return</b> <a class="local col6 ref" href="#66error" title='error' data-ref="66error" data-ref-filename="66error">error</a>;</td></tr>
+<tr><th id="966">966</th><td>}</td></tr>
+<tr><th id="967">967</th><td></td></tr>
+<tr><th id="968">968</th><td><i>/*</i></td></tr>
+<tr><th id="969">969</th><td><i> * Initialize subsystem.   XXX We use a global lock.  This could be the</i></td></tr>
+<tr><th id="970">970</th><td><i> * vnode interlock, but the deadlock detection code may need to inspect</i></td></tr>
+<tr><th id="971">971</th><td><i> * locks belonging to other files.</i></td></tr>
+<tr><th id="972">972</th><td><i> */</i></td></tr>
+<tr><th id="973">973</th><td><em>void</em></td></tr>
+<tr><th id="974">974</th><td><dfn class="decl def fn" id="lf_init" title='lf_init' data-ref="lf_init" data-ref-filename="lf_init">lf_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="975">975</th><td>{</td></tr>
+<tr><th id="976">976</th><td></td></tr>
+<tr><th id="977">977</th><td>	<a class="tu ref" href="#lockf_cache" title='lockf_cache' data-use='w' data-ref="lockf_cache" data-ref-filename="lockf_cache">lockf_cache</a> = <a class="ref fn" href="../sys/pool.h.html#pool_cache_init" title='pool_cache_init' data-ref="pool_cache_init" data-ref-filename="pool_cache_init">pool_cache_init</a>(<b>sizeof</b>(<b>struct</b> <a class="type" href="#lockf" title='lockf' data-ref="lockf" data-ref-filename="lockf">lockf</a>), <var>0</var>, <var>0</var>, <var>0</var>, <q>"lockf"</q>,</td></tr>
+<tr><th id="978">978</th><td> 	    <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a>, <a class="tu ref fn" href="#lf_ctor" title='lf_ctor' data-use='r' data-ref="lf_ctor" data-ref-filename="lf_ctor">lf_ctor</a>, <a class="tu ref fn" href="#lf_dtor" title='lf_dtor' data-use='r' data-ref="lf_dtor" data-ref-filename="lf_dtor">lf_dtor</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="979">979</th><td>        <a class="tu ref" href="#lockf_lock" title='lockf_lock' data-use='w' data-ref="lockf_lock" data-ref-filename="lockf_lock">lockf_lock</a> = <a class="ref fn" href="../sys/mutex.h.html#mutex_obj_alloc" title='mutex_obj_alloc' data-ref="mutex_obj_alloc" data-ref-filename="mutex_obj_alloc">mutex_obj_alloc</a>(<a class="enum" href="../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>, <a class="macro" href="../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a>);</td></tr>
+<tr><th id="980">980</th><td>}</td></tr>
+<tr><th id="981">981</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

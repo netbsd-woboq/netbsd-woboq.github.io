@@ -1,0 +1,399 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>xen_pmap.c source code [netbsd/sys/arch/xen/x86/xen_pmap.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/arch/xen/x86/xen_pmap.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>arch</a>/<a href='..'>xen</a>/<a href='./'>x86</a>/<a href='xen_pmap.c.html'>xen_pmap.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: xen_pmap.c,v 1.31 2019/03/10 16:30:01 maxv Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007 Manuel Bouyer.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="7">7</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="8">8</th><td><i> * are met:</i></td></tr>
+<tr><th id="9">9</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="10">10</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="11">11</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="12">12</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="13">13</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="14">14</th><td><i> *</i></td></tr>
+<tr><th id="15">15</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR</i></td></tr>
+<tr><th id="16">16</th><td><i> * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES</i></td></tr>
+<tr><th id="17">17</th><td><i> * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.</i></td></tr>
+<tr><th id="18">18</th><td><i> * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,</i></td></tr>
+<tr><th id="19">19</th><td><i> * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT</i></td></tr>
+<tr><th id="20">20</th><td><i> * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,</i></td></tr>
+<tr><th id="21">21</th><td><i> * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY</i></td></tr>
+<tr><th id="22">22</th><td><i> * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT</i></td></tr>
+<tr><th id="23">23</th><td><i> * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF</i></td></tr>
+<tr><th id="24">24</th><td><i> * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="25">25</th><td><i> */</i></td></tr>
+<tr><th id="26">26</th><td></td></tr>
+<tr><th id="27">27</th><td><i>/*</i></td></tr>
+<tr><th id="28">28</th><td><i> * Copyright (c) 2006 Mathieu Ropert &lt;mro@adviseo.fr&gt;</i></td></tr>
+<tr><th id="29">29</th><td><i> *</i></td></tr>
+<tr><th id="30">30</th><td><i> * Permission to use, copy, modify, and distribute this software for any</i></td></tr>
+<tr><th id="31">31</th><td><i> * purpose with or without fee is hereby granted, provided that the above</i></td></tr>
+<tr><th id="32">32</th><td><i> * copyright notice and this permission notice appear in all copies.</i></td></tr>
+<tr><th id="33">33</th><td><i> *</i></td></tr>
+<tr><th id="34">34</th><td><i> * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES</i></td></tr>
+<tr><th id="35">35</th><td><i> * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF</i></td></tr>
+<tr><th id="36">36</th><td><i> * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR</i></td></tr>
+<tr><th id="37">37</th><td><i> * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES</i></td></tr>
+<tr><th id="38">38</th><td><i> * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN</i></td></tr>
+<tr><th id="39">39</th><td><i> * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF</i></td></tr>
+<tr><th id="40">40</th><td><i> * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.</i></td></tr>
+<tr><th id="41">41</th><td><i> */</i></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><i>/*</i></td></tr>
+<tr><th id="44">44</th><td><i> * Copyright (c) 1997 Charles D. Cranor and Washington University.</i></td></tr>
+<tr><th id="45">45</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="46">46</th><td><i> *</i></td></tr>
+<tr><th id="47">47</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="48">48</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="49">49</th><td><i> * are met:</i></td></tr>
+<tr><th id="50">50</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="51">51</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="52">52</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="53">53</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="54">54</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="55">55</th><td><i> *</i></td></tr>
+<tr><th id="56">56</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR</i></td></tr>
+<tr><th id="57">57</th><td><i> * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES</i></td></tr>
+<tr><th id="58">58</th><td><i> * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.</i></td></tr>
+<tr><th id="59">59</th><td><i> * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,</i></td></tr>
+<tr><th id="60">60</th><td><i> * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT</i></td></tr>
+<tr><th id="61">61</th><td><i> * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,</i></td></tr>
+<tr><th id="62">62</th><td><i> * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY</i></td></tr>
+<tr><th id="63">63</th><td><i> * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT</i></td></tr>
+<tr><th id="64">64</th><td><i> * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF</i></td></tr>
+<tr><th id="65">65</th><td><i> * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="66">66</th><td><i> */</i></td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td><i>/*</i></td></tr>
+<tr><th id="69">69</th><td><i> * Copyright 2001 (c) Wasabi Systems, Inc.</i></td></tr>
+<tr><th id="70">70</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="71">71</th><td><i> *</i></td></tr>
+<tr><th id="72">72</th><td><i> * Written by Frank van der Linden for Wasabi Systems, Inc.</i></td></tr>
+<tr><th id="73">73</th><td><i> *</i></td></tr>
+<tr><th id="74">74</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="75">75</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="76">76</th><td><i> * are met:</i></td></tr>
+<tr><th id="77">77</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="78">78</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="79">79</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="80">80</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="81">81</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="82">82</th><td><i> * 3. All advertising materials mentioning features or use of this software</i></td></tr>
+<tr><th id="83">83</th><td><i> *    must display the following acknowledgement:</i></td></tr>
+<tr><th id="84">84</th><td><i> *      This product includes software developed for the NetBSD Project by</i></td></tr>
+<tr><th id="85">85</th><td><i> *      Wasabi Systems, Inc.</i></td></tr>
+<tr><th id="86">86</th><td><i> * 4. The name of Wasabi Systems, Inc. may not be used to endorse</i></td></tr>
+<tr><th id="87">87</th><td><i> *    or promote products derived from this software without specific prior</i></td></tr>
+<tr><th id="88">88</th><td><i> *    written permission.</i></td></tr>
+<tr><th id="89">89</th><td><i> *</i></td></tr>
+<tr><th id="90">90</th><td><i> * THIS SOFTWARE IS PROVIDED BY WASABI SYSTEMS, INC. ``AS IS'' AND</i></td></tr>
+<tr><th id="91">91</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="92">92</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="93">93</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL WASABI SYSTEMS, INC</i></td></tr>
+<tr><th id="94">94</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="95">95</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="96">96</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="97">97</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="98">98</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="99">99</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="100">100</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="101">101</th><td><i> */</i></td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="104">104</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: xen_pmap.c,v 1.31 2019/03/10 16:30:01 maxv Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: xen_pmap.c,v 1.31 2019/03/10 16:30:01 maxv Exp $"</q>);</td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><u>#include <a href="../../../../objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/opt_user_ldt.h.html">"opt_user_ldt.h"</a></u></td></tr>
+<tr><th id="107">107</th><td><u>#include <a href="../../../../objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/opt_lockdebug.h.html">"opt_lockdebug.h"</a></u></td></tr>
+<tr><th id="108">108</th><td><u>#include <a href="../../../../objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/opt_multiprocessor.h.html">"opt_multiprocessor.h"</a></u></td></tr>
+<tr><th id="109">109</th><td><u>#include <a href="../../../../objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/opt_xen.h.html">"opt_xen.h"</a></u></td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td><u>#include <a href="../../../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="112">112</th><td><u>#include <a href="../../../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="113">113</th><td><u>#include <a href="../../../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="114">114</th><td><u>#include <a href="../../../sys/pool.h.html">&lt;sys/pool.h&gt;</a></u></td></tr>
+<tr><th id="115">115</th><td><u>#include <a href="../../../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="116">116</th><td><u>#include <a href="../../../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="117">117</th><td><u>#include <a href="../../../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="118">118</th><td><u>#include <a href="../../../sys/intr.h.html">&lt;sys/intr.h&gt;</a></u></td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><u>#include <a href="../../../uvm/uvm.h.html">&lt;uvm/uvm.h&gt;</a></u></td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td><u>#include <a href="../../../dev/isa/isareg.h.html">&lt;dev/isa/isareg.h&gt;</a></u></td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td><u>#include <a href="../../amd64/include/specialreg.h.html">&lt;machine/specialreg.h&gt;</a></u></td></tr>
+<tr><th id="125">125</th><td><u>#include <a href="../../amd64/include/gdt.h.html">&lt;machine/gdt.h&gt;</a></u></td></tr>
+<tr><th id="126">126</th><td><u>#include <a href="../../amd64/include/isa_machdep.h.html">&lt;machine/isa_machdep.h&gt;</a></u></td></tr>
+<tr><th id="127">127</th><td><u>#include <a href="../../amd64/include/cpuvar.h.html">&lt;machine/cpuvar.h&gt;</a></u></td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><u>#include <a href="../../x86/include/pmap.h.html">&lt;x86/pmap.h&gt;</a></u></td></tr>
+<tr><th id="130">130</th><td><u>#include <a href="../../x86/include/pmap_pv.h.html">&lt;x86/pmap_pv.h&gt;</a></u></td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td><u>#include <a href="../../x86/include/i82489reg.h.html">&lt;x86/i82489reg.h&gt;</a></u></td></tr>
+<tr><th id="133">133</th><td><u>#include <a href="../../x86/include/i82489var.h.html">&lt;x86/i82489var.h&gt;</a></u></td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td><u>#include <a href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html">&lt;xen/include/public/xen.h&gt;</a></u></td></tr>
+<tr><th id="136">136</th><td><u>#include <a href="../include/hypervisor.h.html">&lt;xen/hypervisor.h&gt;</a></u></td></tr>
+<tr><th id="137">137</th><td><u>#include <a href="../include/xenpmap.h.html">&lt;xen/xenpmap.h&gt;</a></u></td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td><u>#define <dfn class="macro" id="_M/COUNT" data-ref="_M/COUNT">COUNT</dfn>(x)	/* nothing */</u></td></tr>
+<tr><th id="140">140</th><td></td></tr>
+<tr><th id="141">141</th><td><b>extern</b> <a class="typedef" href="../../amd64/include/pte.h.html#pd_entry_t" title='pd_entry_t' data-type='uint64_t' data-ref="pd_entry_t" data-ref-filename="pd_entry_t">pd_entry_t</a> * <em>const</em> <dfn class="decl" id="normal_pdes" title='normal_pdes' data-ref="normal_pdes" data-ref-filename="normal_pdes">normal_pdes</dfn>[];</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td><b>extern</b> <a class="typedef" href="../../amd64/include/types.h.html#paddr_t" title='paddr_t' data-type='unsigned long' data-ref="paddr_t" data-ref-filename="paddr_t">paddr_t</a> <dfn class="decl" id="pmap_pa_start" title='pmap_pa_start' data-ref="pmap_pa_start" data-ref-filename="pmap_pa_start">pmap_pa_start</dfn>; <i>/* PA of first physical page for this domain */</i></td></tr>
+<tr><th id="144">144</th><td><b>extern</b> <a class="typedef" href="../../amd64/include/types.h.html#paddr_t" title='paddr_t' data-type='unsigned long' data-ref="paddr_t" data-ref-filename="paddr_t">paddr_t</a> <dfn class="decl" id="pmap_pa_end" title='pmap_pa_end' data-ref="pmap_pa_end" data-ref-filename="pmap_pa_end">pmap_pa_end</dfn>;   <i>/* PA of last physical page for this domain */</i></td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td><em>int</em></td></tr>
+<tr><th id="147">147</th><td><dfn class="decl def fn" id="pmap_enter" title='pmap_enter' data-ref="pmap_enter" data-ref-filename="pmap_enter">pmap_enter</dfn>(<b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col1 decl" id="1pmap" title='pmap' data-type='struct pmap *' data-ref="1pmap" data-ref-filename="1pmap">pmap</dfn>, <a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col2 decl" id="2va" title='va' data-type='vaddr_t' data-ref="2va" data-ref-filename="2va">va</dfn>, <a class="typedef" href="../../amd64/include/types.h.html#paddr_t" title='paddr_t' data-type='unsigned long' data-ref="paddr_t" data-ref-filename="paddr_t">paddr_t</a> <dfn class="local col3 decl" id="3pa" title='pa' data-type='paddr_t' data-ref="3pa" data-ref-filename="3pa">pa</dfn>, <a class="typedef" href="../../../uvm/uvm_prot.h.html#vm_prot_t" title='vm_prot_t' data-type='int' data-ref="vm_prot_t" data-ref-filename="vm_prot_t">vm_prot_t</a> <dfn class="local col4 decl" id="4prot" title='prot' data-type='vm_prot_t' data-ref="4prot" data-ref-filename="4prot">prot</dfn>, <a class="typedef" href="../../../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col5 decl" id="5flags" title='flags' data-type='u_int' data-ref="5flags" data-ref-filename="5flags">flags</dfn>)</td></tr>
+<tr><th id="148">148</th><td>{</td></tr>
+<tr><th id="149">149</th><td>	<a class="typedef" href="../../amd64/include/types.h.html#paddr_t" title='paddr_t' data-type='unsigned long' data-ref="paddr_t" data-ref-filename="paddr_t">paddr_t</a> <dfn class="local col6 decl" id="6ma" title='ma' data-type='paddr_t' data-ref="6ma" data-ref-filename="6ma">ma</dfn>;</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((pa &lt; pmap_pa_start || pmap_pa_end &lt;= pa) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col3 ref" href="#3pa" title='pa' data-ref="3pa" data-ref-filename="3pa">pa</a> &lt; <a class="ref" href="#pmap_pa_start" title='pmap_pa_start' data-ref="pmap_pa_start" data-ref-filename="pmap_pa_start">pmap_pa_start</a> || <a class="ref" href="#pmap_pa_end" title='pmap_pa_end' data-ref="pmap_pa_end" data-ref-filename="pmap_pa_end">pmap_pa_end</a> &lt;= <a class="local col3 ref" href="#3pa" title='pa' data-ref="3pa" data-ref-filename="3pa">pa</a>)) {</td></tr>
+<tr><th id="152">152</th><td>		<a class="local col6 ref" href="#6ma" title='ma' data-ref="6ma" data-ref-filename="6ma">ma</a> = <a class="local col3 ref" href="#3pa" title='pa' data-ref="3pa" data-ref-filename="3pa">pa</a>; <i>/* XXX hack */</i></td></tr>
+<tr><th id="153">153</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="154">154</th><td>		<a class="local col6 ref" href="#6ma" title='ma' data-ref="6ma" data-ref-filename="6ma">ma</a> = <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>(<a class="local col3 ref" href="#3pa" title='pa' data-ref="3pa" data-ref-filename="3pa">pa</a>);</td></tr>
+<tr><th id="155">155</th><td>	}</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>	<b>return</b> <a class="ref fn" href="../../x86/include/pmap.h.html#pmap_enter_ma" title='pmap_enter_ma' data-ref="pmap_enter_ma" data-ref-filename="pmap_enter_ma">pmap_enter_ma</a>(<a class="local col1 ref" href="#1pmap" title='pmap' data-ref="1pmap" data-ref-filename="1pmap">pmap</a>, <a class="local col2 ref" href="#2va" title='va' data-ref="2va" data-ref-filename="2va">va</a>, <a class="local col6 ref" href="#6ma" title='ma' data-ref="6ma" data-ref-filename="6ma">ma</a>, <a class="local col3 ref" href="#3pa" title='pa' data-ref="3pa" data-ref-filename="3pa">pa</a>, <a class="local col4 ref" href="#4prot" title='prot' data-ref="4prot" data-ref-filename="4prot">prot</a>, <a class="local col5 ref" href="#5flags" title='flags' data-ref="5flags" data-ref-filename="5flags">flags</a>, <a class="macro" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#551" title="0x7FF0U" data-ref="_M/DOMID_SELF">DOMID_SELF</a>);</td></tr>
+<tr><th id="158">158</th><td>}</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td><i>/*</i></td></tr>
+<tr><th id="161">161</th><td><i> * pmap_kenter_ma: enter a kernel mapping without R/M (pv_entry) tracking</i></td></tr>
+<tr><th id="162">162</th><td><i> *</i></td></tr>
+<tr><th id="163">163</th><td><i> * =&gt; no need to lock anything, assume va is already allocated</i></td></tr>
+<tr><th id="164">164</th><td><i> * =&gt; should be faster than normal pmap enter function</i></td></tr>
+<tr><th id="165">165</th><td><i> * =&gt; we expect a MACHINE address</i></td></tr>
+<tr><th id="166">166</th><td><i> */</i></td></tr>
+<tr><th id="167">167</th><td></td></tr>
+<tr><th id="168">168</th><td><em>void</em></td></tr>
+<tr><th id="169">169</th><td><dfn class="decl def fn" id="pmap_kenter_ma" title='pmap_kenter_ma' data-ref="pmap_kenter_ma" data-ref-filename="pmap_kenter_ma">pmap_kenter_ma</dfn>(<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col7 decl" id="7va" title='va' data-type='vaddr_t' data-ref="7va" data-ref-filename="7va">va</dfn>, <a class="typedef" href="../../amd64/include/types.h.html#paddr_t" title='paddr_t' data-type='unsigned long' data-ref="paddr_t" data-ref-filename="paddr_t">paddr_t</a> <dfn class="local col8 decl" id="8ma" title='ma' data-type='paddr_t' data-ref="8ma" data-ref-filename="8ma">ma</dfn>, <a class="typedef" href="../../../uvm/uvm_prot.h.html#vm_prot_t" title='vm_prot_t' data-type='int' data-ref="vm_prot_t" data-ref-filename="vm_prot_t">vm_prot_t</a> <dfn class="local col9 decl" id="9prot" title='prot' data-type='vm_prot_t' data-ref="9prot" data-ref-filename="9prot">prot</dfn>, <a class="typedef" href="../../../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col0 decl" id="10flags" title='flags' data-type='u_int' data-ref="10flags" data-ref-filename="10flags">flags</dfn>)</td></tr>
+<tr><th id="170">170</th><td>{</td></tr>
+<tr><th id="171">171</th><td>	<a class="typedef" href="../../amd64/include/pte.h.html#pt_entry_t" title='pt_entry_t' data-type='uint64_t' data-ref="pt_entry_t" data-ref-filename="pt_entry_t">pt_entry_t</a> *<dfn class="local col1 decl" id="11pte" title='pte' data-type='pt_entry_t *' data-ref="11pte" data-ref-filename="11pte">pte</dfn>, <dfn class="local col2 decl" id="12opte" title='opte' data-type='pt_entry_t' data-ref="12opte" data-ref-filename="12opte">opte</dfn>, <dfn class="local col3 decl" id="13npte" title='npte' data-type='pt_entry_t' data-ref="13npte" data-ref-filename="13npte">npte</dfn>;</td></tr>
+<tr><th id="172">172</th><td></td></tr>
+<tr><th id="173">173</th><td>	<b>if</b> (<a class="local col7 ref" href="#7va" title='va' data-ref="7va" data-ref-filename="7va">va</a> &lt; <a class="macro" href="../../amd64/include/vmparam.h.html#139" title="vm_min_kernel_address" data-ref="_M/VM_MIN_KERNEL_ADDRESS">VM_MIN_KERNEL_ADDRESS</a>)</td></tr>
+<tr><th id="174">174</th><td>		<a class="local col1 ref" href="#11pte" title='pte' data-ref="11pte" data-ref-filename="11pte">pte</a> = <a class="ref fn" href="../../x86/include/pmap.h.html#vtopte" title='vtopte' data-ref="vtopte" data-ref-filename="vtopte">vtopte</a>(<a class="local col7 ref" href="#7va" title='va' data-ref="7va" data-ref-filename="7va">va</a>);</td></tr>
+<tr><th id="175">175</th><td>	<b>else</b></td></tr>
+<tr><th id="176">176</th><td>		<a class="local col1 ref" href="#11pte" title='pte' data-ref="11pte" data-ref-filename="11pte">pte</a> = <a class="ref fn" href="../../x86/include/pmap.h.html#kvtopte" title='kvtopte' data-ref="kvtopte" data-ref-filename="kvtopte">kvtopte</a>(<a class="local col7 ref" href="#7va" title='va' data-ref="7va" data-ref-filename="7va">va</a>);</td></tr>
+<tr><th id="177">177</th><td></td></tr>
+<tr><th id="178">178</th><td>	<a class="local col3 ref" href="#13npte" title='npte' data-ref="13npte" data-ref-filename="13npte">npte</a> = <a class="local col8 ref" href="#8ma" title='ma' data-ref="8ma" data-ref-filename="8ma">ma</a> | ((<a class="local col9 ref" href="#9prot" title='prot' data-ref="9prot" data-ref-filename="9prot">prot</a> &amp; <a class="macro" href="../../../uvm/uvm_prot.h.html#85" title="((vm_prot_t) 0x02)" data-ref="_M/VM_PROT_WRITE">VM_PROT_WRITE</a>) ? <a class="macro" href="../../amd64/include/pte.h.html#101" title="0x0000000000000002" data-ref="_M/PTE_W">PTE_W</a> : <var>0</var>) | <a class="macro" href="../../amd64/include/pte.h.html#100" title="0x0000000000000001" data-ref="_M/PTE_P">PTE_P</a>;</td></tr>
+<tr><th id="179">179</th><td>	<b>if</b> (<a class="local col0 ref" href="#10flags" title='flags' data-ref="10flags" data-ref-filename="10flags">flags</a> &amp; <a class="macro" href="../../../uvm/uvm_pmap.h.html#101" title="0x00000100" data-ref="_M/PMAP_NOCACHE">PMAP_NOCACHE</a>)</td></tr>
+<tr><th id="180">180</th><td>		<a class="local col3 ref" href="#13npte" title='npte' data-ref="13npte" data-ref-filename="13npte">npte</a> |= <a class="macro" href="../../amd64/include/pte.h.html#128" title="0x0000000000000010" data-ref="_M/PG_N">PG_N</a>;</td></tr>
+<tr><th id="181">181</th><td></td></tr>
+<tr><th id="182">182</th><td>	<b>if</b> ((<a class="ref" href="../../x86/include/cpuvar.h.html#cpu_feature" title='cpu_feature' data-ref="cpu_feature" data-ref-filename="cpu_feature">cpu_feature</a>[<var>2</var>] &amp; <a class="macro" href="../../x86/include/specialreg.h.html#631" title="0x00100000" data-ref="_M/CPUID_NOX">CPUID_NOX</a>) &amp;&amp; !(<a class="local col9 ref" href="#9prot" title='prot' data-ref="9prot" data-ref-filename="9prot">prot</a> &amp; <a class="macro" href="../../../uvm/uvm_prot.h.html#86" title="((vm_prot_t) 0x04)" data-ref="_M/VM_PROT_EXECUTE">VM_PROT_EXECUTE</a>))</td></tr>
+<tr><th id="183">183</th><td>		<a class="local col3 ref" href="#13npte" title='npte' data-ref="13npte" data-ref-filename="13npte">npte</a> |= <a class="macro" href="../../amd64/include/pte.h.html#139" title="0x8000000000000000" data-ref="_M/PG_NX">PG_NX</a>;</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>	<a class="local col2 ref" href="#12opte" title='opte' data-ref="12opte" data-ref-filename="12opte">opte</a> = <a class="ref fn" href="../../amd64/include/pmap.h.html#pmap_pte_testset" title='pmap_pte_testset' data-ref="pmap_pte_testset" data-ref-filename="pmap_pte_testset">pmap_pte_testset</a>(<a class="local col1 ref" href="#11pte" title='pte' data-ref="11pte" data-ref-filename="11pte">pte</a>, <a class="local col3 ref" href="#13npte" title='npte' data-ref="13npte" data-ref-filename="13npte">npte</a>); <i>/* zap! */</i></td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td>	<b>if</b> (<a class="macro" href="../../x86/include/pmap.h.html#337" title="((opte) &amp; 0x0000000000000001)" data-ref="_M/pmap_valid_entry">pmap_valid_entry</a>(<a class="local col2 ref" href="#12opte" title='opte' data-ref="12opte" data-ref-filename="12opte">opte</a>)) {</td></tr>
+<tr><th id="188">188</th><td><u>#<span data-ppcond="188">if</span> defined(<a class="macro" href="../../../../objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a>)</u></td></tr>
+<tr><th id="189">189</th><td>		<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((x86_mp_online == 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../../x86/include/cpuvar.h.html#x86_mp_online" title='x86_mp_online' data-ref="x86_mp_online" data-ref-filename="x86_mp_online">x86_mp_online</a> == <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>)) {</td></tr>
+<tr><th id="190">190</th><td>			<a class="ref fn" href="../../x86/include/pmap.h.html#pmap_update_pg" title='pmap_update_pg' data-ref="pmap_update_pg" data-ref-filename="pmap_update_pg">pmap_update_pg</a>(<a class="local col7 ref" href="#7va" title='va' data-ref="7va" data-ref-filename="7va">va</a>);</td></tr>
+<tr><th id="191">191</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="192">192</th><td>			<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_disable" title='kpreempt_disable' data-ref="kpreempt_disable" data-ref-filename="kpreempt_disable">kpreempt_disable</a>();</td></tr>
+<tr><th id="193">193</th><td>			<a class="ref fn" href="../../x86/include/pmap.h.html#pmap_tlb_shootdown" title='pmap_tlb_shootdown' data-ref="pmap_tlb_shootdown" data-ref-filename="pmap_tlb_shootdown">pmap_tlb_shootdown</a>(<a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>(), <a class="local col7 ref" href="#7va" title='va' data-ref="7va" data-ref-filename="7va">va</a>, <a class="local col2 ref" href="#12opte" title='opte' data-ref="12opte" data-ref-filename="12opte">opte</a>,</td></tr>
+<tr><th id="194">194</th><td>			    <a class="enum" href="../../x86/include/pmap.h.html#TLBSHOOT_KENTER" title='TLBSHOOT_KENTER' data-ref="TLBSHOOT_KENTER" data-ref-filename="TLBSHOOT_KENTER">TLBSHOOT_KENTER</a>);</td></tr>
+<tr><th id="195">195</th><td>			<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_enable" title='kpreempt_enable' data-ref="kpreempt_enable" data-ref-filename="kpreempt_enable">kpreempt_enable</a>();</td></tr>
+<tr><th id="196">196</th><td>		}</td></tr>
+<tr><th id="197">197</th><td><u>#<span data-ppcond="188">else</span></u></td></tr>
+<tr><th id="198">198</th><td>		<i>/* Don't bother deferring in the single CPU case. */</i></td></tr>
+<tr><th id="199">199</th><td>		pmap_update_pg(va);</td></tr>
+<tr><th id="200">200</th><td><u>#<span data-ppcond="188">endif</span></u></td></tr>
+<tr><th id="201">201</th><td>	}</td></tr>
+<tr><th id="202">202</th><td>}</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td><i>/*</i></td></tr>
+<tr><th id="205">205</th><td><i> * pmap_extract_ma: extract a MA for the given VA</i></td></tr>
+<tr><th id="206">206</th><td><i> */</i></td></tr>
+<tr><th id="207">207</th><td></td></tr>
+<tr><th id="208">208</th><td><a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="209">209</th><td><dfn class="decl def fn" id="pmap_extract_ma" title='pmap_extract_ma' data-ref="pmap_extract_ma" data-ref-filename="pmap_extract_ma">pmap_extract_ma</dfn>(<b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col4 decl" id="14pmap" title='pmap' data-type='struct pmap *' data-ref="14pmap" data-ref-filename="14pmap">pmap</dfn>, <a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col5 decl" id="15va" title='va' data-type='vaddr_t' data-ref="15va" data-ref-filename="15va">va</dfn>, <a class="typedef" href="../../amd64/include/types.h.html#paddr_t" title='paddr_t' data-type='unsigned long' data-ref="paddr_t" data-ref-filename="paddr_t">paddr_t</a> *<dfn class="local col6 decl" id="16pap" title='pap' data-type='paddr_t *' data-ref="16pap" data-ref-filename="16pap">pap</dfn>)</td></tr>
+<tr><th id="210">210</th><td>{</td></tr>
+<tr><th id="211">211</th><td>	<a class="typedef" href="../../amd64/include/pte.h.html#pt_entry_t" title='pt_entry_t' data-type='uint64_t' data-ref="pt_entry_t" data-ref-filename="pt_entry_t">pt_entry_t</a> *<dfn class="local col7 decl" id="17ptes" title='ptes' data-type='pt_entry_t *' data-ref="17ptes" data-ref-filename="17ptes">ptes</dfn>, <dfn class="local col8 decl" id="18pte" title='pte' data-type='pt_entry_t' data-ref="18pte" data-ref-filename="18pte">pte</dfn>;</td></tr>
+<tr><th id="212">212</th><td>	<a class="typedef" href="../../amd64/include/pte.h.html#pd_entry_t" title='pd_entry_t' data-type='uint64_t' data-ref="pd_entry_t" data-ref-filename="pd_entry_t">pd_entry_t</a> <dfn class="local col9 decl" id="19pde" title='pde' data-type='pd_entry_t' data-ref="19pde" data-ref-filename="19pde">pde</dfn>;</td></tr>
+<tr><th id="213">213</th><td>	<a class="typedef" href="../../amd64/include/pte.h.html#pd_entry_t" title='pd_entry_t' data-type='uint64_t' data-ref="pd_entry_t" data-ref-filename="pd_entry_t">pd_entry_t</a> * <em>const</em> *<dfn class="local col0 decl" id="20pdes" title='pdes' data-type='pd_entry_t *const *' data-ref="20pdes" data-ref-filename="20pdes">pdes</dfn>;</td></tr>
+<tr><th id="214">214</th><td>	<b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col1 decl" id="21pmap2" title='pmap2' data-type='struct pmap *' data-ref="21pmap2" data-ref-filename="21pmap2">pmap2</dfn>;</td></tr>
+<tr><th id="215">215</th><td>	<em>int</em> <dfn class="local col2 decl" id="22lvl" title='lvl' data-type='int' data-ref="22lvl" data-ref-filename="22lvl">lvl</dfn>;</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_disable" title='kpreempt_disable' data-ref="kpreempt_disable" data-ref-filename="kpreempt_disable">kpreempt_disable</a>();</td></tr>
+<tr><th id="218">218</th><td>	<a class="ref fn" href="../../x86/include/pmap.h.html#pmap_map_ptes" title='pmap_map_ptes' data-ref="pmap_map_ptes" data-ref-filename="pmap_map_ptes">pmap_map_ptes</a>(<a class="local col4 ref" href="#14pmap" title='pmap' data-ref="14pmap" data-ref-filename="14pmap">pmap</a>, &amp;<a class="local col1 ref" href="#21pmap2" title='pmap2' data-ref="21pmap2" data-ref-filename="21pmap2">pmap2</a>, &amp;<a class="local col7 ref" href="#17ptes" title='ptes' data-ref="17ptes" data-ref-filename="17ptes">ptes</a>, &amp;<a class="local col0 ref" href="#20pdes" title='pdes' data-ref="20pdes" data-ref-filename="20pdes">pdes</a>);</td></tr>
+<tr><th id="219">219</th><td>	<b>if</b> (!<a class="ref fn" href="../../x86/include/pmap.h.html#pmap_pdes_valid" title='pmap_pdes_valid' data-ref="pmap_pdes_valid" data-ref-filename="pmap_pdes_valid">pmap_pdes_valid</a>(<a class="local col5 ref" href="#15va" title='va' data-ref="15va" data-ref-filename="15va">va</a>, <a class="local col0 ref" href="#20pdes" title='pdes' data-ref="20pdes" data-ref-filename="20pdes">pdes</a>, &amp;<a class="local col9 ref" href="#19pde" title='pde' data-ref="19pde" data-ref-filename="19pde">pde</a>, &amp;<a class="local col2 ref" href="#22lvl" title='lvl' data-ref="22lvl" data-ref-filename="22lvl">lvl</a>)) {</td></tr>
+<tr><th id="220">220</th><td>		<a class="ref fn" href="../../x86/include/pmap.h.html#pmap_unmap_ptes" title='pmap_unmap_ptes' data-ref="pmap_unmap_ptes" data-ref-filename="pmap_unmap_ptes">pmap_unmap_ptes</a>(<a class="local col4 ref" href="#14pmap" title='pmap' data-ref="14pmap" data-ref-filename="14pmap">pmap</a>, <a class="local col1 ref" href="#21pmap2" title='pmap2' data-ref="21pmap2" data-ref-filename="21pmap2">pmap2</a>);</td></tr>
+<tr><th id="221">221</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_enable" title='kpreempt_enable' data-ref="kpreempt_enable" data-ref-filename="kpreempt_enable">kpreempt_enable</a>();</td></tr>
+<tr><th id="222">222</th><td>		<b>return</b> <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="223">223</th><td>	}</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((lvl == 1)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;lvl == 1&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/x86/xen_pmap.c&quot;, 225))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col2 ref" href="#22lvl" title='lvl' data-ref="22lvl" data-ref-filename="22lvl">lvl</a> == <var>1</var>);</td></tr>
+<tr><th id="226">226</th><td>	<a class="local col8 ref" href="#18pte" title='pte' data-ref="18pte" data-ref-filename="18pte">pte</a> = <a class="local col7 ref" href="#17ptes" title='ptes' data-ref="17ptes" data-ref-filename="17ptes">ptes</a>[<a class="macro" href="../../x86/include/pmap.h.html#86" title="(((((va) &amp; ~0xffff000000000000)) &amp; (((0x0000ff8000000000|0x0000007fc0000000)|0x000000003fe00000)|0x00000000001ff000)) &gt;&gt; 12)" data-ref="_M/pl1_i">pl1_i</a>(<a class="local col5 ref" href="#15va" title='va' data-ref="15va" data-ref-filename="15va">va</a>)];</td></tr>
+<tr><th id="227">227</th><td>	<a class="ref fn" href="../../x86/include/pmap.h.html#pmap_unmap_ptes" title='pmap_unmap_ptes' data-ref="pmap_unmap_ptes" data-ref-filename="pmap_unmap_ptes">pmap_unmap_ptes</a>(<a class="local col4 ref" href="#14pmap" title='pmap' data-ref="14pmap" data-ref-filename="14pmap">pmap</a>, <a class="local col1 ref" href="#21pmap2" title='pmap2' data-ref="21pmap2" data-ref-filename="21pmap2">pmap2</a>);</td></tr>
+<tr><th id="228">228</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_enable" title='kpreempt_enable' data-ref="kpreempt_enable" data-ref-filename="kpreempt_enable">kpreempt_enable</a>();</td></tr>
+<tr><th id="229">229</th><td></td></tr>
+<tr><th id="230">230</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#487" title="__builtin_expect(((pte &amp; 0x0000000000000001) != 0) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>((<a class="local col8 ref" href="#18pte" title='pte' data-ref="18pte" data-ref-filename="18pte">pte</a> &amp; <a class="macro" href="../../amd64/include/pte.h.html#100" title="0x0000000000000001" data-ref="_M/PTE_P">PTE_P</a>) != <var>0</var>)) {</td></tr>
+<tr><th id="231">231</th><td>		<b>if</b> (<a class="local col6 ref" href="#16pap" title='pap' data-ref="16pap" data-ref-filename="16pap">pap</a> != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="232">232</th><td>			*<a class="local col6 ref" href="#16pap" title='pap' data-ref="16pap" data-ref-filename="16pap">pap</a> = (<a class="local col8 ref" href="#18pte" title='pte' data-ref="18pte" data-ref-filename="18pte">pte</a> &amp; <a class="macro" href="../../amd64/include/pte.h.html#138" title="0x000ffffffffff000" data-ref="_M/PG_FRAME">PG_FRAME</a>) | (<a class="local col5 ref" href="#15va" title='va' data-ref="15va" data-ref-filename="15va">va</a> &amp; (<a class="macro" href="../../amd64/include/pte.h.html#82" title="(1UL &lt;&lt; 12)" data-ref="_M/NBPD_L1">NBPD_L1</a> - <var>1</var>));</td></tr>
+<tr><th id="233">233</th><td>		<b>return</b> <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="234">234</th><td>	}</td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td>	<b>return</b> <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="237">237</th><td>}</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td><i>/*</i></td></tr>
+<tr><th id="240">240</th><td><i> * Xen pmap's handlers for save/restore</i></td></tr>
+<tr><th id="241">241</th><td><i> */</i></td></tr>
+<tr><th id="242">242</th><td><em>void</em></td></tr>
+<tr><th id="243">243</th><td><dfn class="decl def fn" id="pmap_xen_suspend" title='pmap_xen_suspend' data-ref="pmap_xen_suspend" data-ref-filename="pmap_xen_suspend">pmap_xen_suspend</dfn>(<em>void</em>)</td></tr>
+<tr><th id="244">244</th><td>{</td></tr>
+<tr><th id="245">245</th><td>	<a class="ref fn" href="#pmap_unmap_recursive_entries" title='pmap_unmap_recursive_entries' data-ref="pmap_unmap_recursive_entries" data-ref-filename="pmap_unmap_recursive_entries">pmap_unmap_recursive_entries</a>();</td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td>	<a class="ref fn" href="../include/xenpmap.h.html#xpq_flush_queue" title='xpq_flush_queue' data-ref="xpq_flush_queue" data-ref-filename="xpq_flush_queue">xpq_flush_queue</a>();</td></tr>
+<tr><th id="248">248</th><td>}</td></tr>
+<tr><th id="249">249</th><td></td></tr>
+<tr><th id="250">250</th><td><em>void</em></td></tr>
+<tr><th id="251">251</th><td><dfn class="decl def fn" id="pmap_xen_resume" title='pmap_xen_resume' data-ref="pmap_xen_resume" data-ref-filename="pmap_xen_resume">pmap_xen_resume</dfn>(<em>void</em>)</td></tr>
+<tr><th id="252">252</th><td>{</td></tr>
+<tr><th id="253">253</th><td>	<a class="ref fn" href="#pmap_map_recursive_entries" title='pmap_map_recursive_entries' data-ref="pmap_map_recursive_entries" data-ref-filename="pmap_map_recursive_entries">pmap_map_recursive_entries</a>();</td></tr>
+<tr><th id="254">254</th><td></td></tr>
+<tr><th id="255">255</th><td>	<a class="ref fn" href="../include/xenpmap.h.html#xpq_flush_queue" title='xpq_flush_queue' data-ref="xpq_flush_queue" data-ref-filename="xpq_flush_queue">xpq_flush_queue</a>();</td></tr>
+<tr><th id="256">256</th><td>}</td></tr>
+<tr><th id="257">257</th><td></td></tr>
+<tr><th id="258">258</th><td><i>/*</i></td></tr>
+<tr><th id="259">259</th><td><i> * NetBSD uses L2 shadow pages to support PAE with Xen. However, Xen does not</i></td></tr>
+<tr><th id="260">260</th><td><i> * handle them correctly during save/restore, leading to incorrect page</i></td></tr>
+<tr><th id="261">261</th><td><i> * tracking and pinning during restore.</i></td></tr>
+<tr><th id="262">262</th><td><i> * For save/restore to succeed, two functions are introduced:</i></td></tr>
+<tr><th id="263">263</th><td><i> * - pmap_map_recursive_entries(), used by resume code to set the recursive</i></td></tr>
+<tr><th id="264">264</th><td><i> *   mapping entries to their correct value</i></td></tr>
+<tr><th id="265">265</th><td><i> * - pmap_unmap_recursive_entries(), used by suspend code to clear all</i></td></tr>
+<tr><th id="266">266</th><td><i> *   PDIR_SLOT_PTE entries</i></td></tr>
+<tr><th id="267">267</th><td><i> */</i></td></tr>
+<tr><th id="268">268</th><td><em>void</em></td></tr>
+<tr><th id="269">269</th><td><dfn class="decl def fn" id="pmap_map_recursive_entries" title='pmap_map_recursive_entries' data-ref="pmap_map_recursive_entries" data-ref-filename="pmap_map_recursive_entries">pmap_map_recursive_entries</dfn>(<em>void</em>)</td></tr>
+<tr><th id="270">270</th><td>{</td></tr>
+<tr><th id="271">271</th><td>	<em>int</em> <dfn class="local col3 decl" id="23i" title='i' data-type='int' data-ref="23i" data-ref-filename="23i">i</dfn>;</td></tr>
+<tr><th id="272">272</th><td>	<b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col4 decl" id="24pm" title='pm' data-type='struct pmap *' data-ref="24pm" data-ref-filename="24pm">pm</dfn>;</td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td>	<a class="ref fn" href="../../../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="ref" href="../../x86/include/pmap.h.html#pmaps_lock" title='pmaps_lock' data-ref="pmaps_lock" data-ref-filename="pmaps_lock">pmaps_lock</a>);</td></tr>
+<tr><th id="275">275</th><td>	<a class="macro" href="../../../sys/queue.h.html#210" title="for ((pm) = ((&amp;pmaps)-&gt;lh_first); (pm) != ((void *)0); (pm) = ((pm)-&gt;pm_list.le_next))" data-ref="_M/LIST_FOREACH">LIST_FOREACH</a>(<a class="local col4 ref" href="#24pm" title='pm' data-ref="24pm" data-ref-filename="24pm">pm</a>, &amp;<a class="ref" href="../../x86/include/pmap.h.html#pmaps" title='pmaps' data-ref="pmaps" data-ref-filename="pmaps">pmaps</a>, <a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_list" title='pmap::pm_list' data-ref="pmap::pm_list" data-ref-filename="pmap..pm_list">pm_list</a>) {</td></tr>
+<tr><th id="276">276</th><td>		<b>for</b> (<a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a> = <var>0</var>; <a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a> &lt; <a class="macro" href="../../x86/include/pmap.h.html#108" title="1" data-ref="_M/PDP_SIZE">PDP_SIZE</a>; <a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a>++) {</td></tr>
+<tr><th id="277">277</th><td>			<a class="ref fn" href="../include/xenpmap.h.html#xpq_queue_pte_update" title='xpq_queue_pte_update' data-ref="xpq_queue_pte_update" data-ref-filename="xpq_queue_pte_update">xpq_queue_pte_update</a>(</td></tr>
+<tr><th id="278">278</th><td>			    <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>(<a class="macro" href="../../x86/include/pmap.h.html#295" title="((pm)-&gt;pm_pdirpa[0] + (509 + i) * sizeof(pd_entry_t))" data-ref="_M/pmap_pdirpa">pmap_pdirpa</a>(<a class="local col4 ref" href="#24pm" title='pm' data-ref="24pm" data-ref-filename="24pm">pm</a>, <a class="macro" href="../../amd64/include/pmap.h.html#112" title="509" data-ref="_M/PDIR_SLOT_PTE">PDIR_SLOT_PTE</a> + <a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a>)),</td></tr>
+<tr><th id="279">279</th><td>			    <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>((<a class="local col4 ref" href="#24pm" title='pm' data-ref="24pm" data-ref-filename="24pm">pm</a>)-&gt;<a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_pdirpa" title='pmap::pm_pdirpa' data-ref="pmap::pm_pdirpa" data-ref-filename="pmap..pm_pdirpa">pm_pdirpa</a>[<a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a>]) | <a class="macro" href="../../amd64/include/pte.h.html#100" title="0x0000000000000001" data-ref="_M/PTE_P">PTE_P</a>);</td></tr>
+<tr><th id="280">280</th><td>		}</td></tr>
+<tr><th id="281">281</th><td>	}</td></tr>
+<tr><th id="282">282</th><td>	<a class="ref fn" href="../../../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="ref" href="../../x86/include/pmap.h.html#pmaps_lock" title='pmaps_lock' data-ref="pmaps_lock" data-ref-filename="pmaps_lock">pmaps_lock</a>);</td></tr>
+<tr><th id="283">283</th><td></td></tr>
+<tr><th id="284">284</th><td>	<b>for</b> (<a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a> = <var>0</var>; <a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a> &lt; <a class="macro" href="../../x86/include/pmap.h.html#108" title="1" data-ref="_M/PDP_SIZE">PDP_SIZE</a>; <a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a>++) {</td></tr>
+<tr><th id="285">285</th><td>		<a class="ref fn" href="../include/xenpmap.h.html#xpq_queue_pte_update" title='xpq_queue_pte_update' data-ref="xpq_queue_pte_update" data-ref-filename="xpq_queue_pte_update">xpq_queue_pte_update</a>(</td></tr>
+<tr><th id="286">286</th><td>		    <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>(<a class="macro" href="../../x86/include/pmap.h.html#295" title="((kernel_pmap_ptr)-&gt;pm_pdirpa[0] + (509 + i) * sizeof(pd_entry_t))" data-ref="_M/pmap_pdirpa">pmap_pdirpa</a>(<a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>(), <a class="macro" href="../../amd64/include/pmap.h.html#112" title="509" data-ref="_M/PDIR_SLOT_PTE">PDIR_SLOT_PTE</a> + <a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a>)),</td></tr>
+<tr><th id="287">287</th><td>		    <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>(<a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>()-&gt;<a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_pdirpa" title='pmap::pm_pdirpa' data-ref="pmap::pm_pdirpa" data-ref-filename="pmap..pm_pdirpa">pm_pdirpa</a>[<a class="local col3 ref" href="#23i" title='i' data-ref="23i" data-ref-filename="23i">i</a>]) | <a class="macro" href="../../amd64/include/pte.h.html#100" title="0x0000000000000001" data-ref="_M/PTE_P">PTE_P</a>);</td></tr>
+<tr><th id="288">288</th><td>	}</td></tr>
+<tr><th id="289">289</th><td>}</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td><i>/*</i></td></tr>
+<tr><th id="292">292</th><td><i> * Unmap recursive entries found in pmaps. Required during Xen</i></td></tr>
+<tr><th id="293">293</th><td><i> * save/restore operations, as Xen does not handle recursive mappings</i></td></tr>
+<tr><th id="294">294</th><td><i> * properly.</i></td></tr>
+<tr><th id="295">295</th><td><i> */</i></td></tr>
+<tr><th id="296">296</th><td><em>void</em></td></tr>
+<tr><th id="297">297</th><td><dfn class="decl def fn" id="pmap_unmap_recursive_entries" title='pmap_unmap_recursive_entries' data-ref="pmap_unmap_recursive_entries" data-ref-filename="pmap_unmap_recursive_entries">pmap_unmap_recursive_entries</dfn>(<em>void</em>)</td></tr>
+<tr><th id="298">298</th><td>{</td></tr>
+<tr><th id="299">299</th><td>	<em>int</em> <dfn class="local col5 decl" id="25i" title='i' data-type='int' data-ref="25i" data-ref-filename="25i">i</dfn>;</td></tr>
+<tr><th id="300">300</th><td>	<b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col6 decl" id="26pm" title='pm' data-type='struct pmap *' data-ref="26pm" data-ref-filename="26pm">pm</dfn>;</td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td>	<i>/*</i></td></tr>
+<tr><th id="303">303</th><td><i>	 * Invalidate pmap_pdp_cache as it contains L2-pinned objects with</i></td></tr>
+<tr><th id="304">304</th><td><i>	 * recursive entries.</i></td></tr>
+<tr><th id="305">305</th><td><i>	 * XXX jym@ : find a way to drain per-CPU caches to. pool_cache_inv</i></td></tr>
+<tr><th id="306">306</th><td><i>	 * does not do that.</i></td></tr>
+<tr><th id="307">307</th><td><i>	 */</i></td></tr>
+<tr><th id="308">308</th><td>	<a class="ref fn" href="../../../sys/pool.h.html#pool_cache_invalidate" title='pool_cache_invalidate' data-ref="pool_cache_invalidate" data-ref-filename="pool_cache_invalidate">pool_cache_invalidate</a>(&amp;<a class="ref" href="../../x86/include/pmap.h.html#pmap_pdp_cache" title='pmap_pdp_cache' data-ref="pmap_pdp_cache" data-ref-filename="pmap_pdp_cache">pmap_pdp_cache</a>);</td></tr>
+<tr><th id="309">309</th><td></td></tr>
+<tr><th id="310">310</th><td>	<a class="ref fn" href="../../../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="ref" href="../../x86/include/pmap.h.html#pmaps_lock" title='pmaps_lock' data-ref="pmaps_lock" data-ref-filename="pmaps_lock">pmaps_lock</a>);</td></tr>
+<tr><th id="311">311</th><td>	<a class="macro" href="../../../sys/queue.h.html#210" title="for ((pm) = ((&amp;pmaps)-&gt;lh_first); (pm) != ((void *)0); (pm) = ((pm)-&gt;pm_list.le_next))" data-ref="_M/LIST_FOREACH">LIST_FOREACH</a>(<a class="local col6 ref" href="#26pm" title='pm' data-ref="26pm" data-ref-filename="26pm">pm</a>, &amp;<a class="ref" href="../../x86/include/pmap.h.html#pmaps" title='pmaps' data-ref="pmaps" data-ref-filename="pmaps">pmaps</a>, <a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_list" title='pmap::pm_list' data-ref="pmap::pm_list" data-ref-filename="pmap..pm_list">pm_list</a>) {</td></tr>
+<tr><th id="312">312</th><td>		<b>for</b> (<a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a> = <var>0</var>; <a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a> &lt; <a class="macro" href="../../x86/include/pmap.h.html#108" title="1" data-ref="_M/PDP_SIZE">PDP_SIZE</a>; <a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a>++) {</td></tr>
+<tr><th id="313">313</th><td>			<a class="ref fn" href="../include/xenpmap.h.html#xpq_queue_pte_update" title='xpq_queue_pte_update' data-ref="xpq_queue_pte_update" data-ref-filename="xpq_queue_pte_update">xpq_queue_pte_update</a>(</td></tr>
+<tr><th id="314">314</th><td>			    <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>(<a class="macro" href="../../x86/include/pmap.h.html#295" title="((pm)-&gt;pm_pdirpa[0] + (509 + i) * sizeof(pd_entry_t))" data-ref="_M/pmap_pdirpa">pmap_pdirpa</a>(<a class="local col6 ref" href="#26pm" title='pm' data-ref="26pm" data-ref-filename="26pm">pm</a>, <a class="macro" href="../../amd64/include/pmap.h.html#112" title="509" data-ref="_M/PDIR_SLOT_PTE">PDIR_SLOT_PTE</a> + <a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a>)), <var>0</var>);</td></tr>
+<tr><th id="315">315</th><td>		}</td></tr>
+<tr><th id="316">316</th><td>	}</td></tr>
+<tr><th id="317">317</th><td>	<a class="ref fn" href="../../../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="ref" href="../../x86/include/pmap.h.html#pmaps_lock" title='pmaps_lock' data-ref="pmaps_lock" data-ref-filename="pmaps_lock">pmaps_lock</a>);</td></tr>
+<tr><th id="318">318</th><td></td></tr>
+<tr><th id="319">319</th><td>	<i>/* do it for pmap_kernel() too! */</i></td></tr>
+<tr><th id="320">320</th><td>	<b>for</b> (<a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a> = <var>0</var>; <a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a> &lt; <a class="macro" href="../../x86/include/pmap.h.html#108" title="1" data-ref="_M/PDP_SIZE">PDP_SIZE</a>; <a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a>++) {</td></tr>
+<tr><th id="321">321</th><td>		<a class="ref fn" href="../include/xenpmap.h.html#xpq_queue_pte_update" title='xpq_queue_pte_update' data-ref="xpq_queue_pte_update" data-ref-filename="xpq_queue_pte_update">xpq_queue_pte_update</a>(</td></tr>
+<tr><th id="322">322</th><td>		    <a class="ref fn" href="../include/xenpmap.h.html#xpmap_ptom" title='xpmap_ptom' data-ref="xpmap_ptom" data-ref-filename="xpmap_ptom">xpmap_ptom</a>(<a class="macro" href="../../x86/include/pmap.h.html#295" title="((kernel_pmap_ptr)-&gt;pm_pdirpa[0] + (509 + i) * sizeof(pd_entry_t))" data-ref="_M/pmap_pdirpa">pmap_pdirpa</a>(<a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>(), <a class="macro" href="../../amd64/include/pmap.h.html#112" title="509" data-ref="_M/PDIR_SLOT_PTE">PDIR_SLOT_PTE</a> + <a class="local col5 ref" href="#25i" title='i' data-ref="25i" data-ref-filename="25i">i</a>)),</td></tr>
+<tr><th id="323">323</th><td>		    <var>0</var>);</td></tr>
+<tr><th id="324">324</th><td>	}</td></tr>
+<tr><th id="325">325</th><td>}</td></tr>
+<tr><th id="326">326</th><td></td></tr>
+<tr><th id="327">327</th><td><em>static</em> <b>__inline</b> <em>void</em></td></tr>
+<tr><th id="328">328</th><td><dfn class="tu decl def fn" id="pmap_kpm_setpte" title='pmap_kpm_setpte' data-type='void pmap_kpm_setpte(struct cpu_info * ci, struct pmap * pmap, int index)' data-ref="pmap_kpm_setpte" data-ref-filename="pmap_kpm_setpte">pmap_kpm_setpte</dfn>(<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col7 decl" id="27ci" title='ci' data-type='struct cpu_info *' data-ref="27ci" data-ref-filename="27ci">ci</dfn>, <b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col8 decl" id="28pmap" title='pmap' data-type='struct pmap *' data-ref="28pmap" data-ref-filename="28pmap">pmap</dfn>, <em>int</em> <dfn class="local col9 decl" id="29index" title='index' data-type='int' data-ref="29index" data-ref-filename="29index">index</dfn>)</td></tr>
+<tr><th id="329">329</th><td>{</td></tr>
+<tr><th id="330">330</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(pmap-&gt;pm_obj[0].vmobjlock))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(pmap-&gt;pm_lock)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/x86/xen_pmap.c&quot;, 330))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/mutex.h.html#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(<a class="local col8 ref" href="#28pmap" title='pmap' data-ref="28pmap" data-ref-filename="28pmap">pmap</a>-&gt;<a class="macro" href="../../x86/include/pmap.h.html#250" title="pm_obj[0].vmobjlock" data-ref="_M/pm_lock">pm_lock</a>));</td></tr>
+<tr><th id="331">331</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(&amp;ci-&gt;ci_kpm_mtx))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(&amp;ci-&gt;ci_kpm_mtx)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/x86/xen_pmap.c&quot;, 331))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/mutex.h.html#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(&amp;<a class="local col7 ref" href="#27ci" title='ci' data-ref="27ci" data-ref-filename="27ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_kpm_mtx" title='cpu_info::ci_kpm_mtx' data-ref="cpu_info::ci_kpm_mtx" data-ref-filename="cpu_info..ci_kpm_mtx">ci_kpm_mtx</a>));</td></tr>
+<tr><th id="332">332</th><td>	<b>if</b> (<a class="local col8 ref" href="#28pmap" title='pmap' data-ref="28pmap" data-ref-filename="28pmap">pmap</a> == <a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>()) {</td></tr>
+<tr><th id="333">333</th><td>		<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((index &gt;= slotspace.area[2].sslot)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;index &gt;= PDIR_SLOT_KERN&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/x86/xen_pmap.c&quot;, 333))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col9 ref" href="#29index" title='index' data-ref="29index" data-ref-filename="29index">index</a> &gt;= <a class="macro" href="../../amd64/include/pmap.h.html#111" title="slotspace.area[2].sslot" data-ref="_M/PDIR_SLOT_KERN">PDIR_SLOT_KERN</a>);</td></tr>
+<tr><th id="334">334</th><td>	}</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td><u>#<span data-ppcond="336">ifdef</span> <span class="macro" data-ref="_M/__x86_64__">__x86_64__</span></u></td></tr>
+<tr><th id="337">337</th><td>	<a class="ref fn" href="../include/xenpmap.h.html#xpq_queue_pte_update" title='xpq_queue_pte_update' data-ref="xpq_queue_pte_update" data-ref-filename="xpq_queue_pte_update">xpq_queue_pte_update</a>(</td></tr>
+<tr><th id="338">338</th><td>	    <a class="ref fn" href="../../x86/include/pmap.h.html#xpmap_ptetomach" title='xpmap_ptetomach' data-ref="xpmap_ptetomach" data-ref-filename="xpmap_ptetomach">xpmap_ptetomach</a>(&amp;<a class="local col7 ref" href="#27ci" title='ci' data-ref="27ci" data-ref-filename="27ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_kpm_pdir" title='cpu_info::ci_kpm_pdir' data-ref="cpu_info::ci_kpm_pdir" data-ref-filename="cpu_info..ci_kpm_pdir">ci_kpm_pdir</a>[<a class="local col9 ref" href="#29index" title='index' data-ref="29index" data-ref-filename="29index">index</a>]),</td></tr>
+<tr><th id="339">339</th><td>	    <a class="local col8 ref" href="#28pmap" title='pmap' data-ref="28pmap" data-ref-filename="28pmap">pmap</a>-&gt;<a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_pdir" title='pmap::pm_pdir' data-ref="pmap::pm_pdir" data-ref-filename="pmap..pm_pdir">pm_pdir</a>[<a class="local col9 ref" href="#29index" title='index' data-ref="29index" data-ref-filename="29index">index</a>]);</td></tr>
+<tr><th id="340">340</th><td><u>#<span data-ppcond="336">else</span></u></td></tr>
+<tr><th id="341">341</th><td>	xpq_queue_pte_update(</td></tr>
+<tr><th id="342">342</th><td>	    xpmap_ptetomach(&amp;ci-&gt;ci_kpm_pdir[l2tol2(index)]),</td></tr>
+<tr><th id="343">343</th><td>	    pmap-&gt;pm_pdir[index]);</td></tr>
+<tr><th id="344">344</th><td><u>#<span data-ppcond="336">endif</span></u></td></tr>
+<tr><th id="345">345</th><td></td></tr>
+<tr><th id="346">346</th><td>	<a class="ref fn" href="../include/xenpmap.h.html#xpq_flush_queue" title='xpq_flush_queue' data-ref="xpq_flush_queue" data-ref-filename="xpq_flush_queue">xpq_flush_queue</a>();</td></tr>
+<tr><th id="347">347</th><td>}</td></tr>
+<tr><th id="348">348</th><td></td></tr>
+<tr><th id="349">349</th><td><i>/*</i></td></tr>
+<tr><th id="350">350</th><td><i> * Synchronise shadow pdir with the pmap on all cpus on which it is</i></td></tr>
+<tr><th id="351">351</th><td><i> * loaded.</i></td></tr>
+<tr><th id="352">352</th><td><i> */</i></td></tr>
+<tr><th id="353">353</th><td><em>void</em></td></tr>
+<tr><th id="354">354</th><td><dfn class="decl def fn" id="xen_kpm_sync" title='xen_kpm_sync' data-ref="xen_kpm_sync" data-ref-filename="xen_kpm_sync">xen_kpm_sync</dfn>(<b>struct</b> <a class="type" href="../../x86/include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col0 decl" id="30pmap" title='pmap' data-type='struct pmap *' data-ref="30pmap" data-ref-filename="30pmap">pmap</dfn>, <em>int</em> <dfn class="local col1 decl" id="31index" title='index' data-type='int' data-ref="31index" data-ref-filename="31index">index</dfn>)</td></tr>
+<tr><th id="355">355</th><td>{</td></tr>
+<tr><th id="356">356</th><td>	<a class="macro" href="../../x86/include/cpu.h.html#364" title="int __attribute__((__unused__))" data-ref="_M/CPU_INFO_ITERATOR">CPU_INFO_ITERATOR</a> <dfn class="local col2 decl" id="32cii" title='cii' data-type='int' data-ref="32cii" data-ref-filename="32cii">cii</dfn>;</td></tr>
+<tr><th id="357">357</th><td>	<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col3 decl" id="33ci" title='ci' data-type='struct cpu_info *' data-ref="33ci" data-ref-filename="33ci">ci</dfn>;</td></tr>
+<tr><th id="358">358</th><td></td></tr>
+<tr><th id="359">359</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((pmap != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;pmap != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/x86/xen_pmap.c&quot;, 359))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col0 ref" href="#30pmap" title='pmap' data-ref="30pmap" data-ref-filename="30pmap">pmap</a> != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="360">360</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((kpreempt_disabled())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;kpreempt_disabled()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/x86/xen_pmap.c&quot;, 360))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</a>());</td></tr>
+<tr><th id="361">361</th><td></td></tr>
+<tr><th id="362">362</th><td>	<a class="ref fn" href="../../amd64/include/pmap.h.html#pmap_pte_flush" title='pmap_pte_flush' data-ref="pmap_pte_flush" data-ref-filename="pmap_pte_flush">pmap_pte_flush</a>();</td></tr>
+<tr><th id="363">363</th><td></td></tr>
+<tr><th id="364">364</th><td>	<b>for</b> (<a class="macro" href="../../x86/include/cpu.h.html#365" title="ci = cpu_info_list; ci != ((void *)0); ci = ci-&gt;ci_next" data-ref="_M/CPU_INFO_FOREACH">CPU_INFO_FOREACH</a>(cii, <a class="local col3 ref" href="#33ci" title='ci' data-ref="33ci" data-ref-filename="33ci">ci</a>)) {</td></tr>
+<tr><th id="365">365</th><td>		<b>if</b> (<a class="local col3 ref" href="#33ci" title='ci' data-ref="33ci" data-ref-filename="33ci">ci</a> == <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="366">366</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="367">367</th><td>		}</td></tr>
+<tr><th id="368">368</th><td>		<a class="typedef" href="../../../sys/types.h.html#cpuid_t" title='cpuid_t' data-type='unsigned long' data-ref="cpuid_t" data-ref-filename="cpuid_t">cpuid_t</a> <dfn class="local col4 decl" id="34cid" title='cid' data-type='cpuid_t' data-ref="34cid" data-ref-filename="34cid">cid</dfn> = <a class="ref fn" href="../../../sys/cpu.h.html#cpu_index" title='cpu_index' data-ref="cpu_index" data-ref-filename="cpu_index">cpu_index</a>(<a class="local col3 ref" href="#33ci" title='ci' data-ref="33ci" data-ref-filename="33ci">ci</a>);</td></tr>
+<tr><th id="369">369</th><td>		<b>if</b> (<a class="local col0 ref" href="#30pmap" title='pmap' data-ref="30pmap" data-ref-filename="30pmap">pmap</a> != <a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>() &amp;&amp;</td></tr>
+<tr><th id="370">370</th><td>		    !<a class="ref fn" href="../../../sys/kcpuset.h.html#kcpuset_isset" title='kcpuset_isset' data-ref="kcpuset_isset" data-ref-filename="kcpuset_isset">kcpuset_isset</a>(<a class="local col0 ref" href="#30pmap" title='pmap' data-ref="30pmap" data-ref-filename="30pmap">pmap</a>-&gt;<a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_xen_ptp_cpus" title='pmap::pm_xen_ptp_cpus' data-ref="pmap::pm_xen_ptp_cpus" data-ref-filename="pmap..pm_xen_ptp_cpus">pm_xen_ptp_cpus</a>, <a class="local col4 ref" href="#34cid" title='cid' data-ref="34cid" data-ref-filename="34cid">cid</a>))</td></tr>
+<tr><th id="371">371</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td>		<i>/* take the lock and check again */</i></td></tr>
+<tr><th id="374">374</th><td>		<a class="ref fn" href="../../../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(&amp;<a class="local col3 ref" href="#33ci" title='ci' data-ref="33ci" data-ref-filename="33ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_kpm_mtx" title='cpu_info::ci_kpm_mtx' data-ref="cpu_info::ci_kpm_mtx" data-ref-filename="cpu_info..ci_kpm_mtx">ci_kpm_mtx</a>);</td></tr>
+<tr><th id="375">375</th><td>		<b>if</b> (<a class="local col0 ref" href="#30pmap" title='pmap' data-ref="30pmap" data-ref-filename="30pmap">pmap</a> == <a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>() ||</td></tr>
+<tr><th id="376">376</th><td>		    <a class="ref fn" href="../../../sys/kcpuset.h.html#kcpuset_isset" title='kcpuset_isset' data-ref="kcpuset_isset" data-ref-filename="kcpuset_isset">kcpuset_isset</a>(<a class="local col0 ref" href="#30pmap" title='pmap' data-ref="30pmap" data-ref-filename="30pmap">pmap</a>-&gt;<a class="ref field" href="../../x86/include/pmap.h.html#pmap::pm_xen_ptp_cpus" title='pmap::pm_xen_ptp_cpus' data-ref="pmap::pm_xen_ptp_cpus" data-ref-filename="pmap..pm_xen_ptp_cpus">pm_xen_ptp_cpus</a>, <a class="local col4 ref" href="#34cid" title='cid' data-ref="34cid" data-ref-filename="34cid">cid</a>)) {</td></tr>
+<tr><th id="377">377</th><td>			<a class="tu ref fn" href="#pmap_kpm_setpte" title='pmap_kpm_setpte' data-use='c' data-ref="pmap_kpm_setpte" data-ref-filename="pmap_kpm_setpte">pmap_kpm_setpte</a>(<a class="local col3 ref" href="#33ci" title='ci' data-ref="33ci" data-ref-filename="33ci">ci</a>, <a class="local col0 ref" href="#30pmap" title='pmap' data-ref="30pmap" data-ref-filename="30pmap">pmap</a>, <a class="local col1 ref" href="#31index" title='index' data-ref="31index" data-ref-filename="31index">index</a>);</td></tr>
+<tr><th id="378">378</th><td>		}</td></tr>
+<tr><th id="379">379</th><td>		<a class="ref fn" href="../../../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(&amp;<a class="local col3 ref" href="#33ci" title='ci' data-ref="33ci" data-ref-filename="33ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_kpm_mtx" title='cpu_info::ci_kpm_mtx' data-ref="cpu_info::ci_kpm_mtx" data-ref-filename="cpu_info..ci_kpm_mtx">ci_kpm_mtx</a>);</td></tr>
+<tr><th id="380">380</th><td>	}</td></tr>
+<tr><th id="381">381</th><td>}</td></tr>
+<tr><th id="382">382</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

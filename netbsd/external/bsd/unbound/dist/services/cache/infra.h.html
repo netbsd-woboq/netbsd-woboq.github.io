@@ -1,0 +1,486 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>infra.h source code [netbsd/external/bsd/unbound/dist/services/cache/infra.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="domain_limit_data,infra_cache,infra_data,infra_key,ip_rate_key,rate_data,rate_key "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/unbound/dist/services/cache/infra.h'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>external</a>/<a href='../../../..'>bsd</a>/<a href='../../..'>unbound</a>/<a href='../..'>dist</a>/<a href='..'>services</a>/<a href='./'>cache</a>/<a href='infra.h.html'>infra.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * services/cache/infra.h - infrastructure cache, server rtt and capabilities</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This software is open source.</i></td></tr>
+<tr><th id="7">7</th><td><i> * </i></td></tr>
+<tr><th id="8">8</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="9">9</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="10">10</th><td><i> * are met:</i></td></tr>
+<tr><th id="11">11</th><td><i> * </i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistributions of source code must retain the above copyright notice,</i></td></tr>
+<tr><th id="13">13</th><td><i> * this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="14">14</th><td><i> * </i></td></tr>
+<tr><th id="15">15</th><td><i> * Redistributions in binary form must reproduce the above copyright notice,</i></td></tr>
+<tr><th id="16">16</th><td><i> * this list of conditions and the following disclaimer in the documentation</i></td></tr>
+<tr><th id="17">17</th><td><i> * and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> * </i></td></tr>
+<tr><th id="19">19</th><td><i> * Neither the name of the NLNET LABS nor the names of its contributors may</i></td></tr>
+<tr><th id="20">20</th><td><i> * be used to endorse or promote products derived from this software without</i></td></tr>
+<tr><th id="21">21</th><td><i> * specific prior written permission.</i></td></tr>
+<tr><th id="22">22</th><td><i> * </i></td></tr>
+<tr><th id="23">23</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="24">24</th><td><i> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="25">25</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="26">26</th><td><i> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="27">27</th><td><i> * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="28">28</th><td><i> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="29">29</th><td><i> * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR</i></td></tr>
+<tr><th id="30">30</th><td><i> * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF</i></td></tr>
+<tr><th id="31">31</th><td><i> * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING</i></td></tr>
+<tr><th id="32">32</th><td><i> * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS</i></td></tr>
+<tr><th id="33">33</th><td><i> * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="34">34</th><td><i> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> *<span class="command"> \file</span></i></td></tr>
+<tr><th id="38">38</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> * This file contains the infrastructure cache, as well as rate limiting.</i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> * Note that there are two sorts of rate-limiting here:</i></td></tr>
+<tr><th id="41">41</th><td><i class="doc"> *  - Pre-cache, per-query rate limiting (query ratelimits)</i></td></tr>
+<tr><th id="42">42</th><td><i class="doc"> *  - Post-cache, per-domain name rate limiting (infra-ratelimits)</i></td></tr>
+<tr><th id="43">43</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#<span data-ppcond="45">ifndef</span> <span class="macro" data-ref="_M/SERVICES_CACHE_INFRA_H">SERVICES_CACHE_INFRA_H</span></u></td></tr>
+<tr><th id="46">46</th><td><u>#define <dfn class="macro" id="_M/SERVICES_CACHE_INFRA_H" data-ref="_M/SERVICES_CACHE_INFRA_H">SERVICES_CACHE_INFRA_H</dfn></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../util/storage/lruhash.h.html">"util/storage/lruhash.h"</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../../util/storage/dnstree.h.html">"util/storage/dnstree.h"</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../../util/rtt.h.html">"util/rtt.h"</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../util/netevent.h.html">"util/netevent.h"</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../../util/data/msgreply.h.html">"util/data/msgreply.h"</a></u></td></tr>
+<tr><th id="52">52</th><td><b>struct</b> <a class="type" href="../../util/storage/slabhash.h.html#slabhash" title='slabhash' data-ref="slabhash" data-ref-filename="slabhash" id="slabhash">slabhash</a>;</td></tr>
+<tr><th id="53">53</th><td><b>struct</b> <a class="type" href="../../util/config_file.h.html#config_file" title='config_file' data-ref="config_file" data-ref-filename="config_file" id="config_file">config_file</a>;</td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="56">56</th><td><i class="doc"> * Host information kept for every server, per zone.</i></td></tr>
+<tr><th id="57">57</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="58">58</th><td><b>struct</b> <dfn class="type def" id="infra_key" title='infra_key' data-ref="infra_key" data-ref-filename="infra_key">infra_key</dfn> {</td></tr>
+<tr><th id="59">59</th><td>	<i class="doc">/** the host address. */</i></td></tr>
+<tr><th id="60">60</th><td>	<b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a> <dfn class="decl field" id="infra_key::addr" title='infra_key::addr' data-ref="infra_key::addr" data-ref-filename="infra_key..addr">addr</dfn>;</td></tr>
+<tr><th id="61">61</th><td>	<i class="doc">/** length of addr. */</i></td></tr>
+<tr><th id="62">62</th><td>	<a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="decl field" id="infra_key::addrlen" title='infra_key::addrlen' data-ref="infra_key::addrlen" data-ref-filename="infra_key..addrlen">addrlen</dfn>;</td></tr>
+<tr><th id="63">63</th><td>	<i class="doc">/** zone name in wireformat */</i></td></tr>
+<tr><th id="64">64</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="decl field" id="infra_key::zonename" title='infra_key::zonename' data-ref="infra_key::zonename" data-ref-filename="infra_key..zonename">zonename</dfn>;</td></tr>
+<tr><th id="65">65</th><td>	<i class="doc">/** length of zonename */</i></td></tr>
+<tr><th id="66">66</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="infra_key::namelen" title='infra_key::namelen' data-ref="infra_key::namelen" data-ref-filename="infra_key..namelen">namelen</dfn>;</td></tr>
+<tr><th id="67">67</th><td>	<i class="doc">/** hash table entry, data of type infra_data. */</i></td></tr>
+<tr><th id="68">68</th><td>	<b>struct</b> <a class="type" href="../../util/storage/lruhash.h.html#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a> <dfn class="decl field" id="infra_key::entry" title='infra_key::entry' data-ref="infra_key::entry" data-ref-filename="infra_key..entry">entry</dfn>;</td></tr>
+<tr><th id="69">69</th><td>};</td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="72">72</th><td><i class="doc"> * Host information encompasses host capabilities and retransmission timeouts.</i></td></tr>
+<tr><th id="73">73</th><td><i class="doc"> * And lameness information (notAuthoritative, noEDNS, Recursive)</i></td></tr>
+<tr><th id="74">74</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="75">75</th><td><b>struct</b> <dfn class="type def" id="infra_data" title='infra_data' data-ref="infra_data" data-ref-filename="infra_data">infra_data</dfn> {</td></tr>
+<tr><th id="76">76</th><td>	<i class="doc">/** TTL value for this entry. absolute time. */</i></td></tr>
+<tr><th id="77">77</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="decl field" id="infra_data::ttl" title='infra_data::ttl' data-ref="infra_data::ttl" data-ref-filename="infra_data..ttl">ttl</dfn>;</td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td>	<i class="doc">/** time in seconds (absolute) when probing re-commences, 0 disabled */</i></td></tr>
+<tr><th id="80">80</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="decl field" id="infra_data::probedelay" title='infra_data::probedelay' data-ref="infra_data::probedelay" data-ref-filename="infra_data..probedelay">probedelay</dfn>;</td></tr>
+<tr><th id="81">81</th><td>	<i class="doc">/** round trip times for timeout calculation */</i></td></tr>
+<tr><th id="82">82</th><td>	<b>struct</b> <a class="type" href="../../util/rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a> <dfn class="decl field" id="infra_data::rtt" title='infra_data::rtt' data-ref="infra_data::rtt" data-ref-filename="infra_data..rtt">rtt</dfn>;</td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td>	<i class="doc">/** edns version that the host supports, -1 means no EDNS */</i></td></tr>
+<tr><th id="85">85</th><td>	<em>int</em> <dfn class="decl field" id="infra_data::edns_version" title='infra_data::edns_version' data-ref="infra_data::edns_version" data-ref-filename="infra_data..edns_version">edns_version</dfn>;</td></tr>
+<tr><th id="86">86</th><td>	<i class="doc">/** if the EDNS lameness is already known or not.</i></td></tr>
+<tr><th id="87">87</th><td><i class="doc">	 * EDNS lame is when EDNS queries or replies are dropped, </i></td></tr>
+<tr><th id="88">88</th><td><i class="doc">	 * and cause a timeout */</i></td></tr>
+<tr><th id="89">89</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::edns_lame_known" title='infra_data::edns_lame_known' data-ref="infra_data::edns_lame_known" data-ref-filename="infra_data..edns_lame_known">edns_lame_known</dfn>;</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td>	<i class="doc">/** is the host lame (does not serve the zone authoritatively),</i></td></tr>
+<tr><th id="92">92</th><td><i class="doc">	 * or is the host dnssec lame (does not serve DNSSEC data) */</i></td></tr>
+<tr><th id="93">93</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::isdnsseclame" title='infra_data::isdnsseclame' data-ref="infra_data::isdnsseclame" data-ref-filename="infra_data..isdnsseclame">isdnsseclame</dfn>;</td></tr>
+<tr><th id="94">94</th><td>	<i class="doc">/** is the host recursion lame (not AA, but RA) */</i></td></tr>
+<tr><th id="95">95</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::rec_lame" title='infra_data::rec_lame' data-ref="infra_data::rec_lame" data-ref-filename="infra_data..rec_lame">rec_lame</dfn>;</td></tr>
+<tr><th id="96">96</th><td>	<i class="doc">/** the host is lame (not authoritative) for A records */</i></td></tr>
+<tr><th id="97">97</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::lame_type_A" title='infra_data::lame_type_A' data-ref="infra_data::lame_type_A" data-ref-filename="infra_data..lame_type_A">lame_type_A</dfn>;</td></tr>
+<tr><th id="98">98</th><td>	<i class="doc">/** the host is lame (not authoritative) for other query types */</i></td></tr>
+<tr><th id="99">99</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::lame_other" title='infra_data::lame_other' data-ref="infra_data::lame_other" data-ref-filename="infra_data..lame_other">lame_other</dfn>;</td></tr>
+<tr><th id="100">100</th><td></td></tr>
+<tr><th id="101">101</th><td>	<i class="doc">/** timeouts counter for type A */</i></td></tr>
+<tr><th id="102">102</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::timeout_A" title='infra_data::timeout_A' data-ref="infra_data::timeout_A" data-ref-filename="infra_data..timeout_A">timeout_A</dfn>;</td></tr>
+<tr><th id="103">103</th><td>	<i class="doc">/** timeouts counter for type AAAA */</i></td></tr>
+<tr><th id="104">104</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::timeout_AAAA" title='infra_data::timeout_AAAA' data-ref="infra_data::timeout_AAAA" data-ref-filename="infra_data..timeout_AAAA">timeout_AAAA</dfn>;</td></tr>
+<tr><th id="105">105</th><td>	<i class="doc">/** timeouts counter for others */</i></td></tr>
+<tr><th id="106">106</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="infra_data::timeout_other" title='infra_data::timeout_other' data-ref="infra_data::timeout_other" data-ref-filename="infra_data..timeout_other">timeout_other</dfn>;</td></tr>
+<tr><th id="107">107</th><td>};</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="110">110</th><td><i class="doc"> * Infra cache </i></td></tr>
+<tr><th id="111">111</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="112">112</th><td><b>struct</b> <dfn class="type def" id="infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</dfn> {</td></tr>
+<tr><th id="113">113</th><td>	<i class="doc">/** The hash table with hosts */</i></td></tr>
+<tr><th id="114">114</th><td>	<b>struct</b> <a class="type" href="../../util/storage/slabhash.h.html#slabhash" title='slabhash' data-ref="slabhash" data-ref-filename="slabhash">slabhash</a>* <dfn class="decl field" id="infra_cache::hosts" title='infra_cache::hosts' data-ref="infra_cache::hosts" data-ref-filename="infra_cache..hosts">hosts</dfn>;</td></tr>
+<tr><th id="115">115</th><td>	<i class="doc">/** TTL value for host information, in seconds */</i></td></tr>
+<tr><th id="116">116</th><td>	<em>int</em> <dfn class="decl field" id="infra_cache::host_ttl" title='infra_cache::host_ttl' data-ref="infra_cache::host_ttl" data-ref-filename="infra_cache..host_ttl">host_ttl</dfn>;</td></tr>
+<tr><th id="117">117</th><td>	<i class="doc">/** hash table with query rates per name: rate_key, rate_data */</i></td></tr>
+<tr><th id="118">118</th><td>	<b>struct</b> <a class="type" href="../../util/storage/slabhash.h.html#slabhash" title='slabhash' data-ref="slabhash" data-ref-filename="slabhash">slabhash</a>* <dfn class="decl field" id="infra_cache::domain_rates" title='infra_cache::domain_rates' data-ref="infra_cache::domain_rates" data-ref-filename="infra_cache..domain_rates">domain_rates</dfn>;</td></tr>
+<tr><th id="119">119</th><td>	<i class="doc">/** ratelimit settings for domains, struct domain_limit_data */</i></td></tr>
+<tr><th id="120">120</th><td>	<a class="typedef" href="../../util/rbtree.h.html#rbtree_type" title='rbtree_type' data-type='struct rbtree_type' data-ref="rbtree_type" data-ref-filename="rbtree_type">rbtree_type</a> <dfn class="decl field" id="infra_cache::domain_limits" title='infra_cache::domain_limits' data-ref="infra_cache::domain_limits" data-ref-filename="infra_cache..domain_limits">domain_limits</dfn>;</td></tr>
+<tr><th id="121">121</th><td>	<i class="doc">/** hash table with query rates per client ip: ip_rate_key, ip_rate_data */</i></td></tr>
+<tr><th id="122">122</th><td>	<b>struct</b> <a class="type" href="../../util/storage/slabhash.h.html#slabhash" title='slabhash' data-ref="slabhash" data-ref-filename="slabhash">slabhash</a>* <dfn class="decl field" id="infra_cache::client_ip_rates" title='infra_cache::client_ip_rates' data-ref="infra_cache::client_ip_rates" data-ref-filename="infra_cache..client_ip_rates">client_ip_rates</dfn>;</td></tr>
+<tr><th id="123">123</th><td>};</td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td><i class="doc">/** ratelimit, unless overridden by domain_limits, 0 is off */</i></td></tr>
+<tr><th id="126">126</th><td><b>extern</b> <em>int</em> <dfn class="decl" id="infra_dp_ratelimit" title='infra_dp_ratelimit' data-ref="infra_dp_ratelimit" data-ref-filename="infra_dp_ratelimit">infra_dp_ratelimit</dfn>;</td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="129">129</th><td><i class="doc"> * ratelimit settings for domains</i></td></tr>
+<tr><th id="130">130</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="131">131</th><td><b>struct</b> <dfn class="type def" id="domain_limit_data" title='domain_limit_data' data-ref="domain_limit_data" data-ref-filename="domain_limit_data">domain_limit_data</dfn> {</td></tr>
+<tr><th id="132">132</th><td>	<i class="doc">/** key for rbtree, must be first in struct, name of domain */</i></td></tr>
+<tr><th id="133">133</th><td>	<b>struct</b> <a class="type" href="../../util/storage/dnstree.h.html#name_tree_node" title='name_tree_node' data-ref="name_tree_node" data-ref-filename="name_tree_node">name_tree_node</a> <dfn class="decl field" id="domain_limit_data::node" title='domain_limit_data::node' data-ref="domain_limit_data::node" data-ref-filename="domain_limit_data..node">node</dfn>;</td></tr>
+<tr><th id="134">134</th><td>	<i class="doc">/** ratelimit for exact match with this name, -1 if not set */</i></td></tr>
+<tr><th id="135">135</th><td>	<em>int</em> <dfn class="decl field" id="domain_limit_data::lim" title='domain_limit_data::lim' data-ref="domain_limit_data::lim" data-ref-filename="domain_limit_data..lim">lim</dfn>;</td></tr>
+<tr><th id="136">136</th><td>	<i class="doc">/** ratelimit for names below this name, -1 if not set */</i></td></tr>
+<tr><th id="137">137</th><td>	<em>int</em> <dfn class="decl field" id="domain_limit_data::below" title='domain_limit_data::below' data-ref="domain_limit_data::below" data-ref-filename="domain_limit_data..below">below</dfn>;</td></tr>
+<tr><th id="138">138</th><td>};</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="141">141</th><td><i class="doc"> * key for ratelimit lookups, a domain name</i></td></tr>
+<tr><th id="142">142</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="143">143</th><td><b>struct</b> <dfn class="type def" id="rate_key" title='rate_key' data-ref="rate_key" data-ref-filename="rate_key">rate_key</dfn> {</td></tr>
+<tr><th id="144">144</th><td>	<i class="doc">/** lruhash key entry */</i></td></tr>
+<tr><th id="145">145</th><td>	<b>struct</b> <a class="type" href="../../util/storage/lruhash.h.html#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a> <dfn class="decl field" id="rate_key::entry" title='rate_key::entry' data-ref="rate_key::entry" data-ref-filename="rate_key..entry">entry</dfn>;</td></tr>
+<tr><th id="146">146</th><td>	<i class="doc">/** domain name in uncompressed wireformat */</i></td></tr>
+<tr><th id="147">147</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="decl field" id="rate_key::name" title='rate_key::name' data-ref="rate_key::name" data-ref-filename="rate_key..name">name</dfn>;</td></tr>
+<tr><th id="148">148</th><td>	<i class="doc">/** length of name */</i></td></tr>
+<tr><th id="149">149</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="rate_key::namelen" title='rate_key::namelen' data-ref="rate_key::namelen" data-ref-filename="rate_key..namelen">namelen</dfn>;</td></tr>
+<tr><th id="150">150</th><td>};</td></tr>
+<tr><th id="151">151</th><td></td></tr>
+<tr><th id="152">152</th><td><i class="doc">/** ip ratelimit, 0 is off */</i></td></tr>
+<tr><th id="153">153</th><td><b>extern</b> <em>int</em> <dfn class="decl" id="infra_ip_ratelimit" title='infra_ip_ratelimit' data-ref="infra_ip_ratelimit" data-ref-filename="infra_ip_ratelimit">infra_ip_ratelimit</dfn>;</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="156">156</th><td><i class="doc"> * key for ip_ratelimit lookups, a source IP.</i></td></tr>
+<tr><th id="157">157</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="158">158</th><td><b>struct</b> <dfn class="type def" id="ip_rate_key" title='ip_rate_key' data-ref="ip_rate_key" data-ref-filename="ip_rate_key">ip_rate_key</dfn> {</td></tr>
+<tr><th id="159">159</th><td>	<i class="doc">/** lruhash key entry */</i></td></tr>
+<tr><th id="160">160</th><td>	<b>struct</b> <a class="type" href="../../util/storage/lruhash.h.html#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a> <dfn class="decl field" id="ip_rate_key::entry" title='ip_rate_key::entry' data-ref="ip_rate_key::entry" data-ref-filename="ip_rate_key..entry">entry</dfn>;</td></tr>
+<tr><th id="161">161</th><td>	<i class="doc">/** client ip information */</i></td></tr>
+<tr><th id="162">162</th><td>	<b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a> <dfn class="decl field" id="ip_rate_key::addr" title='ip_rate_key::addr' data-ref="ip_rate_key::addr" data-ref-filename="ip_rate_key..addr">addr</dfn>;</td></tr>
+<tr><th id="163">163</th><td>	<i class="doc">/** length of address */</i></td></tr>
+<tr><th id="164">164</th><td>	<a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="decl field" id="ip_rate_key::addrlen" title='ip_rate_key::addrlen' data-ref="ip_rate_key::addrlen" data-ref-filename="ip_rate_key..addrlen">addrlen</dfn>;</td></tr>
+<tr><th id="165">165</th><td>};</td></tr>
+<tr><th id="166">166</th><td></td></tr>
+<tr><th id="167">167</th><td><i class="doc">/** number of seconds to track qps rate */</i></td></tr>
+<tr><th id="168">168</th><td><u>#define <dfn class="macro" id="_M/RATE_WINDOW" data-ref="_M/RATE_WINDOW">RATE_WINDOW</dfn> 2</u></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="171">171</th><td><i class="doc"> * Data for ratelimits per domain name</i></td></tr>
+<tr><th id="172">172</th><td><i class="doc"> * It is incremented when a non-cache-lookup happens for that domain name.</i></td></tr>
+<tr><th id="173">173</th><td><i class="doc"> * The name is the delegation point we have for the name.</i></td></tr>
+<tr><th id="174">174</th><td><i class="doc"> * If a new delegation point is found (a referral reply), the previous</i></td></tr>
+<tr><th id="175">175</th><td><i class="doc"> * delegation point is decremented, and the new one is charged with the query.</i></td></tr>
+<tr><th id="176">176</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="177">177</th><td><b>struct</b> <dfn class="type def" id="rate_data" title='rate_data' data-ref="rate_data" data-ref-filename="rate_data">rate_data</dfn> {</td></tr>
+<tr><th id="178">178</th><td>	<i class="doc">/** queries counted, for that second. 0 if not in use. */</i></td></tr>
+<tr><th id="179">179</th><td>	<em>int</em> <dfn class="decl field" id="rate_data::qps" title='rate_data::qps' data-ref="rate_data::qps" data-ref-filename="rate_data..qps">qps</dfn>[<a class="macro" href="#168" title="2" data-ref="_M/RATE_WINDOW">RATE_WINDOW</a>];</td></tr>
+<tr><th id="180">180</th><td>	<i class="doc">/** what the timestamp is of the qps array members, counter is</i></td></tr>
+<tr><th id="181">181</th><td><i class="doc">	 * valid for that timestamp.  Usually now and now-1. */</i></td></tr>
+<tr><th id="182">182</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="decl field" id="rate_data::timestamp" title='rate_data::timestamp' data-ref="rate_data::timestamp" data-ref-filename="rate_data..timestamp">timestamp</dfn>[<a class="macro" href="#168" title="2" data-ref="_M/RATE_WINDOW">RATE_WINDOW</a>];</td></tr>
+<tr><th id="183">183</th><td>};</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td><u>#define <dfn class="macro" id="_M/ip_rate_data" data-ref="_M/ip_rate_data">ip_rate_data</dfn> rate_data</u></td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td><i class="doc">/** infra host cache default hash lookup size */</i></td></tr>
+<tr><th id="188">188</th><td><u>#define <dfn class="macro" id="_M/INFRA_HOST_STARTSIZE" data-ref="_M/INFRA_HOST_STARTSIZE">INFRA_HOST_STARTSIZE</dfn> 32</u></td></tr>
+<tr><th id="189">189</th><td><i class="doc">/** bytes per zonename reserved in the hostcache, dnamelen(zonename.com.) */</i></td></tr>
+<tr><th id="190">190</th><td><u>#define <dfn class="macro" id="_M/INFRA_BYTES_NAME" data-ref="_M/INFRA_BYTES_NAME">INFRA_BYTES_NAME</dfn> 14</u></td></tr>
+<tr><th id="191">191</th><td></td></tr>
+<tr><th id="192">192</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="193">193</th><td><i class="doc"> * Create infra cache.</i></td></tr>
+<tr><th id="194">194</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cfg:</span> config parameters or NULL for defaults.</i></td></tr>
+<tr><th id="195">195</th><td><i class="doc"> * <span class="command">@return</span>: new infra cache, or NULL.</i></td></tr>
+<tr><th id="196">196</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="197">197</th><td><b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="decl fn" id="infra_create" title='infra_create' data-ref="infra_create" data-ref-filename="infra_create">infra_create</dfn>(<b>struct</b> <a class="type" href="../../util/config_file.h.html#config_file" title='config_file' data-ref="config_file" data-ref-filename="config_file">config_file</a>* <dfn class="local col2 decl" id="92cfg" title='cfg' data-type='struct config_file *' data-ref="92cfg" data-ref-filename="92cfg">cfg</dfn>);</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="200">200</th><td><i class="doc"> * Delete infra cache.</i></td></tr>
+<tr><th id="201">201</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache to delete.</i></td></tr>
+<tr><th id="202">202</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="203">203</th><td><em>void</em> <dfn class="decl fn" id="infra_delete" title='infra_delete' data-ref="infra_delete" data-ref-filename="infra_delete">infra_delete</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col3 decl" id="93infra" title='infra' data-type='struct infra_cache *' data-ref="93infra" data-ref-filename="93infra">infra</dfn>);</td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="206">206</th><td><i class="doc"> * Adjust infra cache to use updated configuration settings.</i></td></tr>
+<tr><th id="207">207</th><td><i class="doc"> * This may clean the cache. Operates a bit like realloc.</i></td></tr>
+<tr><th id="208">208</th><td><i class="doc"> * There may be no threading or use by other threads.</i></td></tr>
+<tr><th id="209">209</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> existing cache. If NULL a new infra cache is returned.</i></td></tr>
+<tr><th id="210">210</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cfg:</span> config options.</i></td></tr>
+<tr><th id="211">211</th><td><i class="doc"> * <span class="command">@return</span> the new infra cache pointer or NULL on error.</i></td></tr>
+<tr><th id="212">212</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="213">213</th><td><b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="decl fn" id="infra_adjust" title='infra_adjust' data-ref="infra_adjust" data-ref-filename="infra_adjust">infra_adjust</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col4 decl" id="94infra" title='infra' data-type='struct infra_cache *' data-ref="94infra" data-ref-filename="94infra">infra</dfn>, </td></tr>
+<tr><th id="214">214</th><td>	<b>struct</b> <a class="type" href="../../util/config_file.h.html#config_file" title='config_file' data-ref="config_file" data-ref-filename="config_file">config_file</a>* <dfn class="local col5 decl" id="95cfg" title='cfg' data-type='struct config_file *' data-ref="95cfg" data-ref-filename="95cfg">cfg</dfn>);</td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="217">217</th><td><i class="doc"> * Plain find infra data function (used by the the other functions)</i></td></tr>
+<tr><th id="218">218</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="219">219</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="220">220</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="221">221</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> domain name of zone.</i></td></tr>
+<tr><th id="222">222</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> length of domain name.</i></td></tr>
+<tr><th id="223">223</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">wr:</span> if true, writelock, else readlock.</i></td></tr>
+<tr><th id="224">224</th><td><i class="doc"> * <span class="command">@return</span> the entry, could be expired (this is not checked) or NULL.</i></td></tr>
+<tr><th id="225">225</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="226">226</th><td><b>struct</b> <a class="type" href="../../util/storage/lruhash.h.html#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl fn" id="infra_lookup_nottl" title='infra_lookup_nottl' data-ref="infra_lookup_nottl" data-ref-filename="infra_lookup_nottl">infra_lookup_nottl</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col6 decl" id="96infra" title='infra' data-type='struct infra_cache *' data-ref="96infra" data-ref-filename="96infra">infra</dfn>,</td></tr>
+<tr><th id="227">227</th><td>	<b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col7 decl" id="97addr" title='addr' data-type='struct sockaddr_storage *' data-ref="97addr" data-ref-filename="97addr">addr</dfn>, <a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col8 decl" id="98addrlen" title='addrlen' data-type='__socklen_t' data-ref="98addrlen" data-ref-filename="98addrlen">addrlen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col9 decl" id="99name" title='name' data-type='uint8_t *' data-ref="99name" data-ref-filename="99name">name</dfn>,</td></tr>
+<tr><th id="228">228</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="100namelen" title='namelen' data-type='size_t' data-ref="100namelen" data-ref-filename="100namelen">namelen</dfn>, <em>int</em> <dfn class="local col1 decl" id="101wr" title='wr' data-type='int' data-ref="101wr" data-ref-filename="101wr">wr</dfn>);</td></tr>
+<tr><th id="229">229</th><td></td></tr>
+<tr><th id="230">230</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="231">231</th><td><i class="doc"> * Find host information to send a packet. Creates new entry if not found.</i></td></tr>
+<tr><th id="232">232</th><td><i class="doc"> * Lameness is empty. EDNS is 0 (try with first), and rtt is returned for </i></td></tr>
+<tr><th id="233">233</th><td><i class="doc"> * the first message to it.</i></td></tr>
+<tr><th id="234">234</th><td><i class="doc"> * Use this to send a packet only, because it also locks out others when</i></td></tr>
+<tr><th id="235">235</th><td><i class="doc"> * probing is restricted.</i></td></tr>
+<tr><th id="236">236</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="237">237</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="238">238</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="239">239</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> domain name of zone.</i></td></tr>
+<tr><th id="240">240</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> length of domain name.</i></td></tr>
+<tr><th id="241">241</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="242">242</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns_vs:</span> edns version it supports, is returned.</i></td></tr>
+<tr><th id="243">243</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns_lame_known:</span> if EDNS lame (EDNS is dropped in transit) has</i></td></tr>
+<tr><th id="244">244</th><td><i class="doc"> * 	already been probed, is returned.</i></td></tr>
+<tr><th id="245">245</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">to:</span> timeout to use, is returned.</i></td></tr>
+<tr><th id="246">246</th><td><i class="doc"> * <span class="command">@return</span>: 0 on error.</i></td></tr>
+<tr><th id="247">247</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="248">248</th><td><em>int</em> <dfn class="decl fn" id="infra_host" title='infra_host' data-ref="infra_host" data-ref-filename="infra_host">infra_host</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col2 decl" id="102infra" title='infra' data-type='struct infra_cache *' data-ref="102infra" data-ref-filename="102infra">infra</dfn>, <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col3 decl" id="103addr" title='addr' data-type='struct sockaddr_storage *' data-ref="103addr" data-ref-filename="103addr">addr</dfn>, </td></tr>
+<tr><th id="249">249</th><td>	<a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col4 decl" id="104addrlen" title='addrlen' data-type='__socklen_t' data-ref="104addrlen" data-ref-filename="104addrlen">addrlen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col5 decl" id="105name" title='name' data-type='uint8_t *' data-ref="105name" data-ref-filename="105name">name</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="106namelen" title='namelen' data-type='size_t' data-ref="106namelen" data-ref-filename="106namelen">namelen</dfn>,</td></tr>
+<tr><th id="250">250</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col7 decl" id="107timenow" title='timenow' data-type='time_t' data-ref="107timenow" data-ref-filename="107timenow">timenow</dfn>, <em>int</em>* <dfn class="local col8 decl" id="108edns_vs" title='edns_vs' data-type='int *' data-ref="108edns_vs" data-ref-filename="108edns_vs">edns_vs</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col9 decl" id="109edns_lame_known" title='edns_lame_known' data-type='uint8_t *' data-ref="109edns_lame_known" data-ref-filename="109edns_lame_known">edns_lame_known</dfn>, <em>int</em>* <dfn class="local col0 decl" id="110to" title='to' data-type='int *' data-ref="110to" data-ref-filename="110to">to</dfn>);</td></tr>
+<tr><th id="251">251</th><td></td></tr>
+<tr><th id="252">252</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="253">253</th><td><i class="doc"> * Set a host to be lame for the given zone.</i></td></tr>
+<tr><th id="254">254</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="255">255</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="256">256</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="257">257</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> domain name of zone apex.</i></td></tr>
+<tr><th id="258">258</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> length of domain name.</i></td></tr>
+<tr><th id="259">259</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="260">260</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">dnsseclame:</span> if true the host is set dnssec lame.</i></td></tr>
+<tr><th id="261">261</th><td><i class="doc"> *	if false, the host is marked lame (not serving the zone).</i></td></tr>
+<tr><th id="262">262</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">reclame:</span> if true host is a recursor not AA server.</i></td></tr>
+<tr><th id="263">263</th><td><i class="doc"> *      if false, dnsseclame or marked lame.</i></td></tr>
+<tr><th id="264">264</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qtype:</span> the query type for which it is lame.</i></td></tr>
+<tr><th id="265">265</th><td><i class="doc"> * <span class="command">@return</span>: 0 on error.</i></td></tr>
+<tr><th id="266">266</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="267">267</th><td><em>int</em> <dfn class="decl fn" id="infra_set_lame" title='infra_set_lame' data-ref="infra_set_lame" data-ref-filename="infra_set_lame">infra_set_lame</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col1 decl" id="111infra" title='infra' data-type='struct infra_cache *' data-ref="111infra" data-ref-filename="111infra">infra</dfn>,</td></tr>
+<tr><th id="268">268</th><td>        <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col2 decl" id="112addr" title='addr' data-type='struct sockaddr_storage *' data-ref="112addr" data-ref-filename="112addr">addr</dfn>, <a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col3 decl" id="113addrlen" title='addrlen' data-type='__socklen_t' data-ref="113addrlen" data-ref-filename="113addrlen">addrlen</dfn>,</td></tr>
+<tr><th id="269">269</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col4 decl" id="114name" title='name' data-type='uint8_t *' data-ref="114name" data-ref-filename="114name">name</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="115namelen" title='namelen' data-type='size_t' data-ref="115namelen" data-ref-filename="115namelen">namelen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col6 decl" id="116timenow" title='timenow' data-type='time_t' data-ref="116timenow" data-ref-filename="116timenow">timenow</dfn>, <em>int</em> <dfn class="local col7 decl" id="117dnsseclame" title='dnsseclame' data-type='int' data-ref="117dnsseclame" data-ref-filename="117dnsseclame">dnsseclame</dfn>,</td></tr>
+<tr><th id="270">270</th><td>	<em>int</em> <dfn class="local col8 decl" id="118reclame" title='reclame' data-type='int' data-ref="118reclame" data-ref-filename="118reclame">reclame</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col9 decl" id="119qtype" title='qtype' data-type='uint16_t' data-ref="119qtype" data-ref-filename="119qtype">qtype</dfn>);</td></tr>
+<tr><th id="271">271</th><td></td></tr>
+<tr><th id="272">272</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="273">273</th><td><i class="doc"> * Update rtt information for the host.</i></td></tr>
+<tr><th id="274">274</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="275">275</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="276">276</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="277">277</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> zone name</i></td></tr>
+<tr><th id="278">278</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> zone name length</i></td></tr>
+<tr><th id="279">279</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qtype:</span> query type.</i></td></tr>
+<tr><th id="280">280</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">roundtrip:</span> estimate of roundtrip time in milliseconds or -1 for </i></td></tr>
+<tr><th id="281">281</th><td><i class="doc"> * 	timeout.</i></td></tr>
+<tr><th id="282">282</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">orig_rtt:</span> original rtt for the query that timed out (roundtrip==-1).</i></td></tr>
+<tr><th id="283">283</th><td><i class="doc"> * 	ignored if roundtrip != -1.</i></td></tr>
+<tr><th id="284">284</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="285">285</th><td><i class="doc"> * <span class="command">@return</span>: 0 on error. new rto otherwise.</i></td></tr>
+<tr><th id="286">286</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="287">287</th><td><em>int</em> <dfn class="decl fn" id="infra_rtt_update" title='infra_rtt_update' data-ref="infra_rtt_update" data-ref-filename="infra_rtt_update">infra_rtt_update</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col0 decl" id="120infra" title='infra' data-type='struct infra_cache *' data-ref="120infra" data-ref-filename="120infra">infra</dfn>, <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col1 decl" id="121addr" title='addr' data-type='struct sockaddr_storage *' data-ref="121addr" data-ref-filename="121addr">addr</dfn>,</td></tr>
+<tr><th id="288">288</th><td>	<a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col2 decl" id="122addrlen" title='addrlen' data-type='__socklen_t' data-ref="122addrlen" data-ref-filename="122addrlen">addrlen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col3 decl" id="123name" title='name' data-type='uint8_t *' data-ref="123name" data-ref-filename="123name">name</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="124namelen" title='namelen' data-type='size_t' data-ref="124namelen" data-ref-filename="124namelen">namelen</dfn>, <em>int</em> <dfn class="local col5 decl" id="125qtype" title='qtype' data-type='int' data-ref="125qtype" data-ref-filename="125qtype">qtype</dfn>,</td></tr>
+<tr><th id="289">289</th><td>	<em>int</em> <dfn class="local col6 decl" id="126roundtrip" title='roundtrip' data-type='int' data-ref="126roundtrip" data-ref-filename="126roundtrip">roundtrip</dfn>, <em>int</em> <dfn class="local col7 decl" id="127orig_rtt" title='orig_rtt' data-type='int' data-ref="127orig_rtt" data-ref-filename="127orig_rtt">orig_rtt</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col8 decl" id="128timenow" title='timenow' data-type='time_t' data-ref="128timenow" data-ref-filename="128timenow">timenow</dfn>);</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="292">292</th><td><i class="doc"> * Update information for the host, store that a TCP transaction works.</i></td></tr>
+<tr><th id="293">293</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="294">294</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="295">295</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="296">296</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> name of zone</i></td></tr>
+<tr><th id="297">297</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> length of name</i></td></tr>
+<tr><th id="298">298</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="299">299</th><td><em>void</em> <dfn class="decl fn" id="infra_update_tcp_works" title='infra_update_tcp_works' data-ref="infra_update_tcp_works" data-ref-filename="infra_update_tcp_works">infra_update_tcp_works</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col9 decl" id="129infra" title='infra' data-type='struct infra_cache *' data-ref="129infra" data-ref-filename="129infra">infra</dfn>,</td></tr>
+<tr><th id="300">300</th><td>        <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col0 decl" id="130addr" title='addr' data-type='struct sockaddr_storage *' data-ref="130addr" data-ref-filename="130addr">addr</dfn>, <a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col1 decl" id="131addrlen" title='addrlen' data-type='__socklen_t' data-ref="131addrlen" data-ref-filename="131addrlen">addrlen</dfn>,</td></tr>
+<tr><th id="301">301</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col2 decl" id="132name" title='name' data-type='uint8_t *' data-ref="132name" data-ref-filename="132name">name</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="133namelen" title='namelen' data-type='size_t' data-ref="133namelen" data-ref-filename="133namelen">namelen</dfn>);</td></tr>
+<tr><th id="302">302</th><td></td></tr>
+<tr><th id="303">303</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="304">304</th><td><i class="doc"> * Update edns information for the host.</i></td></tr>
+<tr><th id="305">305</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="306">306</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="307">307</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="308">308</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> name of zone</i></td></tr>
+<tr><th id="309">309</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> length of name</i></td></tr>
+<tr><th id="310">310</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns_version:</span> the version that it publishes.</i></td></tr>
+<tr><th id="311">311</th><td><i class="doc"> * 	If it is known to support EDNS then no-EDNS is not stored over it.</i></td></tr>
+<tr><th id="312">312</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="313">313</th><td><i class="doc"> * <span class="command">@return</span>: 0 on error.</i></td></tr>
+<tr><th id="314">314</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="315">315</th><td><em>int</em> <dfn class="decl fn" id="infra_edns_update" title='infra_edns_update' data-ref="infra_edns_update" data-ref-filename="infra_edns_update">infra_edns_update</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col4 decl" id="134infra" title='infra' data-type='struct infra_cache *' data-ref="134infra" data-ref-filename="134infra">infra</dfn>,</td></tr>
+<tr><th id="316">316</th><td>        <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col5 decl" id="135addr" title='addr' data-type='struct sockaddr_storage *' data-ref="135addr" data-ref-filename="135addr">addr</dfn>, <a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col6 decl" id="136addrlen" title='addrlen' data-type='__socklen_t' data-ref="136addrlen" data-ref-filename="136addrlen">addrlen</dfn>,</td></tr>
+<tr><th id="317">317</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col7 decl" id="137name" title='name' data-type='uint8_t *' data-ref="137name" data-ref-filename="137name">name</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="138namelen" title='namelen' data-type='size_t' data-ref="138namelen" data-ref-filename="138namelen">namelen</dfn>, <em>int</em> <dfn class="local col9 decl" id="139edns_version" title='edns_version' data-type='int' data-ref="139edns_version" data-ref-filename="139edns_version">edns_version</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col0 decl" id="140timenow" title='timenow' data-type='time_t' data-ref="140timenow" data-ref-filename="140timenow">timenow</dfn>);</td></tr>
+<tr><th id="318">318</th><td></td></tr>
+<tr><th id="319">319</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="320">320</th><td><i class="doc"> * Get Lameness information and average RTT if host is in the cache.</i></td></tr>
+<tr><th id="321">321</th><td><i class="doc"> * This information is to be used for server selection.</i></td></tr>
+<tr><th id="322">322</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="323">323</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="324">324</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="325">325</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> zone name.</i></td></tr>
+<tr><th id="326">326</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> zone name length.</i></td></tr>
+<tr><th id="327">327</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qtype:</span> the query to be made.</i></td></tr>
+<tr><th id="328">328</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">lame:</span> if function returns true, this returns lameness of the zone.</i></td></tr>
+<tr><th id="329">329</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">dnsseclame:</span> if function returns true, this returns if the zone</i></td></tr>
+<tr><th id="330">330</th><td><i class="doc"> *	is dnssec-lame.</i></td></tr>
+<tr><th id="331">331</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">reclame:</span> if function returns true, this is if it is recursion lame.</i></td></tr>
+<tr><th id="332">332</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">rtt:</span> if function returns true, this returns avg rtt of the server.</i></td></tr>
+<tr><th id="333">333</th><td><i class="doc"> * 	The rtt value is unclamped and reflects recent timeouts.</i></td></tr>
+<tr><th id="334">334</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="335">335</th><td><i class="doc"> * <span class="command">@return</span> if found in cache, or false if not (or TTL bad).</i></td></tr>
+<tr><th id="336">336</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="337">337</th><td><em>int</em> <dfn class="decl fn" id="infra_get_lame_rtt" title='infra_get_lame_rtt' data-ref="infra_get_lame_rtt" data-ref-filename="infra_get_lame_rtt">infra_get_lame_rtt</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col1 decl" id="141infra" title='infra' data-type='struct infra_cache *' data-ref="141infra" data-ref-filename="141infra">infra</dfn>,</td></tr>
+<tr><th id="338">338</th><td>        <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col2 decl" id="142addr" title='addr' data-type='struct sockaddr_storage *' data-ref="142addr" data-ref-filename="142addr">addr</dfn>, <a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col3 decl" id="143addrlen" title='addrlen' data-type='__socklen_t' data-ref="143addrlen" data-ref-filename="143addrlen">addrlen</dfn>, </td></tr>
+<tr><th id="339">339</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col4 decl" id="144name" title='name' data-type='uint8_t *' data-ref="144name" data-ref-filename="144name">name</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="145namelen" title='namelen' data-type='size_t' data-ref="145namelen" data-ref-filename="145namelen">namelen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col6 decl" id="146qtype" title='qtype' data-type='uint16_t' data-ref="146qtype" data-ref-filename="146qtype">qtype</dfn>, </td></tr>
+<tr><th id="340">340</th><td>	<em>int</em>* <dfn class="local col7 decl" id="147lame" title='lame' data-type='int *' data-ref="147lame" data-ref-filename="147lame">lame</dfn>, <em>int</em>* <dfn class="local col8 decl" id="148dnsseclame" title='dnsseclame' data-type='int *' data-ref="148dnsseclame" data-ref-filename="148dnsseclame">dnsseclame</dfn>, <em>int</em>* <dfn class="local col9 decl" id="149reclame" title='reclame' data-type='int *' data-ref="149reclame" data-ref-filename="149reclame">reclame</dfn>, <em>int</em>* <dfn class="local col0 decl" id="150rtt" title='rtt' data-type='int *' data-ref="150rtt" data-ref-filename="150rtt">rtt</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col1 decl" id="151timenow" title='timenow' data-type='time_t' data-ref="151timenow" data-ref-filename="151timenow">timenow</dfn>);</td></tr>
+<tr><th id="341">341</th><td></td></tr>
+<tr><th id="342">342</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="343">343</th><td><i class="doc"> * Get additional (debug) info on timing.</i></td></tr>
+<tr><th id="344">344</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infra cache.</i></td></tr>
+<tr><th id="345">345</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addr:</span> host address.</i></td></tr>
+<tr><th id="346">346</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">addrlen:</span> length of addr.</i></td></tr>
+<tr><th id="347">347</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> zone name</i></td></tr>
+<tr><th id="348">348</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> zone name length</i></td></tr>
+<tr><th id="349">349</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">rtt:</span> the rtt_info is copied into here (caller alloced return struct).</i></td></tr>
+<tr><th id="350">350</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">delay:</span> probe delay (if any).</i></td></tr>
+<tr><th id="351">351</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="352">352</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">tA:</span> timeout counter on type A.</i></td></tr>
+<tr><th id="353">353</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">tAAAA:</span> timeout counter on type AAAA.</i></td></tr>
+<tr><th id="354">354</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">tother:</span> timeout counter on type other.</i></td></tr>
+<tr><th id="355">355</th><td><i class="doc"> * <span class="command">@return</span> TTL the infra host element is valid for. If -1: not found in cache.</i></td></tr>
+<tr><th id="356">356</th><td><i class="doc"> *	TTL -2: found but expired.</i></td></tr>
+<tr><th id="357">357</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="358">358</th><td><em>long</em> <em>long</em> <dfn class="decl fn" id="infra_get_host_rto" title='infra_get_host_rto' data-ref="infra_get_host_rto" data-ref-filename="infra_get_host_rto">infra_get_host_rto</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col2 decl" id="152infra" title='infra' data-type='struct infra_cache *' data-ref="152infra" data-ref-filename="152infra">infra</dfn>,</td></tr>
+<tr><th id="359">359</th><td>        <b>struct</b> <a class="type" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#sockaddr_storage" title='sockaddr_storage' data-ref="sockaddr_storage" data-ref-filename="sockaddr_storage">sockaddr_storage</a>* <dfn class="local col3 decl" id="153addr" title='addr' data-type='struct sockaddr_storage *' data-ref="153addr" data-ref-filename="153addr">addr</dfn>, <a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/socket.h.html#84" title="__socklen_t" data-ref="_M/socklen_t">socklen_t</a> <dfn class="local col4 decl" id="154addrlen" title='addrlen' data-type='__socklen_t' data-ref="154addrlen" data-ref-filename="154addrlen">addrlen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col5 decl" id="155name" title='name' data-type='uint8_t *' data-ref="155name" data-ref-filename="155name">name</dfn>,</td></tr>
+<tr><th id="360">360</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="156namelen" title='namelen' data-type='size_t' data-ref="156namelen" data-ref-filename="156namelen">namelen</dfn>, <b>struct</b> <a class="type" href="../../util/rtt.h.html#rtt_info" title='rtt_info' data-ref="rtt_info" data-ref-filename="rtt_info">rtt_info</a>* <dfn class="local col7 decl" id="157rtt" title='rtt' data-type='struct rtt_info *' data-ref="157rtt" data-ref-filename="157rtt">rtt</dfn>, <em>int</em>* <dfn class="local col8 decl" id="158delay" title='delay' data-type='int *' data-ref="158delay" data-ref-filename="158delay">delay</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col9 decl" id="159timenow" title='timenow' data-type='time_t' data-ref="159timenow" data-ref-filename="159timenow">timenow</dfn>,</td></tr>
+<tr><th id="361">361</th><td>	<em>int</em>* <dfn class="local col0 decl" id="160tA" title='tA' data-type='int *' data-ref="160tA" data-ref-filename="160tA">tA</dfn>, <em>int</em>* <dfn class="local col1 decl" id="161tAAAA" title='tAAAA' data-type='int *' data-ref="161tAAAA" data-ref-filename="161tAAAA">tAAAA</dfn>, <em>int</em>* <dfn class="local col2 decl" id="162tother" title='tother' data-type='int *' data-ref="162tother" data-ref-filename="162tother">tother</dfn>);</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="364">364</th><td><i class="doc"> * Increment the query rate counter for a delegation point.</i></td></tr>
+<tr><th id="365">365</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infra cache.</i></td></tr>
+<tr><th id="366">366</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> zone name</i></td></tr>
+<tr><th id="367">367</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> zone name length</i></td></tr>
+<tr><th id="368">368</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="369">369</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> for logging, query name.</i></td></tr>
+<tr><th id="370">370</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">replylist:</span> for logging, querier's address (if any).</i></td></tr>
+<tr><th id="371">371</th><td><i class="doc"> * <span class="command">@return</span> 1 if it could be incremented. 0 if the increment overshot the</i></td></tr>
+<tr><th id="372">372</th><td><i class="doc"> * ratelimit or if in the previous second the ratelimit was exceeded.</i></td></tr>
+<tr><th id="373">373</th><td><i class="doc"> * Failures like alloc failures are not returned (probably as 1).</i></td></tr>
+<tr><th id="374">374</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="375">375</th><td><em>int</em> <dfn class="decl fn" id="infra_ratelimit_inc" title='infra_ratelimit_inc' data-ref="infra_ratelimit_inc" data-ref-filename="infra_ratelimit_inc">infra_ratelimit_inc</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col3 decl" id="163infra" title='infra' data-type='struct infra_cache *' data-ref="163infra" data-ref-filename="163infra">infra</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col4 decl" id="164name" title='name' data-type='uint8_t *' data-ref="164name" data-ref-filename="164name">name</dfn>,</td></tr>
+<tr><th id="376">376</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="165namelen" title='namelen' data-type='size_t' data-ref="165namelen" data-ref-filename="165namelen">namelen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col6 decl" id="166timenow" title='timenow' data-type='time_t' data-ref="166timenow" data-ref-filename="166timenow">timenow</dfn>, <b>struct</b> <a class="type" href="../../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col7 decl" id="167qinfo" title='qinfo' data-type='struct query_info *' data-ref="167qinfo" data-ref-filename="167qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="377">377</th><td>	<b>struct</b> <a class="type" href="../../util/netevent.h.html#comm_reply" title='comm_reply' data-ref="comm_reply" data-ref-filename="comm_reply">comm_reply</a>* <dfn class="local col8 decl" id="168replylist" title='replylist' data-type='struct comm_reply *' data-ref="168replylist" data-ref-filename="168replylist">replylist</dfn>);</td></tr>
+<tr><th id="378">378</th><td></td></tr>
+<tr><th id="379">379</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="380">380</th><td><i class="doc"> * Decrement the query rate counter for a delegation point.</i></td></tr>
+<tr><th id="381">381</th><td><i class="doc"> * Because the reply received for the delegation point was pleasant,</i></td></tr>
+<tr><th id="382">382</th><td><i class="doc"> * we do not charge this delegation point with it (i.e. it was a referral).</i></td></tr>
+<tr><th id="383">383</th><td><i class="doc"> * Should call it with same second as when inc() was called.</i></td></tr>
+<tr><th id="384">384</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infra cache.</i></td></tr>
+<tr><th id="385">385</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> zone name</i></td></tr>
+<tr><th id="386">386</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> zone name length</i></td></tr>
+<tr><th id="387">387</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="388">388</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="389">389</th><td><em>void</em> <dfn class="decl fn" id="infra_ratelimit_dec" title='infra_ratelimit_dec' data-ref="infra_ratelimit_dec" data-ref-filename="infra_ratelimit_dec">infra_ratelimit_dec</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col9 decl" id="169infra" title='infra' data-type='struct infra_cache *' data-ref="169infra" data-ref-filename="169infra">infra</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col0 decl" id="170name" title='name' data-type='uint8_t *' data-ref="170name" data-ref-filename="170name">name</dfn>,</td></tr>
+<tr><th id="390">390</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="171namelen" title='namelen' data-type='size_t' data-ref="171namelen" data-ref-filename="171namelen">namelen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col2 decl" id="172timenow" title='timenow' data-type='time_t' data-ref="172timenow" data-ref-filename="172timenow">timenow</dfn>);</td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="393">393</th><td><i class="doc"> * See if the query rate counter for a delegation point is exceeded.</i></td></tr>
+<tr><th id="394">394</th><td><i class="doc"> * So, no queries are going to be allowed.</i></td></tr>
+<tr><th id="395">395</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infra cache.</i></td></tr>
+<tr><th id="396">396</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">name:</span> zone name</i></td></tr>
+<tr><th id="397">397</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">namelen:</span> zone name length</i></td></tr>
+<tr><th id="398">398</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="399">399</th><td><i class="doc"> * <span class="command">@return</span> true if exceeded.</i></td></tr>
+<tr><th id="400">400</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="401">401</th><td><em>int</em> <dfn class="decl fn" id="infra_ratelimit_exceeded" title='infra_ratelimit_exceeded' data-ref="infra_ratelimit_exceeded" data-ref-filename="infra_ratelimit_exceeded">infra_ratelimit_exceeded</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col3 decl" id="173infra" title='infra' data-type='struct infra_cache *' data-ref="173infra" data-ref-filename="173infra">infra</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col4 decl" id="174name" title='name' data-type='uint8_t *' data-ref="174name" data-ref-filename="174name">name</dfn>,</td></tr>
+<tr><th id="402">402</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="175namelen" title='namelen' data-type='size_t' data-ref="175namelen" data-ref-filename="175namelen">namelen</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col6 decl" id="176timenow" title='timenow' data-type='time_t' data-ref="176timenow" data-ref-filename="176timenow">timenow</dfn>);</td></tr>
+<tr><th id="403">403</th><td></td></tr>
+<tr><th id="404">404</th><td><i class="doc">/** find the maximum rate stored, not too old. 0 if no information. */</i></td></tr>
+<tr><th id="405">405</th><td><em>int</em> <dfn class="decl fn" id="infra_rate_max" title='infra_rate_max' data-ref="infra_rate_max" data-ref-filename="infra_rate_max">infra_rate_max</dfn>(<em>void</em>* <dfn class="local col7 decl" id="177data" title='data' data-type='void *' data-ref="177data" data-ref-filename="177data">data</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col8 decl" id="178now" title='now' data-type='time_t' data-ref="178now" data-ref-filename="178now">now</dfn>);</td></tr>
+<tr><th id="406">406</th><td></td></tr>
+<tr><th id="407">407</th><td><i class="doc">/** find the ratelimit in qps for a domain. 0 if no limit for domain. */</i></td></tr>
+<tr><th id="408">408</th><td><em>int</em> <dfn class="decl fn" id="infra_find_ratelimit" title='infra_find_ratelimit' data-ref="infra_find_ratelimit" data-ref-filename="infra_find_ratelimit">infra_find_ratelimit</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col9 decl" id="179infra" title='infra' data-type='struct infra_cache *' data-ref="179infra" data-ref-filename="179infra">infra</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="local col0 decl" id="180name" title='name' data-type='uint8_t *' data-ref="180name" data-ref-filename="180name">name</dfn>,</td></tr>
+<tr><th id="409">409</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="181namelen" title='namelen' data-type='size_t' data-ref="181namelen" data-ref-filename="181namelen">namelen</dfn>);</td></tr>
+<tr><th id="410">410</th><td></td></tr>
+<tr><th id="411">411</th><td><i class="doc">/** Update query ratelimit hash and decide</i></td></tr>
+<tr><th id="412">412</th><td><i class="doc"> *  whether or not a query should be dropped.</i></td></tr>
+<tr><th id="413">413</th><td><i class="doc"> *  <span class="command">@param</span> <span class="arg">infra:</span> infra cache</i></td></tr>
+<tr><th id="414">414</th><td><i class="doc"> *  <span class="command">@param</span> <span class="arg">repinfo:</span> information about client</i></td></tr>
+<tr><th id="415">415</th><td><i class="doc"> *  <span class="command">@param</span> <span class="arg">timenow:</span> what time it is now.</i></td></tr>
+<tr><th id="416">416</th><td><i class="doc"> *  <span class="command">@param</span> <span class="arg">buffer:</span> with query for logging.</i></td></tr>
+<tr><th id="417">417</th><td><i class="doc"> *  <span class="command">@return</span> 1 if it could be incremented. 0 if the increment overshot the</i></td></tr>
+<tr><th id="418">418</th><td><i class="doc"> *  ratelimit and the query should be dropped. */</i></td></tr>
+<tr><th id="419">419</th><td><em>int</em> <dfn class="decl fn" id="infra_ip_ratelimit_inc" title='infra_ip_ratelimit_inc' data-ref="infra_ip_ratelimit_inc" data-ref-filename="infra_ip_ratelimit_inc">infra_ip_ratelimit_inc</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col2 decl" id="182infra" title='infra' data-type='struct infra_cache *' data-ref="182infra" data-ref-filename="182infra">infra</dfn>,</td></tr>
+<tr><th id="420">420</th><td>	<b>struct</b> <a class="type" href="../../util/netevent.h.html#comm_reply" title='comm_reply' data-ref="comm_reply" data-ref-filename="comm_reply">comm_reply</a>* <dfn class="local col3 decl" id="183repinfo" title='repinfo' data-type='struct comm_reply *' data-ref="183repinfo" data-ref-filename="183repinfo">repinfo</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col4 decl" id="184timenow" title='timenow' data-type='time_t' data-ref="184timenow" data-ref-filename="184timenow">timenow</dfn>,</td></tr>
+<tr><th id="421">421</th><td>	<b>struct</b> <a class="type" href="../../sldns/sbuffer.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>* <dfn class="local col5 decl" id="185buffer" title='buffer' data-type='struct sldns_buffer *' data-ref="185buffer" data-ref-filename="185buffer">buffer</dfn>);</td></tr>
+<tr><th id="422">422</th><td></td></tr>
+<tr><th id="423">423</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="424">424</th><td><i class="doc"> * Get memory used by the infra cache.</i></td></tr>
+<tr><th id="425">425</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">infra:</span> infrastructure cache.</i></td></tr>
+<tr><th id="426">426</th><td><i class="doc"> * <span class="command">@return</span> memory in use in bytes.</i></td></tr>
+<tr><th id="427">427</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="428">428</th><td><a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl fn" id="infra_get_mem" title='infra_get_mem' data-ref="infra_get_mem" data-ref-filename="infra_get_mem">infra_get_mem</dfn>(<b>struct</b> <a class="type" href="#infra_cache" title='infra_cache' data-ref="infra_cache" data-ref-filename="infra_cache">infra_cache</a>* <dfn class="local col6 decl" id="186infra" title='infra' data-type='struct infra_cache *' data-ref="186infra" data-ref-filename="186infra">infra</dfn>);</td></tr>
+<tr><th id="429">429</th><td></td></tr>
+<tr><th id="430">430</th><td><i class="doc">/** calculate size for the hashtable, does not count size of lameness,</i></td></tr>
+<tr><th id="431">431</th><td><i class="doc"> * so the hashtable is a fixed number of items */</i></td></tr>
+<tr><th id="432">432</th><td><a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl fn" id="infra_sizefunc" title='infra_sizefunc' data-ref="infra_sizefunc" data-ref-filename="infra_sizefunc">infra_sizefunc</dfn>(<em>void</em>* <dfn class="local col7 decl" id="187k" title='k' data-type='void *' data-ref="187k" data-ref-filename="187k">k</dfn>, <em>void</em>* <dfn class="local col8 decl" id="188d" title='d' data-type='void *' data-ref="188d" data-ref-filename="188d">d</dfn>);</td></tr>
+<tr><th id="433">433</th><td></td></tr>
+<tr><th id="434">434</th><td><i class="doc">/** compare two addresses, returns -1, 0, or +1 */</i></td></tr>
+<tr><th id="435">435</th><td><em>int</em> <dfn class="decl fn" id="infra_compfunc" title='infra_compfunc' data-ref="infra_compfunc" data-ref-filename="infra_compfunc">infra_compfunc</dfn>(<em>void</em>* <dfn class="local col9 decl" id="189key1" title='key1' data-type='void *' data-ref="189key1" data-ref-filename="189key1">key1</dfn>, <em>void</em>* <dfn class="local col0 decl" id="190key2" title='key2' data-type='void *' data-ref="190key2" data-ref-filename="190key2">key2</dfn>);</td></tr>
+<tr><th id="436">436</th><td></td></tr>
+<tr><th id="437">437</th><td><i class="doc">/** delete key, and destroy the lock */</i></td></tr>
+<tr><th id="438">438</th><td><em>void</em> <dfn class="decl fn" id="infra_delkeyfunc" title='infra_delkeyfunc' data-ref="infra_delkeyfunc" data-ref-filename="infra_delkeyfunc">infra_delkeyfunc</dfn>(<em>void</em>* <dfn class="local col1 decl" id="191k" title='k' data-type='void *' data-ref="191k" data-ref-filename="191k">k</dfn>, <em>void</em>* <dfn class="local col2 decl" id="192arg" title='arg' data-type='void *' data-ref="192arg" data-ref-filename="192arg">arg</dfn>);</td></tr>
+<tr><th id="439">439</th><td></td></tr>
+<tr><th id="440">440</th><td><i class="doc">/** delete data and destroy the lameness hashtable */</i></td></tr>
+<tr><th id="441">441</th><td><em>void</em> <dfn class="decl fn" id="infra_deldatafunc" title='infra_deldatafunc' data-ref="infra_deldatafunc" data-ref-filename="infra_deldatafunc">infra_deldatafunc</dfn>(<em>void</em>* <dfn class="local col3 decl" id="193d" title='d' data-type='void *' data-ref="193d" data-ref-filename="193d">d</dfn>, <em>void</em>* <dfn class="local col4 decl" id="194arg" title='arg' data-type='void *' data-ref="194arg" data-ref-filename="194arg">arg</dfn>);</td></tr>
+<tr><th id="442">442</th><td></td></tr>
+<tr><th id="443">443</th><td><i class="doc">/** calculate size for the hashtable */</i></td></tr>
+<tr><th id="444">444</th><td><a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl fn" id="rate_sizefunc" title='rate_sizefunc' data-ref="rate_sizefunc" data-ref-filename="rate_sizefunc">rate_sizefunc</dfn>(<em>void</em>* <dfn class="local col5 decl" id="195k" title='k' data-type='void *' data-ref="195k" data-ref-filename="195k">k</dfn>, <em>void</em>* <dfn class="local col6 decl" id="196d" title='d' data-type='void *' data-ref="196d" data-ref-filename="196d">d</dfn>);</td></tr>
+<tr><th id="445">445</th><td></td></tr>
+<tr><th id="446">446</th><td><i class="doc">/** compare two names, returns -1, 0, or +1 */</i></td></tr>
+<tr><th id="447">447</th><td><em>int</em> <dfn class="decl fn" id="rate_compfunc" title='rate_compfunc' data-ref="rate_compfunc" data-ref-filename="rate_compfunc">rate_compfunc</dfn>(<em>void</em>* <dfn class="local col7 decl" id="197key1" title='key1' data-type='void *' data-ref="197key1" data-ref-filename="197key1">key1</dfn>, <em>void</em>* <dfn class="local col8 decl" id="198key2" title='key2' data-type='void *' data-ref="198key2" data-ref-filename="198key2">key2</dfn>);</td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td><i class="doc">/** delete key, and destroy the lock */</i></td></tr>
+<tr><th id="450">450</th><td><em>void</em> <dfn class="decl fn" id="rate_delkeyfunc" title='rate_delkeyfunc' data-ref="rate_delkeyfunc" data-ref-filename="rate_delkeyfunc">rate_delkeyfunc</dfn>(<em>void</em>* <dfn class="local col9 decl" id="199k" title='k' data-type='void *' data-ref="199k" data-ref-filename="199k">k</dfn>, <em>void</em>* <dfn class="local col0 decl" id="200arg" title='arg' data-type='void *' data-ref="200arg" data-ref-filename="200arg">arg</dfn>);</td></tr>
+<tr><th id="451">451</th><td></td></tr>
+<tr><th id="452">452</th><td><i class="doc">/** delete data */</i></td></tr>
+<tr><th id="453">453</th><td><em>void</em> <dfn class="decl fn" id="rate_deldatafunc" title='rate_deldatafunc' data-ref="rate_deldatafunc" data-ref-filename="rate_deldatafunc">rate_deldatafunc</dfn>(<em>void</em>* <dfn class="local col1 decl" id="201d" title='d' data-type='void *' data-ref="201d" data-ref-filename="201d">d</dfn>, <em>void</em>* <dfn class="local col2 decl" id="202arg" title='arg' data-type='void *' data-ref="202arg" data-ref-filename="202arg">arg</dfn>);</td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td><i>/* calculate size for the client ip hashtable */</i></td></tr>
+<tr><th id="456">456</th><td><a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl fn" id="ip_rate_sizefunc" title='ip_rate_sizefunc' data-ref="ip_rate_sizefunc" data-ref-filename="ip_rate_sizefunc">ip_rate_sizefunc</dfn>(<em>void</em>* <dfn class="local col3 decl" id="203k" title='k' data-type='void *' data-ref="203k" data-ref-filename="203k">k</dfn>, <em>void</em>* <dfn class="local col4 decl" id="204d" title='d' data-type='void *' data-ref="204d" data-ref-filename="204d">d</dfn>);</td></tr>
+<tr><th id="457">457</th><td></td></tr>
+<tr><th id="458">458</th><td><i>/* compare two addresses */</i></td></tr>
+<tr><th id="459">459</th><td><em>int</em> <dfn class="decl fn" id="ip_rate_compfunc" title='ip_rate_compfunc' data-ref="ip_rate_compfunc" data-ref-filename="ip_rate_compfunc">ip_rate_compfunc</dfn>(<em>void</em>* <dfn class="local col5 decl" id="205key1" title='key1' data-type='void *' data-ref="205key1" data-ref-filename="205key1">key1</dfn>, <em>void</em>* <dfn class="local col6 decl" id="206key2" title='key2' data-type='void *' data-ref="206key2" data-ref-filename="206key2">key2</dfn>);</td></tr>
+<tr><th id="460">460</th><td></td></tr>
+<tr><th id="461">461</th><td><i>/* delete key, and destroy the lock */</i></td></tr>
+<tr><th id="462">462</th><td><em>void</em> <dfn class="decl fn" id="ip_rate_delkeyfunc" title='ip_rate_delkeyfunc' data-ref="ip_rate_delkeyfunc" data-ref-filename="ip_rate_delkeyfunc">ip_rate_delkeyfunc</dfn>(<em>void</em>* <dfn class="local col7 decl" id="207d" title='d' data-type='void *' data-ref="207d" data-ref-filename="207d">d</dfn>, <em>void</em>* <dfn class="local col8 decl" id="208arg" title='arg' data-type='void *' data-ref="208arg" data-ref-filename="208arg">arg</dfn>);</td></tr>
+<tr><th id="463">463</th><td></td></tr>
+<tr><th id="464">464</th><td><i>/* delete data */</i></td></tr>
+<tr><th id="465">465</th><td><u>#define <dfn class="macro" id="_M/ip_rate_deldatafunc" data-ref="_M/ip_rate_deldatafunc">ip_rate_deldatafunc</dfn> rate_deldatafunc</u></td></tr>
+<tr><th id="466">466</th><td></td></tr>
+<tr><th id="467">467</th><td><u>#<span data-ppcond="45">endif</span> /* SERVICES_CACHE_INFRA_H */</u></td></tr>
+<tr><th id="468">468</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../../iterator/iter_utils.c.html'>netbsd/external/bsd/unbound/dist/iterator/iter_utils.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

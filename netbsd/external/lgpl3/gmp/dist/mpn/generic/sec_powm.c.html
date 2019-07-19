@@ -1,0 +1,416 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>sec_powm.c source code [netbsd/external/lgpl3/gmp/dist/mpn/generic/sec_powm.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/lgpl3/gmp/dist/mpn/generic/sec_powm.c'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>external</a>/<a href='../../../..'>lgpl3</a>/<a href='../../..'>gmp</a>/<a href='../..'>dist</a>/<a href='..'>mpn</a>/<a href='./'>generic</a>/<a href='sec_powm.c.html'>sec_powm.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* mpn_sec_powm -- Compute R = U^E mod M.  Secure variant, side-channel silent</i></td></tr>
+<tr><th id="2">2</th><td><i>   under the assumption that the multiply instruction is side channel silent.</i></td></tr>
+<tr><th id="3">3</th><td><i></i></td></tr>
+<tr><th id="4">4</th><td><i>   Contributed to the GNU project by Torbjörn Granlund.</i></td></tr>
+<tr><th id="5">5</th><td><i></i></td></tr>
+<tr><th id="6">6</th><td><i>Copyright 2007-2009, 2011-2014 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="7">7</th><td><i></i></td></tr>
+<tr><th id="8">8</th><td><i>This file is part of the GNU MP Library.</i></td></tr>
+<tr><th id="9">9</th><td><i></i></td></tr>
+<tr><th id="10">10</th><td><i>The GNU MP Library is free software; you can redistribute it and/or modify</i></td></tr>
+<tr><th id="11">11</th><td><i>it under the terms of either:</i></td></tr>
+<tr><th id="12">12</th><td><i></i></td></tr>
+<tr><th id="13">13</th><td><i>  * the GNU Lesser General Public License as published by the Free</i></td></tr>
+<tr><th id="14">14</th><td><i>    Software Foundation; either version 3 of the License, or (at your</i></td></tr>
+<tr><th id="15">15</th><td><i>    option) any later version.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>or</i></td></tr>
+<tr><th id="18">18</th><td><i></i></td></tr>
+<tr><th id="19">19</th><td><i>  * the GNU General Public License as published by the Free Software</i></td></tr>
+<tr><th id="20">20</th><td><i>    Foundation; either version 2 of the License, or (at your option) any</i></td></tr>
+<tr><th id="21">21</th><td><i>    later version.</i></td></tr>
+<tr><th id="22">22</th><td><i></i></td></tr>
+<tr><th id="23">23</th><td><i>or both in parallel, as here.</i></td></tr>
+<tr><th id="24">24</th><td><i></i></td></tr>
+<tr><th id="25">25</th><td><i>The GNU MP Library is distributed in the hope that it will be useful, but</i></td></tr>
+<tr><th id="26">26</th><td><i>WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY</i></td></tr>
+<tr><th id="27">27</th><td><i>or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License</i></td></tr>
+<tr><th id="28">28</th><td><i>for more details.</i></td></tr>
+<tr><th id="29">29</th><td><i></i></td></tr>
+<tr><th id="30">30</th><td><i>You should have received copies of the GNU General Public License and the</i></td></tr>
+<tr><th id="31">31</th><td><i>GNU Lesser General Public License along with the GNU MP Library.  If not,</i></td></tr>
+<tr><th id="32">32</th><td><i>see <a href="https://www.gnu.org/licenses/">https://www.gnu.org/licenses/</a>.  */</i></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td></td></tr>
+<tr><th id="35">35</th><td><i>/*</i></td></tr>
+<tr><th id="36">36</th><td><i>  BASIC ALGORITHM, Compute U^E mod M, where M &lt; B^n is odd.</i></td></tr>
+<tr><th id="37">37</th><td><i></i></td></tr>
+<tr><th id="38">38</th><td><i>  1. T &lt;- (B^n * U) mod M                Convert to REDC form</i></td></tr>
+<tr><th id="39">39</th><td><i></i></td></tr>
+<tr><th id="40">40</th><td><i>  2. Compute table U^0, U^1, U^2... of E-dependent size</i></td></tr>
+<tr><th id="41">41</th><td><i></i></td></tr>
+<tr><th id="42">42</th><td><i>  3. While there are more bits in E</i></td></tr>
+<tr><th id="43">43</th><td><i>       W &lt;- power left-to-right base-k</i></td></tr>
+<tr><th id="44">44</th><td><i></i></td></tr>
+<tr><th id="45">45</th><td><i></i></td></tr>
+<tr><th id="46">46</th><td><i>  TODO:</i></td></tr>
+<tr><th id="47">47</th><td><i></i></td></tr>
+<tr><th id="48">48</th><td><i>   * Make getbits a macro, thereby allowing it to update the index operand.</i></td></tr>
+<tr><th id="49">49</th><td><i>     That will simplify the code using getbits.  (Perhaps make getbits' sibling</i></td></tr>
+<tr><th id="50">50</th><td><i>     getbit then have similar form, for symmetry.)</i></td></tr>
+<tr><th id="51">51</th><td><i></i></td></tr>
+<tr><th id="52">52</th><td><i>   * Choose window size without looping.  (Superoptimize or think(tm).)</i></td></tr>
+<tr><th id="53">53</th><td><i></i></td></tr>
+<tr><th id="54">54</th><td><i>   * REDC_1_TO_REDC_2_THRESHOLD might actually represent the cutoff between</i></td></tr>
+<tr><th id="55">55</th><td><i>     redc_1 and redc_n.  On such systems, we will switch to redc_2 causing</i></td></tr>
+<tr><th id="56">56</th><td><i>     slowdown.</i></td></tr>
+<tr><th id="57">57</th><td><i>*/</i></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><u>#include <a href="../../../lib/libgmp/arch/x86_64/gmp.h.html">"gmp.h"</a></u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../../gmp-impl.h.html">"gmp-impl.h"</a></u></td></tr>
+<tr><th id="61">61</th><td><u>#include <a href="../../longlong.h.html">"longlong.h"</a></u></td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td><u>#undef <span class="macro" data-ref="_M/MPN_REDC_1_SEC">MPN_REDC_1_SEC</span></u></td></tr>
+<tr><th id="64">64</th><td><u>#define <dfn class="macro" id="_M/MPN_REDC_1_SEC" data-ref="_M/MPN_REDC_1_SEC">MPN_REDC_1_SEC</dfn>(rp, up, mp, n, invm)				\</u></td></tr>
+<tr><th id="65">65</th><td><u>  do {									\</u></td></tr>
+<tr><th id="66">66</th><td><u>    <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> <dfn class="local col3 decl" id="33cy" title='cy' data-type='mp_limb_t' data-ref="33cy" data-ref-filename="33cy"><dfn class="local col5 decl" id="35cy" title='cy' data-type='mp_limb_t' data-ref="35cy" data-ref-filename="35cy"><dfn class="local col6 decl" id="36cy" title='cy' data-type='mp_limb_t' data-ref="36cy" data-ref-filename="36cy"><dfn class="local col9 decl" id="39cy" title='cy' data-type='mp_limb_t' data-ref="39cy" data-ref-filename="39cy">cy</dfn></dfn></dfn></dfn>;							\</u></td></tr>
+<tr><th id="67">67</th><td><u>    <a class="local col3 ref" href="#284" title='cy' data-ref="33cy" data-ref-filename="33cy"><a class="local col5 ref" href="#338" title='cy' data-ref="35cy" data-ref-filename="35cy"><a class="local col6 ref" href="#338" title='cy' data-ref="36cy" data-ref-filename="36cy"><a class="local col9 ref" href="#365" title='cy' data-ref="39cy" data-ref-filename="39cy">cy</a></a></a></a> = mpn_redc_1 (rp, up, mp, n, invm);				\</u></td></tr>
+<tr><th id="68">68</th><td><u>    mpn_cnd_sub_n (<a class="local col3 ref" href="#284" title='cy' data-ref="33cy" data-ref-filename="33cy"><a class="local col5 ref" href="#338" title='cy' data-ref="35cy" data-ref-filename="35cy"><a class="local col6 ref" href="#338" title='cy' data-ref="36cy" data-ref-filename="36cy"><a class="local col9 ref" href="#365" title='cy' data-ref="39cy" data-ref-filename="39cy">cy</a></a></a></a>, rp, rp, mp, n);					\</u></td></tr>
+<tr><th id="69">69</th><td><u>  } while (0)</u></td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><u>#undef <span class="macro" data-ref="_M/MPN_REDC_2_SEC">MPN_REDC_2_SEC</span></u></td></tr>
+<tr><th id="72">72</th><td><u>#define <dfn class="macro" id="_M/MPN_REDC_2_SEC" data-ref="_M/MPN_REDC_2_SEC">MPN_REDC_2_SEC</dfn>(rp, up, mp, n, mip)				\</u></td></tr>
+<tr><th id="73">73</th><td><u>  do {									\</u></td></tr>
+<tr><th id="74">74</th><td><u>    <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> <dfn class="local col4 decl" id="34cy" title='cy' data-type='mp_limb_t' data-ref="34cy" data-ref-filename="34cy"><dfn class="local col7 decl" id="37cy" title='cy' data-type='mp_limb_t' data-ref="37cy" data-ref-filename="37cy"><dfn class="local col8 decl" id="38cy" title='cy' data-type='mp_limb_t' data-ref="38cy" data-ref-filename="38cy"><dfn class="local col0 decl" id="40cy" title='cy' data-type='mp_limb_t' data-ref="40cy" data-ref-filename="40cy">cy</dfn></dfn></dfn></dfn>;							\</u></td></tr>
+<tr><th id="75">75</th><td><u>    <a class="local col4 ref" href="#286" title='cy' data-ref="34cy" data-ref-filename="34cy"><a class="local col7 ref" href="#348" title='cy' data-ref="37cy" data-ref-filename="37cy"><a class="local col8 ref" href="#348" title='cy' data-ref="38cy" data-ref-filename="38cy"><a class="local col0 ref" href="#367" title='cy' data-ref="40cy" data-ref-filename="40cy">cy</a></a></a></a> = mpn_redc_2 (rp, up, mp, n, mip);				\</u></td></tr>
+<tr><th id="76">76</th><td><u>    mpn_cnd_sub_n (<a class="local col4 ref" href="#286" title='cy' data-ref="34cy" data-ref-filename="34cy"><a class="local col7 ref" href="#348" title='cy' data-ref="37cy" data-ref-filename="37cy"><a class="local col8 ref" href="#348" title='cy' data-ref="38cy" data-ref-filename="38cy"><a class="local col0 ref" href="#367" title='cy' data-ref="40cy" data-ref-filename="40cy">cy</a></a></a></a>, rp, rp, mp, n);					\</u></td></tr>
+<tr><th id="77">77</th><td><u>  } while (0)</u></td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td><u>#<span data-ppcond="79">if</span> <a class="macro" href="../../../lib/libgmp/arch/x86_64/config.h.html#261" title="1" data-ref="_M/HAVE_NATIVE_mpn_addmul_2">HAVE_NATIVE_mpn_addmul_2</a> || HAVE_NATIVE_mpn_redc_2</u></td></tr>
+<tr><th id="80">80</th><td><u>#define <dfn class="macro" id="_M/WANT_REDC_2" data-ref="_M/WANT_REDC_2">WANT_REDC_2</dfn> 1</u></td></tr>
+<tr><th id="81">81</th><td><u>#<span data-ppcond="79">endif</span></u></td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td><i>/* Define our own mpn squaring function.  We do this since we cannot use a</i></td></tr>
+<tr><th id="84">84</th><td><i>   native mpn_sqr_basecase over TUNE_SQR_TOOM2_MAX, or a non-native one over</i></td></tr>
+<tr><th id="85">85</th><td><i>   SQR_TOOM2_THRESHOLD.  This is so because of fixed size stack allocations</i></td></tr>
+<tr><th id="86">86</th><td><i>   made inside mpn_sqr_basecase.  */</i></td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><u>#<span data-ppcond="88">if</span> HAVE_NATIVE_mpn_sqr_diagonal</u></td></tr>
+<tr><th id="89">89</th><td><u>#define MPN_SQR_DIAGONAL(rp, up, n)					\</u></td></tr>
+<tr><th id="90">90</th><td><u>  mpn_sqr_diagonal (rp, up, n)</u></td></tr>
+<tr><th id="91">91</th><td><u>#<span data-ppcond="88">else</span></u></td></tr>
+<tr><th id="92">92</th><td><u>#define <dfn class="macro" id="_M/MPN_SQR_DIAGONAL" data-ref="_M/MPN_SQR_DIAGONAL">MPN_SQR_DIAGONAL</dfn>(rp, up, n)					\</u></td></tr>
+<tr><th id="93">93</th><td><u>  do {									\</u></td></tr>
+<tr><th id="94">94</th><td><u>    mp_size_t _i;							\</u></td></tr>
+<tr><th id="95">95</th><td><u>    for (_i = 0; _i &lt; (n); _i++)					\</u></td></tr>
+<tr><th id="96">96</th><td><u>      {									\</u></td></tr>
+<tr><th id="97">97</th><td><u>	mp_limb_t ul, lpl;						\</u></td></tr>
+<tr><th id="98">98</th><td><u>	ul = (up)[_i];							\</u></td></tr>
+<tr><th id="99">99</th><td><u>	umul_ppmm ((rp)[2 * _i + 1], lpl, ul, ul &lt;&lt; GMP_NAIL_BITS);	\</u></td></tr>
+<tr><th id="100">100</th><td><u>	(rp)[2 * _i] = lpl &gt;&gt; GMP_NAIL_BITS;				\</u></td></tr>
+<tr><th id="101">101</th><td><u>      }									\</u></td></tr>
+<tr><th id="102">102</th><td><u>  } while (0)</u></td></tr>
+<tr><th id="103">103</th><td><u>#<span data-ppcond="88">endif</span></u></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><u>#<span data-ppcond="106">if</span> ! <a class="macro" href="../../../lib/libgmp/arch/x86_64/config.h.html#329" title="1" data-ref="_M/HAVE_NATIVE_mpn_sqr_basecase">HAVE_NATIVE_mpn_sqr_basecase</a></u></td></tr>
+<tr><th id="107">107</th><td><i>/* The limit of the generic code is SQR_TOOM2_THRESHOLD.  */</i></td></tr>
+<tr><th id="108">108</th><td><u>#define SQR_BASECASE_LIM  SQR_TOOM2_THRESHOLD</u></td></tr>
+<tr><th id="109">109</th><td><u>#<span data-ppcond="106">endif</span></u></td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td><u>#<span data-ppcond="111">if</span> <a class="macro" href="../../../lib/libgmp/arch/x86_64/config.h.html#329" title="1" data-ref="_M/HAVE_NATIVE_mpn_sqr_basecase">HAVE_NATIVE_mpn_sqr_basecase</a></u></td></tr>
+<tr><th id="112">112</th><td><u>#<span data-ppcond="112">ifdef</span> <span class="macro" data-ref="_M/TUNE_SQR_TOOM2_MAX">TUNE_SQR_TOOM2_MAX</span></u></td></tr>
+<tr><th id="113">113</th><td><i>/* We slightly abuse TUNE_SQR_TOOM2_MAX here.  If it is set for an assembly</i></td></tr>
+<tr><th id="114">114</th><td><i>   mpn_sqr_basecase, it comes from SQR_TOOM2_THRESHOLD_MAX in the assembly</i></td></tr>
+<tr><th id="115">115</th><td><i>   file.  An assembly mpn_sqr_basecase that does not define it should allow</i></td></tr>
+<tr><th id="116">116</th><td><i>   any size.  */</i></td></tr>
+<tr><th id="117">117</th><td><u>#define SQR_BASECASE_LIM  SQR_TOOM2_THRESHOLD</u></td></tr>
+<tr><th id="118">118</th><td><u>#<span data-ppcond="112">endif</span></u></td></tr>
+<tr><th id="119">119</th><td><u>#<span data-ppcond="111">endif</span></u></td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><u>#<span data-ppcond="121">ifdef</span> <span class="macro" data-ref="_M/WANT_FAT_BINARY">WANT_FAT_BINARY</span></u></td></tr>
+<tr><th id="122">122</th><td><i>/* For fat builds, we use SQR_TOOM2_THRESHOLD which will expand to a read from</i></td></tr>
+<tr><th id="123">123</th><td><i>   __gmpn_cpuvec.  Perhaps any possible sqr_basecase.asm allow any size, and we</i></td></tr>
+<tr><th id="124">124</th><td><i>   limit the use unnecessarily.  We cannot tell, so play it safe.  FIXME.  */</i></td></tr>
+<tr><th id="125">125</th><td><u>#define SQR_BASECASE_LIM  SQR_TOOM2_THRESHOLD</u></td></tr>
+<tr><th id="126">126</th><td><u>#<span data-ppcond="121">endif</span></u></td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><u>#<span data-ppcond="128">ifndef</span> <span class="macro" data-ref="_M/SQR_BASECASE_LIM">SQR_BASECASE_LIM</span></u></td></tr>
+<tr><th id="129">129</th><td><i>/* If SQR_BASECASE_LIM is now not defined, use mpn_sqr_basecase for any operand</i></td></tr>
+<tr><th id="130">130</th><td><i>   size.  */</i></td></tr>
+<tr><th id="131">131</th><td><u>#define <dfn class="macro" id="_M/mpn_local_sqr" data-ref="_M/mpn_local_sqr">mpn_local_sqr</dfn>(rp,up,n,tp) mpn_sqr_basecase(rp,up,n)</u></td></tr>
+<tr><th id="132">132</th><td><u>#<span data-ppcond="128">else</span></u></td></tr>
+<tr><th id="133">133</th><td><i>/* Else use mpn_sqr_basecase for its allowed sizes, else mpn_mul_basecase.  */</i></td></tr>
+<tr><th id="134">134</th><td><u>#define mpn_local_sqr(rp,up,n,tp) \</u></td></tr>
+<tr><th id="135">135</th><td><u>  do {									\</u></td></tr>
+<tr><th id="136">136</th><td><u>    if (BELOW_THRESHOLD (n, SQR_BASECASE_LIM))				\</u></td></tr>
+<tr><th id="137">137</th><td><u>      mpn_sqr_basecase (rp, up, n);					\</u></td></tr>
+<tr><th id="138">138</th><td><u>    else								\</u></td></tr>
+<tr><th id="139">139</th><td><u>      mpn_mul_basecase(rp, up, n, up, n);				\</u></td></tr>
+<tr><th id="140">140</th><td><u>  } while (0)</u></td></tr>
+<tr><th id="141">141</th><td><u>#<span data-ppcond="128">endif</span></u></td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td><u>#define <dfn class="macro" id="_M/getbit" data-ref="_M/getbit">getbit</dfn>(p,bi) \</u></td></tr>
+<tr><th id="144">144</th><td><u>  ((p[(bi - 1) / GMP_NUMB_BITS] &gt;&gt; (bi - 1) % GMP_NUMB_BITS) &amp; 1)</u></td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td><i>/* FIXME: Maybe some things would get simpler if all callers ensure</i></td></tr>
+<tr><th id="147">147</th><td><i>   that bi &gt;= nbits. As far as I understand, with the current code bi</i></td></tr>
+<tr><th id="148">148</th><td><i>   &lt; nbits can happen only for the final iteration. */</i></td></tr>
+<tr><th id="149">149</th><td><em>static</em> <b>inline</b> <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a></td></tr>
+<tr><th id="150">150</th><td><dfn class="decl def fn" id="getbits" title='getbits' data-ref="getbits" data-ref-filename="getbits">getbits</dfn> (<em>const</em> <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> *<dfn class="local col1 decl" id="1p" title='p' data-type='const mp_limb_t *' data-ref="1p" data-ref-filename="1p">p</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_bitcnt_t" title='mp_bitcnt_t' data-type='unsigned long' data-ref="mp_bitcnt_t" data-ref-filename="mp_bitcnt_t">mp_bitcnt_t</a> <dfn class="local col2 decl" id="2bi" title='bi' data-type='mp_bitcnt_t' data-ref="2bi" data-ref-filename="2bi">bi</dfn>, <em>int</em> <dfn class="local col3 decl" id="3nbits" title='nbits' data-type='int' data-ref="3nbits" data-ref-filename="3nbits">nbits</dfn>)</td></tr>
+<tr><th id="151">151</th><td>{</td></tr>
+<tr><th id="152">152</th><td>  <em>int</em> <dfn class="local col4 decl" id="4nbits_in_r" title='nbits_in_r' data-type='int' data-ref="4nbits_in_r" data-ref-filename="4nbits_in_r">nbits_in_r</dfn>;</td></tr>
+<tr><th id="153">153</th><td>  <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> <dfn class="local col5 decl" id="5r" title='r' data-type='mp_limb_t' data-ref="5r" data-ref-filename="5r">r</dfn>;</td></tr>
+<tr><th id="154">154</th><td>  <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col6 decl" id="6i" title='i' data-type='mp_size_t' data-ref="6i" data-ref-filename="6i">i</dfn>;</td></tr>
+<tr><th id="155">155</th><td></td></tr>
+<tr><th id="156">156</th><td>  <b>if</b> (<a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a> &lt; <a class="local col3 ref" href="#3nbits" title='nbits' data-ref="3nbits" data-ref-filename="3nbits">nbits</a>)</td></tr>
+<tr><th id="157">157</th><td>    {</td></tr>
+<tr><th id="158">158</th><td>      <b>return</b> <a class="local col1 ref" href="#1p" title='p' data-ref="1p" data-ref-filename="1p">p</a>[<var>0</var>] &amp; (((<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a>) <var>1</var> &lt;&lt; <a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a>) - <var>1</var>);</td></tr>
+<tr><th id="159">159</th><td>    }</td></tr>
+<tr><th id="160">160</th><td>  <b>else</b></td></tr>
+<tr><th id="161">161</th><td>    {</td></tr>
+<tr><th id="162">162</th><td>      <a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a> -= <a class="local col3 ref" href="#3nbits" title='nbits' data-ref="3nbits" data-ref-filename="3nbits">nbits</a>;			<i>/* bit index of low bit to extract */</i></td></tr>
+<tr><th id="163">163</th><td>      <a class="local col6 ref" href="#6i" title='i' data-ref="6i" data-ref-filename="6i">i</a> = <a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a> / <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#46" title="(64 - 0)" data-ref="_M/GMP_NUMB_BITS">GMP_NUMB_BITS</a>;		<i>/* word index of low bit to extract */</i></td></tr>
+<tr><th id="164">164</th><td>      <a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a> %= <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#46" title="(64 - 0)" data-ref="_M/GMP_NUMB_BITS">GMP_NUMB_BITS</a>;		<i>/* bit index in low word */</i></td></tr>
+<tr><th id="165">165</th><td>      <a class="local col5 ref" href="#5r" title='r' data-ref="5r" data-ref-filename="5r">r</a> = <a class="local col1 ref" href="#1p" title='p' data-ref="1p" data-ref-filename="1p">p</a>[<a class="local col6 ref" href="#6i" title='i' data-ref="6i" data-ref-filename="6i">i</a>] &gt;&gt; <a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a>;			<i>/* extract (low) bits */</i></td></tr>
+<tr><th id="166">166</th><td>      <a class="local col4 ref" href="#4nbits_in_r" title='nbits_in_r' data-ref="4nbits_in_r" data-ref-filename="4nbits_in_r">nbits_in_r</a> = <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#46" title="(64 - 0)" data-ref="_M/GMP_NUMB_BITS">GMP_NUMB_BITS</a> - <a class="local col2 ref" href="#2bi" title='bi' data-ref="2bi" data-ref-filename="2bi">bi</a>;	<i>/* number of bits now in r */</i></td></tr>
+<tr><th id="167">167</th><td>      <b>if</b> (<a class="local col4 ref" href="#4nbits_in_r" title='nbits_in_r' data-ref="4nbits_in_r" data-ref-filename="4nbits_in_r">nbits_in_r</a> &lt; <a class="local col3 ref" href="#3nbits" title='nbits' data-ref="3nbits" data-ref-filename="3nbits">nbits</a>)		<i>/* did we get enough bits? */</i></td></tr>
+<tr><th id="168">168</th><td>	<a class="local col5 ref" href="#5r" title='r' data-ref="5r" data-ref-filename="5r">r</a> += <a class="local col1 ref" href="#1p" title='p' data-ref="1p" data-ref-filename="1p">p</a>[<a class="local col6 ref" href="#6i" title='i' data-ref="6i" data-ref-filename="6i">i</a> + <var>1</var>] &lt;&lt; <a class="local col4 ref" href="#4nbits_in_r" title='nbits_in_r' data-ref="4nbits_in_r" data-ref-filename="4nbits_in_r">nbits_in_r</a>;	<i>/* prepend bits from higher word */</i></td></tr>
+<tr><th id="169">169</th><td>      <b>return</b> <a class="local col5 ref" href="#5r" title='r' data-ref="5r" data-ref-filename="5r">r</a> &amp; (((<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> ) <var>1</var> &lt;&lt; <a class="local col3 ref" href="#3nbits" title='nbits' data-ref="3nbits" data-ref-filename="3nbits">nbits</a>) - <var>1</var>);</td></tr>
+<tr><th id="170">170</th><td>    }</td></tr>
+<tr><th id="171">171</th><td>}</td></tr>
+<tr><th id="172">172</th><td></td></tr>
+<tr><th id="173">173</th><td><u>#<span data-ppcond="173">ifndef</span> <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp-mparam.h.html#220" data-ref="_M/POWM_SEC_TABLE">POWM_SEC_TABLE</a></u></td></tr>
+<tr><th id="174">174</th><td><u>#if GMP_NUMB_BITS &lt; 50</u></td></tr>
+<tr><th id="175">175</th><td><u>#define POWM_SEC_TABLE  2,33,96,780,2741</u></td></tr>
+<tr><th id="176">176</th><td><u>#else</u></td></tr>
+<tr><th id="177">177</th><td><u>#define POWM_SEC_TABLE  2,130,524,2578</u></td></tr>
+<tr><th id="178">178</th><td><u>#endif</u></td></tr>
+<tr><th id="179">179</th><td><u>#<span data-ppcond="173">endif</span></u></td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td><u>#<span data-ppcond="181">if</span> TUNE_PROGRAM_BUILD</u></td></tr>
+<tr><th id="182">182</th><td><b>extern</b> <em>int</em> win_size (mp_bitcnt_t);</td></tr>
+<tr><th id="183">183</th><td><u>#<span data-ppcond="181">else</span></u></td></tr>
+<tr><th id="184">184</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="185">185</th><td><dfn class="decl def fn" id="win_size" title='win_size' data-ref="win_size" data-ref-filename="win_size">win_size</dfn> (<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_bitcnt_t" title='mp_bitcnt_t' data-type='unsigned long' data-ref="mp_bitcnt_t" data-ref-filename="mp_bitcnt_t">mp_bitcnt_t</a> <dfn class="local col7 decl" id="7enb" title='enb' data-type='mp_bitcnt_t' data-ref="7enb" data-ref-filename="7enb">enb</dfn>)</td></tr>
+<tr><th id="186">186</th><td>{</td></tr>
+<tr><th id="187">187</th><td>  <em>int</em> <dfn class="local col8 decl" id="8k" title='k' data-type='int' data-ref="8k" data-ref-filename="8k">k</dfn>;</td></tr>
+<tr><th id="188">188</th><td>  <i>/* Find k, such that x[k-1] &lt; enb &lt;= x[k].</i></td></tr>
+<tr><th id="189">189</th><td><i></i></td></tr>
+<tr><th id="190">190</th><td><i>     We require that x[k] &gt;= k, then it follows that enb &gt; x[k-1] &gt;=</i></td></tr>
+<tr><th id="191">191</th><td><i>     k-1, which implies k &lt;= enb.</i></td></tr>
+<tr><th id="192">192</th><td><i>  */</i></td></tr>
+<tr><th id="193">193</th><td>  <em>static</em> <em>const</em> <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_bitcnt_t" title='mp_bitcnt_t' data-type='unsigned long' data-ref="mp_bitcnt_t" data-ref-filename="mp_bitcnt_t">mp_bitcnt_t</a> <dfn class="local col9 decl" id="9x" title='x' data-type='const mp_bitcnt_t [7]' data-ref="9x" data-ref-filename="9x">x</dfn>[] = {<var>0</var>,<a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp-mparam.h.html#220" title="2,16,194,904,2177" data-ref="_M/POWM_SEC_TABLE">POWM_SEC_TABLE</a>,~(<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_bitcnt_t" title='mp_bitcnt_t' data-type='unsigned long' data-ref="mp_bitcnt_t" data-ref-filename="mp_bitcnt_t">mp_bitcnt_t</a>)<var>0</var>};</td></tr>
+<tr><th id="194">194</th><td>  <b>for</b> (<a class="local col8 ref" href="#8k" title='k' data-ref="8k" data-ref-filename="8k">k</a> = <var>1</var>; <a class="local col7 ref" href="#7enb" title='enb' data-ref="7enb" data-ref-filename="7enb">enb</a> &gt; <a class="local col9 ref" href="#9x" title='x' data-ref="9x" data-ref-filename="9x">x</a>[<a class="local col8 ref" href="#8k" title='k' data-ref="8k" data-ref-filename="8k">k</a>]; <a class="local col8 ref" href="#8k" title='k' data-ref="8k" data-ref-filename="8k">k</a>++)</td></tr>
+<tr><th id="195">195</th><td>    ;</td></tr>
+<tr><th id="196">196</th><td>  <a class="macro" href="../../gmp-impl.h.html#2399" title="do {} while (0)" data-ref="_M/ASSERT">ASSERT</a> (k &lt;= enb);</td></tr>
+<tr><th id="197">197</th><td>  <b>return</b> <a class="local col8 ref" href="#8k" title='k' data-ref="8k" data-ref-filename="8k">k</a>;</td></tr>
+<tr><th id="198">198</th><td>}</td></tr>
+<tr><th id="199">199</th><td><u>#<span data-ppcond="181">endif</span></u></td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td><i>/* Convert U to REDC form, U_r = B^n * U mod M.</i></td></tr>
+<tr><th id="202">202</th><td><i>   Uses scratch space at tp of size 2un + n + 1.  */</i></td></tr>
+<tr><th id="203">203</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="204">204</th><td><dfn class="decl def fn" id="redcify" title='redcify' data-ref="redcify" data-ref-filename="redcify">redcify</dfn> (<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_ptr" title='mp_ptr' data-type='mp_limb_t *' data-ref="mp_ptr" data-ref-filename="mp_ptr">mp_ptr</a> <dfn class="local col0 decl" id="10rp" title='rp' data-type='mp_ptr' data-ref="10rp" data-ref-filename="10rp">rp</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_srcptr" title='mp_srcptr' data-type='const mp_limb_t *' data-ref="mp_srcptr" data-ref-filename="mp_srcptr">mp_srcptr</a> <dfn class="local col1 decl" id="11up" title='up' data-type='mp_srcptr' data-ref="11up" data-ref-filename="11up">up</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col2 decl" id="12un" title='un' data-type='mp_size_t' data-ref="12un" data-ref-filename="12un">un</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_srcptr" title='mp_srcptr' data-type='const mp_limb_t *' data-ref="mp_srcptr" data-ref-filename="mp_srcptr">mp_srcptr</a> <dfn class="local col3 decl" id="13mp" title='mp' data-type='mp_srcptr' data-ref="13mp" data-ref-filename="13mp">mp</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col4 decl" id="14n" title='n' data-type='mp_size_t' data-ref="14n" data-ref-filename="14n">n</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_ptr" title='mp_ptr' data-type='mp_limb_t *' data-ref="mp_ptr" data-ref-filename="mp_ptr">mp_ptr</a> <dfn class="local col5 decl" id="15tp" title='tp' data-type='mp_ptr' data-ref="15tp" data-ref-filename="15tp">tp</dfn>)</td></tr>
+<tr><th id="205">205</th><td>{</td></tr>
+<tr><th id="206">206</th><td>  <a class="macro" href="../../gmp-impl.h.html#1874" title="do { do {} while (0); if ((n) != 0) do { mp_ptr __dst = (tp); mp_size_t __n = (n); do {} while (0); do *__dst++ = (((mp_limb_t) 0L)); while (--__n); } while (0); } while (0)" data-ref="_M/MPN_ZERO">MPN_ZERO</a> (<a class="local col5 ref" href="#15tp" title='tp' data-ref="15tp" data-ref-filename="15tp">tp</a>, <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>);</td></tr>
+<tr><th id="207">207</th><td>  <a class="macro" href="../../gmp-impl.h.html#1804" title="do { do {} while (0); do { do {} while (0); do {} while (0); __gmpn_copyi (tp + n, up, un); } while (0); } while (0)" data-ref="_M/MPN_COPY">MPN_COPY</a> (<a class="local col5 ref" href="#15tp" title='tp' data-ref="15tp" data-ref-filename="15tp">tp</a> + <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>, <a class="local col1 ref" href="#11up" title='up' data-ref="11up" data-ref-filename="11up">up</a>, <a class="local col2 ref" href="#12un" title='un' data-ref="12un" data-ref-filename="12un">un</a>);</td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td>  <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#1679" title="__gmpn_sec_div_r" data-ref="_M/mpn_sec_div_r">mpn_sec_div_r</a> (<a class="local col5 ref" href="#15tp" title='tp' data-ref="15tp" data-ref-filename="15tp">tp</a>, <a class="local col2 ref" href="#12un" title='un' data-ref="12un" data-ref-filename="12un">un</a> + <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>, <a class="local col3 ref" href="#13mp" title='mp' data-ref="13mp" data-ref-filename="13mp">mp</a>, <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>, <a class="local col5 ref" href="#15tp" title='tp' data-ref="15tp" data-ref-filename="15tp">tp</a> + <a class="local col2 ref" href="#12un" title='un' data-ref="12un" data-ref-filename="12un">un</a> + <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>);</td></tr>
+<tr><th id="210">210</th><td>  <a class="macro" href="../../gmp-impl.h.html#1804" title="do { do {} while (0); do { do {} while (0); do {} while (0); __gmpn_copyi (rp, tp, n); } while (0); } while (0)" data-ref="_M/MPN_COPY">MPN_COPY</a> (<a class="local col0 ref" href="#10rp" title='rp' data-ref="10rp" data-ref-filename="10rp">rp</a>, <a class="local col5 ref" href="#15tp" title='tp' data-ref="15tp" data-ref-filename="15tp">tp</a>, <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>);</td></tr>
+<tr><th id="211">211</th><td>}</td></tr>
+<tr><th id="212">212</th><td></td></tr>
+<tr><th id="213">213</th><td><i>/* {rp, n} &lt;-- {bp, bn} ^ {ep, en} mod {mp, n},</i></td></tr>
+<tr><th id="214">214</th><td><i>   where en = ceil (enb / GMP_NUMB_BITS)</i></td></tr>
+<tr><th id="215">215</th><td><i>   Requires that {mp, n} is odd (and hence also mp[0] odd).</i></td></tr>
+<tr><th id="216">216</th><td><i>   Uses scratch space at tp as defined by mpn_sec_powm_itch.  */</i></td></tr>
+<tr><th id="217">217</th><td><em>void</em></td></tr>
+<tr><th id="218">218</th><td><a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#1667" title="__gmpn_sec_powm" data-ref="_M/mpn_sec_powm">mpn_sec_powm</a> (<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_ptr" title='mp_ptr' data-type='mp_limb_t *' data-ref="mp_ptr" data-ref-filename="mp_ptr">mp_ptr</a> <dfn class="local col6 decl" id="16rp" title='rp' data-type='mp_ptr' data-ref="16rp" data-ref-filename="16rp">rp</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_srcptr" title='mp_srcptr' data-type='const mp_limb_t *' data-ref="mp_srcptr" data-ref-filename="mp_srcptr">mp_srcptr</a> <dfn class="local col7 decl" id="17bp" title='bp' data-type='mp_srcptr' data-ref="17bp" data-ref-filename="17bp">bp</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col8 decl" id="18bn" title='bn' data-type='mp_size_t' data-ref="18bn" data-ref-filename="18bn">bn</dfn>,</td></tr>
+<tr><th id="219">219</th><td>	      <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_srcptr" title='mp_srcptr' data-type='const mp_limb_t *' data-ref="mp_srcptr" data-ref-filename="mp_srcptr">mp_srcptr</a> <dfn class="local col9 decl" id="19ep" title='ep' data-type='mp_srcptr' data-ref="19ep" data-ref-filename="19ep">ep</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_bitcnt_t" title='mp_bitcnt_t' data-type='unsigned long' data-ref="mp_bitcnt_t" data-ref-filename="mp_bitcnt_t">mp_bitcnt_t</a> <dfn class="local col0 decl" id="20enb" title='enb' data-type='mp_bitcnt_t' data-ref="20enb" data-ref-filename="20enb">enb</dfn>,</td></tr>
+<tr><th id="220">220</th><td>	      <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_srcptr" title='mp_srcptr' data-type='const mp_limb_t *' data-ref="mp_srcptr" data-ref-filename="mp_srcptr">mp_srcptr</a> <dfn class="local col1 decl" id="21mp" title='mp' data-type='mp_srcptr' data-ref="21mp" data-ref-filename="21mp">mp</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col2 decl" id="22n" title='n' data-type='mp_size_t' data-ref="22n" data-ref-filename="22n">n</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_ptr" title='mp_ptr' data-type='mp_limb_t *' data-ref="mp_ptr" data-ref-filename="mp_ptr">mp_ptr</a> <dfn class="local col3 decl" id="23tp" title='tp' data-type='mp_ptr' data-ref="23tp" data-ref-filename="23tp">tp</dfn>)</td></tr>
+<tr><th id="221">221</th><td>{</td></tr>
+<tr><th id="222">222</th><td>  <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> <dfn class="local col4 decl" id="24ip" title='ip' data-type='mp_limb_t [2]' data-ref="24ip" data-ref-filename="24ip">ip</dfn>[<var>2</var>], *<dfn class="local col5 decl" id="25mip" title='mip' data-type='mp_limb_t *' data-ref="25mip" data-ref-filename="25mip">mip</dfn>;</td></tr>
+<tr><th id="223">223</th><td>  <em>int</em> <dfn class="local col6 decl" id="26windowsize" title='windowsize' data-type='int' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</dfn>, <dfn class="local col7 decl" id="27this_windowsize" title='this_windowsize' data-type='int' data-ref="27this_windowsize" data-ref-filename="27this_windowsize">this_windowsize</dfn>;</td></tr>
+<tr><th id="224">224</th><td>  <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_limb_t" title='mp_limb_t' data-type='unsigned long' data-ref="mp_limb_t" data-ref-filename="mp_limb_t">mp_limb_t</a> <dfn class="local col8 decl" id="28expbits" title='expbits' data-type='mp_limb_t' data-ref="28expbits" data-ref-filename="28expbits">expbits</dfn>;</td></tr>
+<tr><th id="225">225</th><td>  <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_ptr" title='mp_ptr' data-type='mp_limb_t *' data-ref="mp_ptr" data-ref-filename="mp_ptr">mp_ptr</a> <dfn class="local col9 decl" id="29pp" title='pp' data-type='mp_ptr' data-ref="29pp" data-ref-filename="29pp">pp</dfn>, <dfn class="local col0 decl" id="30this_pp" title='this_pp' data-type='mp_ptr' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</dfn>;</td></tr>
+<tr><th id="226">226</th><td>  <em>long</em> <dfn class="local col1 decl" id="31i" title='i' data-type='long' data-ref="31i" data-ref-filename="31i">i</dfn>;</td></tr>
+<tr><th id="227">227</th><td>  <em>int</em> <dfn class="local col2 decl" id="32cnd" title='cnd' data-type='int' data-ref="32cnd" data-ref-filename="32cnd">cnd</dfn>;</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td>  <a class="macro" href="../../gmp-impl.h.html#2399" title="do {} while (0)" data-ref="_M/ASSERT">ASSERT</a> (enb &gt; <var>0</var>);</td></tr>
+<tr><th id="230">230</th><td>  <a class="macro" href="../../gmp-impl.h.html#2399" title="do {} while (0)" data-ref="_M/ASSERT">ASSERT</a> (n &gt; <var>0</var>);</td></tr>
+<tr><th id="231">231</th><td>  <i>/* The code works for bn = 0, but the defined scratch space is 2 limbs</i></td></tr>
+<tr><th id="232">232</th><td><i>     greater than we supply, when converting 1 to redc form .  */</i></td></tr>
+<tr><th id="233">233</th><td>  <a class="macro" href="../../gmp-impl.h.html#2399" title="do {} while (0)" data-ref="_M/ASSERT">ASSERT</a> (bn &gt; <var>0</var>);</td></tr>
+<tr><th id="234">234</th><td>  <a class="macro" href="../../gmp-impl.h.html#2399" title="do {} while (0)" data-ref="_M/ASSERT">ASSERT</a> ((mp[<var>0</var>] &amp; <var>1</var>) != <var>0</var>);</td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td>  <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a> = <a class="ref fn" href="#win_size" title='win_size' data-ref="win_size" data-ref-filename="win_size">win_size</a> (<a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a>);</td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td><u>#<span data-ppcond="238">if</span> <a class="macro" href="#80" title="1" data-ref="_M/WANT_REDC_2">WANT_REDC_2</a></u></td></tr>
+<tr><th id="239">239</th><td>  <b>if</b> (<a class="macro" href="../../gmp-impl.h.html#1276" title="(! ((__builtin_constant_p (35) &amp;&amp; (35) == 0) || (!(__builtin_constant_p (35) &amp;&amp; (35) == 9223372036854775807L) &amp;&amp; (n) &gt;= (35))))" data-ref="_M/BELOW_THRESHOLD">BELOW_THRESHOLD</a> (<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp-mparam.h.html#211" title="35" data-ref="_M/REDC_1_TO_REDC_2_THRESHOLD">REDC_1_TO_REDC_2_THRESHOLD</a>))</td></tr>
+<tr><th id="240">240</th><td>    {</td></tr>
+<tr><th id="241">241</th><td>      <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a> = <a class="local col4 ref" href="#24ip" title='ip' data-ref="24ip" data-ref-filename="24ip">ip</a>;</td></tr>
+<tr><th id="242">242</th><td>      <a class="macro" href="../../gmp-impl.h.html#3261" title="do { mp_limb_t __n = (mp[0]); mp_limb_t __inv; do {} while (0); __inv = __gmp_binvert_limb_table[(__n/2) &amp; 0x7F]; if ((64 - 0) &gt; 8) __inv = 2 * __inv - __inv * __inv * __n; if ((64 - 0) &gt; 16) __inv = 2 * __inv - __inv * __inv * __n; if ((64 - 0) &gt; 32) __inv = 2 * __inv - __inv * __inv * __n; if ((64 - 0) &gt; 64) { int __invbits = 64; do { __inv = 2 * __inv - __inv * __inv * __n; __invbits *= 2; } while (__invbits &lt; (64 - 0)); } do {} while (0); (mip[0]) = __inv &amp; ((~ ((mp_limb_t) (0))) &gt;&gt; 0); } while (0)" data-ref="_M/binvert_limb">binvert_limb</a> (<a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>], <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>[<var>0</var>]);</td></tr>
+<tr><th id="243">243</th><td>      <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>] = -<a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>];</td></tr>
+<tr><th id="244">244</th><td>    }</td></tr>
+<tr><th id="245">245</th><td>  <b>else</b></td></tr>
+<tr><th id="246">246</th><td>    {</td></tr>
+<tr><th id="247">247</th><td>      <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a> = <a class="local col4 ref" href="#24ip" title='ip' data-ref="24ip" data-ref-filename="24ip">ip</a>;</td></tr>
+<tr><th id="248">248</th><td>      <a class="macro" href="../../gmp-impl.h.html#1494" title="__gmpn_binvert" data-ref="_M/mpn_binvert">mpn_binvert</a> (<a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <var>2</var>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>);</td></tr>
+<tr><th id="249">249</th><td>      <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>] = -<a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>]; <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>1</var>] = ~<a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>1</var>];</td></tr>
+<tr><th id="250">250</th><td>    }</td></tr>
+<tr><th id="251">251</th><td><u>#<span data-ppcond="238">else</span></u></td></tr>
+<tr><th id="252">252</th><td>  mip = ip;</td></tr>
+<tr><th id="253">253</th><td>  binvert_limb (mip[<var>0</var>], mp[<var>0</var>]);</td></tr>
+<tr><th id="254">254</th><td>  mip[<var>0</var>] = -mip[<var>0</var>];</td></tr>
+<tr><th id="255">255</th><td><u>#<span data-ppcond="238">endif</span></u></td></tr>
+<tr><th id="256">256</th><td></td></tr>
+<tr><th id="257">257</th><td>  <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a> = <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>;</td></tr>
+<tr><th id="258">258</th><td>  <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a> += (<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a> &lt;&lt; <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>);	<i>/* put tp after power table */</i></td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td>  <i>/* Compute pp[0] table entry */</i></td></tr>
+<tr><th id="261">261</th><td>  <i>/* scratch: |   n   | 1 |   n+2    |  */</i></td></tr>
+<tr><th id="262">262</th><td>  <i>/*          | pp[0] | 1 | redcify  |  */</i></td></tr>
+<tr><th id="263">263</th><td>  <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a> = <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a>;</td></tr>
+<tr><th id="264">264</th><td>  <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a>[<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>] = <var>1</var>;</td></tr>
+<tr><th id="265">265</th><td>  <a class="ref fn" href="#redcify" title='redcify' data-ref="redcify" data-ref-filename="redcify">redcify</a> (<a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a>, <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a> + <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <var>1</var>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a> + <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a> + <var>1</var>);</td></tr>
+<tr><th id="266">266</th><td>  <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a> += <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>;</td></tr>
+<tr><th id="267">267</th><td></td></tr>
+<tr><th id="268">268</th><td>  <i>/* Compute pp[1] table entry.  To avoid excessive scratch usage in the</i></td></tr>
+<tr><th id="269">269</th><td><i>     degenerate situation where B &gt;&gt; M, we let redcify use scratch space which</i></td></tr>
+<tr><th id="270">270</th><td><i>     will later be used by the pp table (element 2 and up).  */</i></td></tr>
+<tr><th id="271">271</th><td>  <i>/* scratch: |   n   |   n   |  bn + n + 1  |  */</i></td></tr>
+<tr><th id="272">272</th><td>  <i>/*          | pp[0] | pp[1] |   redcify    |  */</i></td></tr>
+<tr><th id="273">273</th><td>  <a class="ref fn" href="#redcify" title='redcify' data-ref="redcify" data-ref-filename="redcify">redcify</a> (<a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a>, <a class="local col7 ref" href="#17bp" title='bp' data-ref="17bp" data-ref-filename="17bp">bp</a>, <a class="local col8 ref" href="#18bn" title='bn' data-ref="18bn" data-ref-filename="18bn">bn</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a> + <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td>  <i>/* Precompute powers of b and put them in the temporary area at pp.  */</i></td></tr>
+<tr><th id="276">276</th><td>  <i>/* scratch: |   n   |   n   | ...  |                    |   2n      |  */</i></td></tr>
+<tr><th id="277">277</th><td>  <i>/*          | pp[0] | pp[1] | ...  | pp[2^windowsize-1] |  product  |  */</i></td></tr>
+<tr><th id="278">278</th><td>  <b>for</b> (<a class="local col1 ref" href="#31i" title='i' data-ref="31i" data-ref-filename="31i">i</a> = (<var>1</var> &lt;&lt; <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>) - <var>2</var>; <a class="local col1 ref" href="#31i" title='i' data-ref="31i" data-ref-filename="31i">i</a> &gt; <var>0</var>; <a class="local col1 ref" href="#31i" title='i' data-ref="31i" data-ref-filename="31i">i</a>--)</td></tr>
+<tr><th id="279">279</th><td>    {</td></tr>
+<tr><th id="280">280</th><td>      <a class="macro" href="../../gmp-impl.h.html#1085" title="__gmpn_mul_basecase" data-ref="_M/mpn_mul_basecase">mpn_mul_basecase</a> (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a> + <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);</td></tr>
+<tr><th id="281">281</th><td>      <a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a> += <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>;</td></tr>
+<tr><th id="282">282</th><td><u>#<span data-ppcond="282">if</span> <a class="macro" href="#80" title="1" data-ref="_M/WANT_REDC_2">WANT_REDC_2</a></u></td></tr>
+<tr><th id="283">283</th><td>      <b>if</b> (<a class="macro" href="../../gmp-impl.h.html#1276" title="(! ((__builtin_constant_p (35) &amp;&amp; (35) == 0) || (!(__builtin_constant_p (35) &amp;&amp; (35) == 9223372036854775807L) &amp;&amp; (n) &gt;= (35))))" data-ref="_M/BELOW_THRESHOLD">BELOW_THRESHOLD</a> (<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp-mparam.h.html#211" title="35" data-ref="_M/REDC_1_TO_REDC_2_THRESHOLD">REDC_1_TO_REDC_2_THRESHOLD</a>))</td></tr>
+<tr><th id="284">284</th><td>	<a class="macro" href="#64" title="do { mp_limb_t cy; cy = __gmpn_redc_1 (this_pp, tp, mp, n, mip[0]); __gmpn_cnd_sub_n (cy, this_pp, this_pp, mp, n); } while (0)" data-ref="_M/MPN_REDC_1_SEC">MPN_REDC_1_SEC</a> (<a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>]);</td></tr>
+<tr><th id="285">285</th><td>      <b>else</b></td></tr>
+<tr><th id="286">286</th><td>	<a class="macro" href="#72" title="do { mp_limb_t cy; cy = __gmpn_redc_2 (this_pp, tp, mp, n, mip); __gmpn_cnd_sub_n (cy, this_pp, this_pp, mp, n); } while (0)" data-ref="_M/MPN_REDC_2_SEC">MPN_REDC_2_SEC</a> (<a class="local col0 ref" href="#30this_pp" title='this_pp' data-ref="30this_pp" data-ref-filename="30this_pp">this_pp</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>);</td></tr>
+<tr><th id="287">287</th><td><u>#<span data-ppcond="282">else</span></u></td></tr>
+<tr><th id="288">288</th><td>      MPN_REDC_1_SEC (this_pp, tp, mp, n, mip[<var>0</var>]);</td></tr>
+<tr><th id="289">289</th><td><u>#<span data-ppcond="282">endif</span></u></td></tr>
+<tr><th id="290">290</th><td>    }</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td>  <a class="local col8 ref" href="#28expbits" title='expbits' data-ref="28expbits" data-ref-filename="28expbits">expbits</a> = <a class="ref fn" href="#getbits" title='getbits' data-ref="getbits" data-ref-filename="getbits">getbits</a> (<a class="local col9 ref" href="#19ep" title='ep' data-ref="19ep" data-ref-filename="19ep">ep</a>, <a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a>, <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>);</td></tr>
+<tr><th id="293">293</th><td>  <a class="macro" href="../../gmp-impl.h.html#2390" title="do { if (__builtin_expect ((!(enb &gt;= windowsize)) != 0, 0)) __gmp_assert_fail (&quot;/___NETBSD_SRC___/external/lgpl3/gmp/lib/libgmp/../../dist/mpn/generic/sec_powm.c&quot;, 293, &quot;enb &gt;= windowsize&quot;); } while (0)" data-ref="_M/ASSERT_ALWAYS">ASSERT_ALWAYS</a> (<a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a> &gt;= <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>);</td></tr>
+<tr><th id="294">294</th><td>  <a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a> -= <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>;</td></tr>
+<tr><th id="295">295</th><td></td></tr>
+<tr><th id="296">296</th><td>  <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#1672" title="__gmpn_sec_tabselect" data-ref="_M/mpn_sec_tabselect">mpn_sec_tabselect</a> (<a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <var>1</var> &lt;&lt; <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>, <a class="local col8 ref" href="#28expbits" title='expbits' data-ref="28expbits" data-ref-filename="28expbits">expbits</a>);</td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td>  <i>/* Main exponentiation loop.  */</i></td></tr>
+<tr><th id="299">299</th><td>  <i>/* scratch: |   n   |   n   | ...  |                    |     3n-4n     |  */</i></td></tr>
+<tr><th id="300">300</th><td>  <i>/*          | pp[0] | pp[1] | ...  | pp[2^windowsize-1] |  loop scratch |  */</i></td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td><u>#define <dfn class="macro" id="_M/INNERLOOP" data-ref="_M/INNERLOOP">INNERLOOP</dfn>							\</u></td></tr>
+<tr><th id="303">303</th><td><u>  while (<a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a> != 0)							\</u></td></tr>
+<tr><th id="304">304</th><td><u>    {									\</u></td></tr>
+<tr><th id="305">305</th><td><u>      <a class="local col8 ref" href="#28expbits" title='expbits' data-ref="28expbits" data-ref-filename="28expbits">expbits</a> = <a class="ref fn" href="#getbits" title='getbits' data-ref="getbits" data-ref-filename="getbits">getbits</a> (<a class="local col9 ref" href="#19ep" title='ep' data-ref="19ep" data-ref-filename="19ep">ep</a>, <a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a>, <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>);				\</u></td></tr>
+<tr><th id="306">306</th><td><u>      <a class="local col7 ref" href="#27this_windowsize" title='this_windowsize' data-ref="27this_windowsize" data-ref-filename="27this_windowsize">this_windowsize</a> = <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>;					\</u></td></tr>
+<tr><th id="307">307</th><td><u>      if (<a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a> &lt; <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>)						\</u></td></tr>
+<tr><th id="308">308</th><td><u>	{								\</u></td></tr>
+<tr><th id="309">309</th><td><u>	  <a class="local col7 ref" href="#27this_windowsize" title='this_windowsize' data-ref="27this_windowsize" data-ref-filename="27this_windowsize">this_windowsize</a> -= <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a> - <a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a>;				\</u></td></tr>
+<tr><th id="310">310</th><td><u>	  <a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a> = 0;							\</u></td></tr>
+<tr><th id="311">311</th><td><u>	}								\</u></td></tr>
+<tr><th id="312">312</th><td><u>      else								\</u></td></tr>
+<tr><th id="313">313</th><td><u>	<a class="local col0 ref" href="#20enb" title='enb' data-ref="20enb" data-ref-filename="20enb">enb</a> -= <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>;						\</u></td></tr>
+<tr><th id="314">314</th><td><u>									\</u></td></tr>
+<tr><th id="315">315</th><td><u>      do								\</u></td></tr>
+<tr><th id="316">316</th><td><u>	{								\</u></td></tr>
+<tr><th id="317">317</th><td><u>	  mpn_local_sqr (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, tp + 2 * n);			\</u></td></tr>
+<tr><th id="318">318</th><td><u>	  MPN_REDUCE (<a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>);				\</u></td></tr>
+<tr><th id="319">319</th><td><u>	  <a class="local col7 ref" href="#27this_windowsize" title='this_windowsize' data-ref="27this_windowsize" data-ref-filename="27this_windowsize">this_windowsize</a>--;						\</u></td></tr>
+<tr><th id="320">320</th><td><u>	}								\</u></td></tr>
+<tr><th id="321">321</th><td><u>      while (<a class="local col7 ref" href="#27this_windowsize" title='this_windowsize' data-ref="27this_windowsize" data-ref-filename="27this_windowsize">this_windowsize</a> != 0);					\</u></td></tr>
+<tr><th id="322">322</th><td><u>									\</u></td></tr>
+<tr><th id="323">323</th><td><u>      mpn_sec_tabselect (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a> + 2*<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, 1 &lt;&lt; <a class="local col6 ref" href="#26windowsize" title='windowsize' data-ref="26windowsize" data-ref-filename="26windowsize">windowsize</a>, <a class="local col8 ref" href="#28expbits" title='expbits' data-ref="28expbits" data-ref-filename="28expbits">expbits</a>);	\</u></td></tr>
+<tr><th id="324">324</th><td><u>      mpn_mul_basecase (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a> + 2*<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);			\</u></td></tr>
+<tr><th id="325">325</th><td><u>									\</u></td></tr>
+<tr><th id="326">326</th><td><u>      MPN_REDUCE (<a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>);					\</u></td></tr>
+<tr><th id="327">327</th><td><u>    }</u></td></tr>
+<tr><th id="328">328</th><td></td></tr>
+<tr><th id="329">329</th><td><u>#<span data-ppcond="329">if</span> <a class="macro" href="#80" title="1" data-ref="_M/WANT_REDC_2">WANT_REDC_2</a></u></td></tr>
+<tr><th id="330">330</th><td>  <b>if</b> (<a class="macro" href="../../gmp-impl.h.html#1276" title="(! ((__builtin_constant_p (35) &amp;&amp; (35) == 0) || (!(__builtin_constant_p (35) &amp;&amp; (35) == 9223372036854775807L) &amp;&amp; (n) &gt;= (35))))" data-ref="_M/BELOW_THRESHOLD">BELOW_THRESHOLD</a> (<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp-mparam.h.html#211" title="35" data-ref="_M/REDC_1_TO_REDC_2_THRESHOLD">REDC_1_TO_REDC_2_THRESHOLD</a>))</td></tr>
+<tr><th id="331">331</th><td>    {</td></tr>
+<tr><th id="332">332</th><td><u>#undef <span class="macro" data-ref="_M/MPN_MUL_N">MPN_MUL_N</span></u></td></tr>
+<tr><th id="333">333</th><td><u>#undef <span class="macro" data-ref="_M/MPN_SQR">MPN_SQR</span></u></td></tr>
+<tr><th id="334">334</th><td><u>#undef <span class="macro" data-ref="_M/MPN_REDUCE">MPN_REDUCE</span></u></td></tr>
+<tr><th id="335">335</th><td><u>#define <dfn class="macro" id="_M/MPN_MUL_N" data-ref="_M/MPN_MUL_N">MPN_MUL_N</dfn>(r,a,b,n)		mpn_mul_basecase (r,a,n,b,n)</u></td></tr>
+<tr><th id="336">336</th><td><u>#define <dfn class="macro" id="_M/MPN_SQR" data-ref="_M/MPN_SQR">MPN_SQR</dfn>(r,a,n)			mpn_sqr_basecase (r,a,n)</u></td></tr>
+<tr><th id="337">337</th><td><u>#define <dfn class="macro" id="_M/MPN_REDUCE" data-ref="_M/MPN_REDUCE">MPN_REDUCE</dfn>(rp,tp,mp,n,mip)	MPN_REDC_1_SEC (rp, tp, mp, n, mip[0])</u></td></tr>
+<tr><th id="338">338</th><td>      <a class="macro" href="#302" title="while (enb != 0) { expbits = getbits (ep, enb, windowsize); this_windowsize = windowsize; if (enb &lt; windowsize) { this_windowsize -= windowsize - enb; enb = 0; } else enb -= windowsize; do { __gmpn_sqr_basecase(tp,rp,n); do { mp_limb_t cy; cy = __gmpn_redc_1 (rp, tp, mp, n, mip[0]); __gmpn_cnd_sub_n (cy, rp, rp, mp, n); } while (0); this_windowsize--; } while (this_windowsize != 0); __gmpn_sec_tabselect (tp + 2*n, pp, n, 1 &lt;&lt; windowsize, expbits); __gmpn_mul_basecase (tp, rp, n, tp + 2*n, n); do { mp_limb_t cy; cy = __gmpn_redc_1 (rp, tp, mp, n, mip[0]); __gmpn_cnd_sub_n (cy, rp, rp, mp, n); } while (0); }" data-ref="_M/INNERLOOP">INNERLOOP</a>;</td></tr>
+<tr><th id="339">339</th><td>    }</td></tr>
+<tr><th id="340">340</th><td>  <b>else</b></td></tr>
+<tr><th id="341">341</th><td>    {</td></tr>
+<tr><th id="342">342</th><td><u>#undef <a class="macro" href="#335" data-ref="_M/MPN_MUL_N">MPN_MUL_N</a></u></td></tr>
+<tr><th id="343">343</th><td><u>#undef <a class="macro" href="#336" data-ref="_M/MPN_SQR">MPN_SQR</a></u></td></tr>
+<tr><th id="344">344</th><td><u>#undef <a class="macro" href="#337" data-ref="_M/MPN_REDUCE">MPN_REDUCE</a></u></td></tr>
+<tr><th id="345">345</th><td><u>#define <dfn class="macro" id="_M/MPN_MUL_N" data-ref="_M/MPN_MUL_N">MPN_MUL_N</dfn>(r,a,b,n)		mpn_mul_basecase (r,a,n,b,n)</u></td></tr>
+<tr><th id="346">346</th><td><u>#define <dfn class="macro" id="_M/MPN_SQR" data-ref="_M/MPN_SQR">MPN_SQR</dfn>(r,a,n)			mpn_sqr_basecase (r,a,n)</u></td></tr>
+<tr><th id="347">347</th><td><u>#define <dfn class="macro" id="_M/MPN_REDUCE" data-ref="_M/MPN_REDUCE">MPN_REDUCE</dfn>(rp,tp,mp,n,mip)	MPN_REDC_2_SEC (rp, tp, mp, n, mip)</u></td></tr>
+<tr><th id="348">348</th><td>      <a class="macro" href="#302" title="while (enb != 0) { expbits = getbits (ep, enb, windowsize); this_windowsize = windowsize; if (enb &lt; windowsize) { this_windowsize -= windowsize - enb; enb = 0; } else enb -= windowsize; do { __gmpn_sqr_basecase(tp,rp,n); do { mp_limb_t cy; cy = __gmpn_redc_2 (rp, tp, mp, n, mip); __gmpn_cnd_sub_n (cy, rp, rp, mp, n); } while (0); this_windowsize--; } while (this_windowsize != 0); __gmpn_sec_tabselect (tp + 2*n, pp, n, 1 &lt;&lt; windowsize, expbits); __gmpn_mul_basecase (tp, rp, n, tp + 2*n, n); do { mp_limb_t cy; cy = __gmpn_redc_2 (rp, tp, mp, n, mip); __gmpn_cnd_sub_n (cy, rp, rp, mp, n); } while (0); }" data-ref="_M/INNERLOOP">INNERLOOP</a>;</td></tr>
+<tr><th id="349">349</th><td>    }</td></tr>
+<tr><th id="350">350</th><td><u>#<span data-ppcond="329">else</span></u></td></tr>
+<tr><th id="351">351</th><td><u>#undef MPN_MUL_N</u></td></tr>
+<tr><th id="352">352</th><td><u>#undef MPN_SQR</u></td></tr>
+<tr><th id="353">353</th><td><u>#undef MPN_REDUCE</u></td></tr>
+<tr><th id="354">354</th><td><u>#define MPN_MUL_N(r,a,b,n)		mpn_mul_basecase (r,a,n,b,n)</u></td></tr>
+<tr><th id="355">355</th><td><u>#define MPN_SQR(r,a,n)			mpn_sqr_basecase (r,a,n)</u></td></tr>
+<tr><th id="356">356</th><td><u>#define MPN_REDUCE(rp,tp,mp,n,mip)	MPN_REDC_1_SEC (rp, tp, mp, n, mip[0])</u></td></tr>
+<tr><th id="357">357</th><td>  INNERLOOP;</td></tr>
+<tr><th id="358">358</th><td><u>#<span data-ppcond="329">endif</span></u></td></tr>
+<tr><th id="359">359</th><td></td></tr>
+<tr><th id="360">360</th><td>  <a class="macro" href="../../gmp-impl.h.html#1804" title="do { do {} while (0); do { do {} while (0); do {} while (0); __gmpn_copyi (tp, rp, n); } while (0); } while (0)" data-ref="_M/MPN_COPY">MPN_COPY</a> (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);</td></tr>
+<tr><th id="361">361</th><td>  <a class="macro" href="../../gmp-impl.h.html#1874" title="do { do {} while (0); if ((n) != 0) do { mp_ptr __dst = (tp + n); mp_size_t __n = (n); do {} while (0); do *__dst++ = (((mp_limb_t) 0L)); while (--__n); } while (0); } while (0)" data-ref="_M/MPN_ZERO">MPN_ZERO</a> (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a> + <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td><u>#<span data-ppcond="363">if</span> <a class="macro" href="#80" title="1" data-ref="_M/WANT_REDC_2">WANT_REDC_2</a></u></td></tr>
+<tr><th id="364">364</th><td>  <b>if</b> (<a class="macro" href="../../gmp-impl.h.html#1276" title="(! ((__builtin_constant_p (35) &amp;&amp; (35) == 0) || (!(__builtin_constant_p (35) &amp;&amp; (35) == 9223372036854775807L) &amp;&amp; (n) &gt;= (35))))" data-ref="_M/BELOW_THRESHOLD">BELOW_THRESHOLD</a> (<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp-mparam.h.html#211" title="35" data-ref="_M/REDC_1_TO_REDC_2_THRESHOLD">REDC_1_TO_REDC_2_THRESHOLD</a>))</td></tr>
+<tr><th id="365">365</th><td>    <a class="macro" href="#64" title="do { mp_limb_t cy; cy = __gmpn_redc_1 (rp, tp, mp, n, mip[0]); __gmpn_cnd_sub_n (cy, rp, rp, mp, n); } while (0)" data-ref="_M/MPN_REDC_1_SEC">MPN_REDC_1_SEC</a> (<a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>[<var>0</var>]);</td></tr>
+<tr><th id="366">366</th><td>  <b>else</b></td></tr>
+<tr><th id="367">367</th><td>    <a class="macro" href="#72" title="do { mp_limb_t cy; cy = __gmpn_redc_2 (rp, tp, mp, n, mip); __gmpn_cnd_sub_n (cy, rp, rp, mp, n); } while (0)" data-ref="_M/MPN_REDC_2_SEC">MPN_REDC_2_SEC</a> (<a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>, <a class="local col5 ref" href="#25mip" title='mip' data-ref="25mip" data-ref-filename="25mip">mip</a>);</td></tr>
+<tr><th id="368">368</th><td><u>#<span data-ppcond="363">else</span></u></td></tr>
+<tr><th id="369">369</th><td>  MPN_REDC_1_SEC (rp, tp, mp, n, mip[<var>0</var>]);</td></tr>
+<tr><th id="370">370</th><td><u>#<span data-ppcond="363">endif</span></u></td></tr>
+<tr><th id="371">371</th><td>  <a class="local col2 ref" href="#32cnd" title='cnd' data-ref="32cnd" data-ref-filename="32cnd">cnd</a> = <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#1606" title="__gmpn_sub_n" data-ref="_M/mpn_sub_n">mpn_sub_n</a> (<a class="local col3 ref" href="#23tp" title='tp' data-ref="23tp" data-ref-filename="23tp">tp</a>, <a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);	<i>/* we need just retval */</i></td></tr>
+<tr><th id="372">372</th><td>  <a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#1641" title="__gmpn_cnd_sub_n" data-ref="_M/mpn_cnd_sub_n">mpn_cnd_sub_n</a> (!<a class="local col2 ref" href="#32cnd" title='cnd' data-ref="32cnd" data-ref-filename="32cnd">cnd</a>, <a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col6 ref" href="#16rp" title='rp' data-ref="16rp" data-ref-filename="16rp">rp</a>, <a class="local col1 ref" href="#21mp" title='mp' data-ref="21mp" data-ref-filename="21mp">mp</a>, <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);</td></tr>
+<tr><th id="373">373</th><td>}</td></tr>
+<tr><th id="374">374</th><td></td></tr>
+<tr><th id="375">375</th><td><a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a></td></tr>
+<tr><th id="376">376</th><td><a class="macro" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#1669" title="__gmpn_sec_powm_itch" data-ref="_M/mpn_sec_powm_itch">mpn_sec_powm_itch</a> (<a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col1 decl" id="41bn" title='bn' data-type='mp_size_t' data-ref="41bn" data-ref-filename="41bn">bn</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_bitcnt_t" title='mp_bitcnt_t' data-type='unsigned long' data-ref="mp_bitcnt_t" data-ref-filename="mp_bitcnt_t">mp_bitcnt_t</a> <dfn class="local col2 decl" id="42enb" title='enb' data-type='mp_bitcnt_t' data-ref="42enb" data-ref-filename="42enb">enb</dfn>, <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col3 decl" id="43n" title='n' data-type='mp_size_t' data-ref="43n" data-ref-filename="43n">n</dfn>)</td></tr>
+<tr><th id="377">377</th><td>{</td></tr>
+<tr><th id="378">378</th><td>  <em>int</em> <dfn class="local col4 decl" id="44windowsize" title='windowsize' data-type='int' data-ref="44windowsize" data-ref-filename="44windowsize">windowsize</dfn>;</td></tr>
+<tr><th id="379">379</th><td>  <a class="typedef" href="../../../lib/libgmp/arch/x86_64/gmp.h.html#mp_size_t" title='mp_size_t' data-type='long' data-ref="mp_size_t" data-ref-filename="mp_size_t">mp_size_t</a> <dfn class="local col5 decl" id="45redcify_itch" title='redcify_itch' data-type='mp_size_t' data-ref="45redcify_itch" data-ref-filename="45redcify_itch">redcify_itch</dfn>, <dfn class="local col6 decl" id="46itch" title='itch' data-type='mp_size_t' data-ref="46itch" data-ref-filename="46itch">itch</dfn>;</td></tr>
+<tr><th id="380">380</th><td></td></tr>
+<tr><th id="381">381</th><td>  <i>/* The top scratch usage will either be when reducing B in the 2nd redcify</i></td></tr>
+<tr><th id="382">382</th><td><i>     call, or more typically n*2^windowsize + 3n or 4n, in the main loop.  (It</i></td></tr>
+<tr><th id="383">383</th><td><i>     is 3n or 4n depending on if we use mpn_local_sqr or a native</i></td></tr>
+<tr><th id="384">384</th><td><i>     mpn_sqr_basecase.  We assume 4n always for now.) */</i></td></tr>
+<tr><th id="385">385</th><td></td></tr>
+<tr><th id="386">386</th><td>  <a class="local col4 ref" href="#44windowsize" title='windowsize' data-ref="44windowsize" data-ref-filename="44windowsize">windowsize</a> = <a class="ref fn" href="#win_size" title='win_size' data-ref="win_size" data-ref-filename="win_size">win_size</a> (<a class="local col2 ref" href="#42enb" title='enb' data-ref="42enb" data-ref-filename="42enb">enb</a>);</td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td>  <i>/* The 2n term is due to pp[0] and pp[1] at the time of the 2nd redcify call,</i></td></tr>
+<tr><th id="389">389</th><td><i>     the (bn + n) term is due to redcify's own usage, and the rest is due to</i></td></tr>
+<tr><th id="390">390</th><td><i>     mpn_sec_div_r's usage when called from redcify.  */</i></td></tr>
+<tr><th id="391">391</th><td>  <a class="local col5 ref" href="#45redcify_itch" title='redcify_itch' data-ref="45redcify_itch" data-ref-filename="45redcify_itch">redcify_itch</a> = (<var>2</var> * <a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a>) + (<a class="local col1 ref" href="#41bn" title='bn' data-ref="41bn" data-ref-filename="41bn">bn</a> + <a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a>) + ((<a class="local col1 ref" href="#41bn" title='bn' data-ref="41bn" data-ref-filename="41bn">bn</a> + <a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a>) + <var>2</var> * <a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a> + <var>2</var>);</td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td>  <i>/* The n * 2^windowsize term is due to the power table, the 4n term is due to</i></td></tr>
+<tr><th id="394">394</th><td><i>     scratch needs of squaring/multiplication in the exponentiation loop.  */</i></td></tr>
+<tr><th id="395">395</th><td>  <a class="local col6 ref" href="#46itch" title='itch' data-ref="46itch" data-ref-filename="46itch">itch</a> = (<a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a> &lt;&lt; <a class="local col4 ref" href="#44windowsize" title='windowsize' data-ref="44windowsize" data-ref-filename="44windowsize">windowsize</a>) + (<var>4</var> * <a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a>);</td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td>  <b>return</b> <a class="macro" href="../../gmp-impl.h.html#541" title="((itch) &gt; (redcify_itch) ? (itch) : (redcify_itch))" data-ref="_M/MAX">MAX</a> (<a class="local col6 ref" href="#46itch" title='itch' data-ref="46itch" data-ref-filename="46itch">itch</a>, <a class="local col5 ref" href="#45redcify_itch" title='redcify_itch' data-ref="45redcify_itch" data-ref-filename="45redcify_itch">redcify_itch</a>);</td></tr>
+<tr><th id="398">398</th><td>}</td></tr>
+<tr><th id="399">399</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../../../../../../objdir.amd64/external/lgpl3/gmp/lib/libgmp/mpn_sec_powm.c.html'>netbsd/objdir.amd64/external/lgpl3/gmp/lib/libgmp/mpn_sec_powm.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

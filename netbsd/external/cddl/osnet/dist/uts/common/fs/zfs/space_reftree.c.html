@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>space_reftree.c source code [netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/space_reftree.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/space_reftree.c'; var root_path = '../../../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../../../..'>netbsd</a>/<a href='../../../../../../..'>external</a>/<a href='../../../../../..'>cddl</a>/<a href='../../../../..'>osnet</a>/<a href='../../../..'>dist</a>/<a href='../../..'>uts</a>/<a href='../..'>common</a>/<a href='..'>fs</a>/<a href='./'>zfs</a>/<a href='space_reftree.c.html'>space_reftree.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * CDDL HEADER START</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * The contents of this file are subject to the terms of the</i></td></tr>
+<tr><th id="5">5</th><td><i> * Common Development and Distribution License (the "License").</i></td></tr>
+<tr><th id="6">6</th><td><i> * You may not use this file except in compliance with the License.</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE</i></td></tr>
+<tr><th id="9">9</th><td><i> * or <a href="http://www.opensolaris.org/os/licensing">http://www.opensolaris.org/os/licensing</a>.</i></td></tr>
+<tr><th id="10">10</th><td><i> * See the License for the specific language governing permissions</i></td></tr>
+<tr><th id="11">11</th><td><i> * and limitations under the License.</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * When distributing Covered Code, include this CDDL HEADER in each</i></td></tr>
+<tr><th id="14">14</th><td><i> * file and include the License file at usr/src/OPENSOLARIS.LICENSE.</i></td></tr>
+<tr><th id="15">15</th><td><i> * If applicable, add the following below this CDDL HEADER, with the</i></td></tr>
+<tr><th id="16">16</th><td><i> * fields enclosed by brackets "[]" replaced with your own identifying</i></td></tr>
+<tr><th id="17">17</th><td><i> * information: Portions Copyright [yyyy] [name of copyright owner]</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * CDDL HEADER END</i></td></tr>
+<tr><th id="20">20</th><td><i> */</i></td></tr>
+<tr><th id="21">21</th><td><i>/*</i></td></tr>
+<tr><th id="22">22</th><td><i> * Copyright 2009 Sun Microsystems, Inc.  All rights reserved.</i></td></tr>
+<tr><th id="23">23</th><td><i> * Use is subject to license terms.</i></td></tr>
+<tr><th id="24">24</th><td><i> */</i></td></tr>
+<tr><th id="25">25</th><td><i>/*</i></td></tr>
+<tr><th id="26">26</th><td><i> * Copyright (c) 2013, 2015 by Delphix. All rights reserved.</i></td></tr>
+<tr><th id="27">27</th><td><i> */</i></td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><u>#include <a href="../../../../lib/libzpool/common/sys/zfs_context.h.html">&lt;sys/zfs_context.h&gt;</a></u></td></tr>
+<tr><th id="30">30</th><td><u>#include <a href="sys/range_tree.h.html">&lt;sys/range_tree.h&gt;</a></u></td></tr>
+<tr><th id="31">31</th><td><u>#include <a href="sys/space_reftree.h.html">&lt;sys/space_reftree.h&gt;</a></u></td></tr>
+<tr><th id="32">32</th><td></td></tr>
+<tr><th id="33">33</th><td><i  data-doc="space_reftree_compare">/*</i></td></tr>
+<tr><th id="34">34</th><td><i  data-doc="space_reftree_compare"> * Space reference trees.</i></td></tr>
+<tr><th id="35">35</th><td><i  data-doc="space_reftree_compare"> *</i></td></tr>
+<tr><th id="36">36</th><td><i  data-doc="space_reftree_compare"> * A range tree is a collection of integers.  Every integer is either</i></td></tr>
+<tr><th id="37">37</th><td><i  data-doc="space_reftree_compare"> * in the tree, or it's not.  A space reference tree generalizes</i></td></tr>
+<tr><th id="38">38</th><td><i  data-doc="space_reftree_compare"> * the idea: it allows its members to have arbitrary reference counts,</i></td></tr>
+<tr><th id="39">39</th><td><i  data-doc="space_reftree_compare"> * as opposed to the implicit reference count of 0 or 1 in a range tree.</i></td></tr>
+<tr><th id="40">40</th><td><i  data-doc="space_reftree_compare"> * This representation comes in handy when computing the union or</i></td></tr>
+<tr><th id="41">41</th><td><i  data-doc="space_reftree_compare"> * intersection of multiple space maps.  For example, the union of</i></td></tr>
+<tr><th id="42">42</th><td><i  data-doc="space_reftree_compare"> * N range trees is the subset of the reference tree with refcnt &gt;= 1.</i></td></tr>
+<tr><th id="43">43</th><td><i  data-doc="space_reftree_compare"> * The intersection of N range trees is the subset with refcnt &gt;= N.</i></td></tr>
+<tr><th id="44">44</th><td><i  data-doc="space_reftree_compare"> *</i></td></tr>
+<tr><th id="45">45</th><td><i  data-doc="space_reftree_compare"> * [It's very much like a Fourier transform.  Unions and intersections</i></td></tr>
+<tr><th id="46">46</th><td><i  data-doc="space_reftree_compare"> * are hard to perform in the 'range tree domain', so we convert the trees</i></td></tr>
+<tr><th id="47">47</th><td><i  data-doc="space_reftree_compare"> * into the 'reference count domain', where it's trivial, then invert.]</i></td></tr>
+<tr><th id="48">48</th><td><i  data-doc="space_reftree_compare"> *</i></td></tr>
+<tr><th id="49">49</th><td><i  data-doc="space_reftree_compare"> * vdev_dtl_reassess() uses computations of this form to determine</i></td></tr>
+<tr><th id="50">50</th><td><i  data-doc="space_reftree_compare"> * DTL_MISSING and DTL_OUTAGE for interior vdevs -- e.g. a RAID-Z vdev</i></td></tr>
+<tr><th id="51">51</th><td><i  data-doc="space_reftree_compare"> * has an outage wherever refcnt &gt;= vdev_nparity + 1, and a mirror vdev</i></td></tr>
+<tr><th id="52">52</th><td><i  data-doc="space_reftree_compare"> * has an outage wherever refcnt &gt;= vdev_children.</i></td></tr>
+<tr><th id="53">53</th><td><i  data-doc="space_reftree_compare"> */</i></td></tr>
+<tr><th id="54">54</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="55">55</th><td><dfn class="tu decl def fn" id="space_reftree_compare" title='space_reftree_compare' data-type='int space_reftree_compare(const void * x1, const void * x2)' data-ref="space_reftree_compare" data-ref-filename="space_reftree_compare">space_reftree_compare</dfn>(<em>const</em> <em>void</em> *<dfn class="local col3 decl" id="13x1" title='x1' data-type='const void *' data-ref="13x1" data-ref-filename="13x1">x1</dfn>, <em>const</em> <em>void</em> *<dfn class="local col4 decl" id="14x2" title='x2' data-type='const void *' data-ref="14x2" data-ref-filename="14x2">x2</dfn>)</td></tr>
+<tr><th id="56">56</th><td>{</td></tr>
+<tr><th id="57">57</th><td>	<em>const</em> <a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a> *<dfn class="local col5 decl" id="15sr1" title='sr1' data-type='const space_ref_t *' data-ref="15sr1" data-ref-filename="15sr1">sr1</dfn> = <a class="local col3 ref" href="#13x1" title='x1' data-ref="13x1" data-ref-filename="13x1">x1</a>;</td></tr>
+<tr><th id="58">58</th><td>	<em>const</em> <a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a> *<dfn class="local col6 decl" id="16sr2" title='sr2' data-type='const space_ref_t *' data-ref="16sr2" data-ref-filename="16sr2">sr2</dfn> = <a class="local col4 ref" href="#14x2" title='x2' data-ref="14x2" data-ref-filename="14x2">x2</a>;</td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td>	<b>if</b> (<a class="local col5 ref" href="#15sr1" title='sr1' data-ref="15sr1" data-ref-filename="15sr1">sr1</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a> &lt; <a class="local col6 ref" href="#16sr2" title='sr2' data-ref="16sr2" data-ref-filename="16sr2">sr2</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a>)</td></tr>
+<tr><th id="61">61</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="62">62</th><td>	<b>if</b> (<a class="local col5 ref" href="#15sr1" title='sr1' data-ref="15sr1" data-ref-filename="15sr1">sr1</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a> &gt; <a class="local col6 ref" href="#16sr2" title='sr2' data-ref="16sr2" data-ref-filename="16sr2">sr2</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a>)</td></tr>
+<tr><th id="63">63</th><td>		<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="64">64</th><td></td></tr>
+<tr><th id="65">65</th><td>	<b>if</b> (<a class="local col5 ref" href="#15sr1" title='sr1' data-ref="15sr1" data-ref-filename="15sr1">sr1</a> &lt; <a class="local col6 ref" href="#16sr2" title='sr2' data-ref="16sr2" data-ref-filename="16sr2">sr2</a>)</td></tr>
+<tr><th id="66">66</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="67">67</th><td>	<b>if</b> (<a class="local col5 ref" href="#15sr1" title='sr1' data-ref="15sr1" data-ref-filename="15sr1">sr1</a> &gt; <a class="local col6 ref" href="#16sr2" title='sr2' data-ref="16sr2" data-ref-filename="16sr2">sr2</a>)</td></tr>
+<tr><th id="68">68</th><td>		<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="71">71</th><td>}</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td><em>void</em></td></tr>
+<tr><th id="74">74</th><td><dfn class="decl def fn" id="space_reftree_create" title='space_reftree_create' data-ref="space_reftree_create" data-ref-filename="space_reftree_create">space_reftree_create</dfn>(<a class="typedef" href="../../sys/avl.h.html#avl_tree_t" title='avl_tree_t' data-type='struct avl_tree' data-ref="avl_tree_t" data-ref-filename="avl_tree_t">avl_tree_t</a> *<dfn class="local col7 decl" id="17t" title='t' data-type='avl_tree_t *' data-ref="17t" data-ref-filename="17t">t</dfn>)</td></tr>
+<tr><th id="75">75</th><td>{</td></tr>
+<tr><th id="76">76</th><td>	<a class="ref fn" href="../../sys/avl.h.html#avl_create" title='avl_create' data-ref="avl_create" data-ref-filename="avl_create">avl_create</a>(<a class="local col7 ref" href="#17t" title='t' data-ref="17t" data-ref-filename="17t">t</a>, <a class="tu ref fn" href="#space_reftree_compare" title='space_reftree_compare' data-use='r' data-ref="space_reftree_compare" data-ref-filename="space_reftree_compare">space_reftree_compare</a>,</td></tr>
+<tr><th id="77">77</th><td>	    <b>sizeof</b> (<a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a>), <span class="macro" title="__builtin_offsetof(space_ref_t, sr_node)" data-ref="_M/offsetof">offsetof</span>(<a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a>, sr_node));</td></tr>
+<tr><th id="78">78</th><td>}</td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><em>void</em></td></tr>
+<tr><th id="81">81</th><td><dfn class="decl def fn" id="space_reftree_destroy" title='space_reftree_destroy' data-ref="space_reftree_destroy" data-ref-filename="space_reftree_destroy">space_reftree_destroy</dfn>(<a class="typedef" href="../../sys/avl.h.html#avl_tree_t" title='avl_tree_t' data-type='struct avl_tree' data-ref="avl_tree_t" data-ref-filename="avl_tree_t">avl_tree_t</a> *<dfn class="local col8 decl" id="18t" title='t' data-type='avl_tree_t *' data-ref="18t" data-ref-filename="18t">t</dfn>)</td></tr>
+<tr><th id="82">82</th><td>{</td></tr>
+<tr><th id="83">83</th><td>	<a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a> *<dfn class="local col9 decl" id="19sr" title='sr' data-type='space_ref_t *' data-ref="19sr" data-ref-filename="19sr">sr</dfn>;</td></tr>
+<tr><th id="84">84</th><td>	<em>void</em> *<dfn class="local col0 decl" id="20cookie" title='cookie' data-type='void *' data-ref="20cookie" data-ref-filename="20cookie">cookie</dfn> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td>	<b>while</b> ((<a class="local col9 ref" href="#19sr" title='sr' data-ref="19sr" data-ref-filename="19sr">sr</a> = <a class="ref fn" href="../../sys/avl.h.html#avl_destroy_nodes" title='avl_destroy_nodes' data-ref="avl_destroy_nodes" data-ref-filename="avl_destroy_nodes">avl_destroy_nodes</a>(<a class="local col8 ref" href="#18t" title='t' data-ref="18t" data-ref-filename="18t">t</a>, &amp;<a class="local col0 ref" href="#20cookie" title='cookie' data-ref="20cookie" data-ref-filename="20cookie">cookie</a>)) != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="87">87</th><td>		<a class="macro" href="../../../../lib/libzpool/common/sys/zfs_context.h.html#367" title="umem_free(sr, sizeof (*sr))" data-ref="_M/kmem_free">kmem_free</a>(<a class="local col9 ref" href="#19sr" title='sr' data-ref="19sr" data-ref-filename="19sr">sr</a>, <b>sizeof</b> (*<a class="local col9 ref" href="#19sr" title='sr' data-ref="19sr" data-ref-filename="19sr">sr</a>));</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td>	<a class="ref fn" href="../../sys/avl.h.html#avl_destroy" title='avl_destroy' data-ref="avl_destroy" data-ref-filename="avl_destroy">avl_destroy</a>(<a class="local col8 ref" href="#18t" title='t' data-ref="18t" data-ref-filename="18t">t</a>);</td></tr>
+<tr><th id="90">90</th><td>}</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="93">93</th><td><dfn class="tu decl def fn" id="space_reftree_add_node" title='space_reftree_add_node' data-type='void space_reftree_add_node(avl_tree_t * t, uint64_t offset, int64_t refcnt)' data-ref="space_reftree_add_node" data-ref-filename="space_reftree_add_node">space_reftree_add_node</dfn>(<a class="typedef" href="../../sys/avl.h.html#avl_tree_t" title='avl_tree_t' data-type='struct avl_tree' data-ref="avl_tree_t" data-ref-filename="avl_tree_t">avl_tree_t</a> *<dfn class="local col1 decl" id="21t" title='t' data-type='avl_tree_t *' data-ref="21t" data-ref-filename="21t">t</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col2 decl" id="22offset" title='offset' data-type='uint64_t' data-ref="22offset" data-ref-filename="22offset">offset</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col3 decl" id="23refcnt" title='refcnt' data-type='int64_t' data-ref="23refcnt" data-ref-filename="23refcnt">refcnt</dfn>)</td></tr>
+<tr><th id="94">94</th><td>{</td></tr>
+<tr><th id="95">95</th><td>	<a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a> *<dfn class="local col4 decl" id="24sr" title='sr' data-type='space_ref_t *' data-ref="24sr" data-ref-filename="24sr">sr</dfn>;</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td>	<a class="local col4 ref" href="#24sr" title='sr' data-ref="24sr" data-ref-filename="24sr">sr</a> = <a class="macro" href="../../../../lib/libzpool/common/sys/zfs_context.h.html#365" title="umem_alloc(sizeof (*sr), 0x0100)" data-ref="_M/kmem_alloc">kmem_alloc</a>(<b>sizeof</b> (*<a class="local col4 ref" href="#24sr" title='sr' data-ref="24sr" data-ref-filename="24sr">sr</a>), <a class="macro" href="../../../../lib/libzpool/common/sys/zfs_context.h.html#359" title="0x0100" data-ref="_M/KM_SLEEP">KM_SLEEP</a>);</td></tr>
+<tr><th id="98">98</th><td>	<a class="local col4 ref" href="#24sr" title='sr' data-ref="24sr" data-ref-filename="24sr">sr</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a> = <a class="local col2 ref" href="#22offset" title='offset' data-ref="22offset" data-ref-filename="22offset">offset</a>;</td></tr>
+<tr><th id="99">99</th><td>	<a class="local col4 ref" href="#24sr" title='sr' data-ref="24sr" data-ref-filename="24sr">sr</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_refcnt" title='space_ref::sr_refcnt' data-ref="space_ref::sr_refcnt" data-ref-filename="space_ref..sr_refcnt">sr_refcnt</a> = <a class="local col3 ref" href="#23refcnt" title='refcnt' data-ref="23refcnt" data-ref-filename="23refcnt">refcnt</a>;</td></tr>
+<tr><th id="100">100</th><td></td></tr>
+<tr><th id="101">101</th><td>	<a class="ref fn" href="../../sys/avl.h.html#avl_add" title='avl_add' data-ref="avl_add" data-ref-filename="avl_add">avl_add</a>(<a class="local col1 ref" href="#21t" title='t' data-ref="21t" data-ref-filename="21t">t</a>, <a class="local col4 ref" href="#24sr" title='sr' data-ref="24sr" data-ref-filename="24sr">sr</a>);</td></tr>
+<tr><th id="102">102</th><td>}</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td><em>void</em></td></tr>
+<tr><th id="105">105</th><td><dfn class="decl def fn" id="space_reftree_add_seg" title='space_reftree_add_seg' data-ref="space_reftree_add_seg" data-ref-filename="space_reftree_add_seg">space_reftree_add_seg</dfn>(<a class="typedef" href="../../sys/avl.h.html#avl_tree_t" title='avl_tree_t' data-type='struct avl_tree' data-ref="avl_tree_t" data-ref-filename="avl_tree_t">avl_tree_t</a> *<dfn class="local col5 decl" id="25t" title='t' data-type='avl_tree_t *' data-ref="25t" data-ref-filename="25t">t</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="26start" title='start' data-type='uint64_t' data-ref="26start" data-ref-filename="26start">start</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col7 decl" id="27end" title='end' data-type='uint64_t' data-ref="27end" data-ref-filename="27end">end</dfn>,</td></tr>
+<tr><th id="106">106</th><td>    <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col8 decl" id="28refcnt" title='refcnt' data-type='int64_t' data-ref="28refcnt" data-ref-filename="28refcnt">refcnt</dfn>)</td></tr>
+<tr><th id="107">107</th><td>{</td></tr>
+<tr><th id="108">108</th><td>	<a class="tu ref fn" href="#space_reftree_add_node" title='space_reftree_add_node' data-use='c' data-ref="space_reftree_add_node" data-ref-filename="space_reftree_add_node">space_reftree_add_node</a>(<a class="local col5 ref" href="#25t" title='t' data-ref="25t" data-ref-filename="25t">t</a>, <a class="local col6 ref" href="#26start" title='start' data-ref="26start" data-ref-filename="26start">start</a>, <a class="local col8 ref" href="#28refcnt" title='refcnt' data-ref="28refcnt" data-ref-filename="28refcnt">refcnt</a>);</td></tr>
+<tr><th id="109">109</th><td>	<a class="tu ref fn" href="#space_reftree_add_node" title='space_reftree_add_node' data-use='c' data-ref="space_reftree_add_node" data-ref-filename="space_reftree_add_node">space_reftree_add_node</a>(<a class="local col5 ref" href="#25t" title='t' data-ref="25t" data-ref-filename="25t">t</a>, <a class="local col7 ref" href="#27end" title='end' data-ref="27end" data-ref-filename="27end">end</a>, -<a class="local col8 ref" href="#28refcnt" title='refcnt' data-ref="28refcnt" data-ref-filename="28refcnt">refcnt</a>);</td></tr>
+<tr><th id="110">110</th><td>}</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td><i>/*</i></td></tr>
+<tr><th id="113">113</th><td><i> * Convert (or add) a range tree into a reference tree.</i></td></tr>
+<tr><th id="114">114</th><td><i> */</i></td></tr>
+<tr><th id="115">115</th><td><em>void</em></td></tr>
+<tr><th id="116">116</th><td><dfn class="decl def fn" id="space_reftree_add_map" title='space_reftree_add_map' data-ref="space_reftree_add_map" data-ref-filename="space_reftree_add_map">space_reftree_add_map</dfn>(<a class="typedef" href="../../sys/avl.h.html#avl_tree_t" title='avl_tree_t' data-type='struct avl_tree' data-ref="avl_tree_t" data-ref-filename="avl_tree_t">avl_tree_t</a> *<dfn class="local col9 decl" id="29t" title='t' data-type='avl_tree_t *' data-ref="29t" data-ref-filename="29t">t</dfn>, <a class="typedef" href="sys/range_tree.h.html#range_tree_t" title='range_tree_t' data-type='struct range_tree' data-ref="range_tree_t" data-ref-filename="range_tree_t">range_tree_t</a> *<dfn class="local col0 decl" id="30rt" title='rt' data-type='range_tree_t *' data-ref="30rt" data-ref-filename="30rt">rt</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col1 decl" id="31refcnt" title='refcnt' data-type='int64_t' data-ref="31refcnt" data-ref-filename="31refcnt">refcnt</dfn>)</td></tr>
+<tr><th id="117">117</th><td>{</td></tr>
+<tr><th id="118">118</th><td>	<a class="typedef" href="sys/range_tree.h.html#range_seg_t" title='range_seg_t' data-type='struct range_seg' data-ref="range_seg_t" data-ref-filename="range_seg_t">range_seg_t</a> *<dfn class="local col2 decl" id="32rs" title='rs' data-type='range_seg_t *' data-ref="32rs" data-ref-filename="32rs">rs</dfn>;</td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td>	<a class="macro" href="../../sys/debug.h.html#58" title="((void)0)" data-ref="_M/ASSERT">ASSERT</a>(MUTEX_HELD(rt-&gt;rt_lock));</td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td>	<b>for</b> (<a class="local col2 ref" href="#32rs" title='rs' data-ref="32rs" data-ref-filename="32rs">rs</a> = <a class="ref fn" href="../../sys/avl.h.html#avl_first" title='avl_first' data-ref="avl_first" data-ref-filename="avl_first">avl_first</a>(&amp;<a class="local col0 ref" href="#30rt" title='rt' data-ref="30rt" data-ref-filename="30rt">rt</a>-&gt;<a class="ref field" href="sys/range_tree.h.html#range_tree::rt_root" title='range_tree::rt_root' data-ref="range_tree::rt_root" data-ref-filename="range_tree..rt_root">rt_root</a>); <a class="local col2 ref" href="#32rs" title='rs' data-ref="32rs" data-ref-filename="32rs">rs</a>; <a class="local col2 ref" href="#32rs" title='rs' data-ref="32rs" data-ref-filename="32rs">rs</a> = <a class="macro" href="../../sys/avl.h.html#209" title="avl_walk(&amp;rt-&gt;rt_root, rs, (1))" data-ref="_M/AVL_NEXT">AVL_NEXT</a>(&amp;<a class="local col0 ref" href="#30rt" title='rt' data-ref="30rt" data-ref-filename="30rt">rt</a>-&gt;<a class="ref field" href="sys/range_tree.h.html#range_tree::rt_root" title='range_tree::rt_root' data-ref="range_tree::rt_root" data-ref-filename="range_tree..rt_root">rt_root</a>, <a class="local col2 ref" href="#32rs" title='rs' data-ref="32rs" data-ref-filename="32rs">rs</a>))</td></tr>
+<tr><th id="123">123</th><td>		<a class="ref fn" href="#space_reftree_add_seg" title='space_reftree_add_seg' data-ref="space_reftree_add_seg" data-ref-filename="space_reftree_add_seg">space_reftree_add_seg</a>(<a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a>, <a class="local col2 ref" href="#32rs" title='rs' data-ref="32rs" data-ref-filename="32rs">rs</a>-&gt;<a class="ref field" href="sys/range_tree.h.html#range_seg::rs_start" title='range_seg::rs_start' data-ref="range_seg::rs_start" data-ref-filename="range_seg..rs_start">rs_start</a>, <a class="local col2 ref" href="#32rs" title='rs' data-ref="32rs" data-ref-filename="32rs">rs</a>-&gt;<a class="ref field" href="sys/range_tree.h.html#range_seg::rs_end" title='range_seg::rs_end' data-ref="range_seg::rs_end" data-ref-filename="range_seg..rs_end">rs_end</a>, <a class="local col1 ref" href="#31refcnt" title='refcnt' data-ref="31refcnt" data-ref-filename="31refcnt">refcnt</a>);</td></tr>
+<tr><th id="124">124</th><td>}</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td><i>/*</i></td></tr>
+<tr><th id="127">127</th><td><i> * Convert a reference tree into a range tree.  The range tree will contain</i></td></tr>
+<tr><th id="128">128</th><td><i> * all members of the reference tree for which refcnt &gt;= minref.</i></td></tr>
+<tr><th id="129">129</th><td><i> */</i></td></tr>
+<tr><th id="130">130</th><td><em>void</em></td></tr>
+<tr><th id="131">131</th><td><dfn class="decl def fn" id="space_reftree_generate_map" title='space_reftree_generate_map' data-ref="space_reftree_generate_map" data-ref-filename="space_reftree_generate_map">space_reftree_generate_map</dfn>(<a class="typedef" href="../../sys/avl.h.html#avl_tree_t" title='avl_tree_t' data-type='struct avl_tree' data-ref="avl_tree_t" data-ref-filename="avl_tree_t">avl_tree_t</a> *<dfn class="local col3 decl" id="33t" title='t' data-type='avl_tree_t *' data-ref="33t" data-ref-filename="33t">t</dfn>, <a class="typedef" href="sys/range_tree.h.html#range_tree_t" title='range_tree_t' data-type='struct range_tree' data-ref="range_tree_t" data-ref-filename="range_tree_t">range_tree_t</a> *<dfn class="local col4 decl" id="34rt" title='rt' data-type='range_tree_t *' data-ref="34rt" data-ref-filename="34rt">rt</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col5 decl" id="35minref" title='minref' data-type='int64_t' data-ref="35minref" data-ref-filename="35minref">minref</dfn>)</td></tr>
+<tr><th id="132">132</th><td>{</td></tr>
+<tr><th id="133">133</th><td>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="36start" title='start' data-type='uint64_t' data-ref="36start" data-ref-filename="36start">start</dfn> = -<var>1ULL</var>;</td></tr>
+<tr><th id="134">134</th><td>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col7 decl" id="37refcnt" title='refcnt' data-type='int64_t' data-ref="37refcnt" data-ref-filename="37refcnt">refcnt</dfn> = <var>0</var>;</td></tr>
+<tr><th id="135">135</th><td>	<a class="typedef" href="sys/space_reftree.h.html#space_ref_t" title='space_ref_t' data-type='struct space_ref' data-ref="space_ref_t" data-ref-filename="space_ref_t">space_ref_t</a> *<dfn class="local col8 decl" id="38sr" title='sr' data-type='space_ref_t *' data-ref="38sr" data-ref-filename="38sr">sr</dfn>;</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td>	<a class="macro" href="../../sys/debug.h.html#58" title="((void)0)" data-ref="_M/ASSERT">ASSERT</a>(MUTEX_HELD(rt-&gt;rt_lock));</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td>	<a class="ref fn" href="sys/range_tree.h.html#range_tree_vacate" title='range_tree_vacate' data-ref="range_tree_vacate" data-ref-filename="range_tree_vacate">range_tree_vacate</a>(<a class="local col4 ref" href="#34rt" title='rt' data-ref="34rt" data-ref-filename="34rt">rt</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="140">140</th><td></td></tr>
+<tr><th id="141">141</th><td>	<b>for</b> (<a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a> = <a class="ref fn" href="../../sys/avl.h.html#avl_first" title='avl_first' data-ref="avl_first" data-ref-filename="avl_first">avl_first</a>(<a class="local col3 ref" href="#33t" title='t' data-ref="33t" data-ref-filename="33t">t</a>); <a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>; <a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a> = <a class="macro" href="../../sys/avl.h.html#209" title="avl_walk(t, sr, (1))" data-ref="_M/AVL_NEXT">AVL_NEXT</a>(<a class="local col3 ref" href="#33t" title='t' data-ref="33t" data-ref-filename="33t">t</a>, <a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a>)) {</td></tr>
+<tr><th id="142">142</th><td>		<a class="local col7 ref" href="#37refcnt" title='refcnt' data-ref="37refcnt" data-ref-filename="37refcnt">refcnt</a> += <a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_refcnt" title='space_ref::sr_refcnt' data-ref="space_ref::sr_refcnt" data-ref-filename="space_ref..sr_refcnt">sr_refcnt</a>;</td></tr>
+<tr><th id="143">143</th><td>		<b>if</b> (<a class="local col7 ref" href="#37refcnt" title='refcnt' data-ref="37refcnt" data-ref-filename="37refcnt">refcnt</a> &gt;= <a class="local col5 ref" href="#35minref" title='minref' data-ref="35minref" data-ref-filename="35minref">minref</a>) {</td></tr>
+<tr><th id="144">144</th><td>			<b>if</b> (<a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a> == -<var>1ULL</var>) {</td></tr>
+<tr><th id="145">145</th><td>				<a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a> = <a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a>;</td></tr>
+<tr><th id="146">146</th><td>			}</td></tr>
+<tr><th id="147">147</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="148">148</th><td>			<b>if</b> (<a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a> != -<var>1ULL</var>) {</td></tr>
+<tr><th id="149">149</th><td>				<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col9 decl" id="39end" title='end' data-type='uint64_t' data-ref="39end" data-ref-filename="39end">end</dfn> = <a class="local col8 ref" href="#38sr" title='sr' data-ref="38sr" data-ref-filename="38sr">sr</a>-&gt;<a class="ref field" href="sys/space_reftree.h.html#space_ref::sr_offset" title='space_ref::sr_offset' data-ref="space_ref::sr_offset" data-ref-filename="space_ref..sr_offset">sr_offset</a>;</td></tr>
+<tr><th id="150">150</th><td>				<a class="macro" href="../../sys/debug.h.html#58" title="((void)0)" data-ref="_M/ASSERT">ASSERT</a>(start &lt;= end);</td></tr>
+<tr><th id="151">151</th><td>				<b>if</b> (<a class="local col9 ref" href="#39end" title='end' data-ref="39end" data-ref-filename="39end">end</a> &gt; <a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a>)</td></tr>
+<tr><th id="152">152</th><td>					<a class="ref fn" href="sys/range_tree.h.html#range_tree_add" title='range_tree_add' data-ref="range_tree_add" data-ref-filename="range_tree_add">range_tree_add</a>(<a class="local col4 ref" href="#34rt" title='rt' data-ref="34rt" data-ref-filename="34rt">rt</a>, <a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a>, <a class="local col9 ref" href="#39end" title='end' data-ref="39end" data-ref-filename="39end">end</a> - <a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a>);</td></tr>
+<tr><th id="153">153</th><td>				<a class="local col6 ref" href="#36start" title='start' data-ref="36start" data-ref-filename="36start">start</a> = -<var>1ULL</var>;</td></tr>
+<tr><th id="154">154</th><td>			}</td></tr>
+<tr><th id="155">155</th><td>		}</td></tr>
+<tr><th id="156">156</th><td>	}</td></tr>
+<tr><th id="157">157</th><td>	<a class="macro" href="../../sys/debug.h.html#58" title="((void)0)" data-ref="_M/ASSERT">ASSERT</a>(refcnt == <var>0</var>);</td></tr>
+<tr><th id="158">158</th><td>	<a class="macro" href="../../sys/debug.h.html#58" title="((void)0)" data-ref="_M/ASSERT">ASSERT</a>(start == -<var>1ULL</var>);</td></tr>
+<tr><th id="159">159</th><td>}</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

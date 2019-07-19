@@ -1,0 +1,225 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>graphite-optimize-isl.c source code [netbsd/external/gpl3/gcc/dist/gcc/graphite-optimize-isl.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/gcc/graphite-optimize-isl.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>gcc</a>/<a href='graphite-optimize-isl.c.html'>graphite-optimize-isl.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* A scheduling optimizer for Graphite</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 2012-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Contributed by Tobias Grosser &lt;tobias@grosser.es&gt;.</i></td></tr>
+<tr><th id="4">4</th><td><i></i></td></tr>
+<tr><th id="5">5</th><td><i>This file is part of GCC.</i></td></tr>
+<tr><th id="6">6</th><td><i></i></td></tr>
+<tr><th id="7">7</th><td><i>GCC is free software; you can redistribute it and/or modify</i></td></tr>
+<tr><th id="8">8</th><td><i>it under the terms of the GNU General Public License as published by</i></td></tr>
+<tr><th id="9">9</th><td><i>the Free Software Foundation; either version 3, or (at your option)</i></td></tr>
+<tr><th id="10">10</th><td><i>any later version.</i></td></tr>
+<tr><th id="11">11</th><td><i></i></td></tr>
+<tr><th id="12">12</th><td><i>GCC is distributed in the hope that it will be useful,</i></td></tr>
+<tr><th id="13">13</th><td><i>but WITHOUT ANY WARRANTY; without even the implied warranty of</i></td></tr>
+<tr><th id="14">14</th><td><i>MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</i></td></tr>
+<tr><th id="15">15</th><td><i>GNU General Public License for more details.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="18">18</th><td><i>along with GCC; see the file COPYING3.  If not see</i></td></tr>
+<tr><th id="19">19</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="20">20</th><td></td></tr>
+<tr><th id="21">21</th><td><u>#define <dfn class="macro" id="_M/USES_ISL" data-ref="_M/USES_ISL">USES_ISL</dfn></u></td></tr>
+<tr><th id="22">22</th><td></td></tr>
+<tr><th id="23">23</th><td><u>#include <a href="../../../../../objdir.amd64/tools/gcc/build/gcc/config.h.html">"config.h"</a></u></td></tr>
+<tr><th id="24">24</th><td></td></tr>
+<tr><th id="25">25</th><td><u>#<span data-ppcond="25">ifdef</span> <span class="macro" data-ref="_M/HAVE_isl">HAVE_isl</span></u></td></tr>
+<tr><th id="26">26</th><td></td></tr>
+<tr><th id="27">27</th><td><u>#include "system.h"</u></td></tr>
+<tr><th id="28">28</th><td><u>#include "coretypes.h"</u></td></tr>
+<tr><th id="29">29</th><td><u>#include "backend.h"</u></td></tr>
+<tr><th id="30">30</th><td><u>#include "cfghooks.h"</u></td></tr>
+<tr><th id="31">31</th><td><u>#include "tree.h"</u></td></tr>
+<tr><th id="32">32</th><td><u>#include "gimple.h"</u></td></tr>
+<tr><th id="33">33</th><td><u>#include "fold-const.h"</u></td></tr>
+<tr><th id="34">34</th><td><u>#include "gimple-iterator.h"</u></td></tr>
+<tr><th id="35">35</th><td><u>#include "tree-ssa-loop.h"</u></td></tr>
+<tr><th id="36">36</th><td><u>#include "cfgloop.h"</u></td></tr>
+<tr><th id="37">37</th><td><u>#include "tree-data-ref.h"</u></td></tr>
+<tr><th id="38">38</th><td><u>#include "params.h"</u></td></tr>
+<tr><th id="39">39</th><td><u>#include "dumpfile.h"</u></td></tr>
+<tr><th id="40">40</th><td><u>#include "graphite.h"</u></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><i>/* get_schedule_for_node_st - Improve schedule for the schedule node.</i></td></tr>
+<tr><th id="44">44</th><td><i>   Only Simple loop tiling is considered.  */</i></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><em>static</em> __isl_give isl_schedule_node *</td></tr>
+<tr><th id="47">47</th><td>get_schedule_for_node_st (__isl_take isl_schedule_node *node, <em>void</em> *user)</td></tr>
+<tr><th id="48">48</th><td>{</td></tr>
+<tr><th id="49">49</th><td>  <b>if</b> (user)</td></tr>
+<tr><th id="50">50</th><td>    <b>return</b> node;</td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td>  <b>if</b> (isl_schedule_node_get_type (node) != isl_schedule_node_band</td></tr>
+<tr><th id="53">53</th><td>      || isl_schedule_node_n_children (node) != <var>1</var>)</td></tr>
+<tr><th id="54">54</th><td>    <b>return</b> node;</td></tr>
+<tr><th id="55">55</th><td></td></tr>
+<tr><th id="56">56</th><td>  isl_space *space = isl_schedule_node_band_get_space (node);</td></tr>
+<tr><th id="57">57</th><td>  <em>unsigned</em> dims = isl_space_dim (space, isl_dim_set);</td></tr>
+<tr><th id="58">58</th><td>  isl_schedule_node *child = isl_schedule_node_get_child (node, <var>0</var>);</td></tr>
+<tr><th id="59">59</th><td>  isl_schedule_node_type type = isl_schedule_node_get_type (child);</td></tr>
+<tr><th id="60">60</th><td>  isl_space_free (space);</td></tr>
+<tr><th id="61">61</th><td>  isl_schedule_node_free (child);</td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td>  <b>if</b> (type != isl_schedule_node_leaf)</td></tr>
+<tr><th id="64">64</th><td>    <b>return</b> node;</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td>  <b>if</b> (dims &lt;= <var>1</var> || !isl_schedule_node_band_get_permutable (node))</td></tr>
+<tr><th id="67">67</th><td>    {</td></tr>
+<tr><th id="68">68</th><td>      <b>if</b> (dump_file &amp;&amp; dump_flags)</td></tr>
+<tr><th id="69">69</th><td>	fprintf (dump_file, <q>"not tiled\n"</q>);</td></tr>
+<tr><th id="70">70</th><td>      <b>return</b> node;</td></tr>
+<tr><th id="71">71</th><td>    }</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td>  <i>/* Tile loops.  */</i></td></tr>
+<tr><th id="74">74</th><td>  space = isl_schedule_node_band_get_space (node);</td></tr>
+<tr><th id="75">75</th><td>  isl_multi_val *sizes = isl_multi_val_zero (space);</td></tr>
+<tr><th id="76">76</th><td>  <em>long</em> tile_size = PARAM_VALUE (PARAM_LOOP_BLOCK_TILE_SIZE);</td></tr>
+<tr><th id="77">77</th><td>  isl_ctx *ctx = isl_schedule_node_get_ctx (node);</td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td>  <b>for</b> (<em>unsigned</em> i = <var>0</var>; i &lt; dims; i++)</td></tr>
+<tr><th id="80">80</th><td>    {</td></tr>
+<tr><th id="81">81</th><td>      sizes = isl_multi_val_set_val (sizes, i,</td></tr>
+<tr><th id="82">82</th><td>				     isl_val_int_from_si (ctx, tile_size));</td></tr>
+<tr><th id="83">83</th><td>      <b>if</b> (dump_file &amp;&amp; dump_flags)</td></tr>
+<tr><th id="84">84</th><td>	fprintf (dump_file, <q>"tiled by %ld\n"</q>, tile_size);</td></tr>
+<tr><th id="85">85</th><td>    }</td></tr>
+<tr><th id="86">86</th><td></td></tr>
+<tr><th id="87">87</th><td>  node = isl_schedule_node_band_tile (node, sizes);</td></tr>
+<tr><th id="88">88</th><td>  node = isl_schedule_node_child (node, <var>0</var>);</td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td>  <b>return</b> node;</td></tr>
+<tr><th id="91">91</th><td>}</td></tr>
+<tr><th id="92">92</th><td></td></tr>
+<tr><th id="93">93</th><td><em>static</em> isl_union_set *</td></tr>
+<tr><th id="94">94</th><td>scop_get_domains (scop_p scop)</td></tr>
+<tr><th id="95">95</th><td>{</td></tr>
+<tr><th id="96">96</th><td>  <em>int</em> i;</td></tr>
+<tr><th id="97">97</th><td>  poly_bb_p pbb;</td></tr>
+<tr><th id="98">98</th><td>  isl_space *space = isl_set_get_space (scop-&gt;param_context);</td></tr>
+<tr><th id="99">99</th><td>  isl_union_set *res = isl_union_set_empty (space);</td></tr>
+<tr><th id="100">100</th><td></td></tr>
+<tr><th id="101">101</th><td>  FOR_EACH_VEC_ELT (scop-&gt;pbbs, i, pbb)</td></tr>
+<tr><th id="102">102</th><td>    res = isl_union_set_add_set (res, isl_set_copy (pbb-&gt;domain));</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td>  <b>return</b> res;</td></tr>
+<tr><th id="105">105</th><td>}</td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><i>/* Compute the schedule for SCOP based on its parameters, domain and set of</i></td></tr>
+<tr><th id="108">108</th><td><i>   constraints.  Then apply the schedule to SCOP.  */</i></td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td><em>static</em> <em>bool</em></td></tr>
+<tr><th id="111">111</th><td>optimize_isl (scop_p scop)</td></tr>
+<tr><th id="112">112</th><td>{</td></tr>
+<tr><th id="113">113</th><td>  <em>int</em> old_max_operations = isl_ctx_get_max_operations (scop-&gt;isl_context);</td></tr>
+<tr><th id="114">114</th><td>  <em>int</em> max_operations = PARAM_VALUE (PARAM_MAX_ISL_OPERATIONS);</td></tr>
+<tr><th id="115">115</th><td>  <b>if</b> (max_operations)</td></tr>
+<tr><th id="116">116</th><td>    isl_ctx_set_max_operations (scop-&gt;isl_context, max_operations);</td></tr>
+<tr><th id="117">117</th><td>  isl_options_set_on_error (scop-&gt;isl_context, ISL_ON_ERROR_CONTINUE);</td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td>  isl_union_set *domain = scop_get_domains (scop);</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td>  <i>/* Simplify the dependences on the domain.  */</i></td></tr>
+<tr><th id="122">122</th><td>  scop_get_dependences (scop);</td></tr>
+<tr><th id="123">123</th><td>  isl_union_map *dependences</td></tr>
+<tr><th id="124">124</th><td>    = isl_union_map_gist_domain (isl_union_map_copy (scop-&gt;dependence),</td></tr>
+<tr><th id="125">125</th><td>				 isl_union_set_copy (domain));</td></tr>
+<tr><th id="126">126</th><td>  isl_union_map *validity</td></tr>
+<tr><th id="127">127</th><td>    = isl_union_map_gist_range (dependences, isl_union_set_copy (domain));</td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td>  <i>/* FIXME: proximity should not be validity.  */</i></td></tr>
+<tr><th id="130">130</th><td>  isl_union_map *proximity = isl_union_map_copy (validity);</td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td>  isl_schedule_constraints *sc = isl_schedule_constraints_on_domain (domain);</td></tr>
+<tr><th id="133">133</th><td>  sc = isl_schedule_constraints_set_proximity (sc, proximity);</td></tr>
+<tr><th id="134">134</th><td>  sc = isl_schedule_constraints_set_validity (sc, isl_union_map_copy (validity));</td></tr>
+<tr><th id="135">135</th><td>  sc = isl_schedule_constraints_set_coincidence (sc, validity);</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td>  isl_options_set_schedule_serialize_sccs (scop-&gt;isl_context, <var>0</var>);</td></tr>
+<tr><th id="138">138</th><td>  isl_options_set_schedule_maximize_band_depth (scop-&gt;isl_context, <var>1</var>);</td></tr>
+<tr><th id="139">139</th><td>  isl_options_set_schedule_max_constant_term (scop-&gt;isl_context, <var>20</var>);</td></tr>
+<tr><th id="140">140</th><td>  isl_options_set_schedule_max_coefficient (scop-&gt;isl_context, <var>20</var>);</td></tr>
+<tr><th id="141">141</th><td>  isl_options_set_tile_scale_tile_loops (scop-&gt;isl_context, <var>0</var>);</td></tr>
+<tr><th id="142">142</th><td>  <i>/* Generate loop upper bounds that consist of the current loop iterator, an</i></td></tr>
+<tr><th id="143">143</th><td><i>     operator (&lt; or &lt;=) and an expression not involving the iterator.  If this</i></td></tr>
+<tr><th id="144">144</th><td><i>     option is not set, then the current loop iterator may appear several times</i></td></tr>
+<tr><th id="145">145</th><td><i>     in the upper bound.  See the isl manual for more details.  */</i></td></tr>
+<tr><th id="146">146</th><td>  isl_options_set_ast_build_atomic_upper_bound (scop-&gt;isl_context, <var>1</var>);</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td>  scop-&gt;transformed_schedule = isl_schedule_constraints_compute_schedule (sc);</td></tr>
+<tr><th id="149">149</th><td>  scop-&gt;transformed_schedule =</td></tr>
+<tr><th id="150">150</th><td>    isl_schedule_map_schedule_node_bottom_up (scop-&gt;transformed_schedule,</td></tr>
+<tr><th id="151">151</th><td>					      get_schedule_for_node_st, NULL);</td></tr>
+<tr><th id="152">152</th><td>  isl_options_set_on_error (scop-&gt;isl_context, ISL_ON_ERROR_ABORT);</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td>  isl_ctx_reset_operations (scop-&gt;isl_context);</td></tr>
+<tr><th id="155">155</th><td>  isl_ctx_set_max_operations (scop-&gt;isl_context, old_max_operations);</td></tr>
+<tr><th id="156">156</th><td>  <b>if</b> (!scop-&gt;transformed_schedule</td></tr>
+<tr><th id="157">157</th><td>      || isl_ctx_last_error (scop-&gt;isl_context) == isl_error_quota)</td></tr>
+<tr><th id="158">158</th><td>    {</td></tr>
+<tr><th id="159">159</th><td>      <b>if</b> (dump_file &amp;&amp; dump_flags)</td></tr>
+<tr><th id="160">160</th><td>	fprintf (dump_file, <q>"isl timed out --param max-isl-operations=%d\n"</q>,</td></tr>
+<tr><th id="161">161</th><td>		 max_operations);</td></tr>
+<tr><th id="162">162</th><td>      <b>return</b> <b>false</b>;</td></tr>
+<tr><th id="163">163</th><td>    }</td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td>  gcc_assert (scop-&gt;original_schedule);</td></tr>
+<tr><th id="166">166</th><td>  isl_union_map *original = isl_schedule_get_map (scop-&gt;original_schedule);</td></tr>
+<tr><th id="167">167</th><td>  isl_union_map *transformed = isl_schedule_get_map (scop-&gt;transformed_schedule);</td></tr>
+<tr><th id="168">168</th><td>  <em>bool</em> same_schedule = isl_union_map_is_equal (original, transformed);</td></tr>
+<tr><th id="169">169</th><td>  isl_union_map_free (original);</td></tr>
+<tr><th id="170">170</th><td>  isl_union_map_free (transformed);</td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td>  <b>if</b> (same_schedule)</td></tr>
+<tr><th id="173">173</th><td>    {</td></tr>
+<tr><th id="174">174</th><td>      <b>if</b> (dump_file)</td></tr>
+<tr><th id="175">175</th><td>	{</td></tr>
+<tr><th id="176">176</th><td>	  fprintf (dump_file, <q>"[scheduler] isl optimized schedule is "</q></td></tr>
+<tr><th id="177">177</th><td>		   <q>"identical to the original schedule.\n"</q>);</td></tr>
+<tr><th id="178">178</th><td>	  print_schedule_ast (dump_file, scop-&gt;original_schedule, scop);</td></tr>
+<tr><th id="179">179</th><td>	}</td></tr>
+<tr><th id="180">180</th><td>      isl_schedule_free (scop-&gt;transformed_schedule);</td></tr>
+<tr><th id="181">181</th><td>      scop-&gt;transformed_schedule = isl_schedule_copy (scop-&gt;original_schedule);</td></tr>
+<tr><th id="182">182</th><td>      <b>return</b> <b>false</b>;</td></tr>
+<tr><th id="183">183</th><td>    }</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>  <b>return</b> <b>true</b>;</td></tr>
+<tr><th id="186">186</th><td>}</td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td><i>/* Apply graphite transformations to all the basic blocks of SCOP.  */</i></td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td><em>bool</em></td></tr>
+<tr><th id="191">191</th><td>apply_poly_transforms (scop_p scop)</td></tr>
+<tr><th id="192">192</th><td>{</td></tr>
+<tr><th id="193">193</th><td>  <b>if</b> (flag_loop_nest_optimize)</td></tr>
+<tr><th id="194">194</th><td>    <b>return</b> optimize_isl (scop);</td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td>  <b>if</b> (!flag_graphite_identity &amp;&amp; !flag_loop_parallelize_all)</td></tr>
+<tr><th id="197">197</th><td>    <b>return</b> <b>false</b>;</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td>  <i>/* Generate code even if we did not apply any real transformation.</i></td></tr>
+<tr><th id="200">200</th><td><i>     This also allows to check the performance for the identity</i></td></tr>
+<tr><th id="201">201</th><td><i>     transformation: GIMPLE -&gt; GRAPHITE -&gt; GIMPLE.  */</i></td></tr>
+<tr><th id="202">202</th><td>  gcc_assert (scop-&gt;original_schedule);</td></tr>
+<tr><th id="203">203</th><td>  scop-&gt;transformed_schedule = isl_schedule_copy (scop-&gt;original_schedule);</td></tr>
+<tr><th id="204">204</th><td>  <b>return</b> <b>true</b>;</td></tr>
+<tr><th id="205">205</th><td>}</td></tr>
+<tr><th id="206">206</th><td></td></tr>
+<tr><th id="207">207</th><td><u>#<span data-ppcond="25">endif</span> /* HAVE_isl */</u></td></tr>
+<tr><th id="208">208</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

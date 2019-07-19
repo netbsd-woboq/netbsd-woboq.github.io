@@ -1,0 +1,465 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>lruhash.h source code [netbsd/external/bsd/unbound/dist/util/storage/lruhash.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="lruhash,lruhash_bin,lruhash_entry "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/unbound/dist/util/storage/lruhash.h'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>external</a>/<a href='../../../..'>bsd</a>/<a href='../../..'>unbound</a>/<a href='../..'>dist</a>/<a href='..'>util</a>/<a href='./'>storage</a>/<a href='lruhash.h.html'>lruhash.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * util/storage/lruhash.h - hashtable, hash function, LRU keeping.</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This software is open source.</i></td></tr>
+<tr><th id="7">7</th><td><i> * </i></td></tr>
+<tr><th id="8">8</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="9">9</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="10">10</th><td><i> * are met:</i></td></tr>
+<tr><th id="11">11</th><td><i> * </i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistributions of source code must retain the above copyright notice,</i></td></tr>
+<tr><th id="13">13</th><td><i> * this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="14">14</th><td><i> * </i></td></tr>
+<tr><th id="15">15</th><td><i> * Redistributions in binary form must reproduce the above copyright notice,</i></td></tr>
+<tr><th id="16">16</th><td><i> * this list of conditions and the following disclaimer in the documentation</i></td></tr>
+<tr><th id="17">17</th><td><i> * and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> * </i></td></tr>
+<tr><th id="19">19</th><td><i> * Neither the name of the NLNET LABS nor the names of its contributors may</i></td></tr>
+<tr><th id="20">20</th><td><i> * be used to endorse or promote products derived from this software without</i></td></tr>
+<tr><th id="21">21</th><td><i> * specific prior written permission.</i></td></tr>
+<tr><th id="22">22</th><td><i> * </i></td></tr>
+<tr><th id="23">23</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="24">24</th><td><i> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="25">25</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="26">26</th><td><i> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="27">27</th><td><i> * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="28">28</th><td><i> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="29">29</th><td><i> * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR</i></td></tr>
+<tr><th id="30">30</th><td><i> * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF</i></td></tr>
+<tr><th id="31">31</th><td><i> * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING</i></td></tr>
+<tr><th id="32">32</th><td><i> * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS</i></td></tr>
+<tr><th id="33">33</th><td><i> * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="34">34</th><td><i> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> *<span class="command"> \file</span></i></td></tr>
+<tr><th id="38">38</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> * This file contains a hashtable with LRU keeping of entries.</i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="41">41</th><td><i class="doc"> * The hash table keeps a maximum memory size. Old entries are removed</i></td></tr>
+<tr><th id="42">42</th><td><i class="doc"> * to make space for new entries.</i></td></tr>
+<tr><th id="43">43</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="44">44</th><td><i class="doc"> * The locking strategy is as follows:</i></td></tr>
+<tr><th id="45">45</th><td><i class="doc"> * 	o since (almost) every read also implies a LRU update, the</i></td></tr>
+<tr><th id="46">46</th><td><i class="doc"> *	  hashtable lock is a spinlock, not rwlock.</i></td></tr>
+<tr><th id="47">47</th><td><i class="doc"> *	o the idea is to move every thread through the hash lock quickly,</i></td></tr>
+<tr><th id="48">48</th><td><i class="doc"> *	  so that the next thread can access the lookup table.</i></td></tr>
+<tr><th id="49">49</th><td><i class="doc"> *	o User performs hash function.</i></td></tr>
+<tr><th id="50">50</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="51">51</th><td><i class="doc"> * For read:</i></td></tr>
+<tr><th id="52">52</th><td><i class="doc"> *	o lock hashtable.</i></td></tr>
+<tr><th id="53">53</th><td><i class="doc"> *		o lookup hash bin.</i></td></tr>
+<tr><th id="54">54</th><td><i class="doc"> *		o lock hash bin.</i></td></tr>
+<tr><th id="55">55</th><td><i class="doc"> *			o find entry (if failed, unlock hash, unl bin, exit).</i></td></tr>
+<tr><th id="56">56</th><td><i class="doc"> *			o swizzle pointers for LRU update.</i></td></tr>
+<tr><th id="57">57</th><td><i class="doc"> *		o unlock hashtable.</i></td></tr>
+<tr><th id="58">58</th><td><i class="doc"> *		o lock entry (rwlock).</i></td></tr>
+<tr><th id="59">59</th><td><i class="doc"> *		o unlock hash bin.</i></td></tr>
+<tr><th id="60">60</th><td><i class="doc"> *		o work on entry.</i></td></tr>
+<tr><th id="61">61</th><td><i class="doc"> *	o unlock entry.</i></td></tr>
+<tr><th id="62">62</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="63">63</th><td><i class="doc"> * To update an entry, gain writelock and change the entry.</i></td></tr>
+<tr><th id="64">64</th><td><i class="doc"> * (the entry must keep the same hashvalue, so a data update.)</i></td></tr>
+<tr><th id="65">65</th><td><i class="doc"> * (you cannot upgrade a readlock to a writelock, because the item may</i></td></tr>
+<tr><th id="66">66</th><td><i class="doc"> *  be deleted, it would cause race conditions. So instead, unlock and</i></td></tr>
+<tr><th id="67">67</th><td><i class="doc"> *  relookup it in the hashtable.)</i></td></tr>
+<tr><th id="68">68</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="69">69</th><td><i class="doc"> * To delete an entry:</i></td></tr>
+<tr><th id="70">70</th><td><i class="doc"> *	o unlock the entry if you hold the lock already.</i></td></tr>
+<tr><th id="71">71</th><td><i class="doc"> *	o lock hashtable.</i></td></tr>
+<tr><th id="72">72</th><td><i class="doc"> *		o lookup hash bin.</i></td></tr>
+<tr><th id="73">73</th><td><i class="doc"> *		o lock hash bin.</i></td></tr>
+<tr><th id="74">74</th><td><i class="doc"> *			o find entry (if failed, unlock hash, unl bin, exit).</i></td></tr>
+<tr><th id="75">75</th><td><i class="doc"> *			o remove entry from hashtable bin overflow chain.</i></td></tr>
+<tr><th id="76">76</th><td><i class="doc"> *		o unlock hashtable.</i></td></tr>
+<tr><th id="77">77</th><td><i class="doc"> *		o lock entry (writelock).</i></td></tr>
+<tr><th id="78">78</th><td><i class="doc"> *		o unlock hash bin.</i></td></tr>
+<tr><th id="79">79</th><td><i class="doc"> *	o unlock entry (nobody else should be waiting for this lock,</i></td></tr>
+<tr><th id="80">80</th><td><i class="doc"> *	  since you removed it from hashtable, and you got writelock while</i></td></tr>
+<tr><th id="81">81</th><td><i class="doc"> *	  holding the hashbinlock so you are the only one.)</i></td></tr>
+<tr><th id="82">82</th><td><i class="doc"> * 	  Note you are only allowed to obtain a lock while holding hashbinlock.</i></td></tr>
+<tr><th id="83">83</th><td><i class="doc"> *	o delete entry.</i></td></tr>
+<tr><th id="84">84</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="85">85</th><td><i class="doc"> * The above sequence is:</i></td></tr>
+<tr><th id="86">86</th><td><i class="doc"> *	o race free, works with read, write and delete.</i></td></tr>
+<tr><th id="87">87</th><td><i class="doc"> *	o but has a queue, imagine someone needing a writelock on an item.</i></td></tr>
+<tr><th id="88">88</th><td><i class="doc"> *	  but there are still readlocks. The writelocker waits, but holds</i></td></tr>
+<tr><th id="89">89</th><td><i class="doc"> *	  the hashbinlock. The next thread that comes in and needs the same</i></td></tr>
+<tr><th id="90">90</th><td><i class="doc"> * 	  hashbin will wait for the lock while holding the hashtable lock.</i></td></tr>
+<tr><th id="91">91</th><td><i class="doc"> *	  thus halting the entire system on hashtable.</i></td></tr>
+<tr><th id="92">92</th><td><i class="doc"> *	  This is because of the delete protection. </i></td></tr>
+<tr><th id="93">93</th><td><i class="doc"> *	  Readlocks will be easier on the rwlock on entries.</i></td></tr>
+<tr><th id="94">94</th><td><i class="doc"> *	  While the writer is holding writelock, similar problems happen with</i></td></tr>
+<tr><th id="95">95</th><td><i class="doc"> *	  a reader or writer needing the same item.</i></td></tr>
+<tr><th id="96">96</th><td><i class="doc"> *	  the scenario requires more than three threads.</i></td></tr>
+<tr><th id="97">97</th><td><i class="doc"> * 	o so the queue length is 3 threads in a bad situation. The fourth is</i></td></tr>
+<tr><th id="98">98</th><td><i class="doc"> *	  unable to use the hashtable.</i></td></tr>
+<tr><th id="99">99</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="100">100</th><td><i class="doc"> * If you need to acquire locks on multiple items from the hashtable.</i></td></tr>
+<tr><th id="101">101</th><td><i class="doc"> *	o you MUST release all locks on items from the hashtable before</i></td></tr>
+<tr><th id="102">102</th><td><i class="doc"> *	  doing the next lookup/insert/delete/whatever.</i></td></tr>
+<tr><th id="103">103</th><td><i class="doc"> *	o To acquire multiple items you should use a special routine that</i></td></tr>
+<tr><th id="104">104</th><td><i class="doc"> *	  obtains the locks on those multiple items in one go.</i></td></tr>
+<tr><th id="105">105</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><u>#<span data-ppcond="107">ifndef</span> <span class="macro" data-ref="_M/UTIL_STORAGE_LRUHASH_H">UTIL_STORAGE_LRUHASH_H</span></u></td></tr>
+<tr><th id="108">108</th><td><u>#define <dfn class="macro" id="_M/UTIL_STORAGE_LRUHASH_H" data-ref="_M/UTIL_STORAGE_LRUHASH_H">UTIL_STORAGE_LRUHASH_H</dfn></u></td></tr>
+<tr><th id="109">109</th><td><u>#include <a href="../locks.h.html">"util/locks.h"</a></u></td></tr>
+<tr><th id="110">110</th><td><b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>;</td></tr>
+<tr><th id="111">111</th><td><b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>;</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td><i class="doc">/** default start size for hash arrays */</i></td></tr>
+<tr><th id="114">114</th><td><u>#define <dfn class="macro" id="_M/HASH_DEFAULT_STARTARRAY" data-ref="_M/HASH_DEFAULT_STARTARRAY">HASH_DEFAULT_STARTARRAY</dfn>		1024 /* entries in array */</u></td></tr>
+<tr><th id="115">115</th><td><i class="doc">/** default max memory for hash arrays */</i></td></tr>
+<tr><th id="116">116</th><td><u>#define <dfn class="macro" id="_M/HASH_DEFAULT_MAXMEM" data-ref="_M/HASH_DEFAULT_MAXMEM">HASH_DEFAULT_MAXMEM</dfn>		4*1024*1024 /* bytes */</u></td></tr>
+<tr><th id="117">117</th><td></td></tr>
+<tr><th id="118">118</th><td><i class="doc">/** the type of a hash value */</i></td></tr>
+<tr><th id="119">119</th><td><b>typedef</b> <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="typedef" id="hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</dfn>;</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><i class="doc">/** </i></td></tr>
+<tr><th id="122">122</th><td><i class="doc"> * Type of function that calculates the size of an entry.</i></td></tr>
+<tr><th id="123">123</th><td><i class="doc"> * Result must include the size of struct lruhash_entry. </i></td></tr>
+<tr><th id="124">124</th><td><i class="doc"> * Keys that are identical must also calculate to the same size.</i></td></tr>
+<tr><th id="125">125</th><td><i class="doc"> * size = func(key, data).</i></td></tr>
+<tr><th id="126">126</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="127">127</th><td><b>typedef</b> <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> (*<dfn class="typedef" id="lruhash_sizefunc_type" title='lruhash_sizefunc_type' data-type='size_t (*)(void *, void *)' data-ref="lruhash_sizefunc_type" data-ref-filename="lruhash_sizefunc_type">lruhash_sizefunc_type</dfn>)(<em>void</em>*, <em>void</em>*);</td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><i class="doc">/** type of function that compares two keys. return 0 if equal. */</i></td></tr>
+<tr><th id="130">130</th><td><b>typedef</b> <em>int</em> (*<dfn class="typedef" id="lruhash_compfunc_type" title='lruhash_compfunc_type' data-type='int (*)(void *, void *)' data-ref="lruhash_compfunc_type" data-ref-filename="lruhash_compfunc_type">lruhash_compfunc_type</dfn>)(<em>void</em>*, <em>void</em>*);</td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td><i class="doc">/** old keys are deleted. </i></td></tr>
+<tr><th id="133">133</th><td><i class="doc"> * The RRset type has to revoke its ID number, markdel() is used first.</i></td></tr>
+<tr><th id="134">134</th><td><i class="doc"> * This function is called: func(key, userarg) */</i></td></tr>
+<tr><th id="135">135</th><td><b>typedef</b> <em>void</em> (*<dfn class="typedef" id="lruhash_delkeyfunc_type" title='lruhash_delkeyfunc_type' data-type='void (*)(void *, void *)' data-ref="lruhash_delkeyfunc_type" data-ref-filename="lruhash_delkeyfunc_type">lruhash_delkeyfunc_type</dfn>)(<em>void</em>*, <em>void</em>*);</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td><i class="doc">/** old data is deleted. This function is called: func(data, userarg). */</i></td></tr>
+<tr><th id="138">138</th><td><b>typedef</b> <em>void</em> (*<dfn class="typedef" id="lruhash_deldatafunc_type" title='lruhash_deldatafunc_type' data-type='void (*)(void *, void *)' data-ref="lruhash_deldatafunc_type" data-ref-filename="lruhash_deldatafunc_type">lruhash_deldatafunc_type</dfn>)(<em>void</em>*, <em>void</em>*);</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><i class="doc">/** mark a key as pending to be deleted (and not to be used by anyone). </i></td></tr>
+<tr><th id="141">141</th><td><i class="doc"> * called: func(key) */</i></td></tr>
+<tr><th id="142">142</th><td><b>typedef</b> <em>void</em> (*<dfn class="typedef" id="lruhash_markdelfunc_type" title='lruhash_markdelfunc_type' data-type='void (*)(void *)' data-ref="lruhash_markdelfunc_type" data-ref-filename="lruhash_markdelfunc_type">lruhash_markdelfunc_type</dfn>)(<em>void</em>*);</td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="145">145</th><td><i class="doc"> * Hash table that keeps LRU list of entries.</i></td></tr>
+<tr><th id="146">146</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="147">147</th><td><b>struct</b> <dfn class="type def" id="lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</dfn> {</td></tr>
+<tr><th id="148">148</th><td>	<i class="doc">/** lock for exclusive access, to the lookup array */</i></td></tr>
+<tr><th id="149">149</th><td>	<a class="typedef" href="../locks.h.html#lock_quick_type" title='lock_quick_type' data-type='pthread_spinlock_t' data-ref="lock_quick_type" data-ref-filename="lock_quick_type">lock_quick_type</a> <dfn class="decl field" id="lruhash::lock" title='lruhash::lock' data-ref="lruhash::lock" data-ref-filename="lruhash..lock">lock</dfn>;</td></tr>
+<tr><th id="150">150</th><td>	<i class="doc">/** the size function for entries in this table */</i></td></tr>
+<tr><th id="151">151</th><td>	<a class="typedef" href="#lruhash_sizefunc_type" title='lruhash_sizefunc_type' data-type='size_t (*)(void *, void *)' data-ref="lruhash_sizefunc_type" data-ref-filename="lruhash_sizefunc_type">lruhash_sizefunc_type</a> <dfn class="decl field" id="lruhash::sizefunc" title='lruhash::sizefunc' data-ref="lruhash::sizefunc" data-ref-filename="lruhash..sizefunc">sizefunc</dfn>;</td></tr>
+<tr><th id="152">152</th><td>	<i class="doc">/** the compare function for entries in this table. */</i></td></tr>
+<tr><th id="153">153</th><td>	<a class="typedef" href="#lruhash_compfunc_type" title='lruhash_compfunc_type' data-type='int (*)(void *, void *)' data-ref="lruhash_compfunc_type" data-ref-filename="lruhash_compfunc_type">lruhash_compfunc_type</a> <dfn class="decl field" id="lruhash::compfunc" title='lruhash::compfunc' data-ref="lruhash::compfunc" data-ref-filename="lruhash..compfunc">compfunc</dfn>;</td></tr>
+<tr><th id="154">154</th><td>	<i class="doc">/** how to delete keys. */</i></td></tr>
+<tr><th id="155">155</th><td>	<a class="typedef" href="#lruhash_delkeyfunc_type" title='lruhash_delkeyfunc_type' data-type='void (*)(void *, void *)' data-ref="lruhash_delkeyfunc_type" data-ref-filename="lruhash_delkeyfunc_type">lruhash_delkeyfunc_type</a> <dfn class="decl field" id="lruhash::delkeyfunc" title='lruhash::delkeyfunc' data-ref="lruhash::delkeyfunc" data-ref-filename="lruhash..delkeyfunc">delkeyfunc</dfn>;</td></tr>
+<tr><th id="156">156</th><td>	<i class="doc">/** how to delete data. */</i></td></tr>
+<tr><th id="157">157</th><td>	<a class="typedef" href="#lruhash_deldatafunc_type" title='lruhash_deldatafunc_type' data-type='void (*)(void *, void *)' data-ref="lruhash_deldatafunc_type" data-ref-filename="lruhash_deldatafunc_type">lruhash_deldatafunc_type</a> <dfn class="decl field" id="lruhash::deldatafunc" title='lruhash::deldatafunc' data-ref="lruhash::deldatafunc" data-ref-filename="lruhash..deldatafunc">deldatafunc</dfn>;</td></tr>
+<tr><th id="158">158</th><td>	<i class="doc">/** how to mark a key pending deletion */</i></td></tr>
+<tr><th id="159">159</th><td>	<a class="typedef" href="#lruhash_markdelfunc_type" title='lruhash_markdelfunc_type' data-type='void (*)(void *)' data-ref="lruhash_markdelfunc_type" data-ref-filename="lruhash_markdelfunc_type">lruhash_markdelfunc_type</a> <dfn class="decl field" id="lruhash::markdelfunc" title='lruhash::markdelfunc' data-ref="lruhash::markdelfunc" data-ref-filename="lruhash..markdelfunc">markdelfunc</dfn>;</td></tr>
+<tr><th id="160">160</th><td>	<i class="doc">/** user argument for user functions */</i></td></tr>
+<tr><th id="161">161</th><td>	<em>void</em>* <dfn class="decl field" id="lruhash::cb_arg" title='lruhash::cb_arg' data-ref="lruhash::cb_arg" data-ref-filename="lruhash..cb_arg">cb_arg</dfn>;</td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td>	<i class="doc">/** the size of the lookup array */</i></td></tr>
+<tr><th id="164">164</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="lruhash::size" title='lruhash::size' data-ref="lruhash::size" data-ref-filename="lruhash..size">size</dfn>;</td></tr>
+<tr><th id="165">165</th><td>	<i class="doc">/** size bitmask - since size is a power of 2 */</i></td></tr>
+<tr><th id="166">166</th><td>	<em>int</em> <dfn class="decl field" id="lruhash::size_mask" title='lruhash::size_mask' data-ref="lruhash::size_mask" data-ref-filename="lruhash..size_mask">size_mask</dfn>;</td></tr>
+<tr><th id="167">167</th><td>	<i class="doc">/** lookup array of bins */</i></td></tr>
+<tr><th id="168">168</th><td>	<b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>* <dfn class="decl field" id="lruhash::array" title='lruhash::array' data-ref="lruhash::array" data-ref-filename="lruhash..array">array</dfn>;</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>	<i class="doc">/** the lru list, start and end, noncyclical double linked list. */</i></td></tr>
+<tr><th id="171">171</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl field" id="lruhash::lru_start" title='lruhash::lru_start' data-ref="lruhash::lru_start" data-ref-filename="lruhash..lru_start">lru_start</dfn>;</td></tr>
+<tr><th id="172">172</th><td>	<i class="doc">/** lru list end item (least recently used) */</i></td></tr>
+<tr><th id="173">173</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl field" id="lruhash::lru_end" title='lruhash::lru_end' data-ref="lruhash::lru_end" data-ref-filename="lruhash..lru_end">lru_end</dfn>;</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td>	<i class="doc">/** the number of entries in the hash table. */</i></td></tr>
+<tr><th id="176">176</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="lruhash::num" title='lruhash::num' data-ref="lruhash::num" data-ref-filename="lruhash..num">num</dfn>;</td></tr>
+<tr><th id="177">177</th><td>	<i class="doc">/** the amount of space used, roughly the number of bytes in use. */</i></td></tr>
+<tr><th id="178">178</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="lruhash::space_used" title='lruhash::space_used' data-ref="lruhash::space_used" data-ref-filename="lruhash..space_used">space_used</dfn>;</td></tr>
+<tr><th id="179">179</th><td>	<i class="doc">/** the amount of space the hash table is maximally allowed to use. */</i></td></tr>
+<tr><th id="180">180</th><td>	<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="lruhash::space_max" title='lruhash::space_max' data-ref="lruhash::space_max" data-ref-filename="lruhash..space_max">space_max</dfn>;</td></tr>
+<tr><th id="181">181</th><td>};</td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="184">184</th><td><i class="doc"> * A single bin with a linked list of entries in it.</i></td></tr>
+<tr><th id="185">185</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="186">186</th><td><b>struct</b> <dfn class="type def" id="lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</dfn> {</td></tr>
+<tr><th id="187">187</th><td>	<i class="doc">/** </i></td></tr>
+<tr><th id="188">188</th><td><i class="doc">	 * Lock for exclusive access to the linked list</i></td></tr>
+<tr><th id="189">189</th><td><i class="doc">	 * This lock makes deletion of items safe in this overflow list.</i></td></tr>
+<tr><th id="190">190</th><td><i class="doc">	 */</i></td></tr>
+<tr><th id="191">191</th><td>	<a class="typedef" href="../locks.h.html#lock_quick_type" title='lock_quick_type' data-type='pthread_spinlock_t' data-ref="lock_quick_type" data-ref-filename="lock_quick_type">lock_quick_type</a> <dfn class="decl field" id="lruhash_bin::lock" title='lruhash_bin::lock' data-ref="lruhash_bin::lock" data-ref-filename="lruhash_bin..lock">lock</dfn>;</td></tr>
+<tr><th id="192">192</th><td>	<i class="doc">/** linked list of overflow entries */</i></td></tr>
+<tr><th id="193">193</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl field" id="lruhash_bin::overflow_list" title='lruhash_bin::overflow_list' data-ref="lruhash_bin::overflow_list" data-ref-filename="lruhash_bin..overflow_list">overflow_list</dfn>;</td></tr>
+<tr><th id="194">194</th><td>};</td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="197">197</th><td><i class="doc"> * An entry into the hash table.</i></td></tr>
+<tr><th id="198">198</th><td><i class="doc"> * To change overflow_next you need to hold the bin lock.</i></td></tr>
+<tr><th id="199">199</th><td><i class="doc"> * To change the lru items you need to hold the hashtable lock.</i></td></tr>
+<tr><th id="200">200</th><td><i class="doc"> * This structure is designed as part of key struct. And key pointer helps</i></td></tr>
+<tr><th id="201">201</th><td><i class="doc"> * to get the surrounding structure. Data should be allocated on its own.</i></td></tr>
+<tr><th id="202">202</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="203">203</th><td><b>struct</b> <dfn class="type def" id="lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</dfn> {</td></tr>
+<tr><th id="204">204</th><td>	<i class="doc">/** </i></td></tr>
+<tr><th id="205">205</th><td><i class="doc">	 * rwlock for access to the contents of the entry</i></td></tr>
+<tr><th id="206">206</th><td><i class="doc">	 * Note that it does _not_ cover the lru_ and overflow_ ptrs.</i></td></tr>
+<tr><th id="207">207</th><td><i class="doc">	 * Even with a writelock, you cannot change hash and key.</i></td></tr>
+<tr><th id="208">208</th><td><i class="doc">	 * You need to delete it to change hash or key.</i></td></tr>
+<tr><th id="209">209</th><td><i class="doc">	 */</i></td></tr>
+<tr><th id="210">210</th><td>	<a class="typedef" href="../locks.h.html#lock_rw_type" title='lock_rw_type' data-type='pthread_rwlock_t' data-ref="lock_rw_type" data-ref-filename="lock_rw_type">lock_rw_type</a> <dfn class="decl field" id="lruhash_entry::lock" title='lruhash_entry::lock' data-ref="lruhash_entry::lock" data-ref-filename="lruhash_entry..lock">lock</dfn>;</td></tr>
+<tr><th id="211">211</th><td>	<i class="doc">/** next entry in overflow chain. Covered by hashlock and binlock. */</i></td></tr>
+<tr><th id="212">212</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl field" id="lruhash_entry::overflow_next" title='lruhash_entry::overflow_next' data-ref="lruhash_entry::overflow_next" data-ref-filename="lruhash_entry..overflow_next">overflow_next</dfn>;</td></tr>
+<tr><th id="213">213</th><td>	<i class="doc">/** next entry in lru chain. covered by hashlock. */</i></td></tr>
+<tr><th id="214">214</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl field" id="lruhash_entry::lru_next" title='lruhash_entry::lru_next' data-ref="lruhash_entry::lru_next" data-ref-filename="lruhash_entry..lru_next">lru_next</dfn>;</td></tr>
+<tr><th id="215">215</th><td>	<i class="doc">/** prev entry in lru chain. covered by hashlock. */</i></td></tr>
+<tr><th id="216">216</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl field" id="lruhash_entry::lru_prev" title='lruhash_entry::lru_prev' data-ref="lruhash_entry::lru_prev" data-ref-filename="lruhash_entry..lru_prev">lru_prev</dfn>;</td></tr>
+<tr><th id="217">217</th><td>	<i class="doc">/** hash value of the key. It may not change, until entry deleted. */</i></td></tr>
+<tr><th id="218">218</th><td>	<a class="typedef" href="#hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</a> <dfn class="decl field" id="lruhash_entry::hash" title='lruhash_entry::hash' data-ref="lruhash_entry::hash" data-ref-filename="lruhash_entry..hash">hash</dfn>;</td></tr>
+<tr><th id="219">219</th><td>	<i class="doc">/** key */</i></td></tr>
+<tr><th id="220">220</th><td>	<em>void</em>* <dfn class="decl field" id="lruhash_entry::key" title='lruhash_entry::key' data-ref="lruhash_entry::key" data-ref-filename="lruhash_entry..key">key</dfn>;</td></tr>
+<tr><th id="221">221</th><td>	<i class="doc">/** data */</i></td></tr>
+<tr><th id="222">222</th><td>	<em>void</em>* <dfn class="decl field" id="lruhash_entry::data" title='lruhash_entry::data' data-ref="lruhash_entry::data" data-ref-filename="lruhash_entry..data">data</dfn>;</td></tr>
+<tr><th id="223">223</th><td>};</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="226">226</th><td><i class="doc"> * Create new hash table.</i></td></tr>
+<tr><th id="227">227</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">start_size:</span> size of hashtable array at start, must be power of 2.</i></td></tr>
+<tr><th id="228">228</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">maxmem:</span> maximum amount of memory this table is allowed to use.</i></td></tr>
+<tr><th id="229">229</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">sizefunc:</span> calculates memory usage of entries.</i></td></tr>
+<tr><th id="230">230</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">compfunc:</span> compares entries, 0 on equality.</i></td></tr>
+<tr><th id="231">231</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">delkeyfunc:</span> deletes key.</i></td></tr>
+<tr><th id="232">232</th><td><i class="doc"> *   Calling both delkey and deldata will also free the struct lruhash_entry.</i></td></tr>
+<tr><th id="233">233</th><td><i class="doc"> *   Make it part of the key structure and delete it in delkeyfunc.</i></td></tr>
+<tr><th id="234">234</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">deldatafunc:</span> deletes data. </i></td></tr>
+<tr><th id="235">235</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">arg:</span> user argument that is passed to user function calls.</i></td></tr>
+<tr><th id="236">236</th><td><i class="doc"> * <span class="command">@return</span>: new hash table or NULL on malloc failure.</i></td></tr>
+<tr><th id="237">237</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="238">238</th><td><b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="decl fn" id="lruhash_create" title='lruhash_create' data-ref="lruhash_create" data-ref-filename="lruhash_create">lruhash_create</dfn>(<a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col7 decl" id="27start_size" title='start_size' data-type='size_t' data-ref="27start_size" data-ref-filename="27start_size">start_size</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="28maxmem" title='maxmem' data-type='size_t' data-ref="28maxmem" data-ref-filename="28maxmem">maxmem</dfn>,</td></tr>
+<tr><th id="239">239</th><td>	<a class="typedef" href="#lruhash_sizefunc_type" title='lruhash_sizefunc_type' data-type='size_t (*)(void *, void *)' data-ref="lruhash_sizefunc_type" data-ref-filename="lruhash_sizefunc_type">lruhash_sizefunc_type</a> <dfn class="local col9 decl" id="29sizefunc" title='sizefunc' data-type='lruhash_sizefunc_type' data-ref="29sizefunc" data-ref-filename="29sizefunc">sizefunc</dfn>, <a class="typedef" href="#lruhash_compfunc_type" title='lruhash_compfunc_type' data-type='int (*)(void *, void *)' data-ref="lruhash_compfunc_type" data-ref-filename="lruhash_compfunc_type">lruhash_compfunc_type</a> <dfn class="local col0 decl" id="30compfunc" title='compfunc' data-type='lruhash_compfunc_type' data-ref="30compfunc" data-ref-filename="30compfunc">compfunc</dfn>,</td></tr>
+<tr><th id="240">240</th><td>	<a class="typedef" href="#lruhash_delkeyfunc_type" title='lruhash_delkeyfunc_type' data-type='void (*)(void *, void *)' data-ref="lruhash_delkeyfunc_type" data-ref-filename="lruhash_delkeyfunc_type">lruhash_delkeyfunc_type</a> <dfn class="local col1 decl" id="31delkeyfunc" title='delkeyfunc' data-type='lruhash_delkeyfunc_type' data-ref="31delkeyfunc" data-ref-filename="31delkeyfunc">delkeyfunc</dfn>,</td></tr>
+<tr><th id="241">241</th><td>	<a class="typedef" href="#lruhash_deldatafunc_type" title='lruhash_deldatafunc_type' data-type='void (*)(void *, void *)' data-ref="lruhash_deldatafunc_type" data-ref-filename="lruhash_deldatafunc_type">lruhash_deldatafunc_type</a> <dfn class="local col2 decl" id="32deldatafunc" title='deldatafunc' data-type='lruhash_deldatafunc_type' data-ref="32deldatafunc" data-ref-filename="32deldatafunc">deldatafunc</dfn>, <em>void</em>* <dfn class="local col3 decl" id="33arg" title='arg' data-type='void *' data-ref="33arg" data-ref-filename="33arg">arg</dfn>);</td></tr>
+<tr><th id="242">242</th><td></td></tr>
+<tr><th id="243">243</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="244">244</th><td><i class="doc"> * Delete hash table. Entries are all deleted.</i></td></tr>
+<tr><th id="245">245</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> to delete.</i></td></tr>
+<tr><th id="246">246</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="247">247</th><td><em>void</em> <dfn class="decl fn" id="lruhash_delete" title='lruhash_delete' data-ref="lruhash_delete" data-ref-filename="lruhash_delete">lruhash_delete</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col4 decl" id="34table" title='table' data-type='struct lruhash *' data-ref="34table" data-ref-filename="34table">table</dfn>);</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="250">250</th><td><i class="doc"> * Clear hash table. Entries are all deleted, while locking them before </i></td></tr>
+<tr><th id="251">251</th><td><i class="doc"> * doing so. At end the table is empty.</i></td></tr>
+<tr><th id="252">252</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> to make empty.</i></td></tr>
+<tr><th id="253">253</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="254">254</th><td><em>void</em> <dfn class="decl fn" id="lruhash_clear" title='lruhash_clear' data-ref="lruhash_clear" data-ref-filename="lruhash_clear">lruhash_clear</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col5 decl" id="35table" title='table' data-type='struct lruhash *' data-ref="35table" data-ref-filename="35table">table</dfn>);</td></tr>
+<tr><th id="255">255</th><td></td></tr>
+<tr><th id="256">256</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="257">257</th><td><i class="doc"> * Insert a new element into the hashtable. </i></td></tr>
+<tr><th id="258">258</th><td><i class="doc"> * If key is already present data pointer in that entry is updated.</i></td></tr>
+<tr><th id="259">259</th><td><i class="doc"> * The space calculation function is called with the key, data.</i></td></tr>
+<tr><th id="260">260</th><td><i class="doc"> * If necessary the least recently used entries are deleted to make space.</i></td></tr>
+<tr><th id="261">261</th><td><i class="doc"> * If necessary the hash array is grown up.</i></td></tr>
+<tr><th id="262">262</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="263">263</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="264">264</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">hash:</span> hash value. User calculates the hash.</i></td></tr>
+<tr><th id="265">265</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> identifies the entry.</i></td></tr>
+<tr><th id="266">266</th><td><i class="doc"> * 	If key already present, this entry-&gt;key is deleted immediately.</i></td></tr>
+<tr><th id="267">267</th><td><i class="doc"> *	But entry-&gt;data is set to NULL before deletion, and put into</i></td></tr>
+<tr><th id="268">268</th><td><i class="doc"> * 	the existing entry. The data is then freed.</i></td></tr>
+<tr><th id="269">269</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">data:</span> the data.</i></td></tr>
+<tr><th id="270">270</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cb_override:</span> if not null overrides the cb_arg for the deletefunc.</i></td></tr>
+<tr><th id="271">271</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="272">272</th><td><em>void</em> <dfn class="decl fn" id="lruhash_insert" title='lruhash_insert' data-ref="lruhash_insert" data-ref-filename="lruhash_insert">lruhash_insert</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col6 decl" id="36table" title='table' data-type='struct lruhash *' data-ref="36table" data-ref-filename="36table">table</dfn>, <a class="typedef" href="#hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</a> <dfn class="local col7 decl" id="37hash" title='hash' data-type='hashvalue_type' data-ref="37hash" data-ref-filename="37hash">hash</dfn>, </td></tr>
+<tr><th id="273">273</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col8 decl" id="38entry" title='entry' data-type='struct lruhash_entry *' data-ref="38entry" data-ref-filename="38entry">entry</dfn>, <em>void</em>* <dfn class="local col9 decl" id="39data" title='data' data-type='void *' data-ref="39data" data-ref-filename="39data">data</dfn>, <em>void</em>* <dfn class="local col0 decl" id="40cb_override" title='cb_override' data-type='void *' data-ref="40cb_override" data-ref-filename="40cb_override">cb_override</dfn>);</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="276">276</th><td><i class="doc"> * Lookup an entry in the hashtable.</i></td></tr>
+<tr><th id="277">277</th><td><i class="doc"> * At the end of the function you hold a (read/write)lock on the entry.</i></td></tr>
+<tr><th id="278">278</th><td><i class="doc"> * The LRU is updated for the entry (if found).</i></td></tr>
+<tr><th id="279">279</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="280">280</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">hash:</span> hash of key.</i></td></tr>
+<tr><th id="281">281</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">key:</span> what to look for, compared against entries in overflow chain.</i></td></tr>
+<tr><th id="282">282</th><td><i class="doc"> *    the hash value must be set, and must work with compare function.</i></td></tr>
+<tr><th id="283">283</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">wr:</span> set to true if you desire a writelock on the entry.</i></td></tr>
+<tr><th id="284">284</th><td><i class="doc"> *    with a writelock you can update the data part.</i></td></tr>
+<tr><th id="285">285</th><td><i class="doc"> * <span class="command">@return</span>: pointer to the entry or NULL. The entry is locked.</i></td></tr>
+<tr><th id="286">286</th><td><i class="doc"> *    The user must unlock the entry when done.</i></td></tr>
+<tr><th id="287">287</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="288">288</th><td><b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl fn" id="lruhash_lookup" title='lruhash_lookup' data-ref="lruhash_lookup" data-ref-filename="lruhash_lookup">lruhash_lookup</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col1 decl" id="41table" title='table' data-type='struct lruhash *' data-ref="41table" data-ref-filename="41table">table</dfn>,</td></tr>
+<tr><th id="289">289</th><td>	<a class="typedef" href="#hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</a> <dfn class="local col2 decl" id="42hash" title='hash' data-type='hashvalue_type' data-ref="42hash" data-ref-filename="42hash">hash</dfn>, <em>void</em>* <dfn class="local col3 decl" id="43key" title='key' data-type='void *' data-ref="43key" data-ref-filename="43key">key</dfn>, <em>int</em> <dfn class="local col4 decl" id="44wr" title='wr' data-type='int' data-ref="44wr" data-ref-filename="44wr">wr</dfn>);</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="292">292</th><td><i class="doc"> * Touch entry, so it becomes the most recently used in the LRU list.</i></td></tr>
+<tr><th id="293">293</th><td><i class="doc"> * Caller must hold hash table lock. The entry must be inserted already.</i></td></tr>
+<tr><th id="294">294</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="295">295</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> entry to make first in LRU.</i></td></tr>
+<tr><th id="296">296</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="297">297</th><td><em>void</em> <dfn class="decl fn" id="lru_touch" title='lru_touch' data-ref="lru_touch" data-ref-filename="lru_touch">lru_touch</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col5 decl" id="45table" title='table' data-type='struct lruhash *' data-ref="45table" data-ref-filename="45table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col6 decl" id="46entry" title='entry' data-type='struct lruhash_entry *' data-ref="46entry" data-ref-filename="46entry">entry</dfn>);</td></tr>
+<tr><th id="298">298</th><td></td></tr>
+<tr><th id="299">299</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="300">300</th><td><i class="doc"> * Set the markdelfunction (or NULL)</i></td></tr>
+<tr><th id="301">301</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="302">302</th><td><em>void</em> <dfn class="decl fn" id="lruhash_setmarkdel" title='lruhash_setmarkdel' data-ref="lruhash_setmarkdel" data-ref-filename="lruhash_setmarkdel">lruhash_setmarkdel</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col7 decl" id="47table" title='table' data-type='struct lruhash *' data-ref="47table" data-ref-filename="47table">table</dfn>, <a class="typedef" href="#lruhash_markdelfunc_type" title='lruhash_markdelfunc_type' data-type='void (*)(void *)' data-ref="lruhash_markdelfunc_type" data-ref-filename="lruhash_markdelfunc_type">lruhash_markdelfunc_type</a> <dfn class="local col8 decl" id="48md" title='md' data-type='lruhash_markdelfunc_type' data-ref="48md" data-ref-filename="48md">md</dfn>);</td></tr>
+<tr><th id="303">303</th><td></td></tr>
+<tr><th id="304">304</th><td><i>/************************* getdns functions ************************/</i></td></tr>
+<tr><th id="305">305</th><td><i>/*** these are used by getdns only and not by unbound. ***/</i></td></tr>
+<tr><th id="306">306</th><td></td></tr>
+<tr><th id="307">307</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="308">308</th><td><i class="doc"> * Demote entry, so it becomes the least recently used in the LRU list.</i></td></tr>
+<tr><th id="309">309</th><td><i class="doc"> * Caller must hold hash table lock. The entry must be inserted already.</i></td></tr>
+<tr><th id="310">310</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="311">311</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> entry to make last in LRU.</i></td></tr>
+<tr><th id="312">312</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="313">313</th><td><em>void</em> <dfn class="decl fn" id="lru_demote" title='lru_demote' data-ref="lru_demote" data-ref-filename="lru_demote">lru_demote</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col9 decl" id="49table" title='table' data-type='struct lruhash *' data-ref="49table" data-ref-filename="49table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col0 decl" id="50entry" title='entry' data-type='struct lruhash_entry *' data-ref="50entry" data-ref-filename="50entry">entry</dfn>);</td></tr>
+<tr><th id="314">314</th><td></td></tr>
+<tr><th id="315">315</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="316">316</th><td><i class="doc"> * Insert a new element into the hashtable, or retrieve the corresponding</i></td></tr>
+<tr><th id="317">317</th><td><i class="doc"> * element of it exits.</i></td></tr>
+<tr><th id="318">318</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="319">319</th><td><i class="doc"> * If key is already present data pointer in that entry is kept.</i></td></tr>
+<tr><th id="320">320</th><td><i class="doc"> * If it is not present, a new entry is created. In that case, </i></td></tr>
+<tr><th id="321">321</th><td><i class="doc"> * the space calculation function is called with the key, data.</i></td></tr>
+<tr><th id="322">322</th><td><i class="doc"> * If necessary the least recently used entries are deleted to make space.</i></td></tr>
+<tr><th id="323">323</th><td><i class="doc"> * If necessary the hash array is grown up.</i></td></tr>
+<tr><th id="324">324</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="325">325</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="326">326</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">hash:</span> hash value. User calculates the hash.</i></td></tr>
+<tr><th id="327">327</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> identifies the entry.</i></td></tr>
+<tr><th id="328">328</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">data:</span> the data.</i></td></tr>
+<tr><th id="329">329</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cb_arg:</span> if not null overrides the cb_arg for the deletefunc.</i></td></tr>
+<tr><th id="330">330</th><td><i class="doc"> * <span class="command">@return</span>: pointer to the existing entry if the key was already present,</i></td></tr>
+<tr><th id="331">331</th><td><i class="doc"> *     or to the entry argument if it was not.</i></td></tr>
+<tr><th id="332">332</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="333">333</th><td><b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl fn" id="lruhash_insert_or_retrieve" title='lruhash_insert_or_retrieve' data-ref="lruhash_insert_or_retrieve" data-ref-filename="lruhash_insert_or_retrieve">lruhash_insert_or_retrieve</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col1 decl" id="51table" title='table' data-type='struct lruhash *' data-ref="51table" data-ref-filename="51table">table</dfn>, <a class="typedef" href="#hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</a> <dfn class="local col2 decl" id="52hash" title='hash' data-type='hashvalue_type' data-ref="52hash" data-ref-filename="52hash">hash</dfn>,</td></tr>
+<tr><th id="334">334</th><td>        <b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col3 decl" id="53entry" title='entry' data-type='struct lruhash_entry *' data-ref="53entry" data-ref-filename="53entry">entry</dfn>, <em>void</em>* <dfn class="local col4 decl" id="54data" title='data' data-type='void *' data-ref="54data" data-ref-filename="54data">data</dfn>, <em>void</em>* <dfn class="local col5 decl" id="55cb_arg" title='cb_arg' data-type='void *' data-ref="55cb_arg" data-ref-filename="55cb_arg">cb_arg</dfn>);</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td><i>/************************* Internal functions ************************/</i></td></tr>
+<tr><th id="337">337</th><td><i>/*** these are only exposed for unit tests. ***/</i></td></tr>
+<tr><th id="338">338</th><td></td></tr>
+<tr><th id="339">339</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="340">340</th><td><i class="doc"> * Remove entry from hashtable. Does nothing if not found in hashtable.</i></td></tr>
+<tr><th id="341">341</th><td><i class="doc"> * Delfunc is called for the entry.</i></td></tr>
+<tr><th id="342">342</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="343">343</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">hash:</span> hash of key.</i></td></tr>
+<tr><th id="344">344</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">key:</span> what to look for. </i></td></tr>
+<tr><th id="345">345</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="346">346</th><td><em>void</em> <dfn class="decl fn" id="lruhash_remove" title='lruhash_remove' data-ref="lruhash_remove" data-ref-filename="lruhash_remove">lruhash_remove</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col6 decl" id="56table" title='table' data-type='struct lruhash *' data-ref="56table" data-ref-filename="56table">table</dfn>, <a class="typedef" href="#hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</a> <dfn class="local col7 decl" id="57hash" title='hash' data-type='hashvalue_type' data-ref="57hash" data-ref-filename="57hash">hash</dfn>, <em>void</em>* <dfn class="local col8 decl" id="58key" title='key' data-type='void *' data-ref="58key" data-ref-filename="58key">key</dfn>);</td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td><i class="doc">/** init the hash bins for the table */</i></td></tr>
+<tr><th id="349">349</th><td><em>void</em> <dfn class="decl fn" id="bin_init" title='bin_init' data-ref="bin_init" data-ref-filename="bin_init">bin_init</dfn>(<b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>* <dfn class="local col9 decl" id="59array" title='array' data-type='struct lruhash_bin *' data-ref="59array" data-ref-filename="59array">array</dfn>, <a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="60size" title='size' data-type='size_t' data-ref="60size" data-ref-filename="60size">size</dfn>);</td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td><i class="doc">/** delete the hash bin and entries inside it */</i></td></tr>
+<tr><th id="352">352</th><td><em>void</em> <dfn class="decl fn" id="bin_delete" title='bin_delete' data-ref="bin_delete" data-ref-filename="bin_delete">bin_delete</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col1 decl" id="61table" title='table' data-type='struct lruhash *' data-ref="61table" data-ref-filename="61table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>* <dfn class="local col2 decl" id="62bin" title='bin' data-type='struct lruhash_bin *' data-ref="62bin" data-ref-filename="62bin">bin</dfn>);</td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td><i class="doc">/** </i></td></tr>
+<tr><th id="355">355</th><td><i class="doc"> * Find entry in hash bin. You must have locked the bin.</i></td></tr>
+<tr><th id="356">356</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table with function pointers.</i></td></tr>
+<tr><th id="357">357</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">bin:</span> hash bin to look into.</i></td></tr>
+<tr><th id="358">358</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">hash:</span> hash value to look for.</i></td></tr>
+<tr><th id="359">359</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">key:</span> key to look for.</i></td></tr>
+<tr><th id="360">360</th><td><i class="doc"> * <span class="command">@return</span>: the entry or NULL if not found.</i></td></tr>
+<tr><th id="361">361</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="362">362</th><td><b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="decl fn" id="bin_find_entry" title='bin_find_entry' data-ref="bin_find_entry" data-ref-filename="bin_find_entry">bin_find_entry</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col3 decl" id="63table" title='table' data-type='struct lruhash *' data-ref="63table" data-ref-filename="63table">table</dfn>, </td></tr>
+<tr><th id="363">363</th><td>	<b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>* <dfn class="local col4 decl" id="64bin" title='bin' data-type='struct lruhash_bin *' data-ref="64bin" data-ref-filename="64bin">bin</dfn>, <a class="typedef" href="#hashvalue_type" title='hashvalue_type' data-type='uint32_t' data-ref="hashvalue_type" data-ref-filename="hashvalue_type">hashvalue_type</a> <dfn class="local col5 decl" id="65hash" title='hash' data-type='hashvalue_type' data-ref="65hash" data-ref-filename="65hash">hash</dfn>, <em>void</em>* <dfn class="local col6 decl" id="66key" title='key' data-type='void *' data-ref="66key" data-ref-filename="66key">key</dfn>);</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="366">366</th><td><i class="doc"> * Remove entry from bin overflow chain.</i></td></tr>
+<tr><th id="367">367</th><td><i class="doc"> * You must have locked the bin.</i></td></tr>
+<tr><th id="368">368</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">bin:</span> hash bin to look into.</i></td></tr>
+<tr><th id="369">369</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> entry ptr that needs removal.</i></td></tr>
+<tr><th id="370">370</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="371">371</th><td><em>void</em> <dfn class="decl fn" id="bin_overflow_remove" title='bin_overflow_remove' data-ref="bin_overflow_remove" data-ref-filename="bin_overflow_remove">bin_overflow_remove</dfn>(<b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>* <dfn class="local col7 decl" id="67bin" title='bin' data-type='struct lruhash_bin *' data-ref="67bin" data-ref-filename="67bin">bin</dfn>, </td></tr>
+<tr><th id="372">372</th><td>	<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col8 decl" id="68entry" title='entry' data-type='struct lruhash_entry *' data-ref="68entry" data-ref-filename="68entry">entry</dfn>);</td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="375">375</th><td><i class="doc"> * Split hash bin into two new ones. Based on increased size_mask.</i></td></tr>
+<tr><th id="376">376</th><td><i class="doc"> * Caller must hold hash table lock.</i></td></tr>
+<tr><th id="377">377</th><td><i class="doc"> * At the end the routine acquires all hashbin locks (in the old array).</i></td></tr>
+<tr><th id="378">378</th><td><i class="doc"> * This makes it wait for other threads to finish with the bins.</i></td></tr>
+<tr><th id="379">379</th><td><i class="doc"> * So the bins are ready to be deleted after this function.</i></td></tr>
+<tr><th id="380">380</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table with function pointers.</i></td></tr>
+<tr><th id="381">381</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">newa:</span> new increased array.</i></td></tr>
+<tr><th id="382">382</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">newmask:</span> new lookup mask.</i></td></tr>
+<tr><th id="383">383</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="384">384</th><td><em>void</em> <dfn class="decl fn" id="bin_split" title='bin_split' data-ref="bin_split" data-ref-filename="bin_split">bin_split</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col9 decl" id="69table" title='table' data-type='struct lruhash *' data-ref="69table" data-ref-filename="69table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_bin" title='lruhash_bin' data-ref="lruhash_bin" data-ref-filename="lruhash_bin">lruhash_bin</a>* <dfn class="local col0 decl" id="70newa" title='newa' data-type='struct lruhash_bin *' data-ref="70newa" data-ref-filename="70newa">newa</dfn>, </td></tr>
+<tr><th id="385">385</th><td>	<em>int</em> <dfn class="local col1 decl" id="71newmask" title='newmask' data-type='int' data-ref="71newmask" data-ref-filename="71newmask">newmask</dfn>);</td></tr>
+<tr><th id="386">386</th><td></td></tr>
+<tr><th id="387">387</th><td><i class="doc">/** </i></td></tr>
+<tr><th id="388">388</th><td><i class="doc"> * Try to make space available by deleting old entries.</i></td></tr>
+<tr><th id="389">389</th><td><i class="doc"> * Assumes that the lock on the hashtable is being held by caller.</i></td></tr>
+<tr><th id="390">390</th><td><i class="doc"> * Caller must not hold bin locks.</i></td></tr>
+<tr><th id="391">391</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="392">392</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">list:</span> list of entries that are to be deleted later.</i></td></tr>
+<tr><th id="393">393</th><td><i class="doc"> *	Entries have been removed from the hash table and writelock is held.</i></td></tr>
+<tr><th id="394">394</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="395">395</th><td><em>void</em> <dfn class="decl fn" id="reclaim_space" title='reclaim_space' data-ref="reclaim_space" data-ref-filename="reclaim_space">reclaim_space</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col2 decl" id="72table" title='table' data-type='struct lruhash *' data-ref="72table" data-ref-filename="72table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>** <dfn class="local col3 decl" id="73list" title='list' data-type='struct lruhash_entry **' data-ref="73list" data-ref-filename="73list">list</dfn>);</td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="398">398</th><td><i class="doc"> * Grow the table lookup array. Becomes twice as large.</i></td></tr>
+<tr><th id="399">399</th><td><i class="doc"> * Caller must hold the hash table lock. Must not hold any bin locks.</i></td></tr>
+<tr><th id="400">400</th><td><i class="doc"> * Tries to grow, on malloc failure, nothing happened.</i></td></tr>
+<tr><th id="401">401</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="402">402</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="403">403</th><td><em>void</em> <dfn class="decl fn" id="table_grow" title='table_grow' data-ref="table_grow" data-ref-filename="table_grow">table_grow</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col4 decl" id="74table" title='table' data-type='struct lruhash *' data-ref="74table" data-ref-filename="74table">table</dfn>);</td></tr>
+<tr><th id="404">404</th><td></td></tr>
+<tr><th id="405">405</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="406">406</th><td><i class="doc"> * Put entry at front of lru. entry must be unlinked from lru.</i></td></tr>
+<tr><th id="407">407</th><td><i class="doc"> * Caller must hold hash table lock.</i></td></tr>
+<tr><th id="408">408</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table with lru head and tail.</i></td></tr>
+<tr><th id="409">409</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> entry to make most recently used.</i></td></tr>
+<tr><th id="410">410</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="411">411</th><td><em>void</em> <dfn class="decl fn" id="lru_front" title='lru_front' data-ref="lru_front" data-ref-filename="lru_front">lru_front</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col5 decl" id="75table" title='table' data-type='struct lruhash *' data-ref="75table" data-ref-filename="75table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col6 decl" id="76entry" title='entry' data-type='struct lruhash_entry *' data-ref="76entry" data-ref-filename="76entry">entry</dfn>);</td></tr>
+<tr><th id="412">412</th><td></td></tr>
+<tr><th id="413">413</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="414">414</th><td><i class="doc"> * Remove entry from lru list.</i></td></tr>
+<tr><th id="415">415</th><td><i class="doc"> * Caller must hold hash table lock.</i></td></tr>
+<tr><th id="416">416</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table with lru head and tail.</i></td></tr>
+<tr><th id="417">417</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">entry:</span> entry to remove from lru.</i></td></tr>
+<tr><th id="418">418</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="419">419</th><td><em>void</em> <dfn class="decl fn" id="lru_remove" title='lru_remove' data-ref="lru_remove" data-ref-filename="lru_remove">lru_remove</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col7 decl" id="77table" title='table' data-type='struct lruhash *' data-ref="77table" data-ref-filename="77table">table</dfn>, <b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>* <dfn class="local col8 decl" id="78entry" title='entry' data-type='struct lruhash_entry *' data-ref="78entry" data-ref-filename="78entry">entry</dfn>);</td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="422">422</th><td><i class="doc"> * Output debug info to the log as to state of the hash table.</i></td></tr>
+<tr><th id="423">423</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table.</i></td></tr>
+<tr><th id="424">424</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">id:</span> string printed with table to identify the hash table.</i></td></tr>
+<tr><th id="425">425</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">extended:</span> set to true to print statistics on overflow bin lengths.</i></td></tr>
+<tr><th id="426">426</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="427">427</th><td><em>void</em> <dfn class="decl fn" id="lruhash_status" title='lruhash_status' data-ref="lruhash_status" data-ref-filename="lruhash_status">lruhash_status</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col9 decl" id="79table" title='table' data-type='struct lruhash *' data-ref="79table" data-ref-filename="79table">table</dfn>, <em>const</em> <em>char</em>* <dfn class="local col0 decl" id="80id" title='id' data-type='const char *' data-ref="80id" data-ref-filename="80id">id</dfn>, <em>int</em> <dfn class="local col1 decl" id="81extended" title='extended' data-type='int' data-ref="81extended" data-ref-filename="81extended">extended</dfn>);</td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="430">430</th><td><i class="doc"> * Get memory in use now by the lruhash table.</i></td></tr>
+<tr><th id="431">431</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">table:</span> hash table. Will be locked before use. And unlocked after.</i></td></tr>
+<tr><th id="432">432</th><td><i class="doc"> * <span class="command">@return</span> size in bytes.</i></td></tr>
+<tr><th id="433">433</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="434">434</th><td><a class="typedef" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl fn" id="lruhash_get_mem" title='lruhash_get_mem' data-ref="lruhash_get_mem" data-ref-filename="lruhash_get_mem">lruhash_get_mem</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col2 decl" id="82table" title='table' data-type='struct lruhash *' data-ref="82table" data-ref-filename="82table">table</dfn>);</td></tr>
+<tr><th id="435">435</th><td></td></tr>
+<tr><th id="436">436</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="437">437</th><td><i class="doc"> * Traverse a lruhash. Call back for every element in the table.</i></td></tr>
+<tr><th id="438">438</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">h:</span> hash table.  Locked before use.</i></td></tr>
+<tr><th id="439">439</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">wr:</span> if true writelock is obtained on element, otherwise readlock.</i></td></tr>
+<tr><th id="440">440</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">func:</span> function for every element. Do not lock or unlock elements.</i></td></tr>
+<tr><th id="441">441</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">arg:</span> user argument to func.</i></td></tr>
+<tr><th id="442">442</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="443">443</th><td><em>void</em> <dfn class="decl fn" id="lruhash_traverse" title='lruhash_traverse' data-ref="lruhash_traverse" data-ref-filename="lruhash_traverse">lruhash_traverse</dfn>(<b>struct</b> <a class="type" href="#lruhash" title='lruhash' data-ref="lruhash" data-ref-filename="lruhash">lruhash</a>* <dfn class="local col3 decl" id="83h" title='h' data-type='struct lruhash *' data-ref="83h" data-ref-filename="83h">h</dfn>, <em>int</em> <dfn class="local col4 decl" id="84wr" title='wr' data-type='int' data-ref="84wr" data-ref-filename="84wr">wr</dfn>,</td></tr>
+<tr><th id="444">444</th><td>        <em>void</em> (*<dfn class="local col5 decl" id="85func" title='func' data-type='void (*)(struct lruhash_entry *, void *)' data-ref="85func" data-ref-filename="85func">func</dfn>)(<b>struct</b> <a class="type" href="#lruhash_entry" title='lruhash_entry' data-ref="lruhash_entry" data-ref-filename="lruhash_entry">lruhash_entry</a>*, <em>void</em>*), <em>void</em>* <dfn class="local col6 decl" id="86arg" title='arg' data-type='void *' data-ref="86arg" data-ref-filename="86arg">arg</dfn>);</td></tr>
+<tr><th id="445">445</th><td></td></tr>
+<tr><th id="446">446</th><td><u>#<span data-ppcond="107">endif</span> /* UTIL_STORAGE_LRUHASH_H */</u></td></tr>
+<tr><th id="447">447</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../../dns64/dns64.c.html'>netbsd/external/bsd/unbound/dist/dns64/dns64.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

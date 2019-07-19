@@ -1,0 +1,382 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>shlock.c source code [netbsd/usr.bin/shlock/shlock.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="main "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/usr.bin/shlock/shlock.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>usr.bin</a>/<a href='./'>shlock</a>/<a href='shlock.c.html'>shlock.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: shlock.c,v 1.13 2015/04/10 09:34:43 tron Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2006 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Erik E. Fair.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i>** Program to produce reliable locks for shell scripts.</i></td></tr>
+<tr><th id="34">34</th><td><i>** Algorithm suggested by Peter Honeyman, January 1984,</i></td></tr>
+<tr><th id="35">35</th><td><i>** in connection with HoneyDanBer UUCP.</i></td></tr>
+<tr><th id="36">36</th><td><i>**</i></td></tr>
+<tr><th id="37">37</th><td><i>** I tried extending this to handle shared locks in November 1987,</i></td></tr>
+<tr><th id="38">38</th><td><i>** and ran into to some fundamental problems:</i></td></tr>
+<tr><th id="39">39</th><td><i>**</i></td></tr>
+<tr><th id="40">40</th><td><i>**	Neither 4.3 BSD nor System V have an open(2) with locking,</i></td></tr>
+<tr><th id="41">41</th><td><i>**	so that you can open a file and have it locked as soon as</i></td></tr>
+<tr><th id="42">42</th><td><i>**	it's real; you have to make two system calls, and there's</i></td></tr>
+<tr><th id="43">43</th><td><i>**	a race...</i></td></tr>
+<tr><th id="44">44</th><td><i>**</i></td></tr>
+<tr><th id="45">45</th><td><i>**	When removing dead process id's from a list in a file,</i></td></tr>
+<tr><th id="46">46</th><td><i>**	you need to truncate the file (you don't want to create a</i></td></tr>
+<tr><th id="47">47</th><td><i>**	new one; see above); unfortunately for the portability of</i></td></tr>
+<tr><th id="48">48</th><td><i>**	this program, only 4.3 BSD has ftruncate(2).</i></td></tr>
+<tr><th id="49">49</th><td><i>**</i></td></tr>
+<tr><th id="50">50</th><td><i>** Erik E. Fair &lt;fair@ucbarpa.berkeley.edu&gt;, November 8, 1987</i></td></tr>
+<tr><th id="51">51</th><td><i>**</i></td></tr>
+<tr><th id="52">52</th><td><i>** Extensions for UUCP style locks (i.e. pid is an int in the file,</i></td></tr>
+<tr><th id="53">53</th><td><i>** rather than an ASCII string). Also fix long standing bug with</i></td></tr>
+<tr><th id="54">54</th><td><i>** full file systems and temporary files.</i></td></tr>
+<tr><th id="55">55</th><td><i>**</i></td></tr>
+<tr><th id="56">56</th><td><i>** Erik E. Fair &lt;fair@apple.com&gt;, November 12, 1989</i></td></tr>
+<tr><th id="57">57</th><td><i>**</i></td></tr>
+<tr><th id="58">58</th><td><i>** ANSIfy the code somewhat to make gcc -Wall happy with the code.</i></td></tr>
+<tr><th id="59">59</th><td><i>** Submit to NetBSD</i></td></tr>
+<tr><th id="60">60</th><td><i>**</i></td></tr>
+<tr><th id="61">61</th><td><i>** Erik E. Fair &lt;fair@clock.org&gt;, May 20, 1997</i></td></tr>
+<tr><th id="62">62</th><td><i>*/</i></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td><u>#<span data-ppcond="66">ifndef</span> <span class="macro" data-ref="_M/lint">lint</span></u></td></tr>
+<tr><th id="67">67</th><td><a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: shlock.c,v 1.13 2015/04/10 09:34:43 tron Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: shlock.c,v 1.13 2015/04/10 09:34:43 tron Exp $"</q>);</td></tr>
+<tr><th id="68">68</th><td><u>#<span data-ppcond="66">endif</span></u></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="71">71</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/file.h.html">&lt;sys/file.h&gt;</a></u></td></tr>
+<tr><th id="72">72</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html">&lt;fcntl.h&gt;</a>			/* Needed on hpux */</u></td></tr>
+<tr><th id="73">73</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="74">74</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/signal.h.html">&lt;signal.h&gt;</a></u></td></tr>
+<tr><th id="75">75</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html">&lt;errno.h&gt;</a></u></td></tr>
+<tr><th id="76">76</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a></u></td></tr>
+<tr><th id="77">77</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html">&lt;unistd.h&gt;</a></u></td></tr>
+<tr><th id="78">78</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><u>#define	<dfn class="macro" id="_M/LOCK_SET" data-ref="_M/LOCK_SET">LOCK_SET</dfn>	0</u></td></tr>
+<tr><th id="81">81</th><td><u>#define	<dfn class="macro" id="_M/LOCK_FAIL" data-ref="_M/LOCK_FAIL">LOCK_FAIL</dfn>	1</u></td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td><u>#define	<dfn class="macro" id="_M/LOCK_GOOD" data-ref="_M/LOCK_GOOD">LOCK_GOOD</dfn>	0</u></td></tr>
+<tr><th id="84">84</th><td><u>#define	<dfn class="macro" id="_M/LOCK_BAD" data-ref="_M/LOCK_BAD">LOCK_BAD</dfn>	1</u></td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><u>#define	<dfn class="macro" id="_M/FAIL" data-ref="_M/FAIL">FAIL</dfn>		(-1)</u></td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><u>#define	<dfn class="macro" id="_M/TRUE" data-ref="_M/TRUE">TRUE</dfn>	1</u></td></tr>
+<tr><th id="89">89</th><td><u>#define	<dfn class="macro" id="_M/FALSE" data-ref="_M/FALSE">FALSE</dfn>	0</u></td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td><em>static</em> <em>int</em>	<dfn class="tu decl def" id="Debug" title='Debug' data-type='int' data-ref="Debug" data-ref-filename="Debug">Debug</dfn> = <a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="92">92</th><td><em>static</em> <em>char</em>	*<dfn class="tu decl def" id="Pname" title='Pname' data-type='char *' data-ref="Pname" data-ref-filename="Pname">Pname</dfn>;</td></tr>
+<tr><th id="93">93</th><td><em>static</em> <em>const</em> <em>char</em> <dfn class="tu decl def" id="USAGE" title='USAGE' data-type='const char [38]' data-ref="USAGE" data-ref-filename="USAGE">USAGE</dfn>[] = <q>"%s: USAGE: %s [-du] [-p PID] -f file\n"</q>;</td></tr>
+<tr><th id="94">94</th><td><em>static</em> <em>const</em> <em>char</em> <dfn class="tu decl def" id="E_unlk" title='E_unlk' data-type='const char [20]' data-ref="E_unlk" data-ref-filename="E_unlk">E_unlk</dfn>[] = <q>"%s: unlink(%s): %s\n"</q>;</td></tr>
+<tr><th id="95">95</th><td><em>static</em> <em>const</em> <em>char</em> <dfn class="tu decl def" id="E_open" title='E_open' data-type='const char [18]' data-ref="E_open" data-ref-filename="E_open">E_open</dfn>[] = <q>"%s: open(%s): %s\n"</q>;</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><u>#define	<dfn class="macro" id="_M/dprintf" data-ref="_M/dprintf">dprintf</dfn>	if (<a class="tu ref" href="#Debug" title='Debug' data-use='r' data-ref="Debug" data-ref-filename="Debug">Debug</a>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a></u></td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td><i>/*</i></td></tr>
+<tr><th id="100">100</th><td><i>** Prototypes to make the ANSI compilers happy</i></td></tr>
+<tr><th id="101">101</th><td><i>** Didn't lint used to do type and argument checking?</i></td></tr>
+<tr><th id="102">102</th><td><i>** (and wasn't that sufficient?)</i></td></tr>
+<tr><th id="103">103</th><td><i>*/</i></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td><i  data-doc="xtmpfile">/* the following is in case you need to make the prototypes go away. */</i></td></tr>
+<tr><th id="106">106</th><td><em>static</em> <em>char</em>	*<a class="tu decl fn" href="#xtmpfile" title='xtmpfile' data-type='char * xtmpfile(char * , __pid_t , int )' data-ref="xtmpfile" data-ref-filename="xtmpfile">xtmpfile</a>(<em>char</em> *, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a>, <em>int</em>);</td></tr>
+<tr><th id="107">107</th><td><em>static</em> <em>int</em>	<a class="tu decl fn" href="#p_exists" title='p_exists' data-type='int p_exists(__pid_t )' data-ref="p_exists" data-ref-filename="p_exists">p_exists</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a>);</td></tr>
+<tr><th id="108">108</th><td><em>static</em> <em>int</em>	<a class="tu decl fn" href="#cklock" title='cklock' data-type='int cklock(char * , int )' data-ref="cklock" data-ref-filename="cklock">cklock</a>(<em>char</em> *, <em>int</em>);</td></tr>
+<tr><th id="109">109</th><td><em>static</em> <em>int</em>	<a class="tu decl fn" href="#mklock" title='mklock' data-type='int mklock(char * , __pid_t , int )' data-ref="mklock" data-ref-filename="mklock">mklock</a>(<em>char</em> *, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a>, <em>int</em>);</td></tr>
+<tr><th id="110">110</th><td><a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#214" title="__attribute__((__noreturn__))" data-ref="_M/__dead">__dead</a> <em>static</em> <em>void</em>	<a class="decl fn" href="#bad_usage" title='bad_usage' data-ref="bad_usage" data-ref-filename="bad_usage">bad_usage</a>(<em>void</em>);</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td><i  data-doc="xtmpfile">/*</i></td></tr>
+<tr><th id="113">113</th><td><i  data-doc="xtmpfile">** Create a temporary file, all ready to lock with.</i></td></tr>
+<tr><th id="114">114</th><td><i  data-doc="xtmpfile">** The file arg is so we get the filename right, if he</i></td></tr>
+<tr><th id="115">115</th><td><i  data-doc="xtmpfile">** gave us a full path, instead of using the current directory</i></td></tr>
+<tr><th id="116">116</th><td><i  data-doc="xtmpfile">** which might not be in the same filesystem.</i></td></tr>
+<tr><th id="117">117</th><td><i  data-doc="xtmpfile">*/</i></td></tr>
+<tr><th id="118">118</th><td><em>static</em> <em>char</em> *</td></tr>
+<tr><th id="119">119</th><td><dfn class="tu decl def fn" id="xtmpfile" title='xtmpfile' data-type='char * xtmpfile(char * file, __pid_t pid, int uucpstyle)' data-ref="xtmpfile" data-ref-filename="xtmpfile">xtmpfile</dfn>(<em>char</em> *<dfn class="local col1 decl" id="1file" title='file' data-type='char *' data-ref="1file" data-ref-filename="1file">file</dfn>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a> <dfn class="local col2 decl" id="2pid" title='pid' data-type='__pid_t' data-ref="2pid" data-ref-filename="2pid">pid</dfn>, <em>int</em> <dfn class="local col3 decl" id="3uucpstyle" title='uucpstyle' data-type='int' data-ref="3uucpstyle" data-ref-filename="3uucpstyle">uucpstyle</dfn>)</td></tr>
+<tr><th id="120">120</th><td>{</td></tr>
+<tr><th id="121">121</th><td>	<em>int</em>	<dfn class="local col4 decl" id="4fd" title='fd' data-type='int' data-ref="4fd" data-ref-filename="4fd">fd</dfn>;</td></tr>
+<tr><th id="122">122</th><td>	<em>int</em>	<dfn class="local col5 decl" id="5len" title='len' data-type='int' data-ref="5len" data-ref-filename="5len">len</dfn>;</td></tr>
+<tr><th id="123">123</th><td>	<em>char</em>	*<dfn class="local col6 decl" id="6cp" title='cp' data-type='char *' data-ref="6cp" data-ref-filename="6cp">cp</dfn>, <dfn class="local col7 decl" id="7buf" title='buf' data-type='char [1024]' data-ref="7buf" data-ref-filename="7buf">buf</dfn>[<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#182" title="1024" data-ref="_M/BUFSIZ">BUFSIZ</a>];</td></tr>
+<tr><th id="124">124</th><td>	<em>static</em> <em>char</em>	<dfn class="local col8 decl" id="8tempname" title='tempname' data-type='char [1024]' data-ref="8tempname" data-ref-filename="8tempname">tempname</dfn>[<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#182" title="1024" data-ref="_M/BUFSIZ">BUFSIZ</a>];</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sprintf" title='sprintf' data-ref="sprintf" data-ref-filename="sprintf">sprintf</a>(<a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>, <q>"shlock%ld"</q>, (<em>long</em>)<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#getpid" title='getpid' data-ref="getpid" data-ref-filename="getpid">getpid</a>());</td></tr>
+<tr><th id="127">127</th><td>	<b>if</b> ((<a class="local col6 ref" href="#6cp" title='cp' data-ref="6cp" data-ref-filename="6cp">cp</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strrchr" title='strrchr' data-ref="strrchr" data-ref-filename="strrchr">strrchr</a>(<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcpy" title='strcpy' data-ref="strcpy" data-ref-filename="strcpy">strcpy</a>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="local col1 ref" href="#1file" title='file' data-ref="1file" data-ref-filename="1file">file</a>), <kbd>'/'</kbd>)) != <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="128">128</th><td>		*++<a class="local col6 ref" href="#6cp" title='cp' data-ref="6cp" data-ref-filename="6cp">cp</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="129">129</th><td>		(<em>void</em>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcat" title='strcat' data-ref="strcat" data-ref-filename="strcat">strcat</a>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>);</td></tr>
+<tr><th id="130">130</th><td>	} <b>else</b></td></tr>
+<tr><th id="131">131</th><td>		(<em>void</em>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcpy" title='strcpy' data-ref="strcpy" data-ref-filename="strcpy">strcpy</a>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>);</td></tr>
+<tr><th id="132">132</th><td>	<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: temporary filename: %s\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>);</td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sprintf" title='sprintf' data-ref="sprintf" data-ref-filename="sprintf">sprintf</a>(<a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>, <q>"%ld\n"</q>, (<em>long</em>)<a class="local col2 ref" href="#2pid" title='pid' data-ref="2pid" data-ref-filename="2pid">pid</a>);</td></tr>
+<tr><th id="135">135</th><td>	<a class="local col5 ref" href="#5len" title='len' data-ref="5len" data-ref-filename="5len">len</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>);</td></tr>
+<tr><th id="136">136</th><td><dfn class="lbl" id="9openloop" data-ref="9openloop" data-ref-filename="9openloop">openloop</dfn>:</td></tr>
+<tr><th id="137">137</th><td>	<b>if</b> ((<a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#66" title="0x00000002" data-ref="_M/O_RDWR">O_RDWR</a>|<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#97" title="0x00000200" data-ref="_M/O_CREAT">O_CREAT</a>|<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#99" title="0x00000800" data-ref="_M/O_EXCL">O_EXCL</a>, <var>0644</var>)) &lt; <var>0</var>) {</td></tr>
+<tr><th id="138">138</th><td>		<b>switch</b>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>) {</td></tr>
+<tr><th id="139">139</th><td>		<b>case</b> <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#59" title="17" data-ref="_M/EEXIST">EEXIST</a>:</td></tr>
+<tr><th id="140">140</th><td>			<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: file %s exists already.\n"</q>,</td></tr>
+<tr><th id="141">141</th><td>				<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>);</td></tr>
+<tr><th id="142">142</th><td>			<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#unlink" title='unlink' data-ref="unlink" data-ref-filename="unlink">unlink</a>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="143">143</th><td>				<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#E_unlk" title='E_unlk' data-use='r' data-ref="E_unlk" data-ref-filename="E_unlk">E_unlk</a>,</td></tr>
+<tr><th id="144">144</th><td>					<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="145">145</th><td>				<b>return</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="146">146</th><td>			}</td></tr>
+<tr><th id="147">147</th><td>			<i>/*</i></td></tr>
+<tr><th id="148">148</th><td><i>			** Further profanity</i></td></tr>
+<tr><th id="149">149</th><td><i>			*/</i></td></tr>
+<tr><th id="150">150</th><td>			<b>goto</b> <a class="lbl" href="#9openloop" data-ref="9openloop" data-ref-filename="9openloop">openloop</a>;</td></tr>
+<tr><th id="151">151</th><td>		<b>default</b>:</td></tr>
+<tr><th id="152">152</th><td>			<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#E_open" title='E_open' data-use='r' data-ref="E_open" data-ref-filename="E_open">E_open</a>,</td></tr>
+<tr><th id="153">153</th><td>				<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="154">154</th><td>			<b>return</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="155">155</th><td>		}</td></tr>
+<tr><th id="156">156</th><td>	}</td></tr>
+<tr><th id="157">157</th><td></td></tr>
+<tr><th id="158">158</th><td>	<i>/*</i></td></tr>
+<tr><th id="159">159</th><td><i>	** Write the PID into the temporary file before attempting to link</i></td></tr>
+<tr><th id="160">160</th><td><i>	** to the actual lock file. That way we have a valid lock the instant</i></td></tr>
+<tr><th id="161">161</th><td><i>	** the link succeeds.</i></td></tr>
+<tr><th id="162">162</th><td><i>	*/</i></td></tr>
+<tr><th id="163">163</th><td>	<b>if</b> (<a class="local col3 ref" href="#3uucpstyle" title='uucpstyle' data-ref="3uucpstyle" data-ref-filename="3uucpstyle">uucpstyle</a> ?</td></tr>
+<tr><th id="164">164</th><td>		(<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a>, &amp;<a class="local col2 ref" href="#2pid" title='pid' data-ref="2pid" data-ref-filename="2pid">pid</a>, <b>sizeof</b>(<a class="local col2 ref" href="#2pid" title='pid' data-ref="2pid" data-ref-filename="2pid">pid</a>)) != <b>sizeof</b>(<a class="local col2 ref" href="#2pid" title='pid' data-ref="2pid" data-ref-filename="2pid">pid</a>)) :</td></tr>
+<tr><th id="165">165</th><td>		(<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a>, <a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>, <a class="local col5 ref" href="#5len" title='len' data-ref="5len" data-ref-filename="5len">len</a>) &lt; <var>0</var>))</td></tr>
+<tr><th id="166">166</th><td>	{</td></tr>
+<tr><th id="167">167</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <q>"%s: write(%s,%ld): %s\n"</q>,</td></tr>
+<tr><th id="168">168</th><td>			<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, (<em>long</em>)<a class="local col2 ref" href="#2pid" title='pid' data-ref="2pid" data-ref-filename="2pid">pid</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="169">169</th><td>		(<em>void</em>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a>);</td></tr>
+<tr><th id="170">170</th><td>		<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#unlink" title='unlink' data-ref="unlink" data-ref-filename="unlink">unlink</a>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="171">171</th><td>			<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#E_unlk" title='E_unlk' data-use='r' data-ref="E_unlk" data-ref-filename="E_unlk">E_unlk</a>,</td></tr>
+<tr><th id="172">172</th><td>				<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="173">173</th><td>		}</td></tr>
+<tr><th id="174">174</th><td>		<b>return</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="175">175</th><td>	}</td></tr>
+<tr><th id="176">176</th><td>	(<em>void</em>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a>);</td></tr>
+<tr><th id="177">177</th><td>	<b>return</b>(<a class="local col8 ref" href="#8tempname" title='tempname' data-ref="8tempname" data-ref-filename="8tempname">tempname</a>);</td></tr>
+<tr><th id="178">178</th><td>}</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td><i  data-doc="p_exists">/*</i></td></tr>
+<tr><th id="181">181</th><td><i  data-doc="p_exists">** Does the PID exist?</i></td></tr>
+<tr><th id="182">182</th><td><i  data-doc="p_exists">** Send null signal to find out.</i></td></tr>
+<tr><th id="183">183</th><td><i  data-doc="p_exists">*/</i></td></tr>
+<tr><th id="184">184</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="185">185</th><td><dfn class="tu decl def fn" id="p_exists" title='p_exists' data-type='int p_exists(__pid_t pid)' data-ref="p_exists" data-ref-filename="p_exists">p_exists</dfn>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a> <dfn class="local col0 decl" id="10pid" title='pid' data-type='__pid_t' data-ref="10pid" data-ref-filename="10pid">pid</dfn>)</td></tr>
+<tr><th id="186">186</th><td>{</td></tr>
+<tr><th id="187">187</th><td>	<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: process %ld is "</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, (<em>long</em>)<a class="local col0 ref" href="#10pid" title='pid' data-ref="10pid" data-ref-filename="10pid">pid</a>);</td></tr>
+<tr><th id="188">188</th><td>	<b>if</b> (<a class="local col0 ref" href="#10pid" title='pid' data-ref="10pid" data-ref-filename="10pid">pid</a> &lt;= <var>0</var>) {</td></tr>
+<tr><th id="189">189</th><td>		<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"invalid\n"</q>);</td></tr>
+<tr><th id="190">190</th><td>		<b>return</b>(<a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>);</td></tr>
+<tr><th id="191">191</th><td>	}</td></tr>
+<tr><th id="192">192</th><td>	<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/signal.h.html#kill" title='kill' data-ref="kill" data-ref-filename="kill">kill</a>(<a class="local col0 ref" href="#10pid" title='pid' data-ref="10pid" data-ref-filename="10pid">pid</a>, <var>0</var>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="193">193</th><td>		<b>switch</b>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>) {</td></tr>
+<tr><th id="194">194</th><td>		<b>case</b> <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#44" title="3" data-ref="_M/ESRCH">ESRCH</a>:</td></tr>
+<tr><th id="195">195</th><td>			<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"dead\n"</q>);</td></tr>
+<tr><th id="196">196</th><td>			<b>return</b>(<a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>);	<i>/* pid does not exist */</i></td></tr>
+<tr><th id="197">197</th><td>		<b>case</b> <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#42" title="1" data-ref="_M/EPERM">EPERM</a>:</td></tr>
+<tr><th id="198">198</th><td>			<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"alive\n"</q>);</td></tr>
+<tr><th id="199">199</th><td>			<b>return</b>(<a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>);	<i>/* pid exists */</i></td></tr>
+<tr><th id="200">200</th><td>		<b>default</b>:</td></tr>
+<tr><th id="201">201</th><td>			<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"state unknown: %s\n"</q>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="202">202</th><td>			<b>return</b>(<a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>);	<i>/* be conservative */</i></td></tr>
+<tr><th id="203">203</th><td>		}</td></tr>
+<tr><th id="204">204</th><td>	}</td></tr>
+<tr><th id="205">205</th><td>	<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"alive\n"</q>);</td></tr>
+<tr><th id="206">206</th><td>	<b>return</b>(<a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>);	<i>/* pid exists */</i></td></tr>
+<tr><th id="207">207</th><td>}</td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td><i  data-doc="cklock">/*</i></td></tr>
+<tr><th id="210">210</th><td><i  data-doc="cklock">** Check the validity of an existing lock file.</i></td></tr>
+<tr><th id="211">211</th><td><i  data-doc="cklock">**</i></td></tr>
+<tr><th id="212">212</th><td><i  data-doc="cklock">**	Read the PID out of the lock</i></td></tr>
+<tr><th id="213">213</th><td><i  data-doc="cklock">**	Send a null signal to determine whether that PID still exists</i></td></tr>
+<tr><th id="214">214</th><td><i  data-doc="cklock">**	Existence (or not) determines the validity of the lock.</i></td></tr>
+<tr><th id="215">215</th><td><i  data-doc="cklock">**</i></td></tr>
+<tr><th id="216">216</th><td><i  data-doc="cklock">**	Two bigs wins to this algorithm:</i></td></tr>
+<tr><th id="217">217</th><td><i  data-doc="cklock">**</i></td></tr>
+<tr><th id="218">218</th><td><i  data-doc="cklock">**	o	Locks do not survive crashes of either the system or the</i></td></tr>
+<tr><th id="219">219</th><td><i  data-doc="cklock">**			application by any appreciable period of time.</i></td></tr>
+<tr><th id="220">220</th><td><i  data-doc="cklock">**</i></td></tr>
+<tr><th id="221">221</th><td><i  data-doc="cklock">**	o	No clean up to do if the system or application crashes.</i></td></tr>
+<tr><th id="222">222</th><td><i  data-doc="cklock">**</i></td></tr>
+<tr><th id="223">223</th><td><i  data-doc="cklock">*/</i></td></tr>
+<tr><th id="224">224</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="225">225</th><td><dfn class="tu decl def fn" id="cklock" title='cklock' data-type='int cklock(char * file, int uucpstyle)' data-ref="cklock" data-ref-filename="cklock">cklock</dfn>(<em>char</em> *<dfn class="local col1 decl" id="11file" title='file' data-type='char *' data-ref="11file" data-ref-filename="11file">file</dfn>, <em>int</em> <dfn class="local col2 decl" id="12uucpstyle" title='uucpstyle' data-type='int' data-ref="12uucpstyle" data-ref-filename="12uucpstyle">uucpstyle</dfn>)</td></tr>
+<tr><th id="226">226</th><td>{</td></tr>
+<tr><th id="227">227</th><td>	<em>int</em>	<dfn class="local col3 decl" id="13fd" title='fd' data-type='int' data-ref="13fd" data-ref-filename="13fd">fd</dfn> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="local col1 ref" href="#11file" title='file' data-ref="11file" data-ref-filename="11file">file</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#64" title="0x00000000" data-ref="_M/O_RDONLY">O_RDONLY</a>);</td></tr>
+<tr><th id="228">228</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='long' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a> <dfn class="local col4 decl" id="14len" title='len' data-type='ssize_t' data-ref="14len" data-ref-filename="14len">len</dfn>;</td></tr>
+<tr><th id="229">229</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a>	<dfn class="local col5 decl" id="15pid" title='pid' data-type='__pid_t' data-ref="15pid" data-ref-filename="15pid">pid</dfn>;</td></tr>
+<tr><th id="230">230</th><td>	<em>char</em>	<dfn class="local col6 decl" id="16buf" title='buf' data-type='char [1024]' data-ref="16buf" data-ref-filename="16buf">buf</dfn>[<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#182" title="1024" data-ref="_M/BUFSIZ">BUFSIZ</a>];</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td>	<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: checking extant lock &lt;%s&gt;\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col1 ref" href="#11file" title='file' data-ref="11file" data-ref-filename="11file">file</a>);</td></tr>
+<tr><th id="233">233</th><td>	<b>if</b> (<a class="local col3 ref" href="#13fd" title='fd' data-ref="13fd" data-ref-filename="13fd">fd</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="234">234</th><td>		<b>if</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> != <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#43" title="2" data-ref="_M/ENOENT">ENOENT</a>)</td></tr>
+<tr><th id="235">235</th><td>			<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#E_open" title='E_open' data-use='r' data-ref="E_open" data-ref-filename="E_open">E_open</a>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col1 ref" href="#11file" title='file' data-ref="11file" data-ref-filename="11file">file</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="236">236</th><td>		<b>return</b>(<a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>);	<i>/* might or might not; conservatism */</i></td></tr>
+<tr><th id="237">237</th><td>	}</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<b>if</b> (<a class="local col2 ref" href="#12uucpstyle" title='uucpstyle' data-ref="12uucpstyle" data-ref-filename="12uucpstyle">uucpstyle</a> ?</td></tr>
+<tr><th id="240">240</th><td>		((<a class="local col4 ref" href="#14len" title='len' data-ref="14len" data-ref-filename="14len">len</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#read" title='read' data-ref="read" data-ref-filename="read">read</a>(<a class="local col3 ref" href="#13fd" title='fd' data-ref="13fd" data-ref-filename="13fd">fd</a>, &amp;<a class="local col5 ref" href="#15pid" title='pid' data-ref="15pid" data-ref-filename="15pid">pid</a>, <b>sizeof</b>(<a class="local col5 ref" href="#15pid" title='pid' data-ref="15pid" data-ref-filename="15pid">pid</a>))) != <b>sizeof</b>(<a class="local col5 ref" href="#15pid" title='pid' data-ref="15pid" data-ref-filename="15pid">pid</a>)) :</td></tr>
+<tr><th id="241">241</th><td>		((<a class="local col4 ref" href="#14len" title='len' data-ref="14len" data-ref-filename="14len">len</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#read" title='read' data-ref="read" data-ref-filename="read">read</a>(<a class="local col3 ref" href="#13fd" title='fd' data-ref="13fd" data-ref-filename="13fd">fd</a>, <a class="local col6 ref" href="#16buf" title='buf' data-ref="16buf" data-ref-filename="16buf">buf</a>, <b>sizeof</b>(<a class="local col6 ref" href="#16buf" title='buf' data-ref="16buf" data-ref-filename="16buf">buf</a>))) &lt;= <var>0</var>))</td></tr>
+<tr><th id="242">242</th><td>	{</td></tr>
+<tr><th id="243">243</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col3 ref" href="#13fd" title='fd' data-ref="13fd" data-ref-filename="13fd">fd</a>);</td></tr>
+<tr><th id="244">244</th><td>		<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: lock file format error\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>);</td></tr>
+<tr><th id="245">245</th><td>		<b>return</b>(<a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>);</td></tr>
+<tr><th id="246">246</th><td>	}</td></tr>
+<tr><th id="247">247</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col3 ref" href="#13fd" title='fd' data-ref="13fd" data-ref-filename="13fd">fd</a>);</td></tr>
+<tr><th id="248">248</th><td>	<a class="local col6 ref" href="#16buf" title='buf' data-ref="16buf" data-ref-filename="16buf">buf</a>[<a class="local col4 ref" href="#14len" title='len' data-ref="14len" data-ref-filename="14len">len</a> + <var>1</var>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="249">249</th><td>	<b>return</b>(<a class="tu ref fn" href="#p_exists" title='p_exists' data-use='c' data-ref="p_exists" data-ref-filename="p_exists">p_exists</a>(<a class="local col2 ref" href="#12uucpstyle" title='uucpstyle' data-ref="12uucpstyle" data-ref-filename="12uucpstyle">uucpstyle</a> ? <a class="local col5 ref" href="#15pid" title='pid' data-ref="15pid" data-ref-filename="15pid">pid</a> : <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="local col6 ref" href="#16buf" title='buf' data-ref="16buf" data-ref-filename="16buf">buf</a>)));</td></tr>
+<tr><th id="250">250</th><td>}</td></tr>
+<tr><th id="251">251</th><td></td></tr>
+<tr><th id="252">252</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="253">253</th><td><dfn class="tu decl def fn" id="mklock" title='mklock' data-type='int mklock(char * file, __pid_t pid, int uucpstyle)' data-ref="mklock" data-ref-filename="mklock">mklock</dfn>(<em>char</em> *<dfn class="local col7 decl" id="17file" title='file' data-type='char *' data-ref="17file" data-ref-filename="17file">file</dfn>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a> <dfn class="local col8 decl" id="18pid" title='pid' data-type='__pid_t' data-ref="18pid" data-ref-filename="18pid">pid</dfn>, <em>int</em> <dfn class="local col9 decl" id="19uucpstyle" title='uucpstyle' data-type='int' data-ref="19uucpstyle" data-ref-filename="19uucpstyle">uucpstyle</dfn>)</td></tr>
+<tr><th id="254">254</th><td>{</td></tr>
+<tr><th id="255">255</th><td>	<em>char</em>	*<dfn class="local col0 decl" id="20tmp" title='tmp' data-type='char *' data-ref="20tmp" data-ref-filename="20tmp">tmp</dfn>;</td></tr>
+<tr><th id="256">256</th><td>	<em>int</em>	<dfn class="local col1 decl" id="21retcode" title='retcode' data-type='int' data-ref="21retcode" data-ref-filename="21retcode">retcode</dfn> = <a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="257">257</th><td></td></tr>
+<tr><th id="258">258</th><td>	<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: trying lock &lt;%s&gt; for process %ld\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>,</td></tr>
+<tr><th id="259">259</th><td>	    (<em>long</em>)<a class="local col8 ref" href="#18pid" title='pid' data-ref="18pid" data-ref-filename="18pid">pid</a>);</td></tr>
+<tr><th id="260">260</th><td>	<b>if</b> ((<a class="local col0 ref" href="#20tmp" title='tmp' data-ref="20tmp" data-ref-filename="20tmp">tmp</a> = <a class="tu ref fn" href="#xtmpfile" title='xtmpfile' data-use='c' data-ref="xtmpfile" data-ref-filename="xtmpfile">xtmpfile</a>(<a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>, <a class="local col8 ref" href="#18pid" title='pid' data-ref="18pid" data-ref-filename="18pid">pid</a>, <a class="local col9 ref" href="#19uucpstyle" title='uucpstyle' data-ref="19uucpstyle" data-ref-filename="19uucpstyle">uucpstyle</a>)) == <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="261">261</th><td>		<b>return</b>(<a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>);</td></tr>
+<tr><th id="262">262</th><td></td></tr>
+<tr><th id="263">263</th><td><dfn class="lbl" id="22linkloop" data-ref="22linkloop" data-ref-filename="22linkloop">linkloop</dfn>:</td></tr>
+<tr><th id="264">264</th><td>	<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#link" title='link' data-ref="link" data-ref-filename="link">link</a>(<a class="local col0 ref" href="#20tmp" title='tmp' data-ref="20tmp" data-ref-filename="20tmp">tmp</a>, <a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="265">265</th><td>		<b>switch</b>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>) {</td></tr>
+<tr><th id="266">266</th><td>		<b>case</b> <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#59" title="17" data-ref="_M/EEXIST">EEXIST</a>:</td></tr>
+<tr><th id="267">267</th><td>			<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: lock &lt;%s&gt; already exists\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>);</td></tr>
+<tr><th id="268">268</th><td>			<b>if</b> (<a class="tu ref fn" href="#cklock" title='cklock' data-use='c' data-ref="cklock" data-ref-filename="cklock">cklock</a>(<a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>, <a class="local col9 ref" href="#19uucpstyle" title='uucpstyle' data-ref="19uucpstyle" data-ref-filename="19uucpstyle">uucpstyle</a>)) {</td></tr>
+<tr><th id="269">269</th><td>				<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: extant lock is valid\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>);</td></tr>
+<tr><th id="270">270</th><td>				<b>break</b>;</td></tr>
+<tr><th id="271">271</th><td>			} <b>else</b> {</td></tr>
+<tr><th id="272">272</th><td>				<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: lock is invalid, removing\n"</q>,</td></tr>
+<tr><th id="273">273</th><td>					<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>);</td></tr>
+<tr><th id="274">274</th><td>				<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#unlink" title='unlink' data-ref="unlink" data-ref-filename="unlink">unlink</a>(<a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="275">275</th><td>					<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#E_unlk" title='E_unlk' data-use='r' data-ref="E_unlk" data-ref-filename="E_unlk">E_unlk</a>,</td></tr>
+<tr><th id="276">276</th><td>						<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="277">277</th><td>					<b>break</b>;</td></tr>
+<tr><th id="278">278</th><td>				}</td></tr>
+<tr><th id="279">279</th><td>			}</td></tr>
+<tr><th id="280">280</th><td>			<i>/*</i></td></tr>
+<tr><th id="281">281</th><td><i>			** I hereby profane the god of structured programming,</i></td></tr>
+<tr><th id="282">282</th><td><i>			** Edsgar Dijkstra</i></td></tr>
+<tr><th id="283">283</th><td><i>			*/</i></td></tr>
+<tr><th id="284">284</th><td>			<b>goto</b> <a class="lbl" href="#22linkloop" data-ref="22linkloop" data-ref-filename="22linkloop">linkloop</a>;</td></tr>
+<tr><th id="285">285</th><td>		<b>default</b>:</td></tr>
+<tr><th id="286">286</th><td>			<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <q>"%s: link(%s, %s): %s\n"</q>,</td></tr>
+<tr><th id="287">287</th><td>				<a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col0 ref" href="#20tmp" title='tmp' data-ref="20tmp" data-ref-filename="20tmp">tmp</a>, <a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="288">288</th><td>			<b>break</b>;</td></tr>
+<tr><th id="289">289</th><td>		}</td></tr>
+<tr><th id="290">290</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="291">291</th><td>		<a class="macro" href="#97" title="if (Debug) printf" data-ref="_M/dprintf">dprintf</a>(<q>"%s: got lock &lt;%s&gt;\n"</q>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col7 ref" href="#17file" title='file' data-ref="17file" data-ref-filename="17file">file</a>);</td></tr>
+<tr><th id="292">292</th><td>		<a class="local col1 ref" href="#21retcode" title='retcode' data-ref="21retcode" data-ref-filename="21retcode">retcode</a> = <a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="293">293</th><td>	}</td></tr>
+<tr><th id="294">294</th><td>	<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#unlink" title='unlink' data-ref="unlink" data-ref-filename="unlink">unlink</a>(<a class="local col0 ref" href="#20tmp" title='tmp' data-ref="20tmp" data-ref-filename="20tmp">tmp</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="295">295</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#E_unlk" title='E_unlk' data-use='r' data-ref="E_unlk" data-ref-filename="E_unlk">E_unlk</a>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="local col0 ref" href="#20tmp" title='tmp' data-ref="20tmp" data-ref-filename="20tmp">tmp</a>, <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="296">296</th><td>	}</td></tr>
+<tr><th id="297">297</th><td>	<b>return</b>(<a class="local col1 ref" href="#21retcode" title='retcode' data-ref="21retcode" data-ref-filename="21retcode">retcode</a>);</td></tr>
+<tr><th id="298">298</th><td>}</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="301">301</th><td><dfn class="tu decl def fn" id="bad_usage" title='bad_usage' data-type='void bad_usage()' data-ref="bad_usage" data-ref-filename="bad_usage">bad_usage</dfn>(<em>void</em>)</td></tr>
+<tr><th id="302">302</th><td>{</td></tr>
+<tr><th id="303">303</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>, <a class="tu ref" href="#USAGE" title='USAGE' data-use='r' data-ref="USAGE" data-ref-filename="USAGE">USAGE</a>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>, <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a>);</td></tr>
+<tr><th id="304">304</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#exit" title='exit' data-ref="exit" data-ref-filename="exit">exit</a>(<a class="macro" href="#81" title="1" data-ref="_M/LOCK_FAIL">LOCK_FAIL</a>);</td></tr>
+<tr><th id="305">305</th><td>}</td></tr>
+<tr><th id="306">306</th><td></td></tr>
+<tr><th id="307">307</th><td><em>int</em></td></tr>
+<tr><th id="308">308</th><td><dfn class="decl def fn" id="main" title='main' data-ref="main" data-ref-filename="main">main</dfn>(<em>int</em> <dfn class="local col3 decl" id="23ac" title='ac' data-type='int' data-ref="23ac" data-ref-filename="23ac">ac</dfn>, <em>char</em> **<dfn class="local col4 decl" id="24av" title='av' data-type='char **' data-ref="24av" data-ref-filename="24av">av</dfn>)</td></tr>
+<tr><th id="309">309</th><td>{</td></tr>
+<tr><th id="310">310</th><td>	<em>int</em>	<dfn class="local col5 decl" id="25x" title='x' data-type='int' data-ref="25x" data-ref-filename="25x">x</dfn>;</td></tr>
+<tr><th id="311">311</th><td>	<em>char</em>	*<dfn class="local col6 decl" id="26file" title='file' data-type='char *' data-ref="26file" data-ref-filename="26file">file</dfn> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="312">312</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#183" title="__pid_t" data-ref="_M/pid_t">pid_t</a>	<dfn class="local col7 decl" id="27pid" title='pid' data-type='__pid_t' data-ref="27pid" data-ref-filename="27pid">pid</dfn> = <var>0</var>;</td></tr>
+<tr><th id="313">313</th><td>	<em>int</em>	<dfn class="local col8 decl" id="28uucpstyle" title='uucpstyle' data-type='int' data-ref="28uucpstyle" data-ref-filename="28uucpstyle">uucpstyle</dfn> = <a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>;	<i>/* indicating UUCP style locks */</i></td></tr>
+<tr><th id="314">314</th><td>	<em>int</em>	<dfn class="local col9 decl" id="29only_check" title='only_check' data-type='int' data-ref="29only_check" data-ref-filename="29only_check">only_check</dfn> = <a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>;	<i>/* don't make a lock */</i></td></tr>
+<tr><th id="315">315</th><td></td></tr>
+<tr><th id="316">316</th><td>	<a class="tu ref" href="#Pname" title='Pname' data-use='w' data-ref="Pname" data-ref-filename="Pname">Pname</a> = ((<a class="tu ref" href="#Pname" title='Pname' data-use='w' data-ref="Pname" data-ref-filename="Pname">Pname</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strrchr" title='strrchr' data-ref="strrchr" data-ref-filename="strrchr">strrchr</a>(<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<var>0</var>], <kbd>'/'</kbd>)) ? <a class="tu ref" href="#Pname" title='Pname' data-use='r' data-ref="Pname" data-ref-filename="Pname">Pname</a> + <var>1</var> : <a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<var>0</var>]);</td></tr>
+<tr><th id="317">317</th><td></td></tr>
+<tr><th id="318">318</th><td>	<b>for</b>(<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a> = <var>1</var>; <a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a> &lt; <a class="local col3 ref" href="#23ac" title='ac' data-ref="23ac" data-ref-filename="23ac">ac</a>; <a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>++) {</td></tr>
+<tr><th id="319">319</th><td>		<b>if</b> (<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>][<var>0</var>] == <kbd>'-'</kbd>) {</td></tr>
+<tr><th id="320">320</th><td>			<b>switch</b>(<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>][<var>1</var>]) {</td></tr>
+<tr><th id="321">321</th><td>			<b>case</b> <kbd>'u'</kbd>:</td></tr>
+<tr><th id="322">322</th><td>				<a class="local col8 ref" href="#28uucpstyle" title='uucpstyle' data-ref="28uucpstyle" data-ref-filename="28uucpstyle">uucpstyle</a> = <a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="323">323</th><td>				<b>break</b>;</td></tr>
+<tr><th id="324">324</th><td>			<b>case</b> <kbd>'d'</kbd>:</td></tr>
+<tr><th id="325">325</th><td>				<a class="tu ref" href="#Debug" title='Debug' data-use='w' data-ref="Debug" data-ref-filename="Debug">Debug</a> = <a class="macro" href="#88" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="326">326</th><td>				<b>break</b>;</td></tr>
+<tr><th id="327">327</th><td>			<b>case</b> <kbd>'p'</kbd>:</td></tr>
+<tr><th id="328">328</th><td>				<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>]) &gt; <var>2</var>) {</td></tr>
+<tr><th id="329">329</th><td>					<a class="local col7 ref" href="#27pid" title='pid' data-ref="27pid" data-ref-filename="27pid">pid</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(&amp;<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>][<var>2</var>]);</td></tr>
+<tr><th id="330">330</th><td>				} <b>else</b> {</td></tr>
+<tr><th id="331">331</th><td>					<b>if</b> (++<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a> &gt;= <a class="local col3 ref" href="#23ac" title='ac' data-ref="23ac" data-ref-filename="23ac">ac</a>) {</td></tr>
+<tr><th id="332">332</th><td>						<a class="tu ref fn" href="#bad_usage" title='bad_usage' data-use='c' data-ref="bad_usage" data-ref-filename="bad_usage">bad_usage</a>();</td></tr>
+<tr><th id="333">333</th><td>					}</td></tr>
+<tr><th id="334">334</th><td>					<a class="local col7 ref" href="#27pid" title='pid' data-ref="27pid" data-ref-filename="27pid">pid</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>]);</td></tr>
+<tr><th id="335">335</th><td>				}</td></tr>
+<tr><th id="336">336</th><td>				<a class="local col9 ref" href="#29only_check" title='only_check' data-ref="29only_check" data-ref-filename="29only_check">only_check</a> = <a class="macro" href="#89" title="0" data-ref="_M/FALSE">FALSE</a>;	<i>/* wants one */</i></td></tr>
+<tr><th id="337">337</th><td>				<b>break</b>;</td></tr>
+<tr><th id="338">338</th><td>			<b>case</b> <kbd>'f'</kbd>:</td></tr>
+<tr><th id="339">339</th><td>				<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>]) &gt; <var>2</var>) {</td></tr>
+<tr><th id="340">340</th><td>					<a class="local col6 ref" href="#26file" title='file' data-ref="26file" data-ref-filename="26file">file</a> = &amp;<a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>][<var>2</var>];</td></tr>
+<tr><th id="341">341</th><td>				} <b>else</b> {</td></tr>
+<tr><th id="342">342</th><td>					<b>if</b> (++<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a> &gt;= <a class="local col3 ref" href="#23ac" title='ac' data-ref="23ac" data-ref-filename="23ac">ac</a>) {</td></tr>
+<tr><th id="343">343</th><td>						<a class="tu ref fn" href="#bad_usage" title='bad_usage' data-use='c' data-ref="bad_usage" data-ref-filename="bad_usage">bad_usage</a>();</td></tr>
+<tr><th id="344">344</th><td>					}</td></tr>
+<tr><th id="345">345</th><td>					<a class="local col6 ref" href="#26file" title='file' data-ref="26file" data-ref-filename="26file">file</a> = <a class="local col4 ref" href="#24av" title='av' data-ref="24av" data-ref-filename="24av">av</a>[<a class="local col5 ref" href="#25x" title='x' data-ref="25x" data-ref-filename="25x">x</a>];</td></tr>
+<tr><th id="346">346</th><td>				}</td></tr>
+<tr><th id="347">347</th><td>				<b>break</b>;</td></tr>
+<tr><th id="348">348</th><td>			<b>default</b>:</td></tr>
+<tr><th id="349">349</th><td>				<a class="tu ref fn" href="#bad_usage" title='bad_usage' data-use='c' data-ref="bad_usage" data-ref-filename="bad_usage">bad_usage</a>();</td></tr>
+<tr><th id="350">350</th><td>			}</td></tr>
+<tr><th id="351">351</th><td>		}</td></tr>
+<tr><th id="352">352</th><td>	}</td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td>	<b>if</b> (<a class="local col6 ref" href="#26file" title='file' data-ref="26file" data-ref-filename="26file">file</a> == <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> || (!<a class="local col9 ref" href="#29only_check" title='only_check' data-ref="29only_check" data-ref-filename="29only_check">only_check</a> &amp;&amp; <a class="local col7 ref" href="#27pid" title='pid' data-ref="27pid" data-ref-filename="27pid">pid</a> &lt;= <var>0</var>)) {</td></tr>
+<tr><th id="355">355</th><td>		<a class="tu ref fn" href="#bad_usage" title='bad_usage' data-use='c' data-ref="bad_usage" data-ref-filename="bad_usage">bad_usage</a>();</td></tr>
+<tr><th id="356">356</th><td>	}</td></tr>
+<tr><th id="357">357</th><td></td></tr>
+<tr><th id="358">358</th><td>	<b>if</b> (<a class="local col9 ref" href="#29only_check" title='only_check' data-ref="29only_check" data-ref-filename="29only_check">only_check</a>) {</td></tr>
+<tr><th id="359">359</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#exit" title='exit' data-ref="exit" data-ref-filename="exit">exit</a>(<a class="tu ref fn" href="#cklock" title='cklock' data-use='c' data-ref="cklock" data-ref-filename="cklock">cklock</a>(<a class="local col6 ref" href="#26file" title='file' data-ref="26file" data-ref-filename="26file">file</a>, <a class="local col8 ref" href="#28uucpstyle" title='uucpstyle' data-ref="28uucpstyle" data-ref-filename="28uucpstyle">uucpstyle</a>) ? <a class="macro" href="#83" title="0" data-ref="_M/LOCK_GOOD">LOCK_GOOD</a> : <a class="macro" href="#84" title="1" data-ref="_M/LOCK_BAD">LOCK_BAD</a>);</td></tr>
+<tr><th id="360">360</th><td>	}</td></tr>
+<tr><th id="361">361</th><td></td></tr>
+<tr><th id="362">362</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#exit" title='exit' data-ref="exit" data-ref-filename="exit">exit</a>(<a class="tu ref fn" href="#mklock" title='mklock' data-use='c' data-ref="mklock" data-ref-filename="mklock">mklock</a>(<a class="local col6 ref" href="#26file" title='file' data-ref="26file" data-ref-filename="26file">file</a>, <a class="local col7 ref" href="#27pid" title='pid' data-ref="27pid" data-ref-filename="27pid">pid</a>, <a class="local col8 ref" href="#28uucpstyle" title='uucpstyle' data-ref="28uucpstyle" data-ref-filename="28uucpstyle">uucpstyle</a>) ? <a class="macro" href="#80" title="0" data-ref="_M/LOCK_SET">LOCK_SET</a> : <a class="macro" href="#81" title="1" data-ref="_M/LOCK_FAIL">LOCK_FAIL</a>);</td></tr>
+<tr><th id="363">363</th><td>}</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

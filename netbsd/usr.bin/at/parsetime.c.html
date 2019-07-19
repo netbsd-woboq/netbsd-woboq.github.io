@@ -1,0 +1,671 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>parsetime.c source code [netbsd/usr.bin/at/parsetime.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/usr.bin/at/parsetime.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>usr.bin</a>/<a href='./'>at</a>/<a href='parsetime.c.html'>parsetime.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: parsetime.c,v 1.20 2019/02/16 17:56:57 kre Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * parsetime.c - parse time for at(1)</i></td></tr>
+<tr><th id="5">5</th><td><i> * Copyright (C) 1993, 1994  Thomas Koenig</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * modifications for english-language times</i></td></tr>
+<tr><th id="8">8</th><td><i> * Copyright (C) 1993  David Parsons</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. The name of the author(s) may not be used to endorse or promote</i></td></tr>
+<tr><th id="16">16</th><td><i> *    products derived from this software without specific prior written</i></td></tr>
+<tr><th id="17">17</th><td><i> *    permission.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR</i></td></tr>
+<tr><th id="20">20</th><td><i> * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES</i></td></tr>
+<tr><th id="21">21</th><td><i> * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.</i></td></tr>
+<tr><th id="22">22</th><td><i> * IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,</i></td></tr>
+<tr><th id="23">23</th><td><i> * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT</i></td></tr>
+<tr><th id="24">24</th><td><i> * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,</i></td></tr>
+<tr><th id="25">25</th><td><i> * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY</i></td></tr>
+<tr><th id="26">26</th><td><i> * THEORY OF LIABILITY, WETHER IN CONTRACT, STRICT LIABILITY, OR TORT</i></td></tr>
+<tr><th id="27">27</th><td><i> * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF</i></td></tr>
+<tr><th id="28">28</th><td><i> * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="29">29</th><td><i> *</i></td></tr>
+<tr><th id="30">30</th><td><i> *  at [NOW] PLUS NUMBER MINUTES|HOURS|DAYS|WEEKS</i></td></tr>
+<tr><th id="31">31</th><td><i> *     /NUMBER [DOT NUMBER] [AM|PM]\ /[MONTH NUMBER [NUMBER]]             \</i></td></tr>
+<tr><th id="32">32</th><td><i> *     |NOON                       | |[TOMORROW]                          |</i></td></tr>
+<tr><th id="33">33</th><td><i> *     |MIDNIGHT                   | |[DAY OF WEEK]                       |</i></td></tr>
+<tr><th id="34">34</th><td><i> *     \TEATIME                    / |NUMBER [SLASH NUMBER [SLASH NUMBER]]|</i></td></tr>
+<tr><th id="35">35</th><td><i> *                                   \PLUS NUMBER MINUTES|HOURS|DAYS|WEEKS/</i></td></tr>
+<tr><th id="36">36</th><td><i> */</i></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><i>/* System Headers */</i></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/err.h.html">&lt;err.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/ctype.h.html">&lt;ctype.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html">&lt;errno.h&gt;</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include &lt;stdbool.h&gt;</u></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html">&lt;time.h&gt;</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/tzfile.h.html">&lt;tzfile.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html">&lt;unistd.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td><i>/* Local headers */</i></td></tr>
+<tr><th id="53">53</th><td></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="at.h.html">"at.h"</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="panic.h.html">"panic.h"</a></u></td></tr>
+<tr><th id="56">56</th><td><u>#include <a href="parsetime.h.html">"parsetime.h"</a></u></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="stime.h.html">"stime.h"</a></u></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><i>/* Structures and unions */</i></td></tr>
+<tr><th id="60">60</th><td></td></tr>
+<tr><th id="61">61</th><td><b>typedef</b> <b>enum</b> { <i>/* symbols */</i></td></tr>
+<tr><th id="62">62</th><td>	<dfn class="enum" id="MIDNIGHT" title='MIDNIGHT' data-ref="MIDNIGHT" data-ref-filename="MIDNIGHT">MIDNIGHT</dfn>, <dfn class="enum" id="NOON" title='NOON' data-ref="NOON" data-ref-filename="NOON">NOON</dfn>, <dfn class="enum" id="TEATIME" title='TEATIME' data-ref="TEATIME" data-ref-filename="TEATIME">TEATIME</dfn>,</td></tr>
+<tr><th id="63">63</th><td>	<dfn class="enum" id="PM" title='PM' data-ref="PM" data-ref-filename="PM">PM</dfn>, <dfn class="enum" id="AM" title='AM' data-ref="AM" data-ref-filename="AM">AM</dfn>, <dfn class="enum" id="TOMORROW" title='TOMORROW' data-ref="TOMORROW" data-ref-filename="TOMORROW">TOMORROW</dfn>, <dfn class="enum" id="TODAY" title='TODAY' data-ref="TODAY" data-ref-filename="TODAY">TODAY</dfn>, <dfn class="enum" id="NOW" title='NOW' data-ref="NOW" data-ref-filename="NOW">NOW</dfn>,</td></tr>
+<tr><th id="64">64</th><td>	<dfn class="enum" id="MINUTES" title='MINUTES' data-ref="MINUTES" data-ref-filename="MINUTES">MINUTES</dfn>, <dfn class="enum" id="HOURS" title='HOURS' data-ref="HOURS" data-ref-filename="HOURS">HOURS</dfn>, <dfn class="enum" id="DAYS" title='DAYS' data-ref="DAYS" data-ref-filename="DAYS">DAYS</dfn>, <dfn class="enum" id="WEEKS" title='WEEKS' data-ref="WEEKS" data-ref-filename="WEEKS">WEEKS</dfn>, <dfn class="enum" id="MONTHS" title='MONTHS' data-ref="MONTHS" data-ref-filename="MONTHS">MONTHS</dfn>, <dfn class="enum" id="YEARS" title='YEARS' data-ref="YEARS" data-ref-filename="YEARS">YEARS</dfn>,</td></tr>
+<tr><th id="65">65</th><td>	<dfn class="enum" id="NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</dfn>, <dfn class="enum" id="PLUS" title='PLUS' data-ref="PLUS" data-ref-filename="PLUS">PLUS</dfn>, <dfn class="enum" id="DOT" title='DOT' data-ref="DOT" data-ref-filename="DOT">DOT</dfn>, <dfn class="enum" id="SLASH" title='SLASH' data-ref="SLASH" data-ref-filename="SLASH">SLASH</dfn>, <dfn class="enum" id="ID" title='ID' data-ref="ID" data-ref-filename="ID">ID</dfn>, <dfn class="enum" id="JUNK" title='JUNK' data-ref="JUNK" data-ref-filename="JUNK">JUNK</dfn>,</td></tr>
+<tr><th id="66">66</th><td>	<dfn class="enum" id="JAN" title='JAN' data-ref="JAN" data-ref-filename="JAN">JAN</dfn>, <dfn class="enum" id="FEB" title='FEB' data-ref="FEB" data-ref-filename="FEB">FEB</dfn>, <dfn class="enum" id="MAR" title='MAR' data-ref="MAR" data-ref-filename="MAR">MAR</dfn>, <dfn class="enum" id="APR" title='APR' data-ref="APR" data-ref-filename="APR">APR</dfn>, <dfn class="enum" id="MAY" title='MAY' data-ref="MAY" data-ref-filename="MAY">MAY</dfn>, <dfn class="enum" id="JUN" title='JUN' data-ref="JUN" data-ref-filename="JUN">JUN</dfn>,</td></tr>
+<tr><th id="67">67</th><td>	<dfn class="enum" id="JUL" title='JUL' data-ref="JUL" data-ref-filename="JUL">JUL</dfn>, <dfn class="enum" id="AUG" title='AUG' data-ref="AUG" data-ref-filename="AUG">AUG</dfn>, <dfn class="enum" id="SEP" title='SEP' data-ref="SEP" data-ref-filename="SEP">SEP</dfn>, <dfn class="enum" id="OCT" title='OCT' data-ref="OCT" data-ref-filename="OCT">OCT</dfn>, <dfn class="enum" id="NOV" title='NOV' data-ref="NOV" data-ref-filename="NOV">NOV</dfn>, <dfn class="enum" id="DEC" title='DEC' data-ref="DEC" data-ref-filename="DEC">DEC</dfn>,</td></tr>
+<tr><th id="68">68</th><td>	<dfn class="enum" id="SUN" title='SUN' data-ref="SUN" data-ref-filename="SUN">SUN</dfn>, <dfn class="enum" id="MON" title='MON' data-ref="MON" data-ref-filename="MON">MON</dfn>, <dfn class="enum" id="TUE" title='TUE' data-ref="TUE" data-ref-filename="TUE">TUE</dfn>, <dfn class="enum" id="WED" title='WED' data-ref="WED" data-ref-filename="WED">WED</dfn>, <dfn class="enum" id="THU" title='THU' data-ref="THU" data-ref-filename="THU">THU</dfn>, <dfn class="enum" id="FRI" title='FRI' data-ref="FRI" data-ref-filename="FRI">FRI</dfn>, <dfn class="enum" id="SAT" title='SAT' data-ref="SAT" data-ref-filename="SAT">SAT</dfn>,</td></tr>
+<tr><th id="69">69</th><td>	<dfn class="enum" id="TOKEOF" title='TOKEOF' data-ref="TOKEOF" data-ref-filename="TOKEOF">TOKEOF</dfn>	<i>/* EOF marker */</i></td></tr>
+<tr><th id="70">70</th><td>} <dfn class="typedef" id="tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</dfn>;</td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td><i  data-doc="Specials">/*</i></td></tr>
+<tr><th id="73">73</th><td><i  data-doc="Specials"> * parse translation table - table driven parsers can be your FRIEND!</i></td></tr>
+<tr><th id="74">74</th><td><i  data-doc="Specials"> */</i></td></tr>
+<tr><th id="75">75</th><td><em>static</em> <em>const</em> <b>struct</b> {</td></tr>
+<tr><th id="76">76</th><td>	<em>const</em> <em>char</em> *<dfn class="local col1 decl field" id="1name" title='name' data-type='const char *' data-ref="1name" data-ref-filename="1name">name</dfn>;	<i>/* token name */</i></td></tr>
+<tr><th id="77">77</th><td>	<a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a> <dfn class="local col2 decl field" id="2value" title='value' data-type='tokid_t' data-ref="2value" data-ref-filename="2value">value</dfn>;		<i>/* token id */</i></td></tr>
+<tr><th id="78">78</th><td>	<span class="macro" title="_Bool" data-ref="_M/bool">bool</span> <dfn class="local col3 decl field" id="3plural" title='plural' data-type='_Bool' data-ref="3plural" data-ref-filename="3plural">plural</dfn>;		<i>/* is this plural? */</i></td></tr>
+<tr><th id="79">79</th><td>} <dfn class="tu decl def" id="Specials" title='Specials' data-type='const struct (anonymous struct at /___NETBSD_SRC___/objdir.amd64/usr.bin/at/../../../usr.bin/at/parsetime.c:75:14) [64]' data-ref="Specials" data-ref-filename="Specials">Specials</dfn>[] = {</td></tr>
+<tr><th id="80">80</th><td>	{<q>"midnight"</q>, <a class="enum" href="#MIDNIGHT" title='MIDNIGHT' data-ref="MIDNIGHT" data-ref-filename="MIDNIGHT">MIDNIGHT</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},	<i>/* 00:00:00 of today or tomorrow */</i></td></tr>
+<tr><th id="81">81</th><td>	{<q>"noon"</q>, <a class="enum" href="#NOON" title='NOON' data-ref="NOON" data-ref-filename="NOON">NOON</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* 12:00:00 of today or tomorrow */</i></td></tr>
+<tr><th id="82">82</th><td>	{<q>"teatime"</q>, <a class="enum" href="#TEATIME" title='TEATIME' data-ref="TEATIME" data-ref-filename="TEATIME">TEATIME</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},	<i>/* 16:00:00 of today or tomorrow */</i></td></tr>
+<tr><th id="83">83</th><td>	{<q>"am"</q>, <a class="enum" href="#AM" title='AM' data-ref="AM" data-ref-filename="AM">AM</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* morning times for 0-12 clock */</i></td></tr>
+<tr><th id="84">84</th><td>	{<q>"pm"</q>, <a class="enum" href="#PM" title='PM' data-ref="PM" data-ref-filename="PM">PM</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* evening times for 0-12 clock */</i></td></tr>
+<tr><th id="85">85</th><td>	{<q>"tomorrow"</q>, <a class="enum" href="#TOMORROW" title='TOMORROW' data-ref="TOMORROW" data-ref-filename="TOMORROW">TOMORROW</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},	<i>/* execute 24 hours from time */</i></td></tr>
+<tr><th id="86">86</th><td>	{<q>"today"</q>, <a class="enum" href="#TODAY" title='TODAY' data-ref="TODAY" data-ref-filename="TODAY">TODAY</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* execute today - don't advance time */</i></td></tr>
+<tr><th id="87">87</th><td>	{<q>"now"</q>, <a class="enum" href="#NOW" title='NOW' data-ref="NOW" data-ref-filename="NOW">NOW</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* opt prefix for PLUS */</i></td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td>	{<q>"minute"</q>, <a class="enum" href="#MINUTES" title='MINUTES' data-ref="MINUTES" data-ref-filename="MINUTES">MINUTES</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},	<i>/* minutes multiplier */</i></td></tr>
+<tr><th id="90">90</th><td>	{<q>"min"</q>, <a class="enum" href="#MINUTES" title='MINUTES' data-ref="MINUTES" data-ref-filename="MINUTES">MINUTES</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="91">91</th><td>	{<q>"m"</q>, <a class="enum" href="#MINUTES" title='MINUTES' data-ref="MINUTES" data-ref-filename="MINUTES">MINUTES</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="92">92</th><td>	{<q>"minutes"</q>, <a class="enum" href="#MINUTES" title='MINUTES' data-ref="MINUTES" data-ref-filename="MINUTES">MINUTES</a>, <span class="macro" title="1" data-ref="_M/true">true</span>},	<i>/* (pluralized) */</i></td></tr>
+<tr><th id="93">93</th><td>	{<q>"hour"</q>, <a class="enum" href="#HOURS" title='HOURS' data-ref="HOURS" data-ref-filename="HOURS">HOURS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* hours ... */</i></td></tr>
+<tr><th id="94">94</th><td>	{<q>"hr"</q>, <a class="enum" href="#HOURS" title='HOURS' data-ref="HOURS" data-ref-filename="HOURS">HOURS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* abbreviated */</i></td></tr>
+<tr><th id="95">95</th><td>	{<q>"h"</q>, <a class="enum" href="#HOURS" title='HOURS' data-ref="HOURS" data-ref-filename="HOURS">HOURS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="96">96</th><td>	{<q>"hours"</q>, <a class="enum" href="#HOURS" title='HOURS' data-ref="HOURS" data-ref-filename="HOURS">HOURS</a>, <span class="macro" title="1" data-ref="_M/true">true</span>},		<i>/* (pluralized) */</i></td></tr>
+<tr><th id="97">97</th><td>	{<q>"day"</q>, <a class="enum" href="#DAYS" title='DAYS' data-ref="DAYS" data-ref-filename="DAYS">DAYS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* days ... */</i></td></tr>
+<tr><th id="98">98</th><td>	{<q>"d"</q>, <a class="enum" href="#DAYS" title='DAYS' data-ref="DAYS" data-ref-filename="DAYS">DAYS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="99">99</th><td>	{<q>"days"</q>, <a class="enum" href="#DAYS" title='DAYS' data-ref="DAYS" data-ref-filename="DAYS">DAYS</a>, <span class="macro" title="1" data-ref="_M/true">true</span>},		<i>/* (pluralized) */</i></td></tr>
+<tr><th id="100">100</th><td>	{<q>"week"</q>, <a class="enum" href="#WEEKS" title='WEEKS' data-ref="WEEKS" data-ref-filename="WEEKS">WEEKS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},		<i>/* week ... */</i></td></tr>
+<tr><th id="101">101</th><td>	{<q>"w"</q>, <a class="enum" href="#WEEKS" title='WEEKS' data-ref="WEEKS" data-ref-filename="WEEKS">WEEKS</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="102">102</th><td>	{<q>"weeks"</q>, <a class="enum" href="#WEEKS" title='WEEKS' data-ref="WEEKS" data-ref-filename="WEEKS">WEEKS</a>, <span class="macro" title="1" data-ref="_M/true">true</span>},		<i>/* (pluralized) */</i></td></tr>
+<tr><th id="103">103</th><td>	{ <q>"month"</q>, <a class="enum" href="#MONTHS" title='MONTHS' data-ref="MONTHS" data-ref-filename="MONTHS">MONTHS</a>, <var>0</var> },		<i>/* month ... */</i></td></tr>
+<tr><th id="104">104</th><td>	{ <q>"months"</q>, <a class="enum" href="#MONTHS" title='MONTHS' data-ref="MONTHS" data-ref-filename="MONTHS">MONTHS</a>, <var>1</var> },	<i>/* (pluralized) */</i></td></tr>
+<tr><th id="105">105</th><td>	{ <q>"year"</q>, <a class="enum" href="#YEARS" title='YEARS' data-ref="YEARS" data-ref-filename="YEARS">YEARS</a>, <var>0</var> },		<i>/* year ... */</i></td></tr>
+<tr><th id="106">106</th><td>	{ <q>"years"</q>, <a class="enum" href="#YEARS" title='YEARS' data-ref="YEARS" data-ref-filename="YEARS">YEARS</a>, <var>1</var> },		<i>/* (pluralized) */</i></td></tr>
+<tr><th id="107">107</th><td>	{<q>"jan"</q>, <a class="enum" href="#JAN" title='JAN' data-ref="JAN" data-ref-filename="JAN">JAN</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="108">108</th><td>	{<q>"feb"</q>, <a class="enum" href="#FEB" title='FEB' data-ref="FEB" data-ref-filename="FEB">FEB</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="109">109</th><td>	{<q>"mar"</q>, <a class="enum" href="#MAR" title='MAR' data-ref="MAR" data-ref-filename="MAR">MAR</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="110">110</th><td>	{<q>"apr"</q>, <a class="enum" href="#APR" title='APR' data-ref="APR" data-ref-filename="APR">APR</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="111">111</th><td>	{<q>"may"</q>, <a class="enum" href="#MAY" title='MAY' data-ref="MAY" data-ref-filename="MAY">MAY</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="112">112</th><td>	{<q>"jun"</q>, <a class="enum" href="#JUN" title='JUN' data-ref="JUN" data-ref-filename="JUN">JUN</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="113">113</th><td>	{<q>"jul"</q>, <a class="enum" href="#JUL" title='JUL' data-ref="JUL" data-ref-filename="JUL">JUL</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="114">114</th><td>	{<q>"aug"</q>, <a class="enum" href="#AUG" title='AUG' data-ref="AUG" data-ref-filename="AUG">AUG</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="115">115</th><td>	{<q>"sep"</q>, <a class="enum" href="#SEP" title='SEP' data-ref="SEP" data-ref-filename="SEP">SEP</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="116">116</th><td>	{<q>"oct"</q>, <a class="enum" href="#OCT" title='OCT' data-ref="OCT" data-ref-filename="OCT">OCT</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="117">117</th><td>	{<q>"nov"</q>, <a class="enum" href="#NOV" title='NOV' data-ref="NOV" data-ref-filename="NOV">NOV</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="118">118</th><td>	{<q>"dec"</q>, <a class="enum" href="#DEC" title='DEC' data-ref="DEC" data-ref-filename="DEC">DEC</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="119">119</th><td>	{<q>"january"</q>, <a class="enum" href="#JAN" title='JAN' data-ref="JAN" data-ref-filename="JAN">JAN</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="120">120</th><td>	{<q>"february"</q>, <a class="enum" href="#FEB" title='FEB' data-ref="FEB" data-ref-filename="FEB">FEB</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="121">121</th><td>	{<q>"march"</q>, <a class="enum" href="#MAR" title='MAR' data-ref="MAR" data-ref-filename="MAR">MAR</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="122">122</th><td>	{<q>"april"</q>, <a class="enum" href="#APR" title='APR' data-ref="APR" data-ref-filename="APR">APR</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="123">123</th><td>	{<q>"may"</q>, <a class="enum" href="#MAY" title='MAY' data-ref="MAY" data-ref-filename="MAY">MAY</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="124">124</th><td>	{<q>"june"</q>, <a class="enum" href="#JUN" title='JUN' data-ref="JUN" data-ref-filename="JUN">JUN</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="125">125</th><td>	{<q>"july"</q>, <a class="enum" href="#JUL" title='JUL' data-ref="JUL" data-ref-filename="JUL">JUL</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="126">126</th><td>	{<q>"august"</q>, <a class="enum" href="#AUG" title='AUG' data-ref="AUG" data-ref-filename="AUG">AUG</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="127">127</th><td>	{<q>"september"</q>, <a class="enum" href="#SEP" title='SEP' data-ref="SEP" data-ref-filename="SEP">SEP</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="128">128</th><td>	{<q>"october"</q>, <a class="enum" href="#OCT" title='OCT' data-ref="OCT" data-ref-filename="OCT">OCT</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="129">129</th><td>	{<q>"november"</q>, <a class="enum" href="#NOV" title='NOV' data-ref="NOV" data-ref-filename="NOV">NOV</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="130">130</th><td>	{<q>"december"</q>, <a class="enum" href="#DEC" title='DEC' data-ref="DEC" data-ref-filename="DEC">DEC</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="131">131</th><td>	{<q>"sunday"</q>, <a class="enum" href="#SUN" title='SUN' data-ref="SUN" data-ref-filename="SUN">SUN</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="132">132</th><td>	{<q>"sun"</q>, <a class="enum" href="#SUN" title='SUN' data-ref="SUN" data-ref-filename="SUN">SUN</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="133">133</th><td>	{<q>"monday"</q>, <a class="enum" href="#MON" title='MON' data-ref="MON" data-ref-filename="MON">MON</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="134">134</th><td>	{<q>"mon"</q>, <a class="enum" href="#MON" title='MON' data-ref="MON" data-ref-filename="MON">MON</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="135">135</th><td>	{<q>"tuesday"</q>, <a class="enum" href="#TUE" title='TUE' data-ref="TUE" data-ref-filename="TUE">TUE</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="136">136</th><td>	{<q>"tue"</q>, <a class="enum" href="#TUE" title='TUE' data-ref="TUE" data-ref-filename="TUE">TUE</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="137">137</th><td>	{<q>"wednesday"</q>, <a class="enum" href="#WED" title='WED' data-ref="WED" data-ref-filename="WED">WED</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="138">138</th><td>	{<q>"wed"</q>, <a class="enum" href="#WED" title='WED' data-ref="WED" data-ref-filename="WED">WED</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="139">139</th><td>	{<q>"thursday"</q>, <a class="enum" href="#THU" title='THU' data-ref="THU" data-ref-filename="THU">THU</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="140">140</th><td>	{<q>"thu"</q>, <a class="enum" href="#THU" title='THU' data-ref="THU" data-ref-filename="THU">THU</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="141">141</th><td>	{<q>"friday"</q>, <a class="enum" href="#FRI" title='FRI' data-ref="FRI" data-ref-filename="FRI">FRI</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="142">142</th><td>	{<q>"fri"</q>, <a class="enum" href="#FRI" title='FRI' data-ref="FRI" data-ref-filename="FRI">FRI</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="143">143</th><td>	{<q>"saturday"</q>, <a class="enum" href="#SAT" title='SAT' data-ref="SAT" data-ref-filename="SAT">SAT</a>, <span class="macro" title="0" data-ref="_M/false">false</span>},</td></tr>
+<tr><th id="144">144</th><td>	{<q>"sat"</q>, <a class="enum" href="#SAT" title='SAT' data-ref="SAT" data-ref-filename="SAT">SAT</a>, <span class="macro" title="0" data-ref="_M/false">false</span>}</td></tr>
+<tr><th id="145">145</th><td>};</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><i  data-doc="scp">/* File scope variables */</i></td></tr>
+<tr><th id="148">148</th><td></td></tr>
+<tr><th id="149">149</th><td><em>static</em> <em>char</em> **<dfn class="tu decl def" id="scp" title='scp' data-type='char **' data-ref="scp" data-ref-filename="scp">scp</dfn>;	<i  data-doc="scp">/* scanner - pointer at arglist */</i></td></tr>
+<tr><th id="150">150</th><td><em>static</em> <em>char</em> <dfn class="tu decl def" id="scc" title='scc' data-type='char' data-ref="scc" data-ref-filename="scc">scc</dfn>;	<i  data-doc="scc">/* scanner - count of remaining arguments */</i></td></tr>
+<tr><th id="151">151</th><td><em>static</em> <em>char</em> *<dfn class="tu decl def" id="sct" title='sct' data-type='char *' data-ref="sct" data-ref-filename="sct">sct</dfn>;	<i  data-doc="sct">/* scanner - next char pointer in current argument */</i></td></tr>
+<tr><th id="152">152</th><td><em>static</em> <span class="macro" title="_Bool" data-ref="_M/bool">bool</span> <dfn class="tu decl def" id="need" title='need' data-type='_Bool' data-ref="need" data-ref-filename="need">need</dfn>;	<i  data-doc="need">/* scanner - need to advance to next argument */</i></td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><em>static</em> <em>char</em> *<dfn class="tu decl def" id="sc_token" title='sc_token' data-type='char *' data-ref="sc_token" data-ref-filename="sc_token">sc_token</dfn>;	<i  data-doc="sc_token">/* scanner - token buffer */</i></td></tr>
+<tr><th id="155">155</th><td><em>static</em> <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="tu decl def" id="sc_len" title='sc_len' data-type='size_t' data-ref="sc_len" data-ref-filename="sc_len">sc_len</dfn>;   <i  data-doc="sc_len">/* scanner - length of token buffer */</i></td></tr>
+<tr><th id="156">156</th><td><em>static</em> <a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a> <dfn class="tu decl def" id="sc_tokid" title='sc_tokid' data-type='tokid_t' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</dfn>;<i  data-doc="sc_tokid">/* scanner - token id */</i></td></tr>
+<tr><th id="157">157</th><td><em>static</em> <span class="macro" title="_Bool" data-ref="_M/bool">bool</span> <dfn class="tu decl def" id="sc_tokplur" title='sc_tokplur' data-type='_Bool' data-ref="sc_tokplur" data-ref-filename="sc_tokplur">sc_tokplur</dfn>;	<i  data-doc="sc_tokplur">/* scanner - is token plural? */</i></td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><u>#<span data-ppcond="159">ifndef</span> <span class="macro" data-ref="_M/lint">lint</span></u></td></tr>
+<tr><th id="160">160</th><td><u>#<span data-ppcond="160">if</span> 0</u></td></tr>
+<tr><th id="161">161</th><td><em>static</em> <em>char</em> rcsid[] = <q>"$OpenBSD: parsetime.c,v 1.4 1997/03/01 23:40:10 millert Exp $"</q>;</td></tr>
+<tr><th id="162">162</th><td><u>#<span data-ppcond="160">else</span></u></td></tr>
+<tr><th id="163">163</th><td><a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: parsetime.c,v 1.20 2019/02/16 17:56:57 kre Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: parsetime.c,v 1.20 2019/02/16 17:56:57 kre Exp $"</q>);</td></tr>
+<tr><th id="164">164</th><td><u>#<span data-ppcond="160">endif</span></u></td></tr>
+<tr><th id="165">165</th><td><u>#<span data-ppcond="159">endif</span></u></td></tr>
+<tr><th id="166">166</th><td></td></tr>
+<tr><th id="167">167</th><td><i  data-doc="assign_date">/* Local functions */</i></td></tr>
+<tr><th id="168">168</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#assign_date" title='assign_date' data-type='void assign_date(struct tm * , int , int , int )' data-ref="assign_date" data-ref-filename="assign_date">assign_date</a>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *, <em>int</em>, <em>int</em>, <em>int</em>);</td></tr>
+<tr><th id="169">169</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#expect" title='expect' data-type='void expect(tokid_t )' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a>);</td></tr>
+<tr><th id="170">170</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#init_scanner" title='init_scanner' data-type='void init_scanner(int , char ** )' data-ref="init_scanner" data-ref-filename="init_scanner">init_scanner</a>(<em>int</em>, <em>char</em> **);</td></tr>
+<tr><th id="171">171</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#month" title='month' data-type='void month(struct tm * )' data-ref="month" data-ref-filename="month">month</a>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *);</td></tr>
+<tr><th id="172">172</th><td><em>static</em> <a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a>	<a class="tu decl fn" href="#parse_token" title='parse_token' data-type='tokid_t parse_token(char * )' data-ref="parse_token" data-ref-filename="parse_token">parse_token</a>(<em>char</em> *);</td></tr>
+<tr><th id="173">173</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#plonk" title='plonk' data-type='void plonk(tokid_t )' data-ref="plonk" data-ref-filename="plonk">plonk</a>(<a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a>) <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#214" title="__attribute__((__noreturn__))" data-ref="_M/__dead">__dead</a>;</td></tr>
+<tr><th id="174">174</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#plus" title='plus' data-type='void plus(struct tm * )' data-ref="plus" data-ref-filename="plus">plus</a>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *);</td></tr>
+<tr><th id="175">175</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#tod" title='tod' data-type='void tod(struct tm * )' data-ref="tod" data-ref-filename="tod">tod</a>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *);</td></tr>
+<tr><th id="176">176</th><td><em>static</em> <a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a>	<a class="tu decl fn" href="#token" title='token' data-type='tokid_t token()' data-ref="token" data-ref-filename="token">token</a>(<em>void</em>);</td></tr>
+<tr><th id="177">177</th><td></td></tr>
+<tr><th id="178">178</th><td><i  data-doc="parse_token">/*</i></td></tr>
+<tr><th id="179">179</th><td><i  data-doc="parse_token"> * parse a token, checking if it's something special to us</i></td></tr>
+<tr><th id="180">180</th><td><i  data-doc="parse_token"> */</i></td></tr>
+<tr><th id="181">181</th><td><em>static</em> <a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a></td></tr>
+<tr><th id="182">182</th><td><dfn class="tu decl def fn" id="parse_token" title='parse_token' data-type='tokid_t parse_token(char * arg)' data-ref="parse_token" data-ref-filename="parse_token">parse_token</dfn>(<em>char</em> *<dfn class="local col4 decl" id="4arg" title='arg' data-type='char *' data-ref="4arg" data-ref-filename="4arg">arg</dfn>)</td></tr>
+<tr><th id="183">183</th><td>{</td></tr>
+<tr><th id="184">184</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="5i" title='i' data-type='size_t' data-ref="5i" data-ref-filename="5i">i</dfn>;</td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td>	<b>for</b> (<a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>=<var>0</var>; <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a> &lt; <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#580" title="(sizeof(Specials) / sizeof(Specials[0]))" data-ref="_M/__arraycount">__arraycount</a>(<a class="tu ref" href="#Specials" title='Specials' data-use='r' data-ref="Specials" data-ref-filename="Specials">Specials</a>); <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>++) {</td></tr>
+<tr><th id="187">187</th><td>		<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/strings.h.html#strcasecmp" title='strcasecmp' data-ref="strcasecmp" data-ref-filename="strcasecmp">strcasecmp</a>(<a class="tu ref" href="#Specials" title='Specials' data-use='m' data-ref="Specials" data-ref-filename="Specials">Specials</a>[<a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>].<a class="local col1 ref field" href="#1name" title='name' data-ref="1name" data-ref-filename="1name">name</a>, <a class="local col4 ref" href="#4arg" title='arg' data-ref="4arg" data-ref-filename="4arg">arg</a>) == <var>0</var>) {</td></tr>
+<tr><th id="188">188</th><td>			<a class="tu ref" href="#sc_tokplur" title='sc_tokplur' data-use='w' data-ref="sc_tokplur" data-ref-filename="sc_tokplur">sc_tokplur</a> = <a class="tu ref" href="#Specials" title='Specials' data-use='m' data-ref="Specials" data-ref-filename="Specials">Specials</a>[<a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>].<a class="local col3 ref field" href="#3plural" title='plural' data-ref="3plural" data-ref-filename="3plural">plural</a>;</td></tr>
+<tr><th id="189">189</th><td>		    	<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="tu ref" href="#Specials" title='Specials' data-use='m' data-ref="Specials" data-ref-filename="Specials">Specials</a>[<a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>].<a class="local col2 ref field" href="#2value" title='value' data-ref="2value" data-ref-filename="2value">value</a>;</td></tr>
+<tr><th id="190">190</th><td>		}</td></tr>
+<tr><th id="191">191</th><td>	}</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td>	<i>/* not special - must be some random id */</i></td></tr>
+<tr><th id="194">194</th><td>	<b>return</b> <a class="enum" href="#ID" title='ID' data-ref="ID" data-ref-filename="ID">ID</a>;</td></tr>
+<tr><th id="195">195</th><td>}</td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td><i  data-doc="init_scanner">/*</i></td></tr>
+<tr><th id="198">198</th><td><i  data-doc="init_scanner"> * init_scanner() sets up the scanner to eat arguments</i></td></tr>
+<tr><th id="199">199</th><td><i  data-doc="init_scanner"> */</i></td></tr>
+<tr><th id="200">200</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="201">201</th><td><dfn class="tu decl def fn" id="init_scanner" title='init_scanner' data-type='void init_scanner(int argc, char ** argv)' data-ref="init_scanner" data-ref-filename="init_scanner">init_scanner</dfn>(<em>int</em> <dfn class="local col6 decl" id="6argc" title='argc' data-type='int' data-ref="6argc" data-ref-filename="6argc">argc</dfn>, <em>char</em> **<dfn class="local col7 decl" id="7argv" title='argv' data-type='char **' data-ref="7argv" data-ref-filename="7argv">argv</dfn>)</td></tr>
+<tr><th id="202">202</th><td>{</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td>	<a class="tu ref" href="#scp" title='scp' data-use='w' data-ref="scp" data-ref-filename="scp">scp</a> = <a class="local col7 ref" href="#7argv" title='argv' data-ref="7argv" data-ref-filename="7argv">argv</a>;</td></tr>
+<tr><th id="205">205</th><td>	<a class="tu ref" href="#scc" title='scc' data-use='w' data-ref="scc" data-ref-filename="scc">scc</a> = <a class="local col6 ref" href="#6argc" title='argc' data-ref="6argc" data-ref-filename="6argc">argc</a>;</td></tr>
+<tr><th id="206">206</th><td>	<a class="tu ref" href="#need" title='need' data-use='w' data-ref="need" data-ref-filename="need">need</a> = <span class="macro" title="1" data-ref="_M/true">true</span>;</td></tr>
+<tr><th id="207">207</th><td>	<a class="tu ref" href="#sc_len" title='sc_len' data-use='w' data-ref="sc_len" data-ref-filename="sc_len">sc_len</a> = <var>1</var>;</td></tr>
+<tr><th id="208">208</th><td>	<b>while</b> (<a class="local col6 ref" href="#6argc" title='argc' data-ref="6argc" data-ref-filename="6argc">argc</a>-- &gt; <var>0</var>)</td></tr>
+<tr><th id="209">209</th><td>		<a class="tu ref" href="#sc_len" title='sc_len' data-use='w' data-ref="sc_len" data-ref-filename="sc_len">sc_len</a> += <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(*<a class="local col7 ref" href="#7argv" title='argv' data-ref="7argv" data-ref-filename="7argv">argv</a>++);</td></tr>
+<tr><th id="210">210</th><td></td></tr>
+<tr><th id="211">211</th><td>	<b>if</b> ((<a class="tu ref" href="#sc_token" title='sc_token' data-use='w' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#malloc" title='malloc' data-ref="malloc" data-ref-filename="malloc">malloc</a>(<a class="tu ref" href="#sc_len" title='sc_len' data-use='r' data-ref="sc_len" data-ref-filename="sc_len">sc_len</a>)) == <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="212">212</th><td>		<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"Insufficient virtual memory"</q>);</td></tr>
+<tr><th id="213">213</th><td>}</td></tr>
+<tr><th id="214">214</th><td></td></tr>
+<tr><th id="215">215</th><td><i  data-doc="token">/*</i></td></tr>
+<tr><th id="216">216</th><td><i  data-doc="token"> * token() fetches a token from the input stream</i></td></tr>
+<tr><th id="217">217</th><td><i  data-doc="token"> */</i></td></tr>
+<tr><th id="218">218</th><td><em>static</em> <a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a></td></tr>
+<tr><th id="219">219</th><td><dfn class="tu decl def fn" id="token" title='token' data-type='tokid_t token()' data-ref="token" data-ref-filename="token">token</dfn>(<em>void</em>)</td></tr>
+<tr><th id="220">220</th><td>{</td></tr>
+<tr><th id="221">221</th><td>	<em>int</em> <dfn class="local col8 decl" id="8idx" title='idx' data-type='int' data-ref="8idx" data-ref-filename="8idx">idx</dfn>;</td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td>	<b>for</b>(;;) {</td></tr>
+<tr><th id="224">224</th><td>		(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/string.h.html#97" title="((__builtin_object_size(sc_token, 0) != (size_t)-1) ? __builtin___memset_chk(sc_token, 0, sc_len, __builtin_object_size(sc_token, 0)) : __memset_ichk(sc_token, 0, sc_len))" data-ref="_M/memset">memset</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>, <var>0</var>, <a class="tu ref" href="#sc_len" title='sc_len' data-use='r' data-ref="sc_len" data-ref-filename="sc_len">sc_len</a>);</td></tr>
+<tr><th id="225">225</th><td>		<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="enum" href="#TOKEOF" title='TOKEOF' data-ref="TOKEOF" data-ref-filename="TOKEOF">TOKEOF</a>;</td></tr>
+<tr><th id="226">226</th><td>		<a class="tu ref" href="#sc_tokplur" title='sc_tokplur' data-use='w' data-ref="sc_tokplur" data-ref-filename="sc_tokplur">sc_tokplur</a> = <span class="macro" title="0" data-ref="_M/false">false</span>;</td></tr>
+<tr><th id="227">227</th><td>		<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a> = <var>0</var>;</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td>		<i>/*</i></td></tr>
+<tr><th id="230">230</th><td><i>		 * if we need to read another argument, walk along the</i></td></tr>
+<tr><th id="231">231</th><td><i>		 * argument list; when we fall off the arglist, we'll</i></td></tr>
+<tr><th id="232">232</th><td><i>		 * just return TOKEOF forever</i></td></tr>
+<tr><th id="233">233</th><td><i>		 */</i></td></tr>
+<tr><th id="234">234</th><td>		<b>if</b> (<a class="tu ref" href="#need" title='need' data-use='r' data-ref="need" data-ref-filename="need">need</a>) {</td></tr>
+<tr><th id="235">235</th><td>			<b>if</b> (<a class="tu ref" href="#scc" title='scc' data-use='r' data-ref="scc" data-ref-filename="scc">scc</a> &lt; <var>1</var>)</td></tr>
+<tr><th id="236">236</th><td>				<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a>;</td></tr>
+<tr><th id="237">237</th><td>			<a class="tu ref" href="#sct" title='sct' data-use='w' data-ref="sct" data-ref-filename="sct">sct</a> = *<a class="tu ref" href="#scp" title='scp' data-use='r' data-ref="scp" data-ref-filename="scp">scp</a>;</td></tr>
+<tr><th id="238">238</th><td>			<a class="tu ref" href="#scp" title='scp' data-use='w' data-ref="scp" data-ref-filename="scp">scp</a>++;</td></tr>
+<tr><th id="239">239</th><td>			<a class="tu ref" href="#scc" title='scc' data-use='w' data-ref="scc" data-ref-filename="scc">scc</a>--;</td></tr>
+<tr><th id="240">240</th><td>			<a class="tu ref" href="#need" title='need' data-use='w' data-ref="need" data-ref-filename="need">need</a> = <span class="macro" title="0" data-ref="_M/false">false</span>;</td></tr>
+<tr><th id="241">241</th><td>		}</td></tr>
+<tr><th id="242">242</th><td>		<i>/*</i></td></tr>
+<tr><th id="243">243</th><td><i>		 * eat whitespace now - if we walk off the end of the argument,</i></td></tr>
+<tr><th id="244">244</th><td><i>		 * we'll continue, which puts us up at the top of the while loop</i></td></tr>
+<tr><th id="245">245</th><td><i>		 * to fetch the next argument in</i></td></tr>
+<tr><th id="246">246</th><td><i>		 */</i></td></tr>
+<tr><th id="247">247</th><td>		<b>while</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/ctype_inline.h.html#56" title="((int)((_ctype_tab_ + 1)[((unsigned char)*sct)] &amp; 0x0040))" data-ref="_M/isspace">isspace</a>((<em>unsigned</em> <em>char</em>)*<a class="tu ref" href="#sct" title='sct' data-use='r' data-ref="sct" data-ref-filename="sct">sct</a>))</td></tr>
+<tr><th id="248">248</th><td>			++<a class="tu ref" href="#sct" title='sct' data-use='w' data-ref="sct" data-ref-filename="sct">sct</a>;</td></tr>
+<tr><th id="249">249</th><td>		<b>if</b> (!*<a class="tu ref" href="#sct" title='sct' data-use='r' data-ref="sct" data-ref-filename="sct">sct</a>) {</td></tr>
+<tr><th id="250">250</th><td>			<a class="tu ref" href="#need" title='need' data-use='w' data-ref="need" data-ref-filename="need">need</a> = <span class="macro" title="1" data-ref="_M/true">true</span>;</td></tr>
+<tr><th id="251">251</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="252">252</th><td>		}</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>		<i>/*</i></td></tr>
+<tr><th id="255">255</th><td><i>		 * preserve the first character of the new token</i></td></tr>
+<tr><th id="256">256</th><td><i>		 */</i></td></tr>
+<tr><th id="257">257</th><td>		<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>] = *<a class="tu ref" href="#sct" title='sct' data-use='w' data-ref="sct" data-ref-filename="sct">sct</a>++;</td></tr>
+<tr><th id="258">258</th><td></td></tr>
+<tr><th id="259">259</th><td>		<i>/*</i></td></tr>
+<tr><th id="260">260</th><td><i>		 * then see what it is</i></td></tr>
+<tr><th id="261">261</th><td><i>		 */</i></td></tr>
+<tr><th id="262">262</th><td>		<b>if</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/ctype_inline.h.html#51" title="((int)((_ctype_tab_ + 1)[((unsigned char)sc_token[0])] &amp; 0x0004))" data-ref="_M/isdigit">isdigit</a>((<em>unsigned</em> <em>char</em>)<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>])) {</td></tr>
+<tr><th id="263">263</th><td>			<b>while</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/ctype_inline.h.html#51" title="((int)((_ctype_tab_ + 1)[((unsigned char)*sct)] &amp; 0x0004))" data-ref="_M/isdigit">isdigit</a>((<em>unsigned</em> <em>char</em>)*<a class="tu ref" href="#sct" title='sct' data-use='r' data-ref="sct" data-ref-filename="sct">sct</a>))</td></tr>
+<tr><th id="264">264</th><td>				<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[++<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a>] = *<a class="tu ref" href="#sct" title='sct' data-use='w' data-ref="sct" data-ref-filename="sct">sct</a>++;</td></tr>
+<tr><th id="265">265</th><td>			<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[++<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a>] = <var>0</var>;</td></tr>
+<tr><th id="266">266</th><td>			<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>;</td></tr>
+<tr><th id="267">267</th><td>		} <b>else</b> <b>if</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/ctype_inline.h.html#49" title="((int)((_ctype_tab_ + 1)[((unsigned char)sc_token[0])] &amp; 0x0001))" data-ref="_M/isalpha">isalpha</a>((<em>unsigned</em> <em>char</em>)<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>])) {</td></tr>
+<tr><th id="268">268</th><td>			<b>while</b> (<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/ctype_inline.h.html#49" title="((int)((_ctype_tab_ + 1)[((unsigned char)*sct)] &amp; 0x0001))" data-ref="_M/isalpha">isalpha</a>((<em>unsigned</em> <em>char</em>)*<a class="tu ref" href="#sct" title='sct' data-use='r' data-ref="sct" data-ref-filename="sct">sct</a>))</td></tr>
+<tr><th id="269">269</th><td>				<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[++<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a>] = *<a class="tu ref" href="#sct" title='sct' data-use='w' data-ref="sct" data-ref-filename="sct">sct</a>++;</td></tr>
+<tr><th id="270">270</th><td>			<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[++<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a>] = <var>0</var>;</td></tr>
+<tr><th id="271">271</th><td>			<b>return</b> <a class="tu ref fn" href="#parse_token" title='parse_token' data-use='c' data-ref="parse_token" data-ref-filename="parse_token">parse_token</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="272">272</th><td>		}</td></tr>
+<tr><th id="273">273</th><td>		<b>else</b> <b>if</b> (<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>] == <kbd>':'</kbd> || <a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>] == <kbd>'.'</kbd>)</td></tr>
+<tr><th id="274">274</th><td>			<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="enum" href="#DOT" title='DOT' data-ref="DOT" data-ref-filename="DOT">DOT</a>;</td></tr>
+<tr><th id="275">275</th><td>		<b>else</b> <b>if</b> (<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>] == <kbd>'+'</kbd>)</td></tr>
+<tr><th id="276">276</th><td>			<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="enum" href="#PLUS" title='PLUS' data-ref="PLUS" data-ref-filename="PLUS">PLUS</a>;</td></tr>
+<tr><th id="277">277</th><td>		<b>else</b> <b>if</b> (<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>[<var>0</var>] == <kbd>'/'</kbd>)</td></tr>
+<tr><th id="278">278</th><td>			<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="enum" href="#SLASH" title='SLASH' data-ref="SLASH" data-ref-filename="SLASH">SLASH</a>;</td></tr>
+<tr><th id="279">279</th><td>		<b>else</b></td></tr>
+<tr><th id="280">280</th><td>			<b>return</b> <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='w' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> = <a class="enum" href="#JUNK" title='JUNK' data-ref="JUNK" data-ref-filename="JUNK">JUNK</a>;</td></tr>
+<tr><th id="281">281</th><td>	}</td></tr>
+<tr><th id="282">282</th><td>}</td></tr>
+<tr><th id="283">283</th><td></td></tr>
+<tr><th id="284">284</th><td><i>/*</i></td></tr>
+<tr><th id="285">285</th><td><i> * plonk() gives an appropriate error message if a token is incorrect</i></td></tr>
+<tr><th id="286">286</th><td><i> */</i></td></tr>
+<tr><th id="287">287</th><td><a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#214" title="__attribute__((__noreturn__))" data-ref="_M/__dead">__dead</a></td></tr>
+<tr><th id="288">288</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="289">289</th><td><dfn class="decl def fn" id="plonk" title='plonk' data-ref="plonk" data-ref-filename="plonk">plonk</dfn>(<a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a> <dfn class="local col9 decl" id="9tok" title='tok' data-type='tokid_t' data-ref="9tok" data-ref-filename="9tok">tok</dfn>)</td></tr>
+<tr><th id="290">290</th><td>{</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td>	<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<a class="local col9 ref" href="#9tok" title='tok' data-ref="9tok" data-ref-filename="9tok">tok</a> == <a class="enum" href="#TOKEOF" title='TOKEOF' data-ref="TOKEOF" data-ref-filename="TOKEOF">TOKEOF</a> ? <q>"incomplete time"</q> : <q>"garbled time"</q>);</td></tr>
+<tr><th id="293">293</th><td>}</td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td><i  data-doc="expect">/*</i></td></tr>
+<tr><th id="296">296</th><td><i  data-doc="expect"> * expect() gets a token and dies most horribly if it's not the token we want</i></td></tr>
+<tr><th id="297">297</th><td><i  data-doc="expect"> */</i></td></tr>
+<tr><th id="298">298</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="299">299</th><td><dfn class="tu decl def fn" id="expect" title='expect' data-type='void expect(tokid_t desired)' data-ref="expect" data-ref-filename="expect">expect</dfn>(<a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a> <dfn class="local col0 decl" id="10desired" title='desired' data-type='tokid_t' data-ref="10desired" data-ref-filename="10desired">desired</dfn>)</td></tr>
+<tr><th id="300">300</th><td>{</td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td>	<b>if</b> (<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>() != <a class="local col0 ref" href="#10desired" title='desired' data-ref="10desired" data-ref-filename="10desired">desired</a>)</td></tr>
+<tr><th id="303">303</th><td>		<a class="ref fn" href="#plonk" title='plonk' data-ref="plonk" data-ref-filename="plonk">plonk</a>(<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a>);	<i>/* and we die here... */</i></td></tr>
+<tr><th id="304">304</th><td>}</td></tr>
+<tr><th id="305">305</th><td></td></tr>
+<tr><th id="306">306</th><td><i  data-doc="plus">/*</i></td></tr>
+<tr><th id="307">307</th><td><i  data-doc="plus"> * plus() parses a now + time</i></td></tr>
+<tr><th id="308">308</th><td><i  data-doc="plus"> *</i></td></tr>
+<tr><th id="309">309</th><td><i  data-doc="plus"> *  at [NOW] PLUS NUMBER [MINUTES|HOURS|DAYS|WEEKS|MONTHS|YEARS]</i></td></tr>
+<tr><th id="310">310</th><td><i  data-doc="plus"> *</i></td></tr>
+<tr><th id="311">311</th><td><i  data-doc="plus"> */</i></td></tr>
+<tr><th id="312">312</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="313">313</th><td><dfn class="tu decl def fn" id="plus" title='plus' data-type='void plus(struct tm * tm)' data-ref="plus" data-ref-filename="plus">plus</dfn>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *<dfn class="local col1 decl" id="11tm" title='tm' data-type='struct tm *' data-ref="11tm" data-ref-filename="11tm">tm</dfn>)</td></tr>
+<tr><th id="314">314</th><td>{</td></tr>
+<tr><th id="315">315</th><td>	<em>int</em> <dfn class="local col2 decl" id="12delay" title='delay' data-type='int' data-ref="12delay" data-ref-filename="12delay">delay</dfn>;</td></tr>
+<tr><th id="316">316</th><td>	<em>int</em> <dfn class="local col3 decl" id="13expectplur" title='expectplur' data-type='int' data-ref="13expectplur" data-ref-filename="13expectplur">expectplur</dfn>;</td></tr>
+<tr><th id="317">317</th><td></td></tr>
+<tr><th id="318">318</th><td>	<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>);</td></tr>
+<tr><th id="319">319</th><td></td></tr>
+<tr><th id="320">320</th><td>	<a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="321">321</th><td>	<a class="local col3 ref" href="#13expectplur" title='expectplur' data-ref="13expectplur" data-ref-filename="13expectplur">expectplur</a> = <a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a> != <var>1</var>;</td></tr>
+<tr><th id="322">322</th><td></td></tr>
+<tr><th id="323">323</th><td>	<b>switch</b> (<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>()) {</td></tr>
+<tr><th id="324">324</th><td>	<b>case</b> <a class="enum" href="#YEARS" title='YEARS' data-ref="YEARS" data-ref-filename="YEARS">YEARS</a>:</td></tr>
+<tr><th id="325">325</th><td>		<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_year" title='tm::tm_year' data-ref="tm::tm_year" data-ref-filename="tm..tm_year">tm_year</a> += <a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a>;</td></tr>
+<tr><th id="326">326</th><td>		<b>break</b>;</td></tr>
+<tr><th id="327">327</th><td>	<b>case</b> <a class="enum" href="#MONTHS" title='MONTHS' data-ref="MONTHS" data-ref-filename="MONTHS">MONTHS</a>:</td></tr>
+<tr><th id="328">328</th><td>		<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mon" title='tm::tm_mon' data-ref="tm::tm_mon" data-ref-filename="tm..tm_mon">tm_mon</a> += <a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a>;</td></tr>
+<tr><th id="329">329</th><td>		<b>break</b>;</td></tr>
+<tr><th id="330">330</th><td>	<b>case</b> <a class="enum" href="#WEEKS" title='WEEKS' data-ref="WEEKS" data-ref-filename="WEEKS">WEEKS</a>:</td></tr>
+<tr><th id="331">331</th><td>		<a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a> *= <var>7</var>;</td></tr>
+<tr><th id="332">332</th><td>		<i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="333">333</th><td>	<b>case</b> <a class="enum" href="#DAYS" title='DAYS' data-ref="DAYS" data-ref-filename="DAYS">DAYS</a>:</td></tr>
+<tr><th id="334">334</th><td>		<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a> += <a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a>;</td></tr>
+<tr><th id="335">335</th><td>		<b>break</b>;</td></tr>
+<tr><th id="336">336</th><td>	<b>case</b> <a class="enum" href="#HOURS" title='HOURS' data-ref="HOURS" data-ref-filename="HOURS">HOURS</a>:</td></tr>
+<tr><th id="337">337</th><td>		<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a> += <a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a>;</td></tr>
+<tr><th id="338">338</th><td>		<b>break</b>;</td></tr>
+<tr><th id="339">339</th><td>	<b>case</b> <a class="enum" href="#MINUTES" title='MINUTES' data-ref="MINUTES" data-ref-filename="MINUTES">MINUTES</a>:</td></tr>
+<tr><th id="340">340</th><td>		<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_min" title='tm::tm_min' data-ref="tm::tm_min" data-ref-filename="tm..tm_min">tm_min</a> += <a class="local col2 ref" href="#12delay" title='delay' data-ref="12delay" data-ref-filename="12delay">delay</a>;</td></tr>
+<tr><th id="341">341</th><td>		<b>break</b>;</td></tr>
+<tr><th id="342">342</th><td>	<b>default</b>:</td></tr>
+<tr><th id="343">343</th><td>		<a class="ref fn" href="#plonk" title='plonk' data-ref="plonk" data-ref-filename="plonk">plonk</a>(<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a>);</td></tr>
+<tr><th id="344">344</th><td>		<b>break</b>;</td></tr>
+<tr><th id="345">345</th><td>	}</td></tr>
+<tr><th id="346">346</th><td></td></tr>
+<tr><th id="347">347</th><td>	<b>if</b> (<a class="local col3 ref" href="#13expectplur" title='expectplur' data-ref="13expectplur" data-ref-filename="13expectplur">expectplur</a> != <a class="tu ref" href="#sc_tokplur" title='sc_tokplur' data-use='r' data-ref="sc_tokplur" data-ref-filename="sc_tokplur">sc_tokplur</a>)</td></tr>
+<tr><th id="348">348</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/err.h.html#warnx" title='warnx' data-ref="warnx" data-ref-filename="warnx">warnx</a>(<q>"pluralization is wrong"</q>);</td></tr>
+<tr><th id="349">349</th><td></td></tr>
+<tr><th id="350">350</th><td>	<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_isdst" title='tm::tm_isdst' data-ref="tm::tm_isdst" data-ref-filename="tm..tm_isdst">tm_isdst</a> = -<var>1</var>;</td></tr>
+<tr><th id="351">351</th><td>	<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__mktime50" title='mktime' data-ref="__mktime50" data-ref-filename="__mktime50">mktime</a>(<a class="local col1 ref" href="#11tm" title='tm' data-ref="11tm" data-ref-filename="11tm">tm</a>) == -<var>1</var>)</td></tr>
+<tr><th id="352">352</th><td>		<a class="ref fn" href="#plonk" title='plonk' data-ref="plonk" data-ref-filename="plonk">plonk</a>(<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a>);</td></tr>
+<tr><th id="353">353</th><td>}</td></tr>
+<tr><th id="354">354</th><td></td></tr>
+<tr><th id="355">355</th><td><i  data-doc="tod">/*</i></td></tr>
+<tr><th id="356">356</th><td><i  data-doc="tod"> * tod() computes the time of day</i></td></tr>
+<tr><th id="357">357</th><td><i  data-doc="tod"> *     [NUMBER [DOT NUMBER] [AM|PM]]</i></td></tr>
+<tr><th id="358">358</th><td><i  data-doc="tod"> */</i></td></tr>
+<tr><th id="359">359</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="360">360</th><td><dfn class="tu decl def fn" id="tod" title='tod' data-type='void tod(struct tm * tm)' data-ref="tod" data-ref-filename="tod">tod</dfn>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *<dfn class="local col4 decl" id="14tm" title='tm' data-type='struct tm *' data-ref="14tm" data-ref-filename="14tm">tm</dfn>)</td></tr>
+<tr><th id="361">361</th><td>{</td></tr>
+<tr><th id="362">362</th><td>	<em>int</em> <dfn class="local col5 decl" id="15hour" title='hour' data-type='int' data-ref="15hour" data-ref-filename="15hour">hour</dfn>, <dfn class="local col6 decl" id="16minute" title='minute' data-type='int' data-ref="16minute" data-ref-filename="16minute">minute</dfn>;</td></tr>
+<tr><th id="363">363</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col7 decl" id="17tlen" title='tlen' data-type='size_t' data-ref="17tlen" data-ref-filename="17tlen">tlen</dfn>;</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td>	<a class="local col6 ref" href="#16minute" title='minute' data-ref="16minute" data-ref-filename="16minute">minute</a> = <var>0</var>;</td></tr>
+<tr><th id="366">366</th><td>	<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="367">367</th><td>	<a class="local col7 ref" href="#17tlen" title='tlen' data-ref="17tlen" data-ref-filename="17tlen">tlen</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td>	<i>/*</i></td></tr>
+<tr><th id="370">370</th><td><i>	 * first pick out the time of day - if it's 4 digits, we assume</i></td></tr>
+<tr><th id="371">371</th><td><i>	 * a HHMM time, otherwise it's HH DOT MM time</i></td></tr>
+<tr><th id="372">372</th><td><i>	 */</i></td></tr>
+<tr><th id="373">373</th><td>	<b>if</b> (<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>() == <a class="enum" href="#DOT" title='DOT' data-ref="DOT" data-ref-filename="DOT">DOT</a>) {</td></tr>
+<tr><th id="374">374</th><td>		<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>);</td></tr>
+<tr><th id="375">375</th><td>		<a class="local col6 ref" href="#16minute" title='minute' data-ref="16minute" data-ref-filename="16minute">minute</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="376">376</th><td>		(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="377">377</th><td>	} <b>else</b> <b>if</b> (<a class="local col7 ref" href="#17tlen" title='tlen' data-ref="17tlen" data-ref-filename="17tlen">tlen</a> == <var>4</var>) {</td></tr>
+<tr><th id="378">378</th><td>		<a class="local col6 ref" href="#16minute" title='minute' data-ref="16minute" data-ref-filename="16minute">minute</a> = <a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> % <var>100</var>;</td></tr>
+<tr><th id="379">379</th><td>		<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> = <a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> / <var>100</var>;</td></tr>
+<tr><th id="380">380</th><td>	}</td></tr>
+<tr><th id="381">381</th><td></td></tr>
+<tr><th id="382">382</th><td>	<b>if</b> (<a class="local col6 ref" href="#16minute" title='minute' data-ref="16minute" data-ref-filename="16minute">minute</a> &gt; <var>59</var>)</td></tr>
+<tr><th id="383">383</th><td>		<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"garbled time"</q>);</td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td>	<i>/*</i></td></tr>
+<tr><th id="386">386</th><td><i>	 * check if an AM or PM specifier was given</i></td></tr>
+<tr><th id="387">387</th><td><i>	 */</i></td></tr>
+<tr><th id="388">388</th><td>	<b>if</b> (<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#AM" title='AM' data-ref="AM" data-ref-filename="AM">AM</a> || <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#PM" title='PM' data-ref="PM" data-ref-filename="PM">PM</a>) {</td></tr>
+<tr><th id="389">389</th><td>		<b>if</b> (<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> &gt; <var>12</var>)</td></tr>
+<tr><th id="390">390</th><td>			<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"garbled time"</q>);</td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td>		<b>if</b> (<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#PM" title='PM' data-ref="PM" data-ref-filename="PM">PM</a>) {</td></tr>
+<tr><th id="393">393</th><td>			<b>if</b> (<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> != <var>12</var>)	<i>/* 12:xx PM is 12:xx, not 24:xx */</i></td></tr>
+<tr><th id="394">394</th><td>				<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> += <var>12</var>;</td></tr>
+<tr><th id="395">395</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="396">396</th><td>			<b>if</b> (<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> == <var>12</var>)	<i>/* 12:xx AM is 00:xx, not 12:xx */</i></td></tr>
+<tr><th id="397">397</th><td>				<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> = <var>0</var>;</td></tr>
+<tr><th id="398">398</th><td>		}</td></tr>
+<tr><th id="399">399</th><td>		(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="400">400</th><td>	} <b>else</b> <b>if</b> (<a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> &gt; <var>23</var>)</td></tr>
+<tr><th id="401">401</th><td>		<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"garbled time"</q>);</td></tr>
+<tr><th id="402">402</th><td></td></tr>
+<tr><th id="403">403</th><td>	<i>/*</i></td></tr>
+<tr><th id="404">404</th><td><i>	 * if we specify an absolute time, we don't want to bump the day even</i></td></tr>
+<tr><th id="405">405</th><td><i>	 * if we've gone past that time - but if we're specifying a time plus</i></td></tr>
+<tr><th id="406">406</th><td><i>	 * a relative offset, it's okay to bump things</i></td></tr>
+<tr><th id="407">407</th><td><i>	 */</i></td></tr>
+<tr><th id="408">408</th><td>	<b>if</b> ((<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#TOKEOF" title='TOKEOF' data-ref="TOKEOF" data-ref-filename="TOKEOF">TOKEOF</a> || <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#PLUS" title='PLUS' data-ref="PLUS" data-ref-filename="PLUS">PLUS</a>) &amp;&amp; (<a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a> &gt; <a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> ||</td></tr>
+<tr><th id="409">409</th><td>	    (<a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a> == <a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a> &amp;&amp; <a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_min" title='tm::tm_min' data-ref="tm::tm_min" data-ref-filename="tm..tm_min">tm_min</a> &gt; <a class="local col6 ref" href="#16minute" title='minute' data-ref="16minute" data-ref-filename="16minute">minute</a>))) {</td></tr>
+<tr><th id="410">410</th><td>		<a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a>++;</td></tr>
+<tr><th id="411">411</th><td>		<a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a>++;</td></tr>
+<tr><th id="412">412</th><td>	}</td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td>	<a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a> = <a class="local col5 ref" href="#15hour" title='hour' data-ref="15hour" data-ref-filename="15hour">hour</a>;</td></tr>
+<tr><th id="415">415</th><td>	<a class="local col4 ref" href="#14tm" title='tm' data-ref="14tm" data-ref-filename="14tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_min" title='tm::tm_min' data-ref="tm::tm_min" data-ref-filename="tm..tm_min">tm_min</a> = <a class="local col6 ref" href="#16minute" title='minute' data-ref="16minute" data-ref-filename="16minute">minute</a>;</td></tr>
+<tr><th id="416">416</th><td>}</td></tr>
+<tr><th id="417">417</th><td></td></tr>
+<tr><th id="418">418</th><td><i  data-doc="assign_date">/*</i></td></tr>
+<tr><th id="419">419</th><td><i  data-doc="assign_date"> * assign_date() assigns a date, wrapping to next year if needed.</i></td></tr>
+<tr><th id="420">420</th><td><i  data-doc="assign_date"> * Accept years in 4-digit, 2-digit, or current year (-1).</i></td></tr>
+<tr><th id="421">421</th><td><i  data-doc="assign_date"> */</i></td></tr>
+<tr><th id="422">422</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="423">423</th><td><dfn class="tu decl def fn" id="assign_date" title='assign_date' data-type='void assign_date(struct tm * tm, int mday, int mon, int year)' data-ref="assign_date" data-ref-filename="assign_date">assign_date</dfn>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *<dfn class="local col8 decl" id="18tm" title='tm' data-type='struct tm *' data-ref="18tm" data-ref-filename="18tm">tm</dfn>, <em>int</em> <dfn class="local col9 decl" id="19mday" title='mday' data-type='int' data-ref="19mday" data-ref-filename="19mday">mday</dfn>, <em>int</em> <dfn class="local col0 decl" id="20mon" title='mon' data-type='int' data-ref="20mon" data-ref-filename="20mon">mon</dfn>, <em>int</em> <dfn class="local col1 decl" id="21year" title='year' data-type='int' data-ref="21year" data-ref-filename="21year">year</dfn>)</td></tr>
+<tr><th id="424">424</th><td>{</td></tr>
+<tr><th id="425">425</th><td></td></tr>
+<tr><th id="426">426</th><td>	<b>if</b> (<a class="local col1 ref" href="#21year" title='year' data-ref="21year" data-ref-filename="21year">year</a> &gt; <var>99</var>) {	<i>/* four digit year */</i></td></tr>
+<tr><th id="427">427</th><td>		<b>if</b> (<a class="local col1 ref" href="#21year" title='year' data-ref="21year" data-ref-filename="21year">year</a> &gt;= <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/tzfile.h.html#153" title="1900" data-ref="_M/TM_YEAR_BASE">TM_YEAR_BASE</a>)</td></tr>
+<tr><th id="428">428</th><td>			<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_year" title='tm::tm_year' data-ref="tm::tm_year" data-ref-filename="tm..tm_year">tm_year</a> = <a class="local col1 ref" href="#21year" title='year' data-ref="21year" data-ref-filename="21year">year</a> - <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/tzfile.h.html#153" title="1900" data-ref="_M/TM_YEAR_BASE">TM_YEAR_BASE</a>;</td></tr>
+<tr><th id="429">429</th><td>		<b>else</b></td></tr>
+<tr><th id="430">430</th><td>			<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"garbled time"</q>);</td></tr>
+<tr><th id="431">431</th><td>	}</td></tr>
+<tr><th id="432">432</th><td>	<b>else</b> <b>if</b> (<a class="local col1 ref" href="#21year" title='year' data-ref="21year" data-ref-filename="21year">year</a> &gt;= <var>0</var>) {	<i>/* two digit year */</i></td></tr>
+<tr><th id="433">433</th><td>		<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_year" title='tm::tm_year' data-ref="tm::tm_year" data-ref-filename="tm..tm_year">tm_year</a> = <a class="macro" href="stime.h.html#49" title="((year) &lt; 69 ? (year) + 2000 : (year) + 1900)" data-ref="_M/conv_2dig_year">conv_2dig_year</a>(<a class="local col1 ref" href="#21year" title='year' data-ref="21year" data-ref-filename="21year">year</a>) - <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/tzfile.h.html#153" title="1900" data-ref="_M/TM_YEAR_BASE">TM_YEAR_BASE</a>;</td></tr>
+<tr><th id="434">434</th><td>	}</td></tr>
+<tr><th id="435">435</th><td>	<b>else</b> <b>if</b> (<a class="local col1 ref" href="#21year" title='year' data-ref="21year" data-ref-filename="21year">year</a> == -<var>1</var>) {	<i>/* year not given (use default in tm) */</i></td></tr>
+<tr><th id="436">436</th><td>		<i>/* allow for 1 year range from current date */</i></td></tr>
+<tr><th id="437">437</th><td>		<b>if</b> (<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mon" title='tm::tm_mon' data-ref="tm::tm_mon" data-ref-filename="tm..tm_mon">tm_mon</a> &gt; <a class="local col0 ref" href="#20mon" title='mon' data-ref="20mon" data-ref-filename="20mon">mon</a> ||</td></tr>
+<tr><th id="438">438</th><td>		    (<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mon" title='tm::tm_mon' data-ref="tm::tm_mon" data-ref-filename="tm..tm_mon">tm_mon</a> == <a class="local col0 ref" href="#20mon" title='mon' data-ref="20mon" data-ref-filename="20mon">mon</a> &amp;&amp; <a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a> &gt; <a class="local col9 ref" href="#19mday" title='mday' data-ref="19mday" data-ref-filename="19mday">mday</a>))</td></tr>
+<tr><th id="439">439</th><td>			<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_year" title='tm::tm_year' data-ref="tm::tm_year" data-ref-filename="tm..tm_year">tm_year</a>++;</td></tr>
+<tr><th id="440">440</th><td>	}</td></tr>
+<tr><th id="441">441</th><td>	<b>else</b></td></tr>
+<tr><th id="442">442</th><td>		<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"invalid year"</q>);</td></tr>
+<tr><th id="443">443</th><td></td></tr>
+<tr><th id="444">444</th><td>	<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a> = <a class="local col9 ref" href="#19mday" title='mday' data-ref="19mday" data-ref-filename="19mday">mday</a>;</td></tr>
+<tr><th id="445">445</th><td>	<a class="local col8 ref" href="#18tm" title='tm' data-ref="18tm" data-ref-filename="18tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mon" title='tm::tm_mon' data-ref="tm::tm_mon" data-ref-filename="tm..tm_mon">tm_mon</a> = <a class="local col0 ref" href="#20mon" title='mon' data-ref="20mon" data-ref-filename="20mon">mon</a>;</td></tr>
+<tr><th id="446">446</th><td>}</td></tr>
+<tr><th id="447">447</th><td></td></tr>
+<tr><th id="448">448</th><td><i  data-doc="month">/*</i></td></tr>
+<tr><th id="449">449</th><td><i  data-doc="month"> * month() picks apart a month specification</i></td></tr>
+<tr><th id="450">450</th><td><i  data-doc="month"> *</i></td></tr>
+<tr><th id="451">451</th><td><i  data-doc="month"> *  /[&lt;month&gt; NUMBER [NUMBER]]           \</i></td></tr>
+<tr><th id="452">452</th><td><i  data-doc="month"> *  |[TOMORROW]                          |</i></td></tr>
+<tr><th id="453">453</th><td><i  data-doc="month"> *  |[DAY OF WEEK]                       |</i></td></tr>
+<tr><th id="454">454</th><td><i  data-doc="month"> *  |NUMBER [SLASH NUMBER [SLASH NUMBER]]|</i></td></tr>
+<tr><th id="455">455</th><td><i  data-doc="month"> *  \PLUS NUMBER MINUTES|HOURS|DAYS|WEEKS/</i></td></tr>
+<tr><th id="456">456</th><td><i  data-doc="month"> */</i></td></tr>
+<tr><th id="457">457</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="458">458</th><td><dfn class="tu decl def fn" id="month" title='month' data-type='void month(struct tm * tm)' data-ref="month" data-ref-filename="month">month</dfn>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> *<dfn class="local col2 decl" id="22tm" title='tm' data-type='struct tm *' data-ref="22tm" data-ref-filename="22tm">tm</dfn>)</td></tr>
+<tr><th id="459">459</th><td>{</td></tr>
+<tr><th id="460">460</th><td>	<em>int</em> <dfn class="local col3 decl" id="23year" title='year' data-type='int' data-ref="23year" data-ref-filename="23year">year</dfn>;</td></tr>
+<tr><th id="461">461</th><td>	<em>int</em> <dfn class="local col4 decl" id="24mday" title='mday' data-type='int' data-ref="24mday" data-ref-filename="24mday">mday</dfn>, <dfn class="local col5 decl" id="25wday" title='wday' data-type='int' data-ref="25wday" data-ref-filename="25wday">wday</dfn>, <dfn class="local col6 decl" id="26mon" title='mon' data-type='int' data-ref="26mon" data-ref-filename="26mon">mon</dfn>;</td></tr>
+<tr><th id="462">462</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col7 decl" id="27tlen" title='tlen' data-type='size_t' data-ref="27tlen" data-ref-filename="27tlen">tlen</dfn>;</td></tr>
+<tr><th id="463">463</th><td></td></tr>
+<tr><th id="464">464</th><td>	<a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a> = -<var>1</var>;</td></tr>
+<tr><th id="465">465</th><td>	<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> = <var>0</var>;</td></tr>
+<tr><th id="466">466</th><td>	<b>switch</b> (<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a>) {</td></tr>
+<tr><th id="467">467</th><td>	<b>case</b> <a class="enum" href="#PLUS" title='PLUS' data-ref="PLUS" data-ref-filename="PLUS">PLUS</a>:</td></tr>
+<tr><th id="468">468</th><td>		<a class="tu ref fn" href="#plus" title='plus' data-use='c' data-ref="plus" data-ref-filename="plus">plus</a>(<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>);</td></tr>
+<tr><th id="469">469</th><td>		<b>break</b>;</td></tr>
+<tr><th id="470">470</th><td></td></tr>
+<tr><th id="471">471</th><td>	<b>case</b> <a class="enum" href="#TOMORROW" title='TOMORROW' data-ref="TOMORROW" data-ref-filename="TOMORROW">TOMORROW</a>:</td></tr>
+<tr><th id="472">472</th><td>		<i>/* do something tomorrow */</i></td></tr>
+<tr><th id="473">473</th><td>		<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a>++;</td></tr>
+<tr><th id="474">474</th><td>		<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a>++;</td></tr>
+<tr><th id="475">475</th><td>		<i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="476">476</th><td>	<b>case</b> <a class="enum" href="#TODAY" title='TODAY' data-ref="TODAY" data-ref-filename="TODAY">TODAY</a>:</td></tr>
+<tr><th id="477">477</th><td>		<i>/* force ourselves to stay in today - no further processing */</i></td></tr>
+<tr><th id="478">478</th><td>		(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="479">479</th><td>		<b>break</b>;</td></tr>
+<tr><th id="480">480</th><td></td></tr>
+<tr><th id="481">481</th><td>	<b>case</b> <a class="enum" href="#JAN" title='JAN' data-ref="JAN" data-ref-filename="JAN">JAN</a>: <b>case</b> <a class="enum" href="#FEB" title='FEB' data-ref="FEB" data-ref-filename="FEB">FEB</a>: <b>case</b> <a class="enum" href="#MAR" title='MAR' data-ref="MAR" data-ref-filename="MAR">MAR</a>: <b>case</b> <a class="enum" href="#APR" title='APR' data-ref="APR" data-ref-filename="APR">APR</a>: <b>case</b> <a class="enum" href="#MAY" title='MAY' data-ref="MAY" data-ref-filename="MAY">MAY</a>: <b>case</b> <a class="enum" href="#JUN" title='JUN' data-ref="JUN" data-ref-filename="JUN">JUN</a>:</td></tr>
+<tr><th id="482">482</th><td>	<b>case</b> <a class="enum" href="#JUL" title='JUL' data-ref="JUL" data-ref-filename="JUL">JUL</a>: <b>case</b> <a class="enum" href="#AUG" title='AUG' data-ref="AUG" data-ref-filename="AUG">AUG</a>: <b>case</b> <a class="enum" href="#SEP" title='SEP' data-ref="SEP" data-ref-filename="SEP">SEP</a>: <b>case</b> <a class="enum" href="#OCT" title='OCT' data-ref="OCT" data-ref-filename="OCT">OCT</a>: <b>case</b> <a class="enum" href="#NOV" title='NOV' data-ref="NOV" data-ref-filename="NOV">NOV</a>: <b>case</b> <a class="enum" href="#DEC" title='DEC' data-ref="DEC" data-ref-filename="DEC">DEC</a>:</td></tr>
+<tr><th id="483">483</th><td>		<i>/*</i></td></tr>
+<tr><th id="484">484</th><td><i>		 * do month mday [year]</i></td></tr>
+<tr><th id="485">485</th><td><i>		 */</i></td></tr>
+<tr><th id="486">486</th><td>		<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> = <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> - <a class="enum" href="#JAN" title='JAN' data-ref="JAN" data-ref-filename="JAN">JAN</a>;</td></tr>
+<tr><th id="487">487</th><td>		<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>);</td></tr>
+<tr><th id="488">488</th><td>		<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="489">489</th><td>		<b>if</b> (<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>() == <a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>) {</td></tr>
+<tr><th id="490">490</th><td>			<a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="491">491</th><td>			(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="492">492</th><td>		}</td></tr>
+<tr><th id="493">493</th><td>		<a class="tu ref fn" href="#assign_date" title='assign_date' data-use='c' data-ref="assign_date" data-ref-filename="assign_date">assign_date</a>(<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>, <a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a>, <a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a>, <a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a>);</td></tr>
+<tr><th id="494">494</th><td>		<b>break</b>;</td></tr>
+<tr><th id="495">495</th><td></td></tr>
+<tr><th id="496">496</th><td>	<b>case</b> <a class="enum" href="#SUN" title='SUN' data-ref="SUN" data-ref-filename="SUN">SUN</a>: <b>case</b> <a class="enum" href="#MON" title='MON' data-ref="MON" data-ref-filename="MON">MON</a>: <b>case</b> <a class="enum" href="#TUE" title='TUE' data-ref="TUE" data-ref-filename="TUE">TUE</a>:</td></tr>
+<tr><th id="497">497</th><td>	<b>case</b> <a class="enum" href="#WED" title='WED' data-ref="WED" data-ref-filename="WED">WED</a>: <b>case</b> <a class="enum" href="#THU" title='THU' data-ref="THU" data-ref-filename="THU">THU</a>: <b>case</b> <a class="enum" href="#FRI" title='FRI' data-ref="FRI" data-ref-filename="FRI">FRI</a>:</td></tr>
+<tr><th id="498">498</th><td>	<b>case</b> <a class="enum" href="#SAT" title='SAT' data-ref="SAT" data-ref-filename="SAT">SAT</a>:</td></tr>
+<tr><th id="499">499</th><td>		<i>/* do a particular day of the week */</i></td></tr>
+<tr><th id="500">500</th><td>		<a class="local col5 ref" href="#25wday" title='wday' data-ref="25wday" data-ref-filename="25wday">wday</a> = <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> - <a class="enum" href="#SUN" title='SUN' data-ref="SUN" data-ref-filename="SUN">SUN</a>;</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td>		<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> = <a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a>;</td></tr>
+<tr><th id="503">503</th><td></td></tr>
+<tr><th id="504">504</th><td>		<i>/* if this day is &lt; today, then roll to next week */</i></td></tr>
+<tr><th id="505">505</th><td>		<b>if</b> (<a class="local col5 ref" href="#25wday" title='wday' data-ref="25wday" data-ref-filename="25wday">wday</a> &lt; <a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a>)</td></tr>
+<tr><th id="506">506</th><td>			<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> += <var>7</var> - (<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a> - <a class="local col5 ref" href="#25wday" title='wday' data-ref="25wday" data-ref-filename="25wday">wday</a>);</td></tr>
+<tr><th id="507">507</th><td>		<b>else</b></td></tr>
+<tr><th id="508">508</th><td>			<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> += (<a class="local col5 ref" href="#25wday" title='wday' data-ref="25wday" data-ref-filename="25wday">wday</a> - <a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a>);</td></tr>
+<tr><th id="509">509</th><td></td></tr>
+<tr><th id="510">510</th><td>		<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a> = <a class="local col5 ref" href="#25wday" title='wday' data-ref="25wday" data-ref-filename="25wday">wday</a>;</td></tr>
+<tr><th id="511">511</th><td></td></tr>
+<tr><th id="512">512</th><td>		<a class="tu ref fn" href="#assign_date" title='assign_date' data-use='c' data-ref="assign_date" data-ref-filename="assign_date">assign_date</a>(<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>, <a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a>, <a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mon" title='tm::tm_mon' data-ref="tm::tm_mon" data-ref-filename="tm..tm_mon">tm_mon</a>, <a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_year" title='tm::tm_year' data-ref="tm::tm_year" data-ref-filename="tm..tm_year">tm_year</a> + <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/tzfile.h.html#153" title="1900" data-ref="_M/TM_YEAR_BASE">TM_YEAR_BASE</a>);</td></tr>
+<tr><th id="513">513</th><td>		<b>break</b>;</td></tr>
+<tr><th id="514">514</th><td></td></tr>
+<tr><th id="515">515</th><td>	<b>case</b> <a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>:</td></tr>
+<tr><th id="516">516</th><td>		<i>/*</i></td></tr>
+<tr><th id="517">517</th><td><i>		 * get numeric MMDDYY, mm/dd/yy, or dd.mm.yy</i></td></tr>
+<tr><th id="518">518</th><td><i>		 */</i></td></tr>
+<tr><th id="519">519</th><td>		<a class="local col7 ref" href="#27tlen" title='tlen' data-ref="27tlen" data-ref-filename="27tlen">tlen</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="520">520</th><td>		<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="521">521</th><td>		(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="522">522</th><td></td></tr>
+<tr><th id="523">523</th><td>		<b>if</b> (<a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#SLASH" title='SLASH' data-ref="SLASH" data-ref-filename="SLASH">SLASH</a> || <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a> == <a class="enum" href="#DOT" title='DOT' data-ref="DOT" data-ref-filename="DOT">DOT</a>) {</td></tr>
+<tr><th id="524">524</th><td>			<a class="typedef" href="#tokid_t" title='tokid_t' data-type='enum tokid_t' data-ref="tokid_t" data-ref-filename="tokid_t">tokid_t</a> <dfn class="local col8 decl" id="28sep" title='sep' data-type='tokid_t' data-ref="28sep" data-ref-filename="28sep">sep</dfn>;</td></tr>
+<tr><th id="525">525</th><td></td></tr>
+<tr><th id="526">526</th><td>			<a class="local col8 ref" href="#28sep" title='sep' data-ref="28sep" data-ref-filename="28sep">sep</a> = <a class="tu ref" href="#sc_tokid" title='sc_tokid' data-use='r' data-ref="sc_tokid" data-ref-filename="sc_tokid">sc_tokid</a>;</td></tr>
+<tr><th id="527">527</th><td>			<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>);</td></tr>
+<tr><th id="528">528</th><td>			<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="529">529</th><td>			<b>if</b> (<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>() == <a class="local col8 ref" href="#28sep" title='sep' data-ref="28sep" data-ref-filename="28sep">sep</a>) {</td></tr>
+<tr><th id="530">530</th><td>				<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>);</td></tr>
+<tr><th id="531">531</th><td>				<a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="tu ref" href="#sc_token" title='sc_token' data-use='r' data-ref="sc_token" data-ref-filename="sc_token">sc_token</a>);</td></tr>
+<tr><th id="532">532</th><td>				(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="533">533</th><td>			}</td></tr>
+<tr><th id="534">534</th><td></td></tr>
+<tr><th id="535">535</th><td>			<i>/*</i></td></tr>
+<tr><th id="536">536</th><td><i>			 * flip months and days for european timing</i></td></tr>
+<tr><th id="537">537</th><td><i>			 */</i></td></tr>
+<tr><th id="538">538</th><td>			<b>if</b> (<a class="local col8 ref" href="#28sep" title='sep' data-ref="28sep" data-ref-filename="28sep">sep</a> == <a class="enum" href="#DOT" title='DOT' data-ref="DOT" data-ref-filename="DOT">DOT</a>) {</td></tr>
+<tr><th id="539">539</th><td>				<em>int</em> <dfn class="local col9 decl" id="29x" title='x' data-type='int' data-ref="29x" data-ref-filename="29x">x</dfn> = <a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a>;</td></tr>
+<tr><th id="540">540</th><td>				<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> = <a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a>;</td></tr>
+<tr><th id="541">541</th><td>				<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> = <a class="local col9 ref" href="#29x" title='x' data-ref="29x" data-ref-filename="29x">x</a>;</td></tr>
+<tr><th id="542">542</th><td>			}</td></tr>
+<tr><th id="543">543</th><td>		} <b>else</b> <b>if</b> (<a class="local col7 ref" href="#27tlen" title='tlen' data-ref="27tlen" data-ref-filename="27tlen">tlen</a> == <var>6</var> || <a class="local col7 ref" href="#27tlen" title='tlen' data-ref="27tlen" data-ref-filename="27tlen">tlen</a> == <var>8</var>) {</td></tr>
+<tr><th id="544">544</th><td>			<b>if</b> (<a class="local col7 ref" href="#27tlen" title='tlen' data-ref="27tlen" data-ref-filename="27tlen">tlen</a> == <var>8</var>) {</td></tr>
+<tr><th id="545">545</th><td>				<a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a> = (<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> % <var>10000</var>) - <var>1900</var>;</td></tr>
+<tr><th id="546">546</th><td>				<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> /= <var>10000</var>;</td></tr>
+<tr><th id="547">547</th><td>			} <b>else</b> {</td></tr>
+<tr><th id="548">548</th><td>				<a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a> = <a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> % <var>100</var>;</td></tr>
+<tr><th id="549">549</th><td>				<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> /= <var>100</var>;</td></tr>
+<tr><th id="550">550</th><td>			}</td></tr>
+<tr><th id="551">551</th><td>			<a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> = <a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> % <var>100</var>;</td></tr>
+<tr><th id="552">552</th><td>			<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> /= <var>100</var>;</td></tr>
+<tr><th id="553">553</th><td>		} <b>else</b></td></tr>
+<tr><th id="554">554</th><td>			<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"garbled time"</q>);</td></tr>
+<tr><th id="555">555</th><td></td></tr>
+<tr><th id="556">556</th><td>		<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a>--;</td></tr>
+<tr><th id="557">557</th><td>		<b>if</b> (<a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> &lt; <var>0</var> || <a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a> &gt; <var>11</var> || <a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> &lt; <var>1</var> || <a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a> &gt; <var>31</var>)</td></tr>
+<tr><th id="558">558</th><td>			<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"garbled time"</q>);</td></tr>
+<tr><th id="559">559</th><td></td></tr>
+<tr><th id="560">560</th><td>		<a class="tu ref fn" href="#assign_date" title='assign_date' data-use='c' data-ref="assign_date" data-ref-filename="assign_date">assign_date</a>(<a class="local col2 ref" href="#22tm" title='tm' data-ref="22tm" data-ref-filename="22tm">tm</a>, <a class="local col4 ref" href="#24mday" title='mday' data-ref="24mday" data-ref-filename="24mday">mday</a>, <a class="local col6 ref" href="#26mon" title='mon' data-ref="26mon" data-ref-filename="26mon">mon</a>, <a class="local col3 ref" href="#23year" title='year' data-ref="23year" data-ref-filename="23year">year</a>);</td></tr>
+<tr><th id="561">561</th><td>		<b>break</b>;</td></tr>
+<tr><th id="562">562</th><td>	<b>default</b>:</td></tr>
+<tr><th id="563">563</th><td>		<i>/* plonk(sc_tokid); */</i>	<i>/* XXX - die here? */</i></td></tr>
+<tr><th id="564">564</th><td>		<b>break</b>;</td></tr>
+<tr><th id="565">565</th><td>	}</td></tr>
+<tr><th id="566">566</th><td>}</td></tr>
+<tr><th id="567">567</th><td></td></tr>
+<tr><th id="568">568</th><td></td></tr>
+<tr><th id="569">569</th><td><i>/* Global functions */</i></td></tr>
+<tr><th id="570">570</th><td></td></tr>
+<tr><th id="571">571</th><td><a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a></td></tr>
+<tr><th id="572">572</th><td><dfn class="decl def fn" id="parsetime" title='parsetime' data-ref="parsetime" data-ref-filename="parsetime">parsetime</dfn>(<em>int</em> <dfn class="local col0 decl" id="30argc" title='argc' data-type='int' data-ref="30argc" data-ref-filename="30argc">argc</dfn>, <em>char</em> **<dfn class="local col1 decl" id="31argv" title='argv' data-type='char **' data-ref="31argv" data-ref-filename="31argv">argv</dfn>)</td></tr>
+<tr><th id="573">573</th><td>{</td></tr>
+<tr><th id="574">574</th><td>	<i>/*</i></td></tr>
+<tr><th id="575">575</th><td><i>	 * Do the argument parsing, die if necessary, and return the</i></td></tr>
+<tr><th id="576">576</th><td><i>	 * time the job should be run.</i></td></tr>
+<tr><th id="577">577</th><td><i>	 */</i></td></tr>
+<tr><th id="578">578</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col2 decl" id="32nowtimer" title='nowtimer' data-type='time_t' data-ref="32nowtimer" data-ref-filename="32nowtimer">nowtimer</dfn>, <dfn class="local col3 decl" id="33runtimer" title='runtimer' data-type='time_t' data-ref="33runtimer" data-ref-filename="33runtimer">runtimer</dfn>;</td></tr>
+<tr><th id="579">579</th><td>	<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> <dfn class="local col4 decl" id="34nowtime" title='nowtime' data-type='struct tm' data-ref="34nowtime" data-ref-filename="34nowtime">nowtime</dfn>, <dfn class="local col5 decl" id="35runtime" title='runtime' data-type='struct tm' data-ref="35runtime" data-ref-filename="35runtime">runtime</dfn>;</td></tr>
+<tr><th id="580">580</th><td>	<em>int</em> <dfn class="local col6 decl" id="36hr" title='hr' data-type='int' data-ref="36hr" data-ref-filename="36hr">hr</dfn> = <var>0</var>; <i>/* this MUST be initialized to zero for</i></td></tr>
+<tr><th id="581">581</th><td><i>	               midnight/noon/teatime */</i></td></tr>
+<tr><th id="582">582</th><td></td></tr>
+<tr><th id="583">583</th><td>	<a class="local col2 ref" href="#32nowtimer" title='nowtimer' data-ref="32nowtimer" data-ref-filename="32nowtimer">nowtimer</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__time50" title='time' data-ref="__time50" data-ref-filename="__time50">time</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="584">584</th><td>	<a class="local col4 ref" href="#34nowtime" title='nowtime' data-ref="34nowtime" data-ref-filename="34nowtime">nowtime</a> = *<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__locatime50" title='localtime' data-ref="__locatime50" data-ref-filename="__locatime50">localtime</a>(&amp;<a class="local col2 ref" href="#32nowtimer" title='nowtimer' data-ref="32nowtimer" data-ref-filename="32nowtimer">nowtimer</a>);</td></tr>
+<tr><th id="585">585</th><td></td></tr>
+<tr><th id="586">586</th><td>	<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a> = <a class="local col4 ref" href="#34nowtime" title='nowtime' data-ref="34nowtime" data-ref-filename="34nowtime">nowtime</a>;</td></tr>
+<tr><th id="587">587</th><td>	<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_sec" title='tm::tm_sec' data-ref="tm::tm_sec" data-ref-filename="tm..tm_sec">tm_sec</a> = <var>0</var>;</td></tr>
+<tr><th id="588">588</th><td></td></tr>
+<tr><th id="589">589</th><td>	<b>if</b> (<a class="local col0 ref" href="#30argc" title='argc' data-ref="30argc" data-ref-filename="30argc">argc</a> &lt;= <a class="ref" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#optind" title='optind' data-ref="optind" data-ref-filename="optind">optind</a>)</td></tr>
+<tr><th id="590">590</th><td>		<a class="ref fn" href="panic.h.html#usage" title='usage' data-ref="usage" data-ref-filename="usage">usage</a>();</td></tr>
+<tr><th id="591">591</th><td></td></tr>
+<tr><th id="592">592</th><td>	<a class="tu ref fn" href="#init_scanner" title='init_scanner' data-use='c' data-ref="init_scanner" data-ref-filename="init_scanner">init_scanner</a>(<a class="local col0 ref" href="#30argc" title='argc' data-ref="30argc" data-ref-filename="30argc">argc</a> - <a class="ref" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#optind" title='optind' data-ref="optind" data-ref-filename="optind">optind</a>, <a class="local col1 ref" href="#31argv" title='argv' data-ref="31argv" data-ref-filename="31argv">argv</a> + <a class="ref" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#optind" title='optind' data-ref="optind" data-ref-filename="optind">optind</a>);</td></tr>
+<tr><th id="593">593</th><td></td></tr>
+<tr><th id="594">594</th><td>	<b>switch</b> (<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>()) {</td></tr>
+<tr><th id="595">595</th><td>	<b>case</b> <a class="enum" href="#NOW" title='NOW' data-ref="NOW" data-ref-filename="NOW">NOW</a>:</td></tr>
+<tr><th id="596">596</th><td>		<b>if</b> (<a class="tu ref" href="#scc" title='scc' data-use='r' data-ref="scc" data-ref-filename="scc">scc</a> &lt; <var>1</var>)</td></tr>
+<tr><th id="597">597</th><td>			<b>return</b> <a class="local col2 ref" href="#32nowtimer" title='nowtimer' data-ref="32nowtimer" data-ref-filename="32nowtimer">nowtimer</a>;</td></tr>
+<tr><th id="598">598</th><td></td></tr>
+<tr><th id="599">599</th><td>		<i>/* now is optional prefix for PLUS tree */</i></td></tr>
+<tr><th id="600">600</th><td>		<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#PLUS" title='PLUS' data-ref="PLUS" data-ref-filename="PLUS">PLUS</a>);</td></tr>
+<tr><th id="601">601</th><td>		<i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="602">602</th><td>	<b>case</b> <a class="enum" href="#PLUS" title='PLUS' data-ref="PLUS" data-ref-filename="PLUS">PLUS</a>:</td></tr>
+<tr><th id="603">603</th><td>		<a class="tu ref fn" href="#plus" title='plus' data-use='c' data-ref="plus" data-ref-filename="plus">plus</a>(&amp;<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>);</td></tr>
+<tr><th id="604">604</th><td>		<b>break</b>;</td></tr>
+<tr><th id="605">605</th><td></td></tr>
+<tr><th id="606">606</th><td>	<b>case</b> <a class="enum" href="#NUMBER" title='NUMBER' data-ref="NUMBER" data-ref-filename="NUMBER">NUMBER</a>:</td></tr>
+<tr><th id="607">607</th><td>		<a class="tu ref fn" href="#tod" title='tod' data-use='c' data-ref="tod" data-ref-filename="tod">tod</a>(&amp;<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>);</td></tr>
+<tr><th id="608">608</th><td>		<a class="tu ref fn" href="#month" title='month' data-use='c' data-ref="month" data-ref-filename="month">month</a>(&amp;<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>);</td></tr>
+<tr><th id="609">609</th><td>		<b>break</b>;</td></tr>
+<tr><th id="610">610</th><td></td></tr>
+<tr><th id="611">611</th><td>		<i>/*</i></td></tr>
+<tr><th id="612">612</th><td><i>		 * evil coding for TEATIME|NOON|MIDNIGHT - we've initialised</i></td></tr>
+<tr><th id="613">613</th><td><i>		 * hr to zero up above, then fall into this case in such a</i></td></tr>
+<tr><th id="614">614</th><td><i>		 * way so we add +12 +4 hours to it for teatime, +12 hours</i></td></tr>
+<tr><th id="615">615</th><td><i>		 * to it for noon, and nothing at all for midnight, then</i></td></tr>
+<tr><th id="616">616</th><td><i>		 * set our runtime to that hour before leaping into the</i></td></tr>
+<tr><th id="617">617</th><td><i>		 * month scanner</i></td></tr>
+<tr><th id="618">618</th><td><i>		 */</i></td></tr>
+<tr><th id="619">619</th><td>	<b>case</b> <a class="enum" href="#TEATIME" title='TEATIME' data-ref="TEATIME" data-ref-filename="TEATIME">TEATIME</a>:</td></tr>
+<tr><th id="620">620</th><td>		<a class="local col6 ref" href="#36hr" title='hr' data-ref="36hr" data-ref-filename="36hr">hr</a> += <var>4</var>;</td></tr>
+<tr><th id="621">621</th><td>		<i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="622">622</th><td>	<b>case</b> <a class="enum" href="#NOON" title='NOON' data-ref="NOON" data-ref-filename="NOON">NOON</a>:</td></tr>
+<tr><th id="623">623</th><td>		<a class="local col6 ref" href="#36hr" title='hr' data-ref="36hr" data-ref-filename="36hr">hr</a> += <var>12</var>;</td></tr>
+<tr><th id="624">624</th><td>		<i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="625">625</th><td>	<b>case</b> <a class="enum" href="#MIDNIGHT" title='MIDNIGHT' data-ref="MIDNIGHT" data-ref-filename="MIDNIGHT">MIDNIGHT</a>:</td></tr>
+<tr><th id="626">626</th><td>		<b>if</b> (<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a> &gt;= <a class="local col6 ref" href="#36hr" title='hr' data-ref="36hr" data-ref-filename="36hr">hr</a>) {</td></tr>
+<tr><th id="627">627</th><td>			<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a>++;</td></tr>
+<tr><th id="628">628</th><td>			<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_wday" title='tm::tm_wday' data-ref="tm::tm_wday" data-ref-filename="tm..tm_wday">tm_wday</a>++;</td></tr>
+<tr><th id="629">629</th><td>		}</td></tr>
+<tr><th id="630">630</th><td>		<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a> = <a class="local col6 ref" href="#36hr" title='hr' data-ref="36hr" data-ref-filename="36hr">hr</a>;</td></tr>
+<tr><th id="631">631</th><td>		<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_min" title='tm::tm_min' data-ref="tm::tm_min" data-ref-filename="tm..tm_min">tm_min</a> = <var>0</var>;</td></tr>
+<tr><th id="632">632</th><td>		(<em>void</em>)<a class="tu ref fn" href="#token" title='token' data-use='c' data-ref="token" data-ref-filename="token">token</a>();</td></tr>
+<tr><th id="633">633</th><td>		<i>/*FALLTHROUGH*/</i>	<i>/* fall through to month setting */</i></td></tr>
+<tr><th id="634">634</th><td>	<b>default</b>:</td></tr>
+<tr><th id="635">635</th><td>		<a class="tu ref fn" href="#month" title='month' data-use='c' data-ref="month" data-ref-filename="month">month</a>(&amp;<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>);</td></tr>
+<tr><th id="636">636</th><td>		<b>break</b>;</td></tr>
+<tr><th id="637">637</th><td>	}</td></tr>
+<tr><th id="638">638</th><td>	<a class="tu ref fn" href="#expect" title='expect' data-use='c' data-ref="expect" data-ref-filename="expect">expect</a>(<a class="enum" href="#TOKEOF" title='TOKEOF' data-ref="TOKEOF" data-ref-filename="TOKEOF">TOKEOF</a>);</td></tr>
+<tr><th id="639">639</th><td></td></tr>
+<tr><th id="640">640</th><td>	<i>/*</i></td></tr>
+<tr><th id="641">641</th><td><i>	 * adjust for daylight savings time</i></td></tr>
+<tr><th id="642">642</th><td><i>	 */</i></td></tr>
+<tr><th id="643">643</th><td>	<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>.<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_isdst" title='tm::tm_isdst' data-ref="tm::tm_isdst" data-ref-filename="tm..tm_isdst">tm_isdst</a> = -<var>1</var>;</td></tr>
+<tr><th id="644">644</th><td>	<a class="local col3 ref" href="#33runtimer" title='runtimer' data-ref="33runtimer" data-ref-filename="33runtimer">runtimer</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__mktime50" title='mktime' data-ref="__mktime50" data-ref-filename="__mktime50">mktime</a>(&amp;<a class="local col5 ref" href="#35runtime" title='runtime' data-ref="35runtime" data-ref-filename="35runtime">runtime</a>);</td></tr>
+<tr><th id="645">645</th><td></td></tr>
+<tr><th id="646">646</th><td>	<b>if</b> (<a class="local col3 ref" href="#33runtimer" title='runtimer' data-ref="33runtimer" data-ref-filename="33runtimer">runtimer</a> == (<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a>)-<var>1</var>)</td></tr>
+<tr><th id="647">647</th><td>		<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"Invalid time"</q>);</td></tr>
+<tr><th id="648">648</th><td></td></tr>
+<tr><th id="649">649</th><td>	<b>if</b> (<a class="local col2 ref" href="#32nowtimer" title='nowtimer' data-ref="32nowtimer" data-ref-filename="32nowtimer">nowtimer</a> &gt; <a class="local col3 ref" href="#33runtimer" title='runtimer' data-ref="33runtimer" data-ref-filename="33runtimer">runtimer</a>)</td></tr>
+<tr><th id="650">650</th><td>		<a class="ref fn" href="panic.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"Trying to travel back in time"</q>);</td></tr>
+<tr><th id="651">651</th><td></td></tr>
+<tr><th id="652">652</th><td>	<b>return</b> <a class="local col3 ref" href="#33runtimer" title='runtimer' data-ref="33runtimer" data-ref-filename="33runtimer">runtimer</a>;</td></tr>
+<tr><th id="653">653</th><td>}</td></tr>
+<tr><th id="654">654</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

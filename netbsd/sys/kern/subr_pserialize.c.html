@@ -1,0 +1,379 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>subr_pserialize.c source code [netbsd/sys/kern/subr_pserialize.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="pserialize "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/subr_pserialize.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='subr_pserialize.c.html'>subr_pserialize.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: subr_pserialize.c,v 1.12 2018/08/14 01:06:01 ozaki-r Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2010, 2011 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="8">8</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="9">9</th><td><i> * are met:</i></td></tr>
+<tr><th id="10">10</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="11">11</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="12">12</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="13">13</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="14">14</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="15">15</th><td><i> *</i></td></tr>
+<tr><th id="16">16</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="17">17</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="18">18</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="19">19</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="21">21</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="22">22</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="23">23</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="25">25</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="26">26</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="27">27</th><td><i> */</i></td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><i>/*</i></td></tr>
+<tr><th id="30">30</th><td><i> * Passive serialization.</i></td></tr>
+<tr><th id="31">31</th><td><i> *</i></td></tr>
+<tr><th id="32">32</th><td><i> * Implementation accurately matches the lapsed US patent 4809168, therefore</i></td></tr>
+<tr><th id="33">33</th><td><i> * code is patent-free in the United States.  Your use of this code is at</i></td></tr>
+<tr><th id="34">34</th><td><i> * your own risk.</i></td></tr>
+<tr><th id="35">35</th><td><i> * </i></td></tr>
+<tr><th id="36">36</th><td><i> * Note for NetBSD developers: all changes to this source file must be</i></td></tr>
+<tr><th id="37">37</th><td><i> * approved by the &lt;core&gt;.</i></td></tr>
+<tr><th id="38">38</th><td><i> */</i></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: subr_pserialize.c,v 1.12 2018/08/14 01:06:01 ozaki-r Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: subr_pserialize.c,v 1.12 2018/08/14 01:06:01 ozaki-r Exp $"</q>);</td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../sys/condvar.h.html">&lt;sys/condvar.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../sys/evcnt.h.html">&lt;sys/evcnt.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../sys/mutex.h.html">&lt;sys/mutex.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../sys/pserialize.h.html">&lt;sys/pserialize.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../sys/queue.h.html">&lt;sys/queue.h&gt;</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../sys/xcall.h.html">&lt;sys/xcall.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><b>struct</b> <dfn class="type def" id="pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</dfn> {</td></tr>
+<tr><th id="56">56</th><td>	<a class="macro" href="../sys/queue.h.html#423" title="struct { struct pserialize *tqe_next; struct pserialize * *tqe_prev; }" data-ref="_M/TAILQ_ENTRY">TAILQ_ENTRY</a>(<a class="type" href="#pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</a>)	<dfn class="decl field" id="pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</dfn>;</td></tr>
+<tr><th id="57">57</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *			<dfn class="decl field" id="pserialize::psz_owner" title='pserialize::psz_owner' data-ref="pserialize::psz_owner" data-ref-filename="pserialize..psz_owner">psz_owner</dfn>;</td></tr>
+<tr><th id="58">58</th><td>	<a class="typedef" href="../sys/kcpuset.h.html#kcpuset_t" title='kcpuset_t' data-type='struct kcpuset' data-ref="kcpuset_t" data-ref-filename="kcpuset_t">kcpuset_t</a> *		<dfn class="decl field" id="pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</dfn>;</td></tr>
+<tr><th id="59">59</th><td>	<a class="typedef" href="../sys/kcpuset.h.html#kcpuset_t" title='kcpuset_t' data-type='struct kcpuset' data-ref="kcpuset_t" data-ref-filename="kcpuset_t">kcpuset_t</a> *		<dfn class="decl field" id="pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</dfn>;</td></tr>
+<tr><th id="60">60</th><td>};</td></tr>
+<tr><th id="61">61</th><td></td></tr>
+<tr><th id="62">62</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>			<dfn class="tu decl def" id="psz_work_todo" title='psz_work_todo' data-type='u_int' data-ref="psz_work_todo" data-ref-filename="psz_work_todo">psz_work_todo</dfn>	<a class="macro" href="../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="63">63</th><td><em>static</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a>			<dfn class="tu decl def" id="psz_lock" title='psz_lock' data-type='kmutex_t' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</dfn>	<a class="macro" href="../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="64">64</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/evcnt.h.html#evcnt" title='evcnt' data-ref="evcnt" data-ref-filename="evcnt">evcnt</a>		<dfn class="tu decl def" id="psz_ev_excl" title='psz_ev_excl' data-type='struct evcnt' data-ref="psz_ev_excl" data-ref-filename="psz_ev_excl">psz_ev_excl</dfn>	<a class="macro" href="../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td><i  data-doc="psz_queue0">/*</i></td></tr>
+<tr><th id="67">67</th><td><i  data-doc="psz_queue0"> * As defined in "Method 1":</i></td></tr>
+<tr><th id="68">68</th><td><i  data-doc="psz_queue0"> *	q0: "0 MP checkpoints have occured".</i></td></tr>
+<tr><th id="69">69</th><td><i  data-doc="psz_queue0"> *	q1: "1 MP checkpoint has occured".</i></td></tr>
+<tr><th id="70">70</th><td><i  data-doc="psz_queue0"> *	q2: "2 MP checkpoints have occured".</i></td></tr>
+<tr><th id="71">71</th><td><i  data-doc="psz_queue0"> */</i></td></tr>
+<tr><th id="72">72</th><td><em>static</em> <a class="macro" href="../sys/queue.h.html#413" title="struct { struct pserialize *tqh_first; struct pserialize * *tqh_last; }" data-ref="_M/TAILQ_HEAD">TAILQ_HEAD</a>(, <a class="type" href="#pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</a>)	<dfn class="tu decl def" id="psz_queue0" title='psz_queue0' data-type='struct (anonymous struct at /___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c:72:8)' data-ref="psz_queue0" data-ref-filename="psz_queue0">psz_queue0</dfn>	<a class="macro" href="../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="73">73</th><td><em>static</em> <a class="macro" href="../sys/queue.h.html#413" title="struct { struct pserialize *tqh_first; struct pserialize * *tqh_last; }" data-ref="_M/TAILQ_HEAD">TAILQ_HEAD</a>(, <a class="type" href="#pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</a>)	<dfn class="tu decl def" id="psz_queue1" title='psz_queue1' data-type='struct (anonymous struct at /___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c:73:8)' data-ref="psz_queue1" data-ref-filename="psz_queue1">psz_queue1</dfn>	<a class="macro" href="../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="74">74</th><td><em>static</em> <a class="macro" href="../sys/queue.h.html#413" title="struct { struct pserialize *tqh_first; struct pserialize * *tqh_last; }" data-ref="_M/TAILQ_HEAD">TAILQ_HEAD</a>(, <a class="type" href="#pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</a>)	<dfn class="tu decl def" id="psz_queue2" title='psz_queue2' data-type='struct (anonymous struct at /___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c:74:8)' data-ref="psz_queue2" data-ref-filename="psz_queue2">psz_queue2</dfn>	<a class="macro" href="../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><u>#<span data-ppcond="76">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="77">77</th><td><u>#include &lt;sys/percpu.h&gt;</u></td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td><em>static</em> percpu_t		*psz_debug_nreads	__cacheline_aligned;</td></tr>
+<tr><th id="80">80</th><td><u>#<span data-ppcond="76">endif</span></u></td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><i>/*</i></td></tr>
+<tr><th id="83">83</th><td><i> * pserialize_init:</i></td></tr>
+<tr><th id="84">84</th><td><i> *</i></td></tr>
+<tr><th id="85">85</th><td><i> *	Initialize passive serialization structures.</i></td></tr>
+<tr><th id="86">86</th><td><i> */</i></td></tr>
+<tr><th id="87">87</th><td><em>void</em></td></tr>
+<tr><th id="88">88</th><td><dfn class="decl def fn" id="pserialize_init" title='pserialize_init' data-ref="pserialize_init" data-ref-filename="pserialize_init">pserialize_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="89">89</th><td>{</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td>	<a class="tu ref" href="#psz_work_todo" title='psz_work_todo' data-use='w' data-ref="psz_work_todo" data-ref-filename="psz_work_todo">psz_work_todo</a> = <var>0</var>;</td></tr>
+<tr><th id="92">92</th><td>	<a class="macro" href="../sys/queue.h.html#496" title="do { (&amp;psz_queue0)-&gt;tqh_first = (((void *)0)); (&amp;psz_queue0)-&gt;tqh_last = &amp;(&amp;psz_queue0)-&gt;tqh_first; } while ( 0)" data-ref="_M/TAILQ_INIT">TAILQ_INIT</a>(&amp;<a class="tu ref" href="#psz_queue0" title='psz_queue0' data-use='a' data-ref="psz_queue0" data-ref-filename="psz_queue0">psz_queue0</a>);</td></tr>
+<tr><th id="93">93</th><td>	<a class="macro" href="../sys/queue.h.html#496" title="do { (&amp;psz_queue1)-&gt;tqh_first = (((void *)0)); (&amp;psz_queue1)-&gt;tqh_last = &amp;(&amp;psz_queue1)-&gt;tqh_first; } while ( 0)" data-ref="_M/TAILQ_INIT">TAILQ_INIT</a>(&amp;<a class="tu ref" href="#psz_queue1" title='psz_queue1' data-use='a' data-ref="psz_queue1" data-ref-filename="psz_queue1">psz_queue1</a>);</td></tr>
+<tr><th id="94">94</th><td>	<a class="macro" href="../sys/queue.h.html#496" title="do { (&amp;psz_queue2)-&gt;tqh_first = (((void *)0)); (&amp;psz_queue2)-&gt;tqh_last = &amp;(&amp;psz_queue2)-&gt;tqh_first; } while ( 0)" data-ref="_M/TAILQ_INIT">TAILQ_INIT</a>(&amp;<a class="tu ref" href="#psz_queue2" title='psz_queue2' data-use='a' data-ref="psz_queue2" data-ref-filename="psz_queue2">psz_queue2</a>);</td></tr>
+<tr><th id="95">95</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_init" title='mutex_init' data-ref="mutex_init" data-ref-filename="mutex_init">mutex_init</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>, <a class="enum" href="../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>, <a class="macro" href="../arch/x86/include/intrdefs.h.html#14" title="0x7" data-ref="_M/IPL_SCHED">IPL_SCHED</a>);</td></tr>
+<tr><th id="96">96</th><td>	<a class="ref fn" href="../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="tu ref" href="#psz_ev_excl" title='psz_ev_excl' data-use='a' data-ref="psz_ev_excl" data-ref-filename="psz_ev_excl">psz_ev_excl</a>, <a class="macro" href="../sys/evcnt.h.html#103" title="0" data-ref="_M/EVCNT_TYPE_MISC">EVCNT_TYPE_MISC</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="97">97</th><td>	    <q>"pserialize"</q>, <q>"exclusive access"</q>);</td></tr>
+<tr><th id="98">98</th><td><u>#<span data-ppcond="98">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="99">99</th><td>	psz_debug_nreads = percpu_alloc(<b>sizeof</b>(uint32_t));</td></tr>
+<tr><th id="100">100</th><td><u>#<span data-ppcond="98">endif</span></u></td></tr>
+<tr><th id="101">101</th><td>}</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><i>/*</i></td></tr>
+<tr><th id="104">104</th><td><i> * pserialize_create:</i></td></tr>
+<tr><th id="105">105</th><td><i> *</i></td></tr>
+<tr><th id="106">106</th><td><i> *	Create and initialize a passive serialization object.</i></td></tr>
+<tr><th id="107">107</th><td><i> */</i></td></tr>
+<tr><th id="108">108</th><td><a class="typedef" href="../sys/pserialize.h.html#pserialize_t" title='pserialize_t' data-type='struct pserialize *' data-ref="pserialize_t" data-ref-filename="pserialize_t">pserialize_t</a></td></tr>
+<tr><th id="109">109</th><td><dfn class="decl def fn" id="pserialize_create" title='pserialize_create' data-ref="pserialize_create" data-ref-filename="pserialize_create">pserialize_create</dfn>(<em>void</em>)</td></tr>
+<tr><th id="110">110</th><td>{</td></tr>
+<tr><th id="111">111</th><td>	<a class="typedef" href="../sys/pserialize.h.html#pserialize_t" title='pserialize_t' data-type='struct pserialize *' data-ref="pserialize_t" data-ref-filename="pserialize_t">pserialize_t</a> <dfn class="local col1 decl" id="1psz" title='psz' data-type='pserialize_t' data-ref="1psz" data-ref-filename="1psz">psz</dfn>;</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td>	<a class="local col1 ref" href="#1psz" title='psz' data-ref="1psz" data-ref-filename="1psz">psz</a> = <a class="ref fn" href="../sys/kmem.h.html#kmem_zalloc" title='kmem_zalloc' data-ref="kmem_zalloc" data-ref-filename="kmem_zalloc">kmem_zalloc</a>(<b>sizeof</b>(<b>struct</b> <a class="type" href="#pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</a>), <a class="macro" href="../sys/kmem.h.html#57" title="0x00000001" data-ref="_M/KM_SLEEP">KM_SLEEP</a>);</td></tr>
+<tr><th id="114">114</th><td>	<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_create" title='kcpuset_create' data-ref="kcpuset_create" data-ref-filename="kcpuset_create">kcpuset_create</a>(&amp;<a class="local col1 ref" href="#1psz" title='psz' data-ref="1psz" data-ref-filename="1psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>, <a class="macro" href="../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>);</td></tr>
+<tr><th id="115">115</th><td>	<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_create" title='kcpuset_create' data-ref="kcpuset_create" data-ref-filename="kcpuset_create">kcpuset_create</a>(&amp;<a class="local col1 ref" href="#1psz" title='psz' data-ref="1psz" data-ref-filename="1psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>, <a class="macro" href="../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>);</td></tr>
+<tr><th id="116">116</th><td>	<a class="local col1 ref" href="#1psz" title='psz' data-ref="1psz" data-ref-filename="1psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_owner" title='pserialize::psz_owner' data-ref="pserialize::psz_owner" data-ref-filename="pserialize..psz_owner">psz_owner</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="117">117</th><td></td></tr>
+<tr><th id="118">118</th><td>	<b>return</b> <a class="local col1 ref" href="#1psz" title='psz' data-ref="1psz" data-ref-filename="1psz">psz</a>;</td></tr>
+<tr><th id="119">119</th><td>}</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><i>/*</i></td></tr>
+<tr><th id="122">122</th><td><i> * pserialize_destroy:</i></td></tr>
+<tr><th id="123">123</th><td><i> *</i></td></tr>
+<tr><th id="124">124</th><td><i> *	Destroy a passive serialization object.</i></td></tr>
+<tr><th id="125">125</th><td><i> */</i></td></tr>
+<tr><th id="126">126</th><td><em>void</em></td></tr>
+<tr><th id="127">127</th><td><dfn class="decl def fn" id="pserialize_destroy" title='pserialize_destroy' data-ref="pserialize_destroy" data-ref-filename="pserialize_destroy">pserialize_destroy</dfn>(<a class="typedef" href="../sys/pserialize.h.html#pserialize_t" title='pserialize_t' data-type='struct pserialize *' data-ref="pserialize_t" data-ref-filename="pserialize_t">pserialize_t</a> <dfn class="local col2 decl" id="2psz" title='psz' data-type='pserialize_t' data-ref="2psz" data-ref-filename="2psz">psz</dfn>)</td></tr>
+<tr><th id="128">128</th><td>{</td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((psz-&gt;psz_owner == ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;psz-&gt;psz_owner == NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c&quot;, 130))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col2 ref" href="#2psz" title='psz' data-ref="2psz" data-ref-filename="2psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_owner" title='pserialize::psz_owner' data-ref="pserialize::psz_owner" data-ref-filename="pserialize..psz_owner">psz_owner</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td>	<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_destroy" title='kcpuset_destroy' data-ref="kcpuset_destroy" data-ref-filename="kcpuset_destroy">kcpuset_destroy</a>(<a class="local col2 ref" href="#2psz" title='psz' data-ref="2psz" data-ref-filename="2psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>);</td></tr>
+<tr><th id="133">133</th><td>	<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_destroy" title='kcpuset_destroy' data-ref="kcpuset_destroy" data-ref-filename="kcpuset_destroy">kcpuset_destroy</a>(<a class="local col2 ref" href="#2psz" title='psz' data-ref="2psz" data-ref-filename="2psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>);</td></tr>
+<tr><th id="134">134</th><td>	<a class="ref fn" href="../sys/kmem.h.html#kmem_free" title='kmem_free' data-ref="kmem_free" data-ref-filename="kmem_free">kmem_free</a>(<a class="local col2 ref" href="#2psz" title='psz' data-ref="2psz" data-ref-filename="2psz">psz</a>, <b>sizeof</b>(<b>struct</b> <a class="type" href="#pserialize" title='pserialize' data-ref="pserialize" data-ref-filename="pserialize">pserialize</a>));</td></tr>
+<tr><th id="135">135</th><td>}</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td><i>/*</i></td></tr>
+<tr><th id="138">138</th><td><i> * pserialize_perform:</i></td></tr>
+<tr><th id="139">139</th><td><i> *</i></td></tr>
+<tr><th id="140">140</th><td><i> *	Perform the write side of passive serialization.  The calling</i></td></tr>
+<tr><th id="141">141</th><td><i> *	thread holds an exclusive lock on the data object(s) being updated.</i></td></tr>
+<tr><th id="142">142</th><td><i> *	We wait until every processor in the system has made at least two</i></td></tr>
+<tr><th id="143">143</th><td><i> *	passes through cpu_switchto().  The wait is made with the caller's</i></td></tr>
+<tr><th id="144">144</th><td><i> *	update lock held, but is short term.</i></td></tr>
+<tr><th id="145">145</th><td><i> */</i></td></tr>
+<tr><th id="146">146</th><td><em>void</em></td></tr>
+<tr><th id="147">147</th><td><dfn class="decl def fn" id="pserialize_perform" title='pserialize_perform' data-ref="pserialize_perform" data-ref-filename="pserialize_perform">pserialize_perform</dfn>(<a class="typedef" href="../sys/pserialize.h.html#pserialize_t" title='pserialize_t' data-type='struct pserialize *' data-ref="pserialize_t" data-ref-filename="pserialize_t">pserialize_t</a> <dfn class="local col3 decl" id="3psz" title='psz' data-type='pserialize_t' data-ref="3psz" data-ref-filename="3psz">psz</dfn>)</td></tr>
+<tr><th id="148">148</th><td>{</td></tr>
+<tr><th id="149">149</th><td>	<em>int</em> <dfn class="local col4 decl" id="4n" title='n' data-type='int' data-ref="4n" data-ref-filename="4n">n</dfn>;</td></tr>
+<tr><th id="150">150</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col5 decl" id="5xc" title='xc' data-type='uint64_t' data-ref="5xc" data-ref-filename="5xc">xc</dfn>;</td></tr>
+<tr><th id="151">151</th><td></td></tr>
+<tr><th id="152">152</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((!cpu_intr_p())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;!cpu_intr_p()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c&quot;, 152))" data-ref="_M/KASSERT">KASSERT</a>(!<a class="ref fn" href="../sys/cpu.h.html#cpu_intr_p" title='cpu_intr_p' data-ref="cpu_intr_p" data-ref-filename="cpu_intr_p">cpu_intr_p</a>());</td></tr>
+<tr><th id="153">153</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((!cpu_softintr_p())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;!cpu_softintr_p()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c&quot;, 153))" data-ref="_M/KASSERT">KASSERT</a>(!<a class="ref fn" href="../sys/cpu.h.html#cpu_softintr_p" title='cpu_softintr_p' data-ref="cpu_softintr_p" data-ref-filename="cpu_softintr_p">cpu_softintr_p</a>());</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((panicstr != ((void *)0)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)) {</td></tr>
+<tr><th id="156">156</th><td>		<b>return</b>;</td></tr>
+<tr><th id="157">157</th><td>	}</td></tr>
+<tr><th id="158">158</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((psz-&gt;psz_owner == ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;psz-&gt;psz_owner == NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c&quot;, 158))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_owner" title='pserialize::psz_owner' data-ref="pserialize::psz_owner" data-ref-filename="pserialize..psz_owner">psz_owner</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="159">159</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ncpu &gt; 0)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ncpu &gt; 0&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c&quot;, 159))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref" href="../sys/systm.h.html#ncpu" title='ncpu' data-ref="ncpu" data-ref-filename="ncpu">ncpu</a> &gt; <var>0</var>);</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((mp_online == 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../sys/systm.h.html#mp_online" title='mp_online' data-ref="mp_online" data-ref-filename="mp_online">mp_online</a> == <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>)) {</td></tr>
+<tr><th id="162">162</th><td>		<a class="tu ref" href="#psz_ev_excl" title='psz_ev_excl' data-use='m' data-ref="psz_ev_excl" data-ref-filename="psz_ev_excl">psz_ev_excl</a>.<a class="ref field" href="../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="163">163</th><td>		<b>return</b>;</td></tr>
+<tr><th id="164">164</th><td>	}</td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td>	<i>/*</i></td></tr>
+<tr><th id="167">167</th><td><i>	 * Set up the object and put it onto the queue.  The lock</i></td></tr>
+<tr><th id="168">168</th><td><i>	 * activity here provides the necessary memory barrier to</i></td></tr>
+<tr><th id="169">169</th><td><i>	 * make the caller's data update completely visible to</i></td></tr>
+<tr><th id="170">170</th><td><i>	 * other processors.</i></td></tr>
+<tr><th id="171">171</th><td><i>	 */</i></td></tr>
+<tr><th id="172">172</th><td>	<a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_owner" title='pserialize::psz_owner' data-ref="pserialize::psz_owner" data-ref-filename="pserialize..psz_owner">psz_owner</a> = <a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="173">173</th><td>	<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_copy" title='kcpuset_copy' data-ref="kcpuset_copy" data-ref-filename="kcpuset_copy">kcpuset_copy</a>(<a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>, <a class="ref" href="../sys/cpu.h.html#kcpuset_running" title='kcpuset_running' data-ref="kcpuset_running" data-ref-filename="kcpuset_running">kcpuset_running</a>);</td></tr>
+<tr><th id="174">174</th><td>	<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_zero" title='kcpuset_zero' data-ref="kcpuset_zero" data-ref-filename="kcpuset_zero">kcpuset_zero</a>(<a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>);</td></tr>
+<tr><th id="175">175</th><td></td></tr>
+<tr><th id="176">176</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_enter" title='mutex_spin_enter' data-ref="mutex_spin_enter" data-ref-filename="mutex_spin_enter">mutex_spin_enter</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>);</td></tr>
+<tr><th id="177">177</th><td>	<a class="macro" href="../sys/queue.h.html#512" title="do { (psz)-&gt;psz_chain.tqe_next = (((void *)0)); (psz)-&gt;psz_chain.tqe_prev = (&amp;psz_queue0)-&gt;tqh_last; *(&amp;psz_queue0)-&gt;tqh_last = (psz); (&amp;psz_queue0)-&gt;tqh_last = &amp;(psz)-&gt;psz_chain.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_TAIL">TAILQ_INSERT_TAIL</a>(&amp;<a class="tu ref" href="#psz_queue0" title='psz_queue0' data-use='a' data-ref="psz_queue0" data-ref-filename="psz_queue0">psz_queue0</a>, <a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="178">178</th><td>	<a class="tu ref" href="#psz_work_todo" title='psz_work_todo' data-use='w' data-ref="psz_work_todo" data-ref-filename="psz_work_todo">psz_work_todo</a>++;</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td>	<a class="local col4 ref" href="#4n" title='n' data-ref="4n" data-ref-filename="4n">n</a> = <var>0</var>;</td></tr>
+<tr><th id="181">181</th><td>	<b>do</b> {</td></tr>
+<tr><th id="182">182</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_exit" title='mutex_spin_exit' data-ref="mutex_spin_exit" data-ref-filename="mutex_spin_exit">mutex_spin_exit</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>);</td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td>		<i>/*</i></td></tr>
+<tr><th id="185">185</th><td><i>		 * Force some context switch activity on every CPU, as</i></td></tr>
+<tr><th id="186">186</th><td><i>		 * the system may not be busy.  Pause to not flood.</i></td></tr>
+<tr><th id="187">187</th><td><i>		 */</i></td></tr>
+<tr><th id="188">188</th><td>		<b>if</b> (<a class="local col4 ref" href="#4n" title='n' data-ref="4n" data-ref-filename="4n">n</a>++ &gt; <var>1</var>)</td></tr>
+<tr><th id="189">189</th><td>			<a class="ref fn" href="../sys/proc.h.html#kpause" title='kpause' data-ref="kpause" data-ref-filename="kpause">kpause</a>(<q>"psrlz"</q>, <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>, <var>1</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="190">190</th><td>		<a class="local col5 ref" href="#5xc" title='xc' data-ref="5xc" data-ref-filename="5xc">xc</a> = <a class="ref fn" href="../sys/xcall.h.html#xc_broadcast" title='xc_broadcast' data-ref="xc_broadcast" data-ref-filename="xc_broadcast">xc_broadcast</a>(<a class="macro" href="../sys/xcall.h.html#39" title="0x01" data-ref="_M/XC_HIGHPRI">XC_HIGHPRI</a>, (<a class="typedef" href="../sys/xcall.h.html#xcfunc_t" title='xcfunc_t' data-type='void (*)(void *, void *)' data-ref="xcfunc_t" data-ref-filename="xcfunc_t">xcfunc_t</a>)<a class="ref fn" href="../sys/systm.h.html#nullop" title='nullop' data-ref="nullop" data-ref-filename="nullop">nullop</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="191">191</th><td>		<a class="ref fn" href="../sys/xcall.h.html#xc_wait" title='xc_wait' data-ref="xc_wait" data-ref-filename="xc_wait">xc_wait</a>(<a class="local col5 ref" href="#5xc" title='xc' data-ref="5xc" data-ref-filename="5xc">xc</a>);</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_enter" title='mutex_spin_enter' data-ref="mutex_spin_enter" data-ref-filename="mutex_spin_enter">mutex_spin_enter</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>);</td></tr>
+<tr><th id="194">194</th><td>	} <b>while</b> (!<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_iszero" title='kcpuset_iszero' data-ref="kcpuset_iszero" data-ref-filename="kcpuset_iszero">kcpuset_iszero</a>(<a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>));</td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td>	<a class="tu ref" href="#psz_ev_excl" title='psz_ev_excl' data-use='m' data-ref="psz_ev_excl" data-ref-filename="psz_ev_excl">psz_ev_excl</a>.<a class="ref field" href="../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="197">197</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_exit" title='mutex_spin_exit' data-ref="mutex_spin_exit" data-ref-filename="mutex_spin_exit">mutex_spin_exit</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>);</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td>	<a class="local col3 ref" href="#3psz" title='psz' data-ref="3psz" data-ref-filename="3psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_owner" title='pserialize::psz_owner' data-ref="pserialize::psz_owner" data-ref-filename="pserialize..psz_owner">psz_owner</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="200">200</th><td>}</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td><em>int</em></td></tr>
+<tr><th id="203">203</th><td><dfn class="decl def fn" id="pserialize_read_enter" title='pserialize_read_enter' data-ref="pserialize_read_enter" data-ref-filename="pserialize_read_enter">pserialize_read_enter</dfn>(<em>void</em>)</td></tr>
+<tr><th id="204">204</th><td>{</td></tr>
+<tr><th id="205">205</th><td>	<em>int</em> <dfn class="local col6 decl" id="6s" title='s' data-type='int' data-ref="6s" data-ref-filename="6s">s</dfn>;</td></tr>
+<tr><th id="206">206</th><td></td></tr>
+<tr><th id="207">207</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((!cpu_intr_p())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;!cpu_intr_p()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pserialize.c&quot;, 207))" data-ref="_M/KASSERT">KASSERT</a>(!<a class="ref fn" href="../sys/cpu.h.html#cpu_intr_p" title='cpu_intr_p' data-ref="cpu_intr_p" data-ref-filename="cpu_intr_p">cpu_intr_p</a>());</td></tr>
+<tr><th id="208">208</th><td>	<a class="local col6 ref" href="#6s" title='s' data-ref="6s" data-ref-filename="6s">s</a> = <a class="ref fn" href="../sys/spl.h.html#53" title='splsoftserial' data-ref="splsoftserial" data-ref-filename="splsoftserial">splsoftserial</a>();</td></tr>
+<tr><th id="209">209</th><td><u>#<span data-ppcond="209">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="210">210</th><td>	{</td></tr>
+<tr><th id="211">211</th><td>		uint32_t *nreads;</td></tr>
+<tr><th id="212">212</th><td>		nreads = percpu_getref(psz_debug_nreads);</td></tr>
+<tr><th id="213">213</th><td>		(*nreads)++;</td></tr>
+<tr><th id="214">214</th><td>		<b>if</b> (*nreads == <var>0</var>)</td></tr>
+<tr><th id="215">215</th><td>			panic(<q>"nreads overflow"</q>);</td></tr>
+<tr><th id="216">216</th><td>		percpu_putref(psz_debug_nreads);</td></tr>
+<tr><th id="217">217</th><td>	}</td></tr>
+<tr><th id="218">218</th><td><u>#<span data-ppcond="209">endif</span></u></td></tr>
+<tr><th id="219">219</th><td>	<b>return</b> <a class="local col6 ref" href="#6s" title='s' data-ref="6s" data-ref-filename="6s">s</a>;</td></tr>
+<tr><th id="220">220</th><td>}</td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td><em>void</em></td></tr>
+<tr><th id="223">223</th><td><dfn class="decl def fn" id="pserialize_read_exit" title='pserialize_read_exit' data-ref="pserialize_read_exit" data-ref-filename="pserialize_read_exit">pserialize_read_exit</dfn>(<em>int</em> <dfn class="local col7 decl" id="7s" title='s' data-type='int' data-ref="7s" data-ref-filename="7s">s</dfn>)</td></tr>
+<tr><th id="224">224</th><td>{</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td><u>#<span data-ppcond="226">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="227">227</th><td>	{</td></tr>
+<tr><th id="228">228</th><td>		uint32_t *nreads;</td></tr>
+<tr><th id="229">229</th><td>		nreads = percpu_getref(psz_debug_nreads);</td></tr>
+<tr><th id="230">230</th><td>		(*nreads)--;</td></tr>
+<tr><th id="231">231</th><td>		<b>if</b> (*nreads == UINT_MAX)</td></tr>
+<tr><th id="232">232</th><td>			panic(<q>"nreads underflow"</q>);</td></tr>
+<tr><th id="233">233</th><td>		percpu_putref(psz_debug_nreads);</td></tr>
+<tr><th id="234">234</th><td>	}</td></tr>
+<tr><th id="235">235</th><td><u>#<span data-ppcond="226">endif</span></u></td></tr>
+<tr><th id="236">236</th><td>	<a class="macro" href="../arch/x86/include/intr.h.html#170" title="spllower(s)" data-ref="_M/splx">splx</a>(<a class="local col7 ref" href="#7s" title='s' data-ref="7s" data-ref-filename="7s">s</a>);</td></tr>
+<tr><th id="237">237</th><td>}</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td><i>/*</i></td></tr>
+<tr><th id="240">240</th><td><i> * pserialize_switchpoint:</i></td></tr>
+<tr><th id="241">241</th><td><i> *</i></td></tr>
+<tr><th id="242">242</th><td><i> *	Monitor system context switch activity.  Called from machine</i></td></tr>
+<tr><th id="243">243</th><td><i> *	independent code after mi_switch() returns.</i></td></tr>
+<tr><th id="244">244</th><td><i> */</i> </td></tr>
+<tr><th id="245">245</th><td><em>void</em></td></tr>
+<tr><th id="246">246</th><td><dfn class="decl def fn" id="pserialize_switchpoint" title='pserialize_switchpoint' data-ref="pserialize_switchpoint" data-ref-filename="pserialize_switchpoint">pserialize_switchpoint</dfn>(<em>void</em>)</td></tr>
+<tr><th id="247">247</th><td>{</td></tr>
+<tr><th id="248">248</th><td>	<a class="typedef" href="../sys/pserialize.h.html#pserialize_t" title='pserialize_t' data-type='struct pserialize *' data-ref="pserialize_t" data-ref-filename="pserialize_t">pserialize_t</a> <dfn class="local col8 decl" id="8psz" title='psz' data-type='pserialize_t' data-ref="8psz" data-ref-filename="8psz">psz</dfn>, <dfn class="local col9 decl" id="9next" title='next' data-type='pserialize_t' data-ref="9next" data-ref-filename="9next">next</dfn>;</td></tr>
+<tr><th id="249">249</th><td>	<a class="typedef" href="../sys/types.h.html#cpuid_t" title='cpuid_t' data-type='unsigned long' data-ref="cpuid_t" data-ref-filename="cpuid_t">cpuid_t</a> <dfn class="local col0 decl" id="10cid" title='cid' data-type='cpuid_t' data-ref="10cid" data-ref-filename="10cid">cid</dfn>;</td></tr>
+<tr><th id="250">250</th><td></td></tr>
+<tr><th id="251">251</th><td>	<i>/*</i></td></tr>
+<tr><th id="252">252</th><td><i>	 * If no updates pending, bail out.  No need to lock in order to</i></td></tr>
+<tr><th id="253">253</th><td><i>	 * test psz_work_todo; the only ill effect of missing an update</i></td></tr>
+<tr><th id="254">254</th><td><i>	 * would be to delay LWPs waiting in pserialize_perform().  That</i></td></tr>
+<tr><th id="255">255</th><td><i>	 * will not happen because updates are on the queue before an</i></td></tr>
+<tr><th id="256">256</th><td><i>	 * xcall is generated (serialization) to tickle every CPU.</i></td></tr>
+<tr><th id="257">257</th><td><i>	 */</i></td></tr>
+<tr><th id="258">258</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((psz_work_todo == 0) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="tu ref" href="#psz_work_todo" title='psz_work_todo' data-use='r' data-ref="psz_work_todo" data-ref-filename="psz_work_todo">psz_work_todo</a> == <var>0</var>)) {</td></tr>
+<tr><th id="259">259</th><td>		<b>return</b>;</td></tr>
+<tr><th id="260">260</th><td>	}</td></tr>
+<tr><th id="261">261</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_enter" title='mutex_spin_enter' data-ref="mutex_spin_enter" data-ref-filename="mutex_spin_enter">mutex_spin_enter</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>);</td></tr>
+<tr><th id="262">262</th><td>	<a class="local col0 ref" href="#10cid" title='cid' data-ref="10cid" data-ref-filename="10cid">cid</a> = <a class="ref fn" href="../sys/cpu.h.html#cpu_index" title='cpu_index' data-ref="cpu_index" data-ref-filename="cpu_index">cpu_index</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td>	<i>/*</i></td></tr>
+<tr><th id="265">265</th><td><i>	 * At first, scan through the second queue and update each request,</i></td></tr>
+<tr><th id="266">266</th><td><i>	 * if passed all processors, then transfer to the third queue. </i></td></tr>
+<tr><th id="267">267</th><td><i>	 */</i></td></tr>
+<tr><th id="268">268</th><td>	<b>for</b> (<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;psz_queue1)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="tu ref" href="#psz_queue1" title='psz_queue1' data-use='a' data-ref="psz_queue1" data-ref-filename="psz_queue1">psz_queue1</a>); <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>; <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> = <a class="local col9 ref" href="#9next" title='next' data-ref="9next" data-ref-filename="9next">next</a>) {</td></tr>
+<tr><th id="269">269</th><td>		<a class="local col9 ref" href="#9next" title='next' data-ref="9next" data-ref-filename="9next">next</a> = <a class="macro" href="../sys/queue.h.html#430" title="((psz)-&gt;psz_chain.tqe_next)" data-ref="_M/TAILQ_NEXT">TAILQ_NEXT</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="270">270</th><td>		<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_set" title='kcpuset_set' data-ref="kcpuset_set" data-ref-filename="kcpuset_set">kcpuset_set</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>, <a class="local col0 ref" href="#10cid" title='cid' data-ref="10cid" data-ref-filename="10cid">cid</a>);</td></tr>
+<tr><th id="271">271</th><td>		<b>if</b> (!<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_match" title='kcpuset_match' data-ref="kcpuset_match" data-ref-filename="kcpuset_match">kcpuset_match</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>)) {</td></tr>
+<tr><th id="272">272</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="273">273</th><td>		}</td></tr>
+<tr><th id="274">274</th><td>		<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_zero" title='kcpuset_zero' data-ref="kcpuset_zero" data-ref-filename="kcpuset_zero">kcpuset_zero</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>);</td></tr>
+<tr><th id="275">275</th><td>		<a class="macro" href="../sys/queue.h.html#540" title="do { if (((psz)-&gt;psz_chain.tqe_next) != (((void *)0))) (psz)-&gt;psz_chain.tqe_next-&gt;psz_chain.tqe_prev = (psz)-&gt;psz_chain.tqe_prev; else (&amp;psz_queue1)-&gt;tqh_last = (psz)-&gt;psz_chain.tqe_prev; *(psz)-&gt;psz_chain.tqe_prev = (psz)-&gt;psz_chain.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="tu ref" href="#psz_queue1" title='psz_queue1' data-use='a' data-ref="psz_queue1" data-ref-filename="psz_queue1">psz_queue1</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="276">276</th><td>		<a class="macro" href="../sys/queue.h.html#512" title="do { (psz)-&gt;psz_chain.tqe_next = (((void *)0)); (psz)-&gt;psz_chain.tqe_prev = (&amp;psz_queue2)-&gt;tqh_last; *(&amp;psz_queue2)-&gt;tqh_last = (psz); (&amp;psz_queue2)-&gt;tqh_last = &amp;(psz)-&gt;psz_chain.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_TAIL">TAILQ_INSERT_TAIL</a>(&amp;<a class="tu ref" href="#psz_queue2" title='psz_queue2' data-use='a' data-ref="psz_queue2" data-ref-filename="psz_queue2">psz_queue2</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="277">277</th><td>	}</td></tr>
+<tr><th id="278">278</th><td>	<i>/*</i></td></tr>
+<tr><th id="279">279</th><td><i>	 * Scan through the first queue and update each request,</i></td></tr>
+<tr><th id="280">280</th><td><i>	 * if passed all processors, then move to the second queue. </i></td></tr>
+<tr><th id="281">281</th><td><i>	 */</i></td></tr>
+<tr><th id="282">282</th><td>	<b>for</b> (<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;psz_queue0)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="tu ref" href="#psz_queue0" title='psz_queue0' data-use='a' data-ref="psz_queue0" data-ref-filename="psz_queue0">psz_queue0</a>); <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>; <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> = <a class="local col9 ref" href="#9next" title='next' data-ref="9next" data-ref-filename="9next">next</a>) {</td></tr>
+<tr><th id="283">283</th><td>		<a class="local col9 ref" href="#9next" title='next' data-ref="9next" data-ref-filename="9next">next</a> = <a class="macro" href="../sys/queue.h.html#430" title="((psz)-&gt;psz_chain.tqe_next)" data-ref="_M/TAILQ_NEXT">TAILQ_NEXT</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="284">284</th><td>		<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_set" title='kcpuset_set' data-ref="kcpuset_set" data-ref-filename="kcpuset_set">kcpuset_set</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>, <a class="local col0 ref" href="#10cid" title='cid' data-ref="10cid" data-ref-filename="10cid">cid</a>);</td></tr>
+<tr><th id="285">285</th><td>		<b>if</b> (!<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_match" title='kcpuset_match' data-ref="kcpuset_match" data-ref-filename="kcpuset_match">kcpuset_match</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>)) {</td></tr>
+<tr><th id="286">286</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="287">287</th><td>		}</td></tr>
+<tr><th id="288">288</th><td>		<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_zero" title='kcpuset_zero' data-ref="kcpuset_zero" data-ref-filename="kcpuset_zero">kcpuset_zero</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_pass" title='pserialize::psz_pass' data-ref="pserialize::psz_pass" data-ref-filename="pserialize..psz_pass">psz_pass</a>);</td></tr>
+<tr><th id="289">289</th><td>		<a class="macro" href="../sys/queue.h.html#540" title="do { if (((psz)-&gt;psz_chain.tqe_next) != (((void *)0))) (psz)-&gt;psz_chain.tqe_next-&gt;psz_chain.tqe_prev = (psz)-&gt;psz_chain.tqe_prev; else (&amp;psz_queue0)-&gt;tqh_last = (psz)-&gt;psz_chain.tqe_prev; *(psz)-&gt;psz_chain.tqe_prev = (psz)-&gt;psz_chain.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="tu ref" href="#psz_queue0" title='psz_queue0' data-use='a' data-ref="psz_queue0" data-ref-filename="psz_queue0">psz_queue0</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="290">290</th><td>		<a class="macro" href="../sys/queue.h.html#512" title="do { (psz)-&gt;psz_chain.tqe_next = (((void *)0)); (psz)-&gt;psz_chain.tqe_prev = (&amp;psz_queue1)-&gt;tqh_last; *(&amp;psz_queue1)-&gt;tqh_last = (psz); (&amp;psz_queue1)-&gt;tqh_last = &amp;(psz)-&gt;psz_chain.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_TAIL">TAILQ_INSERT_TAIL</a>(&amp;<a class="tu ref" href="#psz_queue1" title='psz_queue1' data-use='a' data-ref="psz_queue1" data-ref-filename="psz_queue1">psz_queue1</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="291">291</th><td>	}</td></tr>
+<tr><th id="292">292</th><td>	<i>/*</i></td></tr>
+<tr><th id="293">293</th><td><i>	 * Process the third queue: entries have been seen twice on every</i></td></tr>
+<tr><th id="294">294</th><td><i>	 * processor, remove from the queue and notify the updating thread.</i></td></tr>
+<tr><th id="295">295</th><td><i>	 */</i></td></tr>
+<tr><th id="296">296</th><td>	<b>while</b> ((<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;psz_queue2)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="tu ref" href="#psz_queue2" title='psz_queue2' data-use='a' data-ref="psz_queue2" data-ref-filename="psz_queue2">psz_queue2</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="297">297</th><td>		<a class="macro" href="../sys/queue.h.html#540" title="do { if (((psz)-&gt;psz_chain.tqe_next) != (((void *)0))) (psz)-&gt;psz_chain.tqe_next-&gt;psz_chain.tqe_prev = (psz)-&gt;psz_chain.tqe_prev; else (&amp;psz_queue2)-&gt;tqh_last = (psz)-&gt;psz_chain.tqe_prev; *(psz)-&gt;psz_chain.tqe_prev = (psz)-&gt;psz_chain.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="tu ref" href="#psz_queue2" title='psz_queue2' data-use='a' data-ref="psz_queue2" data-ref-filename="psz_queue2">psz_queue2</a>, <a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>, <a class="ref field" href="#pserialize::psz_chain" title='pserialize::psz_chain' data-ref="pserialize::psz_chain" data-ref-filename="pserialize..psz_chain">psz_chain</a>);</td></tr>
+<tr><th id="298">298</th><td>		<a class="ref fn" href="../sys/kcpuset.h.html#kcpuset_zero" title='kcpuset_zero' data-ref="kcpuset_zero" data-ref-filename="kcpuset_zero">kcpuset_zero</a>(<a class="local col8 ref" href="#8psz" title='psz' data-ref="8psz" data-ref-filename="8psz">psz</a>-&gt;<a class="ref field" href="#pserialize::psz_target" title='pserialize::psz_target' data-ref="pserialize::psz_target" data-ref-filename="pserialize..psz_target">psz_target</a>);</td></tr>
+<tr><th id="299">299</th><td>		<a class="tu ref" href="#psz_work_todo" title='psz_work_todo' data-use='w' data-ref="psz_work_todo" data-ref-filename="psz_work_todo">psz_work_todo</a>--;</td></tr>
+<tr><th id="300">300</th><td>	}</td></tr>
+<tr><th id="301">301</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_exit" title='mutex_spin_exit' data-ref="mutex_spin_exit" data-ref-filename="mutex_spin_exit">mutex_spin_exit</a>(&amp;<a class="tu ref" href="#psz_lock" title='psz_lock' data-use='a' data-ref="psz_lock" data-ref-filename="psz_lock">psz_lock</a>);</td></tr>
+<tr><th id="302">302</th><td>}</td></tr>
+<tr><th id="303">303</th><td></td></tr>
+<tr><th id="304">304</th><td><i>/*</i></td></tr>
+<tr><th id="305">305</th><td><i> * pserialize_in_read_section:</i></td></tr>
+<tr><th id="306">306</th><td><i> *</i></td></tr>
+<tr><th id="307">307</th><td><i> *   True if the caller is in a pserialize read section.  To be used only</i></td></tr>
+<tr><th id="308">308</th><td><i> *   for diagnostic assertions where we want to guarantee the condition like:</i></td></tr>
+<tr><th id="309">309</th><td><i> *</i></td></tr>
+<tr><th id="310">310</th><td><i> *     KASSERT(pserialize_in_read_section());</i></td></tr>
+<tr><th id="311">311</th><td><i> */</i></td></tr>
+<tr><th id="312">312</th><td><a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="313">313</th><td><dfn class="decl def fn" id="pserialize_in_read_section" title='pserialize_in_read_section' data-ref="pserialize_in_read_section" data-ref-filename="pserialize_in_read_section">pserialize_in_read_section</dfn>(<em>void</em>)</td></tr>
+<tr><th id="314">314</th><td>{</td></tr>
+<tr><th id="315">315</th><td><u>#<span data-ppcond="315">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="316">316</th><td>	uint32_t *nreads;</td></tr>
+<tr><th id="317">317</th><td>	bool in;</td></tr>
+<tr><th id="318">318</th><td></td></tr>
+<tr><th id="319">319</th><td>	<i>/* Not initialized yet */</i></td></tr>
+<tr><th id="320">320</th><td>	<b>if</b> (__predict_false(psz_debug_nreads == NULL))</td></tr>
+<tr><th id="321">321</th><td>		<b>return</b> true;</td></tr>
+<tr><th id="322">322</th><td></td></tr>
+<tr><th id="323">323</th><td>	nreads = percpu_getref(psz_debug_nreads);</td></tr>
+<tr><th id="324">324</th><td>	in = *nreads != <var>0</var>;</td></tr>
+<tr><th id="325">325</th><td>	percpu_putref(psz_debug_nreads);</td></tr>
+<tr><th id="326">326</th><td></td></tr>
+<tr><th id="327">327</th><td>	<b>return</b> in;</td></tr>
+<tr><th id="328">328</th><td><u>#<span data-ppcond="315">else</span></u></td></tr>
+<tr><th id="329">329</th><td>	<b>return</b> <a class="macro" href="../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="330">330</th><td><u>#<span data-ppcond="315">endif</span></u></td></tr>
+<tr><th id="331">331</th><td>}</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td><i>/*</i></td></tr>
+<tr><th id="334">334</th><td><i> * pserialize_not_in_read_section:</i></td></tr>
+<tr><th id="335">335</th><td><i> *</i></td></tr>
+<tr><th id="336">336</th><td><i> *   True if the caller is not in a pserialize read section.  To be used only</i></td></tr>
+<tr><th id="337">337</th><td><i> *   for diagnostic assertions where we want to guarantee the condition like:</i></td></tr>
+<tr><th id="338">338</th><td><i> *</i></td></tr>
+<tr><th id="339">339</th><td><i> *     KASSERT(pserialize_not_in_read_section());</i></td></tr>
+<tr><th id="340">340</th><td><i> */</i></td></tr>
+<tr><th id="341">341</th><td><a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="342">342</th><td><dfn class="decl def fn" id="pserialize_not_in_read_section" title='pserialize_not_in_read_section' data-ref="pserialize_not_in_read_section" data-ref-filename="pserialize_not_in_read_section">pserialize_not_in_read_section</dfn>(<em>void</em>)</td></tr>
+<tr><th id="343">343</th><td>{</td></tr>
+<tr><th id="344">344</th><td><u>#<span data-ppcond="344">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="345">345</th><td>	uint32_t *nreads;</td></tr>
+<tr><th id="346">346</th><td>	bool notin;</td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td>	<i>/* Not initialized yet */</i></td></tr>
+<tr><th id="349">349</th><td>	<b>if</b> (__predict_false(psz_debug_nreads == NULL))</td></tr>
+<tr><th id="350">350</th><td>		<b>return</b> true;</td></tr>
+<tr><th id="351">351</th><td></td></tr>
+<tr><th id="352">352</th><td>	nreads = percpu_getref(psz_debug_nreads);</td></tr>
+<tr><th id="353">353</th><td>	notin = *nreads == <var>0</var>;</td></tr>
+<tr><th id="354">354</th><td>	percpu_putref(psz_debug_nreads);</td></tr>
+<tr><th id="355">355</th><td></td></tr>
+<tr><th id="356">356</th><td>	<b>return</b> notin;</td></tr>
+<tr><th id="357">357</th><td><u>#<span data-ppcond="344">else</span></u></td></tr>
+<tr><th id="358">358</th><td>	<b>return</b> <a class="macro" href="../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="359">359</th><td><u>#<span data-ppcond="344">endif</span></u></td></tr>
+<tr><th id="360">360</th><td>}</td></tr>
+<tr><th id="361">361</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

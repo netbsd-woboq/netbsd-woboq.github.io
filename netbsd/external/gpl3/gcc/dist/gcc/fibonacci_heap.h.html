@@ -1,0 +1,670 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>fibonacci_heap.h source code [netbsd/external/gpl3/gcc/dist/gcc/fibonacci_heap.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="fibonacci_heap,fibonacci_node "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/gcc/fibonacci_heap.h'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>gcc</a>/<a href='fibonacci_heap.h.html'>fibonacci_heap.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* Fibonacci heap for GNU compiler.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 1998-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Contributed by Daniel Berlin (dan@cgsoftware.com).</i></td></tr>
+<tr><th id="4">4</th><td><i>   Re-implemented in C++ by Martin Liska &lt;mliska@suse.cz&gt;</i></td></tr>
+<tr><th id="5">5</th><td><i></i></td></tr>
+<tr><th id="6">6</th><td><i>This file is part of GCC.</i></td></tr>
+<tr><th id="7">7</th><td><i></i></td></tr>
+<tr><th id="8">8</th><td><i>GCC is free software; you can redistribute it and/or modify it under</i></td></tr>
+<tr><th id="9">9</th><td><i>the terms of the GNU General Public License as published by the Free</i></td></tr>
+<tr><th id="10">10</th><td><i>Software Foundation; either version 3, or (at your option) any later</i></td></tr>
+<tr><th id="11">11</th><td><i>version.</i></td></tr>
+<tr><th id="12">12</th><td><i></i></td></tr>
+<tr><th id="13">13</th><td><i>GCC is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="14">14</th><td><i>WARRANTY; without even the implied warranty of MERCHANTABILITY or</i></td></tr>
+<tr><th id="15">15</th><td><i>FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License</i></td></tr>
+<tr><th id="16">16</th><td><i>for more details.</i></td></tr>
+<tr><th id="17">17</th><td><i></i></td></tr>
+<tr><th id="18">18</th><td><i>You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="19">19</th><td><i>along with GCC; see the file COPYING3.  If not see</i></td></tr>
+<tr><th id="20">20</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="21">21</th><td></td></tr>
+<tr><th id="22">22</th><td><i>/* Fibonacci heaps are somewhat complex, but, there's an article in</i></td></tr>
+<tr><th id="23">23</th><td><i>   DDJ that explains them pretty well:</i></td></tr>
+<tr><th id="24">24</th><td><i></i></td></tr>
+<tr><th id="25">25</th><td><i>   <a href="http://www.ddj.com/articles/1997/9701/9701o/9701o.htm?topic=algoritms">http://www.ddj.com/articles/1997/9701/9701o/9701o.htm?topic=algoritms</a></i></td></tr>
+<tr><th id="26">26</th><td><i></i></td></tr>
+<tr><th id="27">27</th><td><i>   Introduction to algorithms by Corman and Rivest also goes over them.</i></td></tr>
+<tr><th id="28">28</th><td><i></i></td></tr>
+<tr><th id="29">29</th><td><i>   The original paper that introduced them is "Fibonacci heaps and their</i></td></tr>
+<tr><th id="30">30</th><td><i>   uses in improved network optimization algorithms" by Tarjan and</i></td></tr>
+<tr><th id="31">31</th><td><i>   Fredman (JACM 34(3), July 1987).</i></td></tr>
+<tr><th id="32">32</th><td><i></i></td></tr>
+<tr><th id="33">33</th><td><i>   Amortized and real worst case time for operations:</i></td></tr>
+<tr><th id="34">34</th><td><i></i></td></tr>
+<tr><th id="35">35</th><td><i>   ExtractMin: O(lg n) amortized. O(n) worst case.</i></td></tr>
+<tr><th id="36">36</th><td><i>   DecreaseKey: O(1) amortized.  O(lg n) worst case.</i></td></tr>
+<tr><th id="37">37</th><td><i>   Insert: O(1) amortized.</i></td></tr>
+<tr><th id="38">38</th><td><i>   Union: O(1) amortized.  */</i></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#<span data-ppcond="40">ifndef</span> <span class="macro" data-ref="_M/GCC_FIBONACCI_HEAP_H">GCC_FIBONACCI_HEAP_H</span></u></td></tr>
+<tr><th id="41">41</th><td><u>#define <dfn class="macro" id="_M/GCC_FIBONACCI_HEAP_H" data-ref="_M/GCC_FIBONACCI_HEAP_H">GCC_FIBONACCI_HEAP_H</dfn></u></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><i>/* Forward definition.  */</i></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="46">46</th><td><b>class</b> <a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>;</td></tr>
+<tr><th id="47">47</th><td></td></tr>
+<tr><th id="48">48</th><td><i>/* Fibonacci heap node class.  */</i></td></tr>
+<tr><th id="49">49</th><td></td></tr>
+<tr><th id="50">50</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="51">51</th><td><b>class</b> <dfn class="type def" id="fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</dfn></td></tr>
+<tr><th id="52">52</th><td>{</td></tr>
+<tr><th id="53">53</th><td>  <b>typedef</b> <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; <dfn class="typedef" id="fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</dfn>;</td></tr>
+<tr><th id="54">54</th><td>  <b>friend</b> <b>class</b> <a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;;</td></tr>
+<tr><th id="55">55</th><td></td></tr>
+<tr><th id="56">56</th><td><b>public</b>:</td></tr>
+<tr><th id="57">57</th><td>  <i>/* Default constructor.  */</i></td></tr>
+<tr><th id="58">58</th><td>  <dfn class="decl def fn" id="_ZN14fibonacci_nodeC1Ev" title='fibonacci_node::fibonacci_node&lt;K, V&gt;' data-ref="_ZN14fibonacci_nodeC1Ev" data-ref-filename="_ZN14fibonacci_nodeC1Ev">fibonacci_node</dfn> (): <a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a> (<span class="macro" title="__null" data-ref="_M/NULL">NULL</span>), <a class="member field" href="#fibonacci_node::m_child" title='fibonacci_node::m_child' data-ref="fibonacci_node::m_child" data-ref-filename="fibonacci_node..m_child">m_child</a> (<span class="macro" title="__null" data-ref="_M/NULL">NULL</span>), <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a> (<b>this</b>),</td></tr>
+<tr><th id="59">59</th><td>    <a class="member field" href="#fibonacci_node::m_right" title='fibonacci_node::m_right' data-ref="fibonacci_node::m_right" data-ref-filename="fibonacci_node..m_right">m_right</a> (<b>this</b>), <a class="member field" href="#fibonacci_node::m_degree" title='fibonacci_node::m_degree' data-ref="fibonacci_node::m_degree" data-ref-filename="fibonacci_node..m_degree">m_degree</a> (<var>0</var>), <a class="member field" href="#fibonacci_node::m_mark" title='fibonacci_node::m_mark' data-ref="fibonacci_node::m_mark" data-ref-filename="fibonacci_node..m_mark">m_mark</a> (<var>0</var>)</td></tr>
+<tr><th id="60">60</th><td>  {</td></tr>
+<tr><th id="61">61</th><td>  }</td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td>  <i>/* Constructor for a node with given KEY.  */</i></td></tr>
+<tr><th id="64">64</th><td>  <dfn class="decl def fn" id="_ZN14fibonacci_nodeC1ET_PT0_" title='fibonacci_node::fibonacci_node&lt;K, V&gt;' data-ref="_ZN14fibonacci_nodeC1ET_PT0_" data-ref-filename="_ZN14fibonacci_nodeC1ET_PT0_">fibonacci_node</dfn> (K <dfn class="local col4 decl" id="64key" title='key' data-type='K' data-ref="64key" data-ref-filename="64key">key</dfn>, V *<dfn class="local col5 decl" id="65data" title='data' data-type='V *' data-ref="65data" data-ref-filename="65data">data</dfn> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>): <a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a> (<span class="macro" title="__null" data-ref="_M/NULL">NULL</span>), <a class="member field" href="#fibonacci_node::m_child" title='fibonacci_node::m_child' data-ref="fibonacci_node::m_child" data-ref-filename="fibonacci_node..m_child">m_child</a> (<span class="macro" title="__null" data-ref="_M/NULL">NULL</span>),</td></tr>
+<tr><th id="65">65</th><td>    <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a> (<b>this</b>), <a class="member field" href="#fibonacci_node::m_right" title='fibonacci_node::m_right' data-ref="fibonacci_node::m_right" data-ref-filename="fibonacci_node..m_right">m_right</a> (<b>this</b>), <a class="member field" href="#fibonacci_node::m_key" title='fibonacci_node::m_key' data-ref="fibonacci_node::m_key" data-ref-filename="fibonacci_node..m_key">m_key</a> (<a class="local col4 ref" href="#64key" title='key' data-ref="64key" data-ref-filename="64key">key</a>), <a class="member field" href="#fibonacci_node::m_data" title='fibonacci_node::m_data' data-ref="fibonacci_node::m_data" data-ref-filename="fibonacci_node..m_data">m_data</a> (<a class="local col5 ref" href="#65data" title='data' data-ref="65data" data-ref-filename="65data">data</a>),</td></tr>
+<tr><th id="66">66</th><td>    <a class="member field" href="#fibonacci_node::m_degree" title='fibonacci_node::m_degree' data-ref="fibonacci_node::m_degree" data-ref-filename="fibonacci_node..m_degree">m_degree</a> (<var>0</var>), <a class="member field" href="#fibonacci_node::m_mark" title='fibonacci_node::m_mark' data-ref="fibonacci_node::m_mark" data-ref-filename="fibonacci_node..m_mark">m_mark</a> (<var>0</var>)</td></tr>
+<tr><th id="67">67</th><td>  {</td></tr>
+<tr><th id="68">68</th><td>  }</td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td>  <i>/* Compare fibonacci node with OTHER node.  */</i></td></tr>
+<tr><th id="71">71</th><td>  <em>int</em> <dfn class="decl def fn" id="_ZN14fibonacci_node7compareEP14fibonacci_nodeIT_T0_E" title='fibonacci_node::compare' data-ref="_ZN14fibonacci_node7compareEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_node7compareEP14fibonacci_nodeIT_T0_E">compare</dfn> (<a class="typedef" href="#fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col6 decl" id="66other" title='other' data-type='fibonacci_node::fibonacci_node_t *' data-ref="66other" data-ref-filename="66other">other</dfn>)</td></tr>
+<tr><th id="72">72</th><td>  {</td></tr>
+<tr><th id="73">73</th><td>    <b>if</b> (<a class="member field" href="#fibonacci_node::m_key" title='fibonacci_node::m_key' data-ref="fibonacci_node::m_key" data-ref-filename="fibonacci_node..m_key">m_key</a> &lt; <a class="local col6 ref" href="#66other" title='other' data-ref="66other" data-ref-filename="66other">other</a>-&gt;m_key)</td></tr>
+<tr><th id="74">74</th><td>      <b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="75">75</th><td>    <b>if</b> (<a class="member field" href="#fibonacci_node::m_key" title='fibonacci_node::m_key' data-ref="fibonacci_node::m_key" data-ref-filename="fibonacci_node..m_key">m_key</a> &gt; <a class="local col6 ref" href="#66other" title='other' data-ref="66other" data-ref-filename="66other">other</a>-&gt;m_key)</td></tr>
+<tr><th id="76">76</th><td>      <b>return</b> <var>1</var>;</td></tr>
+<tr><th id="77">77</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="78">78</th><td>  }</td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td>  <i>/* Compare the node with a given KEY.  */</i></td></tr>
+<tr><th id="81">81</th><td>  <em>int</em> <dfn class="decl def fn" id="_ZN14fibonacci_node12compare_dataET_" title='fibonacci_node::compare_data' data-ref="_ZN14fibonacci_node12compare_dataET_" data-ref-filename="_ZN14fibonacci_node12compare_dataET_">compare_data</dfn> (K <dfn class="local col7 decl" id="67key" title='key' data-type='K' data-ref="67key" data-ref-filename="67key">key</dfn>)</td></tr>
+<tr><th id="82">82</th><td>  {</td></tr>
+<tr><th id="83">83</th><td>    <b>return</b> <a class="typedef" href="#fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</a> (<a class="local col7 ref" href="#67key" title='key' data-ref="67key" data-ref-filename="67key">key</a>).compare (<b>this</b>);</td></tr>
+<tr><th id="84">84</th><td>  }</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td>  <i>/* Remove fibonacci heap node.  */</i></td></tr>
+<tr><th id="87">87</th><td>  <a class="typedef" href="#fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</a> *<a class="decl fn" href="#_ZN14fibonacci_node6removeEv" title='fibonacci_node::remove' data-ref="_ZN14fibonacci_node6removeEv" data-ref-filename="_ZN14fibonacci_node6removeEv">remove</a> ();</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td>  <i>/* Link the node with PARENT.  */</i></td></tr>
+<tr><th id="90">90</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_node4linkEP14fibonacci_nodeIT_T0_E" title='fibonacci_node::link' data-ref="_ZN14fibonacci_node4linkEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_node4linkEP14fibonacci_nodeIT_T0_E">link</a> (<a class="typedef" href="#fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col8 decl" id="68parent" title='parent' data-type='fibonacci_node::fibonacci_node_t *' data-ref="68parent" data-ref-filename="68parent">parent</dfn>);</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td>  <i>/* Return key associated with the node.  */</i></td></tr>
+<tr><th id="93">93</th><td>  K <dfn class="decl def fn" id="_ZN14fibonacci_node7get_keyEv" title='fibonacci_node::get_key' data-ref="_ZN14fibonacci_node7get_keyEv" data-ref-filename="_ZN14fibonacci_node7get_keyEv">get_key</dfn> ()</td></tr>
+<tr><th id="94">94</th><td>  {</td></tr>
+<tr><th id="95">95</th><td>    <b>return</b> <a class="member field" href="#fibonacci_node::m_key" title='fibonacci_node::m_key' data-ref="fibonacci_node::m_key" data-ref-filename="fibonacci_node..m_key">m_key</a>;</td></tr>
+<tr><th id="96">96</th><td>  }</td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td>  <i>/* Return data associated with the node.  */</i></td></tr>
+<tr><th id="99">99</th><td>  V *<dfn class="decl def fn" id="_ZN14fibonacci_node8get_dataEv" title='fibonacci_node::get_data' data-ref="_ZN14fibonacci_node8get_dataEv" data-ref-filename="_ZN14fibonacci_node8get_dataEv">get_data</dfn> ()</td></tr>
+<tr><th id="100">100</th><td>  {</td></tr>
+<tr><th id="101">101</th><td>    <b>return</b> <a class="member field" href="#fibonacci_node::m_data" title='fibonacci_node::m_data' data-ref="fibonacci_node::m_data" data-ref-filename="fibonacci_node..m_data">m_data</a>;</td></tr>
+<tr><th id="102">102</th><td>  }</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td><b>private</b>:</td></tr>
+<tr><th id="105">105</th><td>  <i>/* Put node B after this node.  */</i></td></tr>
+<tr><th id="106">106</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_node12insert_afterEP14fibonacci_nodeIT_T0_E" title='fibonacci_node::insert_after' data-ref="_ZN14fibonacci_node12insert_afterEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_node12insert_afterEP14fibonacci_nodeIT_T0_E">insert_after</a> (<a class="typedef" href="#fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col9 decl" id="69b" title='b' data-type='fibonacci_node::fibonacci_node_t *' data-ref="69b" data-ref-filename="69b">b</dfn>);</td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td>  <i>/* Insert fibonacci node B after this node.  */</i></td></tr>
+<tr><th id="109">109</th><td>  <em>void</em> <dfn class="decl def fn" id="_ZN14fibonacci_node13insert_beforeEP14fibonacci_nodeIT_T0_E" title='fibonacci_node::insert_before' data-ref="_ZN14fibonacci_node13insert_beforeEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_node13insert_beforeEP14fibonacci_nodeIT_T0_E">insert_before</dfn> (<a class="typedef" href="#fibonacci_node::fibonacci_node_t" title='fibonacci_node::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_node::fibonacci_node_t" data-ref-filename="fibonacci_node..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col0 decl" id="70b" title='b' data-type='fibonacci_node::fibonacci_node_t *' data-ref="70b" data-ref-filename="70b">b</dfn>)</td></tr>
+<tr><th id="110">110</th><td>  {</td></tr>
+<tr><th id="111">111</th><td>    <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a>-&gt;insert_after (<a class="local col0 ref" href="#70b" title='b' data-ref="70b" data-ref-filename="70b">b</a>);</td></tr>
+<tr><th id="112">112</th><td>  }</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td>  <i>/* Parent node.  */</i></td></tr>
+<tr><th id="115">115</th><td>  fibonacci_node *<dfn class="decl field" id="fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</dfn>;</td></tr>
+<tr><th id="116">116</th><td>  <i>/* Child node.  */</i></td></tr>
+<tr><th id="117">117</th><td>  fibonacci_node *<dfn class="decl field" id="fibonacci_node::m_child" title='fibonacci_node::m_child' data-ref="fibonacci_node::m_child" data-ref-filename="fibonacci_node..m_child">m_child</dfn>;</td></tr>
+<tr><th id="118">118</th><td>  <i>/* Left sibling.  */</i></td></tr>
+<tr><th id="119">119</th><td>  fibonacci_node *<dfn class="decl field" id="fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</dfn>;</td></tr>
+<tr><th id="120">120</th><td>  <i>/* Right node.  */</i></td></tr>
+<tr><th id="121">121</th><td>  fibonacci_node *<dfn class="decl field" id="fibonacci_node::m_right" title='fibonacci_node::m_right' data-ref="fibonacci_node::m_right" data-ref-filename="fibonacci_node..m_right">m_right</dfn>;</td></tr>
+<tr><th id="122">122</th><td>  <i>/* Key associated with node.  */</i></td></tr>
+<tr><th id="123">123</th><td>  K <dfn class="decl field" id="fibonacci_node::m_key" title='fibonacci_node::m_key' data-ref="fibonacci_node::m_key" data-ref-filename="fibonacci_node..m_key">m_key</dfn>;</td></tr>
+<tr><th id="124">124</th><td>  <i>/* Data associated with node.  */</i></td></tr>
+<tr><th id="125">125</th><td>  V *<dfn class="decl field" id="fibonacci_node::m_data" title='fibonacci_node::m_data' data-ref="fibonacci_node::m_data" data-ref-filename="fibonacci_node..m_data">m_data</dfn>;</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td><u>#<span data-ppcond="127">if</span> defined (<span class="macro" data-ref="_M/__GNUC__">__GNUC__</span>) &amp;&amp; (!defined (<a class="macro" href="../../../../../objdir.amd64/tools/gcc/build/gcc/auto-host.h.html#2091" data-ref="_M/SIZEOF_INT">SIZEOF_INT</a>) || <a class="macro" href="../../../../../objdir.amd64/tools/gcc/build/gcc/auto-host.h.html#2091" title="4" data-ref="_M/SIZEOF_INT">SIZEOF_INT</a> &lt; 4)</u></td></tr>
+<tr><th id="128">128</th><td>  <i>/* Degree of the node.  */</i></td></tr>
+<tr><th id="129">129</th><td>  <b>__extension__</b> <em>unsigned</em> <em>long</em> <em>int</em> m_degree : <var>31</var>;</td></tr>
+<tr><th id="130">130</th><td>  <i>/* Mark of the node.  */</i></td></tr>
+<tr><th id="131">131</th><td>  <b>__extension__</b> <em>unsigned</em> <em>long</em> <em>int</em> m_mark : <var>1</var>;</td></tr>
+<tr><th id="132">132</th><td><u>#<span data-ppcond="127">else</span></u></td></tr>
+<tr><th id="133">133</th><td>  <i>/* Degree of the node.  */</i></td></tr>
+<tr><th id="134">134</th><td>  <em>unsigned</em> <em>int</em> <dfn class="decl field" id="fibonacci_node::m_degree" title='fibonacci_node::m_degree' data-ref="fibonacci_node::m_degree" data-ref-filename="fibonacci_node..m_degree">m_degree</dfn> : <var>31</var>;</td></tr>
+<tr><th id="135">135</th><td>  <i>/* Mark of the node.  */</i></td></tr>
+<tr><th id="136">136</th><td>  <em>unsigned</em> <em>int</em> <dfn class="decl field" id="fibonacci_node::m_mark" title='fibonacci_node::m_mark' data-ref="fibonacci_node::m_mark" data-ref-filename="fibonacci_node..m_mark">m_mark</dfn> : <var>1</var>;</td></tr>
+<tr><th id="137">137</th><td><u>#<span data-ppcond="127">endif</span></u></td></tr>
+<tr><th id="138">138</th><td>};</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><i>/* Fibonacci heap class. */</i></td></tr>
+<tr><th id="141">141</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="142">142</th><td><b>class</b> <dfn class="type def" id="fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</dfn></td></tr>
+<tr><th id="143">143</th><td>{</td></tr>
+<tr><th id="144">144</th><td>  <b>typedef</b> <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; <dfn class="typedef" id="fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</dfn>;</td></tr>
+<tr><th id="145">145</th><td>  <b>friend</b> <b>class</b> <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;;</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><b>public</b>:</td></tr>
+<tr><th id="148">148</th><td>  <i>/* Default constructor.  */</i></td></tr>
+<tr><th id="149">149</th><td>  <dfn class="decl def fn" id="_ZN14fibonacci_heapC1ET_" title='fibonacci_heap::fibonacci_heap&lt;K, V&gt;' data-ref="_ZN14fibonacci_heapC1ET_" data-ref-filename="_ZN14fibonacci_heapC1ET_">fibonacci_heap</dfn> (K <dfn class="local col1 decl" id="71global_min_key" title='global_min_key' data-type='K' data-ref="71global_min_key" data-ref-filename="71global_min_key">global_min_key</dfn>): <a class="member field" href="#fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</a> (<var>0</var>), <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> (<span class="macro" title="__null" data-ref="_M/NULL">NULL</span>), <a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a> (<span class="macro" title="__null" data-ref="_M/NULL">NULL</span>),</td></tr>
+<tr><th id="150">150</th><td>    <a class="member field" href="#fibonacci_heap::m_global_min_key" title='fibonacci_heap::m_global_min_key' data-ref="fibonacci_heap::m_global_min_key" data-ref-filename="fibonacci_heap..m_global_min_key">m_global_min_key</a> (<a class="local col1 ref" href="#71global_min_key" title='global_min_key' data-ref="71global_min_key" data-ref-filename="71global_min_key">global_min_key</a>)</td></tr>
+<tr><th id="151">151</th><td>  {</td></tr>
+<tr><th id="152">152</th><td>  }</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td>  <i>/* Destructor.  */</i></td></tr>
+<tr><th id="155">155</th><td>  <dfn class="decl def fn" id="_ZN14fibonacci_heapD1Ev" title='fibonacci_heap::~fibonacci_heap&lt;K, V&gt;' data-ref="_ZN14fibonacci_heapD1Ev" data-ref-filename="_ZN14fibonacci_heapD1Ev">~fibonacci_heap</dfn> ()</td></tr>
+<tr><th id="156">156</th><td>  {</td></tr>
+<tr><th id="157">157</th><td>    <b>while</b> (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="158">158</th><td>      <b>delete</b> (<a class="member fn" href="#_ZN14fibonacci_heap20extract_minimum_nodeEv" title='fibonacci_heap::extract_minimum_node' data-ref="_ZN14fibonacci_heap20extract_minimum_nodeEv" data-ref-filename="_ZN14fibonacci_heap20extract_minimum_nodeEv">extract_minimum_node</a> ());</td></tr>
+<tr><th id="159">159</th><td>  }</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td>  <i>/* Insert new node given by KEY and DATA associated with the key.  */</i></td></tr>
+<tr><th id="162">162</th><td>  <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<a class="decl fn" href="#_ZN14fibonacci_heap6insertET_PT0_" title='fibonacci_heap::insert' data-ref="_ZN14fibonacci_heap6insertET_PT0_" data-ref-filename="_ZN14fibonacci_heap6insertET_PT0_">insert</a> (K <dfn class="local col2 decl" id="72key" title='key' data-type='K' data-ref="72key" data-ref-filename="72key">key</dfn>, V *<dfn class="local col3 decl" id="73data" title='data' data-type='V *' data-ref="73data" data-ref-filename="73data">data</dfn>);</td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td>  <i>/* Return true if no entry is present.  */</i></td></tr>
+<tr><th id="165">165</th><td>  <em>bool</em> <dfn class="decl def fn" id="_ZN14fibonacci_heap5emptyEv" title='fibonacci_heap::empty' data-ref="_ZN14fibonacci_heap5emptyEv" data-ref-filename="_ZN14fibonacci_heap5emptyEv">empty</dfn> ()</td></tr>
+<tr><th id="166">166</th><td>  {</td></tr>
+<tr><th id="167">167</th><td>    <b>return</b> <a class="member field" href="#fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</a> == <var>0</var>;</td></tr>
+<tr><th id="168">168</th><td>  }</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>  <i>/* Return the number of nodes.  */</i></td></tr>
+<tr><th id="171">171</th><td>  <span class='typedef' title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</span> <dfn class="decl def fn" id="_ZN14fibonacci_heap5nodesEv" title='fibonacci_heap::nodes' data-ref="_ZN14fibonacci_heap5nodesEv" data-ref-filename="_ZN14fibonacci_heap5nodesEv">nodes</dfn> ()</td></tr>
+<tr><th id="172">172</th><td>  {</td></tr>
+<tr><th id="173">173</th><td>    <b>return</b> <a class="member field" href="#fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</a>;</td></tr>
+<tr><th id="174">174</th><td>  }</td></tr>
+<tr><th id="175">175</th><td></td></tr>
+<tr><th id="176">176</th><td>  <i>/* Return minimal key presented in the heap.  */</i></td></tr>
+<tr><th id="177">177</th><td>  K <dfn class="decl def fn" id="_ZN14fibonacci_heap7min_keyEv" title='fibonacci_heap::min_key' data-ref="_ZN14fibonacci_heap7min_keyEv" data-ref-filename="_ZN14fibonacci_heap7min_keyEv">min_key</dfn> ()</td></tr>
+<tr><th id="178">178</th><td>  {</td></tr>
+<tr><th id="179">179</th><td>    <b>if</b> (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="180">180</th><td>      <a class="macro" href="system.h.html#758" title="(fancy_abort (&quot;/___NETBSD_SRC___/external/gpl3/gcc/dist/libgcc/../gcc/fibonacci_heap.h&quot;, 180, __FUNCTION__))" data-ref="_M/gcc_unreachable">gcc_unreachable</a> ();</td></tr>
+<tr><th id="181">181</th><td></td></tr>
+<tr><th id="182">182</th><td>    <b>return</b> <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>-&gt;m_key;</td></tr>
+<tr><th id="183">183</th><td>  }</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>  <i>/* For given NODE, set new KEY value.  */</i></td></tr>
+<tr><th id="186">186</th><td>  K <dfn class="decl def fn" id="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_" title='fibonacci_heap::replace_key' data-ref="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_" data-ref-filename="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_">replace_key</dfn> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col4 decl" id="74node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="74node" data-ref-filename="74node">node</dfn>, K <dfn class="local col5 decl" id="75key" title='key' data-type='K' data-ref="75key" data-ref-filename="75key">key</dfn>)</td></tr>
+<tr><th id="187">187</th><td>  {</td></tr>
+<tr><th id="188">188</th><td>    K <dfn class="local col6 decl" id="76okey" title='okey' data-type='K' data-ref="76okey" data-ref-filename="76okey">okey</dfn> = <a class="local col4 ref" href="#74node" title='node' data-ref="74node" data-ref-filename="74node">node</a>-&gt;m_key;</td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>    <a class="member fn" href="#_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" title='fibonacci_heap::replace_key_data' data-ref="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" data-ref-filename="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_">replace_key_data</a> (<a class="local col4 ref" href="#74node" title='node' data-ref="74node" data-ref-filename="74node">node</a>, <a class="local col5 ref" href="#75key" title='key' data-ref="75key" data-ref-filename="75key">key</a>, <a class="local col4 ref" href="#74node" title='node' data-ref="74node" data-ref-filename="74node">node</a>-&gt;m_data);</td></tr>
+<tr><th id="191">191</th><td>    <b>return</b> <a class="local col6 ref" href="#76okey" title='okey' data-ref="76okey" data-ref-filename="76okey">okey</a>;</td></tr>
+<tr><th id="192">192</th><td>  }</td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>  <i>/* For given NODE, decrease value to new KEY.  */</i></td></tr>
+<tr><th id="195">195</th><td>  K <dfn class="decl def fn" id="_ZN14fibonacci_heap12decrease_keyEP14fibonacci_nodeIT_T0_ES1_" title='fibonacci_heap::decrease_key' data-ref="_ZN14fibonacci_heap12decrease_keyEP14fibonacci_nodeIT_T0_ES1_" data-ref-filename="_ZN14fibonacci_heap12decrease_keyEP14fibonacci_nodeIT_T0_ES1_">decrease_key</dfn> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col7 decl" id="77node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="77node" data-ref-filename="77node">node</dfn>, K <dfn class="local col8 decl" id="78key" title='key' data-type='K' data-ref="78key" data-ref-filename="78key">key</dfn>)</td></tr>
+<tr><th id="196">196</th><td>  {</td></tr>
+<tr><th id="197">197</th><td>    <a class="macro" href="system.h.html#736" title="((void)(!(key &lt;= node-&gt;m_key) ? fancy_abort (&quot;/___NETBSD_SRC___/external/gpl3/gcc/dist/libgcc/../gcc/fibonacci_heap.h&quot;, 197, __FUNCTION__), 0 : 0))" data-ref="_M/gcc_assert">gcc_assert</a> (<a class="local col8 ref" href="#78key" title='key' data-ref="78key" data-ref-filename="78key">key</a> &lt;= <a class="local col7 ref" href="#77node" title='node' data-ref="77node" data-ref-filename="77node">node</a>-&gt;m_key);</td></tr>
+<tr><th id="198">198</th><td>    <b>return</b> <a class="member fn" href="#_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_" title='fibonacci_heap::replace_key' data-ref="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_" data-ref-filename="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_">replace_key</a> (<a class="local col7 ref" href="#77node" title='node' data-ref="77node" data-ref-filename="77node">node</a>, <a class="local col8 ref" href="#78key" title='key' data-ref="78key" data-ref-filename="78key">key</a>);</td></tr>
+<tr><th id="199">199</th><td>  }</td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td>  <i>/* For given NODE, set new KEY and DATA value.  */</i></td></tr>
+<tr><th id="202">202</th><td>  V *<a class="decl fn" href="#_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" title='fibonacci_heap::replace_key_data' data-ref="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" data-ref-filename="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_">replace_key_data</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col9 decl" id="79node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="79node" data-ref-filename="79node">node</dfn>, K <dfn class="local col0 decl" id="80key" title='key' data-type='K' data-ref="80key" data-ref-filename="80key">key</dfn>, V *<dfn class="local col1 decl" id="81data" title='data' data-type='V *' data-ref="81data" data-ref-filename="81data">data</dfn>);</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td>  <i>/* Extract minimum node in the heap. If RELEASE is specified,</i></td></tr>
+<tr><th id="205">205</th><td><i>     memory is released.  */</i></td></tr>
+<tr><th id="206">206</th><td>  V *<a class="decl fn" href="#_ZN14fibonacci_heap11extract_minEb" title='fibonacci_heap::extract_min' data-ref="_ZN14fibonacci_heap11extract_minEb" data-ref-filename="_ZN14fibonacci_heap11extract_minEb">extract_min</a> (<em>bool</em> <dfn class="local col2 decl" id="82release" title='release' data-type='bool' data-ref="82release" data-ref-filename="82release">release</dfn> = <b>true</b>);</td></tr>
+<tr><th id="207">207</th><td></td></tr>
+<tr><th id="208">208</th><td>  <i>/* Return value associated with minimum node in the heap.  */</i></td></tr>
+<tr><th id="209">209</th><td>  V *<dfn class="decl def fn" id="_ZN14fibonacci_heap3minEv" title='fibonacci_heap::min' data-ref="_ZN14fibonacci_heap3minEv" data-ref-filename="_ZN14fibonacci_heap3minEv">min</dfn> ()</td></tr>
+<tr><th id="210">210</th><td>  {</td></tr>
+<tr><th id="211">211</th><td>    <b>if</b> (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="212">212</th><td>      <b>return</b> <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td>    <b>return</b> <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>-&gt;m_data;</td></tr>
+<tr><th id="215">215</th><td>  }</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td>  <i>/* Replace data associated with NODE and replace it with DATA.  */</i></td></tr>
+<tr><th id="218">218</th><td>  V *<dfn class="decl def fn" id="_ZN14fibonacci_heap12replace_dataEP14fibonacci_nodeIT_T0_EPS2_" title='fibonacci_heap::replace_data' data-ref="_ZN14fibonacci_heap12replace_dataEP14fibonacci_nodeIT_T0_EPS2_" data-ref-filename="_ZN14fibonacci_heap12replace_dataEP14fibonacci_nodeIT_T0_EPS2_">replace_data</dfn> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col3 decl" id="83node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="83node" data-ref-filename="83node">node</dfn>, V *<dfn class="local col4 decl" id="84data" title='data' data-type='V *' data-ref="84data" data-ref-filename="84data">data</dfn>)</td></tr>
+<tr><th id="219">219</th><td>  {</td></tr>
+<tr><th id="220">220</th><td>    <b>return</b> <a class="member fn" href="#_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" title='fibonacci_heap::replace_key_data' data-ref="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" data-ref-filename="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_">replace_key_data</a> (<a class="local col3 ref" href="#83node" title='node' data-ref="83node" data-ref-filename="83node">node</a>, <a class="local col3 ref" href="#83node" title='node' data-ref="83node" data-ref-filename="83node">node</a>-&gt;m_key, <a class="local col4 ref" href="#84data" title='data' data-ref="84data" data-ref-filename="84data">data</a>);</td></tr>
+<tr><th id="221">221</th><td>  }</td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td>  <i>/* Delete NODE in the heap.  */</i></td></tr>
+<tr><th id="224">224</th><td>  V *<a class="decl fn" href="#_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb" title='fibonacci_heap::delete_node' data-ref="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb" data-ref-filename="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb">delete_node</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col5 decl" id="85node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="85node" data-ref-filename="85node">node</dfn>, <em>bool</em> <dfn class="local col6 decl" id="86release" title='release' data-type='bool' data-ref="86release" data-ref-filename="86release">release</dfn> = <b>true</b>);</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td>  <i>/* Union the heap with HEAPB.  */</i></td></tr>
+<tr><th id="227">227</th><td>  fibonacci_heap *<a class="decl fn" href="#_ZN14fibonacci_heap10union_withEP14fibonacci_heapIT_T0_E" title='fibonacci_heap::union_with' data-ref="_ZN14fibonacci_heap10union_withEP14fibonacci_heapIT_T0_E" data-ref-filename="_ZN14fibonacci_heap10union_withEP14fibonacci_heapIT_T0_E">union_with</a> (fibonacci_heap *<dfn class="local col7 decl" id="87heapb" title='heapb' data-type='fibonacci_heap&lt;K, V&gt; *' data-ref="87heapb" data-ref-filename="87heapb">heapb</dfn>);</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td><b>private</b>:</td></tr>
+<tr><th id="230">230</th><td>  <i>/* Insert new NODE given by KEY and DATA associated with the key.  */</i></td></tr>
+<tr><th id="231">231</th><td>  <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<a class="decl fn" href="#_ZN14fibonacci_heap6insertEP14fibonacci_nodeIT_T0_ES1_PS2_" title='fibonacci_heap::insert' data-ref="_ZN14fibonacci_heap6insertEP14fibonacci_nodeIT_T0_ES1_PS2_" data-ref-filename="_ZN14fibonacci_heap6insertEP14fibonacci_nodeIT_T0_ES1_PS2_">insert</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col8 decl" id="88node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="88node" data-ref-filename="88node">node</dfn>, K <dfn class="local col9 decl" id="89key" title='key' data-type='K' data-ref="89key" data-ref-filename="89key">key</dfn>, V *<dfn class="local col0 decl" id="90data" title='data' data-type='V *' data-ref="90data" data-ref-filename="90data">data</dfn>);</td></tr>
+<tr><th id="232">232</th><td></td></tr>
+<tr><th id="233">233</th><td>  <i>/* Insert new NODE that has already filled key and value.  */</i></td></tr>
+<tr><th id="234">234</th><td>  <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<a class="decl fn" href="#_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_node' data-ref="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E">insert_node</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col1 decl" id="91node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="91node" data-ref-filename="91node">node</dfn>);</td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td>  <i>/* Insert it into the root list.  */</i></td></tr>
+<tr><th id="237">237</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_root' data-ref="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E">insert_root</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col2 decl" id="92node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="92node" data-ref-filename="92node">node</dfn>);</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>  <i>/* Remove NODE from PARENT's child list.  */</i></td></tr>
+<tr><th id="240">240</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" title='fibonacci_heap::cut' data-ref="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" data-ref-filename="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_">cut</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col3 decl" id="93node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="93node" data-ref-filename="93node">node</dfn>, <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col4 decl" id="94parent" title='parent' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="94parent" data-ref-filename="94parent">parent</dfn>);</td></tr>
+<tr><th id="241">241</th><td></td></tr>
+<tr><th id="242">242</th><td>  <i>/* Process cut of node Y and do it recursivelly.  */</i></td></tr>
+<tr><th id="243">243</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::cascading_cut' data-ref="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E">cascading_cut</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col5 decl" id="95y" title='y' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="95y" data-ref-filename="95y">y</dfn>);</td></tr>
+<tr><th id="244">244</th><td></td></tr>
+<tr><th id="245">245</th><td>  <i>/* Extract minimum node from the heap.  */</i></td></tr>
+<tr><th id="246">246</th><td>  <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> * <a class="decl fn" href="#_ZN14fibonacci_heap20extract_minimum_nodeEv" title='fibonacci_heap::extract_minimum_node' data-ref="_ZN14fibonacci_heap20extract_minimum_nodeEv" data-ref-filename="_ZN14fibonacci_heap20extract_minimum_nodeEv">extract_minimum_node</a> ();</td></tr>
+<tr><th id="247">247</th><td></td></tr>
+<tr><th id="248">248</th><td>  <i>/* Remove root NODE from the heap.  */</i></td></tr>
+<tr><th id="249">249</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::remove_root' data-ref="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E">remove_root</a> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col6 decl" id="96node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="96node" data-ref-filename="96node">node</dfn>);</td></tr>
+<tr><th id="250">250</th><td></td></tr>
+<tr><th id="251">251</th><td>  <i>/* Consolidate heap.  */</i></td></tr>
+<tr><th id="252">252</th><td>  <em>void</em> <a class="decl fn" href="#_ZN14fibonacci_heap11consolidateEv" title='fibonacci_heap::consolidate' data-ref="_ZN14fibonacci_heap11consolidateEv" data-ref-filename="_ZN14fibonacci_heap11consolidateEv">consolidate</a> ();</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>  <i>/* Number of nodes.  */</i></td></tr>
+<tr><th id="255">255</th><td>  <span class='typedef' title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</span> <dfn class="decl field" id="fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</dfn>;</td></tr>
+<tr><th id="256">256</th><td>  <i>/* Minimum node of the heap.  */</i></td></tr>
+<tr><th id="257">257</th><td>  <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="decl field" id="fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</dfn>;</td></tr>
+<tr><th id="258">258</th><td>  <i>/* Root node of the heap.  */</i></td></tr>
+<tr><th id="259">259</th><td>  <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="decl field" id="fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</dfn>;</td></tr>
+<tr><th id="260">260</th><td>  <i>/* Global minimum given in the heap construction.  */</i></td></tr>
+<tr><th id="261">261</th><td>  K <dfn class="decl field" id="fibonacci_heap::m_global_min_key" title='fibonacci_heap::m_global_min_key' data-ref="fibonacci_heap::m_global_min_key" data-ref-filename="fibonacci_heap..m_global_min_key">m_global_min_key</dfn>;</td></tr>
+<tr><th id="262">262</th><td>};</td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td><i>/* Remove fibonacci heap node.  */</i></td></tr>
+<tr><th id="265">265</th><td></td></tr>
+<tr><th id="266">266</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="267">267</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *</td></tr>
+<tr><th id="268">268</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_node6removeEv" title='fibonacci_node::remove' data-ref="_ZN14fibonacci_node6removeEv" data-ref-filename="_ZN14fibonacci_node6removeEv">remove</dfn> ()</td></tr>
+<tr><th id="269">269</th><td>{</td></tr>
+<tr><th id="270">270</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col7 decl" id="97ret" title='ret' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="97ret" data-ref-filename="97ret">ret</dfn>;</td></tr>
+<tr><th id="271">271</th><td></td></tr>
+<tr><th id="272">272</th><td>  <b>if</b> (<b>this</b> == <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a>)</td></tr>
+<tr><th id="273">273</th><td>    <a class="local col7 ref" href="#97ret" title='ret' data-ref="97ret" data-ref-filename="97ret">ret</a> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="274">274</th><td>  <b>else</b></td></tr>
+<tr><th id="275">275</th><td>    <a class="local col7 ref" href="#97ret" title='ret' data-ref="97ret" data-ref-filename="97ret">ret</a> = <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a>;</td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td>  <b>if</b> (<a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a> != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span> &amp;&amp; <a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a>-&gt;m_child == <b>this</b>)</td></tr>
+<tr><th id="278">278</th><td>    <a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a>-&gt;m_child = <a class="local col7 ref" href="#97ret" title='ret' data-ref="97ret" data-ref-filename="97ret">ret</a>;</td></tr>
+<tr><th id="279">279</th><td></td></tr>
+<tr><th id="280">280</th><td>  <a class="member field" href="#fibonacci_node::m_right" title='fibonacci_node::m_right' data-ref="fibonacci_node::m_right" data-ref-filename="fibonacci_node..m_right">m_right</a>-&gt;m_left = <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a>;</td></tr>
+<tr><th id="281">281</th><td>  <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a>-&gt;m_right = <a class="member field" href="#fibonacci_node::m_right" title='fibonacci_node::m_right' data-ref="fibonacci_node::m_right" data-ref-filename="fibonacci_node..m_right">m_right</a>;</td></tr>
+<tr><th id="282">282</th><td></td></tr>
+<tr><th id="283">283</th><td>  <a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="284">284</th><td>  <a class="member field" href="#fibonacci_node::m_left" title='fibonacci_node::m_left' data-ref="fibonacci_node::m_left" data-ref-filename="fibonacci_node..m_left">m_left</a> = <b>this</b>;</td></tr>
+<tr><th id="285">285</th><td>  <a class="member field" href="#fibonacci_node::m_right" title='fibonacci_node::m_right' data-ref="fibonacci_node::m_right" data-ref-filename="fibonacci_node..m_right">m_right</a> = <b>this</b>;</td></tr>
+<tr><th id="286">286</th><td></td></tr>
+<tr><th id="287">287</th><td>  <b>return</b> <a class="local col7 ref" href="#97ret" title='ret' data-ref="97ret" data-ref-filename="97ret">ret</a>;</td></tr>
+<tr><th id="288">288</th><td>}</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td><i>/* Link the node with PARENT.  */</i></td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="293">293</th><td><em>void</em></td></tr>
+<tr><th id="294">294</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_node4linkEP14fibonacci_nodeIT_T0_E" title='fibonacci_node::link' data-ref="_ZN14fibonacci_node4linkEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_node4linkEP14fibonacci_nodeIT_T0_E">link</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col8 decl" id="98parent" title='parent' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="98parent" data-ref-filename="98parent">parent</dfn>)</td></tr>
+<tr><th id="295">295</th><td>{</td></tr>
+<tr><th id="296">296</th><td>  <b>if</b> (<a class="local col8 ref" href="#98parent" title='parent' data-ref="98parent" data-ref-filename="98parent">parent</a>-&gt;m_child == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="297">297</th><td>    <a class="local col8 ref" href="#98parent" title='parent' data-ref="98parent" data-ref-filename="98parent">parent</a>-&gt;m_child = <b>this</b>;</td></tr>
+<tr><th id="298">298</th><td>  <b>else</b></td></tr>
+<tr><th id="299">299</th><td>    <a class="local col8 ref" href="#98parent" title='parent' data-ref="98parent" data-ref-filename="98parent">parent</a>-&gt;m_child-&gt;insert_before (<b>this</b>);</td></tr>
+<tr><th id="300">300</th><td>  <a class="member field" href="#fibonacci_node::m_parent" title='fibonacci_node::m_parent' data-ref="fibonacci_node::m_parent" data-ref-filename="fibonacci_node..m_parent">m_parent</a> = <a class="local col8 ref" href="#98parent" title='parent' data-ref="98parent" data-ref-filename="98parent">parent</a>;</td></tr>
+<tr><th id="301">301</th><td>  <a class="local col8 ref" href="#98parent" title='parent' data-ref="98parent" data-ref-filename="98parent">parent</a>-&gt;m_degree++;</td></tr>
+<tr><th id="302">302</th><td>  <a class="member field" href="#fibonacci_node::m_mark" title='fibonacci_node::m_mark' data-ref="fibonacci_node::m_mark" data-ref-filename="fibonacci_node..m_mark">m_mark</a> = <var>0</var>;</td></tr>
+<tr><th id="303">303</th><td>}</td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td><i>/* Put node B after this node.  */</i></td></tr>
+<tr><th id="306">306</th><td></td></tr>
+<tr><th id="307">307</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="308">308</th><td><em>void</em></td></tr>
+<tr><th id="309">309</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_node12insert_afterEP14fibonacci_nodeIT_T0_E" title='fibonacci_node::insert_after' data-ref="_ZN14fibonacci_node12insert_afterEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_node12insert_afterEP14fibonacci_nodeIT_T0_E">insert_after</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col9 decl" id="99b" title='b' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="99b" data-ref-filename="99b">b</dfn>)</td></tr>
+<tr><th id="310">310</th><td>{</td></tr>
+<tr><th id="311">311</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col0 decl" id="100a" title='a' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="100a" data-ref-filename="100a">a</dfn> = <b>this</b>;</td></tr>
+<tr><th id="312">312</th><td></td></tr>
+<tr><th id="313">313</th><td>  <b>if</b> (<a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a> == <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>-&gt;m_right)</td></tr>
+<tr><th id="314">314</th><td>    {</td></tr>
+<tr><th id="315">315</th><td>      <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>-&gt;m_right = <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>;</td></tr>
+<tr><th id="316">316</th><td>      <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>-&gt;m_left = <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>;</td></tr>
+<tr><th id="317">317</th><td>      <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>-&gt;m_right = <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>;</td></tr>
+<tr><th id="318">318</th><td>      <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>-&gt;m_left = <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>;</td></tr>
+<tr><th id="319">319</th><td>    }</td></tr>
+<tr><th id="320">320</th><td>  <b>else</b></td></tr>
+<tr><th id="321">321</th><td>    {</td></tr>
+<tr><th id="322">322</th><td>      <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>-&gt;m_right = <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>-&gt;m_right;</td></tr>
+<tr><th id="323">323</th><td>      <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>-&gt;m_right-&gt;m_left = <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>;</td></tr>
+<tr><th id="324">324</th><td>      <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>-&gt;m_right = <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>;</td></tr>
+<tr><th id="325">325</th><td>      <a class="local col9 ref" href="#99b" title='b' data-ref="99b" data-ref-filename="99b">b</a>-&gt;m_left = <a class="local col0 ref" href="#100a" title='a' data-ref="100a" data-ref-filename="100a">a</a>;</td></tr>
+<tr><th id="326">326</th><td>    }</td></tr>
+<tr><th id="327">327</th><td>}</td></tr>
+<tr><th id="328">328</th><td></td></tr>
+<tr><th id="329">329</th><td><i>/* Insert new node given by KEY and DATA associated with the key.  */</i></td></tr>
+<tr><th id="330">330</th><td></td></tr>
+<tr><th id="331">331</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="332">332</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;*</td></tr>
+<tr><th id="333">333</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap6insertET_PT0_" title='fibonacci_heap::insert' data-ref="_ZN14fibonacci_heap6insertET_PT0_" data-ref-filename="_ZN14fibonacci_heap6insertET_PT0_">insert</dfn> (K <dfn class="local col1 decl" id="101key" title='key' data-type='K' data-ref="101key" data-ref-filename="101key">key</dfn>, V *<dfn class="local col2 decl" id="102data" title='data' data-type='V *' data-ref="102data" data-ref-filename="102data">data</dfn>)</td></tr>
+<tr><th id="334">334</th><td>{</td></tr>
+<tr><th id="335">335</th><td>  <i>/* Create the new node.  */</i></td></tr>
+<tr><th id="336">336</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col3 decl" id="103node" title='node' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="103node" data-ref-filename="103node">node</dfn> = <b>new</b> <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> (<a class="local col1 ref" href="#101key" title='key' data-ref="101key" data-ref-filename="101key">key</a>, <a class="local col2 ref" href="#102data" title='data' data-ref="102data" data-ref-filename="102data">data</a>);</td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td>  <b>return</b> <a class="member fn" href="#_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_node' data-ref="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E">insert_node</a> (<a class="local col3 ref" href="#103node" title='node' data-ref="103node" data-ref-filename="103node">node</a>);</td></tr>
+<tr><th id="339">339</th><td>}</td></tr>
+<tr><th id="340">340</th><td></td></tr>
+<tr><th id="341">341</th><td><i>/* Insert new NODE given by DATA associated with the key.  */</i></td></tr>
+<tr><th id="342">342</th><td></td></tr>
+<tr><th id="343">343</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="344">344</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;*</td></tr>
+<tr><th id="345">345</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap6insertEP14fibonacci_nodeIT_T0_ES1_PS2_" title='fibonacci_heap::insert' data-ref="_ZN14fibonacci_heap6insertEP14fibonacci_nodeIT_T0_ES1_PS2_" data-ref-filename="_ZN14fibonacci_heap6insertEP14fibonacci_nodeIT_T0_ES1_PS2_">insert</dfn> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col4 decl" id="104node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="104node" data-ref-filename="104node">node</dfn>, K <dfn class="local col5 decl" id="105key" title='key' data-type='K' data-ref="105key" data-ref-filename="105key">key</dfn>, V *<dfn class="local col6 decl" id="106data" title='data' data-type='V *' data-ref="106data" data-ref-filename="106data">data</dfn>)</td></tr>
+<tr><th id="346">346</th><td>{</td></tr>
+<tr><th id="347">347</th><td>  <i>/* Set the node's data.  */</i></td></tr>
+<tr><th id="348">348</th><td>  <a class="local col4 ref" href="#104node" title='node' data-ref="104node" data-ref-filename="104node">node</a>-&gt;m_data = <a class="local col6 ref" href="#106data" title='data' data-ref="106data" data-ref-filename="106data">data</a>;</td></tr>
+<tr><th id="349">349</th><td>  <a class="local col4 ref" href="#104node" title='node' data-ref="104node" data-ref-filename="104node">node</a>-&gt;m_key = <a class="local col5 ref" href="#105key" title='key' data-ref="105key" data-ref-filename="105key">key</a>;</td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td>  <b>return</b> <a class="member fn" href="#_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_node' data-ref="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E">insert_node</a> (<a class="local col4 ref" href="#104node" title='node' data-ref="104node" data-ref-filename="104node">node</a>);</td></tr>
+<tr><th id="352">352</th><td>}</td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td><i>/* Insert new NODE that has already filled key and value.  */</i></td></tr>
+<tr><th id="355">355</th><td></td></tr>
+<tr><th id="356">356</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="357">357</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;*</td></tr>
+<tr><th id="358">358</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_node' data-ref="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_nodeEP14fibonacci_nodeIT_T0_E">insert_node</dfn> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col7 decl" id="107node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="107node" data-ref-filename="107node">node</dfn>)</td></tr>
+<tr><th id="359">359</th><td>{</td></tr>
+<tr><th id="360">360</th><td>  <i>/* Insert it into the root list.  */</i></td></tr>
+<tr><th id="361">361</th><td>  <a class="member fn" href="#_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_root' data-ref="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E">insert_root</a> (<a class="local col7 ref" href="#107node" title='node' data-ref="107node" data-ref-filename="107node">node</a>);</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td>  <i>/* If their was no minimum, or this key is less than the min,</i></td></tr>
+<tr><th id="364">364</th><td><i>     it's the new min.  */</i></td></tr>
+<tr><th id="365">365</th><td>  <b>if</b> (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span> || <a class="local col7 ref" href="#107node" title='node' data-ref="107node" data-ref-filename="107node">node</a>-&gt;m_key &lt; <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>-&gt;m_key)</td></tr>
+<tr><th id="366">366</th><td>    <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> = <a class="local col7 ref" href="#107node" title='node' data-ref="107node" data-ref-filename="107node">node</a>;</td></tr>
+<tr><th id="367">367</th><td></td></tr>
+<tr><th id="368">368</th><td>  <a class="member field" href="#fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</a>++;</td></tr>
+<tr><th id="369">369</th><td></td></tr>
+<tr><th id="370">370</th><td>  <b>return</b> <a class="local col7 ref" href="#107node" title='node' data-ref="107node" data-ref-filename="107node">node</a>;</td></tr>
+<tr><th id="371">371</th><td>}</td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td><i>/* For given NODE, set new KEY and DATA value.  */</i></td></tr>
+<tr><th id="374">374</th><td></td></tr>
+<tr><th id="375">375</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="376">376</th><td>V*</td></tr>
+<tr><th id="377">377</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" title='fibonacci_heap::replace_key_data' data-ref="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_" data-ref-filename="_ZN14fibonacci_heap16replace_key_dataEP14fibonacci_nodeIT_T0_ES1_PS2_">replace_key_data</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col8 decl" id="108node" title='node' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="108node" data-ref-filename="108node">node</dfn>, K <dfn class="local col9 decl" id="109key" title='key' data-type='K' data-ref="109key" data-ref-filename="109key">key</dfn>,</td></tr>
+<tr><th id="378">378</th><td>				       V *<dfn class="local col0 decl" id="110data" title='data' data-type='V *' data-ref="110data" data-ref-filename="110data">data</dfn>)</td></tr>
+<tr><th id="379">379</th><td>{</td></tr>
+<tr><th id="380">380</th><td>  K <dfn class="local col1 decl" id="111okey" title='okey' data-type='K' data-ref="111okey" data-ref-filename="111okey">okey</dfn>;</td></tr>
+<tr><th id="381">381</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col2 decl" id="112y" title='y' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="112y" data-ref-filename="112y">y</dfn>;</td></tr>
+<tr><th id="382">382</th><td>  V *<dfn class="local col3 decl" id="113odata" title='odata' data-type='V *' data-ref="113odata" data-ref-filename="113odata">odata</dfn> = <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;m_data;</td></tr>
+<tr><th id="383">383</th><td></td></tr>
+<tr><th id="384">384</th><td>  <i>/* If we wanted to, we do a real increase by redeleting and</i></td></tr>
+<tr><th id="385">385</th><td><i>     inserting.  */</i></td></tr>
+<tr><th id="386">386</th><td>  <b>if</b> (<a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;compare_data (<a class="local col9 ref" href="#109key" title='key' data-ref="109key" data-ref-filename="109key">key</a>) &gt; <var>0</var>)</td></tr>
+<tr><th id="387">387</th><td>    {</td></tr>
+<tr><th id="388">388</th><td>      <a class="member fn" href="#_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb" title='fibonacci_heap::delete_node' data-ref="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb" data-ref-filename="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb">delete_node</a> (<a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>, <b>false</b>);</td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td>      <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a> = <b>new</b> (<a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>) <a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> ();</td></tr>
+<tr><th id="391">391</th><td>      insert (<a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>, <a class="local col9 ref" href="#109key" title='key' data-ref="109key" data-ref-filename="109key">key</a>, <a class="local col0 ref" href="#110data" title='data' data-ref="110data" data-ref-filename="110data">data</a>);</td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td>      <b>return</b> <a class="local col3 ref" href="#113odata" title='odata' data-ref="113odata" data-ref-filename="113odata">odata</a>;</td></tr>
+<tr><th id="394">394</th><td>    }</td></tr>
+<tr><th id="395">395</th><td></td></tr>
+<tr><th id="396">396</th><td>  <a class="local col1 ref" href="#111okey" title='okey' data-ref="111okey" data-ref-filename="111okey">okey</a> = <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;m_key;</td></tr>
+<tr><th id="397">397</th><td>  <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;m_data = <a class="local col0 ref" href="#110data" title='data' data-ref="110data" data-ref-filename="110data">data</a>;</td></tr>
+<tr><th id="398">398</th><td>  <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;m_key = <a class="local col9 ref" href="#109key" title='key' data-ref="109key" data-ref-filename="109key">key</a>;</td></tr>
+<tr><th id="399">399</th><td>  <a class="local col2 ref" href="#112y" title='y' data-ref="112y" data-ref-filename="112y">y</a> = <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;m_parent;</td></tr>
+<tr><th id="400">400</th><td></td></tr>
+<tr><th id="401">401</th><td>  <i>/* Short-circuit if the key is the same, as we then don't have to</i></td></tr>
+<tr><th id="402">402</th><td><i>     do anything.  Except if we're trying to force the new node to</i></td></tr>
+<tr><th id="403">403</th><td><i>     be the new minimum for delete.  */</i></td></tr>
+<tr><th id="404">404</th><td>  <b>if</b> (<a class="local col1 ref" href="#111okey" title='okey' data-ref="111okey" data-ref-filename="111okey">okey</a> == <a class="local col9 ref" href="#109key" title='key' data-ref="109key" data-ref-filename="109key">key</a> &amp;&amp; <a class="local col1 ref" href="#111okey" title='okey' data-ref="111okey" data-ref-filename="111okey">okey</a> != <a class="member field" href="#fibonacci_heap::m_global_min_key" title='fibonacci_heap::m_global_min_key' data-ref="fibonacci_heap::m_global_min_key" data-ref-filename="fibonacci_heap..m_global_min_key">m_global_min_key</a>)</td></tr>
+<tr><th id="405">405</th><td>    <b>return</b> <a class="local col3 ref" href="#113odata" title='odata' data-ref="113odata" data-ref-filename="113odata">odata</a>;</td></tr>
+<tr><th id="406">406</th><td></td></tr>
+<tr><th id="407">407</th><td>  <i>/* These two compares are specifically &lt;= 0 to make sure that in the case</i></td></tr>
+<tr><th id="408">408</th><td><i>     of equality, a node we replaced the data on, becomes the new min.  This</i></td></tr>
+<tr><th id="409">409</th><td><i>     is needed so that delete's call to extractmin gets the right node.  */</i></td></tr>
+<tr><th id="410">410</th><td>  <b>if</b> (<a class="local col2 ref" href="#112y" title='y' data-ref="112y" data-ref-filename="112y">y</a> != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span> &amp;&amp; <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;compare (<a class="local col2 ref" href="#112y" title='y' data-ref="112y" data-ref-filename="112y">y</a>) &lt;= <var>0</var>)</td></tr>
+<tr><th id="411">411</th><td>    {</td></tr>
+<tr><th id="412">412</th><td>      <a class="member fn" href="#_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" title='fibonacci_heap::cut' data-ref="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" data-ref-filename="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_">cut</a> (<a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>, <a class="local col2 ref" href="#112y" title='y' data-ref="112y" data-ref-filename="112y">y</a>);</td></tr>
+<tr><th id="413">413</th><td>      <a class="member fn" href="#_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::cascading_cut' data-ref="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E">cascading_cut</a> (<a class="local col2 ref" href="#112y" title='y' data-ref="112y" data-ref-filename="112y">y</a>);</td></tr>
+<tr><th id="414">414</th><td>    }</td></tr>
+<tr><th id="415">415</th><td></td></tr>
+<tr><th id="416">416</th><td>  <b>if</b> (<a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>-&gt;compare (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>) &lt;= <var>0</var>)</td></tr>
+<tr><th id="417">417</th><td>    <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> = <a class="local col8 ref" href="#108node" title='node' data-ref="108node" data-ref-filename="108node">node</a>;</td></tr>
+<tr><th id="418">418</th><td></td></tr>
+<tr><th id="419">419</th><td>  <b>return</b> <a class="local col3 ref" href="#113odata" title='odata' data-ref="113odata" data-ref-filename="113odata">odata</a>;</td></tr>
+<tr><th id="420">420</th><td>}</td></tr>
+<tr><th id="421">421</th><td></td></tr>
+<tr><th id="422">422</th><td><i>/* Extract minimum node in the heap.  Delete fibonacci node if RELEASE</i></td></tr>
+<tr><th id="423">423</th><td><i>   is true.  */</i></td></tr>
+<tr><th id="424">424</th><td></td></tr>
+<tr><th id="425">425</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="426">426</th><td>V*</td></tr>
+<tr><th id="427">427</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap11extract_minEb" title='fibonacci_heap::extract_min' data-ref="_ZN14fibonacci_heap11extract_minEb" data-ref-filename="_ZN14fibonacci_heap11extract_minEb">extract_min</dfn> (<em>bool</em> <dfn class="local col4 decl" id="114release" title='release' data-type='bool' data-ref="114release" data-ref-filename="114release">release</dfn>)</td></tr>
+<tr><th id="428">428</th><td>{</td></tr>
+<tr><th id="429">429</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col5 decl" id="115z" title='z' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="115z" data-ref-filename="115z">z</dfn>;</td></tr>
+<tr><th id="430">430</th><td>  V *<dfn class="local col6 decl" id="116ret" title='ret' data-type='V *' data-ref="116ret" data-ref-filename="116ret">ret</dfn> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="431">431</th><td></td></tr>
+<tr><th id="432">432</th><td>  <i>/* If we don't have a min set, it means we have no nodes.  */</i></td></tr>
+<tr><th id="433">433</th><td>  <b>if</b> (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="434">434</th><td>    {</td></tr>
+<tr><th id="435">435</th><td>      <i>/* Otherwise, extract the min node, free the node, and return the</i></td></tr>
+<tr><th id="436">436</th><td><i>       node's data.  */</i></td></tr>
+<tr><th id="437">437</th><td>      <a class="local col5 ref" href="#115z" title='z' data-ref="115z" data-ref-filename="115z">z</a> = <a class="member fn" href="#_ZN14fibonacci_heap20extract_minimum_nodeEv" title='fibonacci_heap::extract_minimum_node' data-ref="_ZN14fibonacci_heap20extract_minimum_nodeEv" data-ref-filename="_ZN14fibonacci_heap20extract_minimum_nodeEv">extract_minimum_node</a> ();</td></tr>
+<tr><th id="438">438</th><td>      <a class="local col6 ref" href="#116ret" title='ret' data-ref="116ret" data-ref-filename="116ret">ret</a> = <a class="local col5 ref" href="#115z" title='z' data-ref="115z" data-ref-filename="115z">z</a>-&gt;m_data;</td></tr>
+<tr><th id="439">439</th><td></td></tr>
+<tr><th id="440">440</th><td>      <b>if</b> (<a class="local col4 ref" href="#114release" title='release' data-ref="114release" data-ref-filename="114release">release</a>)</td></tr>
+<tr><th id="441">441</th><td>        <b>delete</b> (<a class="local col5 ref" href="#115z" title='z' data-ref="115z" data-ref-filename="115z">z</a>);</td></tr>
+<tr><th id="442">442</th><td>    }</td></tr>
+<tr><th id="443">443</th><td></td></tr>
+<tr><th id="444">444</th><td>  <b>return</b> <a class="local col6 ref" href="#116ret" title='ret' data-ref="116ret" data-ref-filename="116ret">ret</a>;</td></tr>
+<tr><th id="445">445</th><td>}</td></tr>
+<tr><th id="446">446</th><td></td></tr>
+<tr><th id="447">447</th><td><i>/* Delete NODE in the heap, if RELEASE is specified memory is released.  */</i></td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="450">450</th><td>V*</td></tr>
+<tr><th id="451">451</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb" title='fibonacci_heap::delete_node' data-ref="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb" data-ref-filename="_ZN14fibonacci_heap11delete_nodeEP14fibonacci_nodeIT_T0_Eb">delete_node</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col7 decl" id="117node" title='node' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="117node" data-ref-filename="117node">node</dfn>, <em>bool</em> <dfn class="local col8 decl" id="118release" title='release' data-type='bool' data-ref="118release" data-ref-filename="118release">release</dfn>)</td></tr>
+<tr><th id="452">452</th><td>{</td></tr>
+<tr><th id="453">453</th><td>  V *<dfn class="local col9 decl" id="119ret" title='ret' data-type='V *' data-ref="119ret" data-ref-filename="119ret">ret</dfn> = <a class="local col7 ref" href="#117node" title='node' data-ref="117node" data-ref-filename="117node">node</a>-&gt;m_data;</td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td>  <i>/* To perform delete, we just make it the min key, and extract.  */</i></td></tr>
+<tr><th id="456">456</th><td>  <a class="member fn" href="#_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_" title='fibonacci_heap::replace_key' data-ref="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_" data-ref-filename="_ZN14fibonacci_heap11replace_keyEP14fibonacci_nodeIT_T0_ES1_">replace_key</a> (<a class="local col7 ref" href="#117node" title='node' data-ref="117node" data-ref-filename="117node">node</a>, <a class="member field" href="#fibonacci_heap::m_global_min_key" title='fibonacci_heap::m_global_min_key' data-ref="fibonacci_heap::m_global_min_key" data-ref-filename="fibonacci_heap..m_global_min_key">m_global_min_key</a>);</td></tr>
+<tr><th id="457">457</th><td>  <b>if</b> (<a class="local col7 ref" href="#117node" title='node' data-ref="117node" data-ref-filename="117node">node</a> != <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>)</td></tr>
+<tr><th id="458">458</th><td>    {</td></tr>
+<tr><th id="459">459</th><td>      <a class="ref fn" href="../../../../../../include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a> (<a class="macro" href="../../../../../../include/stdio.h.html#141" title="stderr" data-ref="_M/stderr">stderr</a>, <q>"Can't force minimum on fibheap.\n"</q>);</td></tr>
+<tr><th id="460">460</th><td>      <a class="macro" href="system.h.html#732" title="fancy_abort (&quot;/___NETBSD_SRC___/external/gpl3/gcc/dist/libgcc/../gcc/fibonacci_heap.h&quot;, 460, __FUNCTION__)" data-ref="_M/abort">abort</a> ();</td></tr>
+<tr><th id="461">461</th><td>    }</td></tr>
+<tr><th id="462">462</th><td>  <a class="member fn" href="#_ZN14fibonacci_heap11extract_minEb" title='fibonacci_heap::extract_min' data-ref="_ZN14fibonacci_heap11extract_minEb" data-ref-filename="_ZN14fibonacci_heap11extract_minEb">extract_min</a> (<a class="local col8 ref" href="#118release" title='release' data-ref="118release" data-ref-filename="118release">release</a>);</td></tr>
+<tr><th id="463">463</th><td></td></tr>
+<tr><th id="464">464</th><td>  <b>return</b> <a class="local col9 ref" href="#119ret" title='ret' data-ref="119ret" data-ref-filename="119ret">ret</a>;</td></tr>
+<tr><th id="465">465</th><td>}</td></tr>
+<tr><th id="466">466</th><td></td></tr>
+<tr><th id="467">467</th><td><i>/* Union the heap with HEAPB.  One of the heaps is going to be deleted.  */</i></td></tr>
+<tr><th id="468">468</th><td></td></tr>
+<tr><th id="469">469</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="470">470</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;*</td></tr>
+<tr><th id="471">471</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap10union_withEP14fibonacci_heapIT_T0_E" title='fibonacci_heap::union_with' data-ref="_ZN14fibonacci_heap10union_withEP14fibonacci_heapIT_T0_E" data-ref-filename="_ZN14fibonacci_heap10union_withEP14fibonacci_heapIT_T0_E">union_with</dfn> (<a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt; *<dfn class="local col0 decl" id="120heapb" title='heapb' data-type='fibonacci_heap&lt;K, V&gt; *' data-ref="120heapb" data-ref-filename="120heapb">heapb</dfn>)</td></tr>
+<tr><th id="472">472</th><td>{</td></tr>
+<tr><th id="473">473</th><td>  <a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt; *<dfn class="local col1 decl" id="121heapa" title='heapa' data-type='fibonacci_heap&lt;K, V&gt; *' data-ref="121heapa" data-ref-filename="121heapa">heapa</dfn> = <b>this</b>;</td></tr>
+<tr><th id="474">474</th><td></td></tr>
+<tr><th id="475">475</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col2 decl" id="122a_root" title='a_root' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="122a_root" data-ref-filename="122a_root">a_root</dfn>, *<dfn class="local col3 decl" id="123b_root" title='b_root' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="123b_root" data-ref-filename="123b_root">b_root</dfn>;</td></tr>
+<tr><th id="476">476</th><td></td></tr>
+<tr><th id="477">477</th><td>  <i>/* If one of the heaps is empty, the union is just the other heap.  */</i></td></tr>
+<tr><th id="478">478</th><td>  <b>if</b> ((<a class="local col2 ref" href="#122a_root" title='a_root' data-ref="122a_root" data-ref-filename="122a_root">a_root</a> = <a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>-&gt;m_root) == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="479">479</th><td>    {</td></tr>
+<tr><th id="480">480</th><td>      <b>delete</b> (<a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>);</td></tr>
+<tr><th id="481">481</th><td>      <b>return</b> <a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>;</td></tr>
+<tr><th id="482">482</th><td>    }</td></tr>
+<tr><th id="483">483</th><td>  <b>if</b> ((<a class="local col3 ref" href="#123b_root" title='b_root' data-ref="123b_root" data-ref-filename="123b_root">b_root</a> = <a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>-&gt;m_root) == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="484">484</th><td>    {</td></tr>
+<tr><th id="485">485</th><td>      <b>delete</b> (<a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>);</td></tr>
+<tr><th id="486">486</th><td>      <b>return</b> <a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>;</td></tr>
+<tr><th id="487">487</th><td>    }</td></tr>
+<tr><th id="488">488</th><td></td></tr>
+<tr><th id="489">489</th><td>  <i>/* Merge them to the next nodes on the opposite chain.  */</i></td></tr>
+<tr><th id="490">490</th><td>  <a class="local col2 ref" href="#122a_root" title='a_root' data-ref="122a_root" data-ref-filename="122a_root">a_root</a>-&gt;m_left-&gt;m_right = <a class="local col3 ref" href="#123b_root" title='b_root' data-ref="123b_root" data-ref-filename="123b_root">b_root</a>;</td></tr>
+<tr><th id="491">491</th><td>  <a class="local col3 ref" href="#123b_root" title='b_root' data-ref="123b_root" data-ref-filename="123b_root">b_root</a>-&gt;m_left-&gt;m_right = <a class="local col2 ref" href="#122a_root" title='a_root' data-ref="122a_root" data-ref-filename="122a_root">a_root</a>;</td></tr>
+<tr><th id="492">492</th><td>  <span class="namespace">std::</span>swap (<a class="local col2 ref" href="#122a_root" title='a_root' data-ref="122a_root" data-ref-filename="122a_root">a_root</a>-&gt;m_left, <a class="local col3 ref" href="#123b_root" title='b_root' data-ref="123b_root" data-ref-filename="123b_root">b_root</a>-&gt;m_left);</td></tr>
+<tr><th id="493">493</th><td>  <a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>-&gt;m_nodes += <a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>-&gt;m_nodes;</td></tr>
+<tr><th id="494">494</th><td></td></tr>
+<tr><th id="495">495</th><td>  <i>/* And set the new minimum, if it's changed.  */</i></td></tr>
+<tr><th id="496">496</th><td>  <b>if</b> (<a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>-&gt;m_min-&gt;compare (<a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>-&gt;m_min) &lt; <var>0</var>)</td></tr>
+<tr><th id="497">497</th><td>    <a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>-&gt;m_min = <a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>-&gt;m_min;</td></tr>
+<tr><th id="498">498</th><td></td></tr>
+<tr><th id="499">499</th><td>  <i>/* Set m_min to NULL to not to delete live fibonacci nodes.  */</i></td></tr>
+<tr><th id="500">500</th><td>  <a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>-&gt;m_min = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="501">501</th><td>  <b>delete</b> (<a class="local col0 ref" href="#120heapb" title='heapb' data-ref="120heapb" data-ref-filename="120heapb">heapb</a>);</td></tr>
+<tr><th id="502">502</th><td></td></tr>
+<tr><th id="503">503</th><td>  <b>return</b> <a class="local col1 ref" href="#121heapa" title='heapa' data-ref="121heapa" data-ref-filename="121heapa">heapa</a>;</td></tr>
+<tr><th id="504">504</th><td>}</td></tr>
+<tr><th id="505">505</th><td></td></tr>
+<tr><th id="506">506</th><td><i>/* Insert it into the root list.  */</i></td></tr>
+<tr><th id="507">507</th><td></td></tr>
+<tr><th id="508">508</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="509">509</th><td><em>void</em></td></tr>
+<tr><th id="510">510</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_root' data-ref="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E">insert_root</dfn> (<a class="typedef" href="#fibonacci_heap::fibonacci_node_t" title='fibonacci_heap::fibonacci_node_t' data-type='fibonacci_node&lt;K, V&gt;' data-ref="fibonacci_heap::fibonacci_node_t" data-ref-filename="fibonacci_heap..fibonacci_node_t">fibonacci_node_t</a> *<dfn class="local col4 decl" id="124node" title='node' data-type='fibonacci_heap::fibonacci_node_t *' data-ref="124node" data-ref-filename="124node">node</dfn>)</td></tr>
+<tr><th id="511">511</th><td>{</td></tr>
+<tr><th id="512">512</th><td>  <i>/* If the heap is currently empty, the new node becomes the singleton</i></td></tr>
+<tr><th id="513">513</th><td><i>     circular root list.  */</i></td></tr>
+<tr><th id="514">514</th><td>  <b>if</b> (<a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a> == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="515">515</th><td>    {</td></tr>
+<tr><th id="516">516</th><td>      <a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a> = <a class="local col4 ref" href="#124node" title='node' data-ref="124node" data-ref-filename="124node">node</a>;</td></tr>
+<tr><th id="517">517</th><td>      <a class="local col4 ref" href="#124node" title='node' data-ref="124node" data-ref-filename="124node">node</a>-&gt;m_left = <a class="local col4 ref" href="#124node" title='node' data-ref="124node" data-ref-filename="124node">node</a>;</td></tr>
+<tr><th id="518">518</th><td>      <a class="local col4 ref" href="#124node" title='node' data-ref="124node" data-ref-filename="124node">node</a>-&gt;m_right = <a class="local col4 ref" href="#124node" title='node' data-ref="124node" data-ref-filename="124node">node</a>;</td></tr>
+<tr><th id="519">519</th><td>      <b>return</b>;</td></tr>
+<tr><th id="520">520</th><td>    }</td></tr>
+<tr><th id="521">521</th><td></td></tr>
+<tr><th id="522">522</th><td>  <i>/* Otherwise, insert it in the circular root list between the root</i></td></tr>
+<tr><th id="523">523</th><td><i>     and it's right node.  */</i></td></tr>
+<tr><th id="524">524</th><td>  <a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a>-&gt;insert_after (<a class="local col4 ref" href="#124node" title='node' data-ref="124node" data-ref-filename="124node">node</a>);</td></tr>
+<tr><th id="525">525</th><td>}</td></tr>
+<tr><th id="526">526</th><td></td></tr>
+<tr><th id="527">527</th><td><i>/* Remove NODE from PARENT's child list.  */</i></td></tr>
+<tr><th id="528">528</th><td></td></tr>
+<tr><th id="529">529</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="530">530</th><td><em>void</em></td></tr>
+<tr><th id="531">531</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" title='fibonacci_heap::cut' data-ref="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" data-ref-filename="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_">cut</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col5 decl" id="125node" title='node' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="125node" data-ref-filename="125node">node</dfn>,</td></tr>
+<tr><th id="532">532</th><td>			  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col6 decl" id="126parent" title='parent' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="126parent" data-ref-filename="126parent">parent</dfn>)</td></tr>
+<tr><th id="533">533</th><td>{</td></tr>
+<tr><th id="534">534</th><td>  <a class="local col5 ref" href="#125node" title='node' data-ref="125node" data-ref-filename="125node">node</a>-&gt;remove ();</td></tr>
+<tr><th id="535">535</th><td>  <a class="local col6 ref" href="#126parent" title='parent' data-ref="126parent" data-ref-filename="126parent">parent</a>-&gt;m_degree--;</td></tr>
+<tr><th id="536">536</th><td>  <a class="member fn" href="#_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_root' data-ref="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E">insert_root</a> (<a class="local col5 ref" href="#125node" title='node' data-ref="125node" data-ref-filename="125node">node</a>);</td></tr>
+<tr><th id="537">537</th><td>  <a class="local col5 ref" href="#125node" title='node' data-ref="125node" data-ref-filename="125node">node</a>-&gt;m_parent = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="538">538</th><td>  <a class="local col5 ref" href="#125node" title='node' data-ref="125node" data-ref-filename="125node">node</a>-&gt;m_mark = <var>0</var>;</td></tr>
+<tr><th id="539">539</th><td>}</td></tr>
+<tr><th id="540">540</th><td></td></tr>
+<tr><th id="541">541</th><td><i>/* Process cut of node Y and do it recursivelly.  */</i></td></tr>
+<tr><th id="542">542</th><td></td></tr>
+<tr><th id="543">543</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="544">544</th><td><em>void</em></td></tr>
+<tr><th id="545">545</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::cascading_cut' data-ref="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap13cascading_cutEP14fibonacci_nodeIT_T0_E">cascading_cut</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col7 decl" id="127y" title='y' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="127y" data-ref-filename="127y">y</dfn>)</td></tr>
+<tr><th id="546">546</th><td>{</td></tr>
+<tr><th id="547">547</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col8 decl" id="128z" title='z' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="128z" data-ref-filename="128z">z</dfn>;</td></tr>
+<tr><th id="548">548</th><td></td></tr>
+<tr><th id="549">549</th><td>  <b>while</b> ((<a class="local col8 ref" href="#128z" title='z' data-ref="128z" data-ref-filename="128z">z</a> = <a class="local col7 ref" href="#127y" title='y' data-ref="127y" data-ref-filename="127y">y</a>-&gt;m_parent) != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="550">550</th><td>    {</td></tr>
+<tr><th id="551">551</th><td>      <b>if</b> (<a class="local col7 ref" href="#127y" title='y' data-ref="127y" data-ref-filename="127y">y</a>-&gt;m_mark == <var>0</var>)</td></tr>
+<tr><th id="552">552</th><td>	{</td></tr>
+<tr><th id="553">553</th><td>	  <a class="local col7 ref" href="#127y" title='y' data-ref="127y" data-ref-filename="127y">y</a>-&gt;m_mark = <var>1</var>;</td></tr>
+<tr><th id="554">554</th><td>	  <b>return</b>;</td></tr>
+<tr><th id="555">555</th><td>	}</td></tr>
+<tr><th id="556">556</th><td>      <b>else</b></td></tr>
+<tr><th id="557">557</th><td>	{</td></tr>
+<tr><th id="558">558</th><td>	  <a class="member fn" href="#_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" title='fibonacci_heap::cut' data-ref="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_" data-ref-filename="_ZN14fibonacci_heap3cutEP14fibonacci_nodeIT_T0_ES4_">cut</a> (<a class="local col7 ref" href="#127y" title='y' data-ref="127y" data-ref-filename="127y">y</a>, <a class="local col8 ref" href="#128z" title='z' data-ref="128z" data-ref-filename="128z">z</a>);</td></tr>
+<tr><th id="559">559</th><td>	  <a class="local col7 ref" href="#127y" title='y' data-ref="127y" data-ref-filename="127y">y</a> = <a class="local col8 ref" href="#128z" title='z' data-ref="128z" data-ref-filename="128z">z</a>;</td></tr>
+<tr><th id="560">560</th><td>	}</td></tr>
+<tr><th id="561">561</th><td>    }</td></tr>
+<tr><th id="562">562</th><td>}</td></tr>
+<tr><th id="563">563</th><td></td></tr>
+<tr><th id="564">564</th><td><i>/* Extract minimum node from the heap.  */</i></td></tr>
+<tr><th id="565">565</th><td></td></tr>
+<tr><th id="566">566</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="567">567</th><td><a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt;*</td></tr>
+<tr><th id="568">568</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap20extract_minimum_nodeEv" title='fibonacci_heap::extract_minimum_node' data-ref="_ZN14fibonacci_heap20extract_minimum_nodeEv" data-ref-filename="_ZN14fibonacci_heap20extract_minimum_nodeEv">extract_minimum_node</dfn> ()</td></tr>
+<tr><th id="569">569</th><td>{</td></tr>
+<tr><th id="570">570</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col9 decl" id="129ret" title='ret' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="129ret" data-ref-filename="129ret">ret</dfn> = <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>;</td></tr>
+<tr><th id="571">571</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col0 decl" id="130x" title='x' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="130x" data-ref-filename="130x">x</dfn>, *<dfn class="local col1 decl" id="131y" title='y' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="131y" data-ref-filename="131y">y</dfn>, *<dfn class="local col2 decl" id="132orig" title='orig' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="132orig" data-ref-filename="132orig">orig</dfn>;</td></tr>
+<tr><th id="572">572</th><td></td></tr>
+<tr><th id="573">573</th><td>  <i>/* Attach the child list of the minimum node to the root list of the heap.</i></td></tr>
+<tr><th id="574">574</th><td><i>     If there is no child list, we don't do squat.  */</i></td></tr>
+<tr><th id="575">575</th><td>  <b>for</b> (<a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a> = <a class="local col9 ref" href="#129ret" title='ret' data-ref="129ret" data-ref-filename="129ret">ret</a>-&gt;m_child, <a class="local col2 ref" href="#132orig" title='orig' data-ref="132orig" data-ref-filename="132orig">orig</a> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>; <a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a> != <a class="local col2 ref" href="#132orig" title='orig' data-ref="132orig" data-ref-filename="132orig">orig</a> &amp;&amp; <a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a> != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>; <a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a> = <a class="local col1 ref" href="#131y" title='y' data-ref="131y" data-ref-filename="131y">y</a>)</td></tr>
+<tr><th id="576">576</th><td>    {</td></tr>
+<tr><th id="577">577</th><td>      <b>if</b> (<a class="local col2 ref" href="#132orig" title='orig' data-ref="132orig" data-ref-filename="132orig">orig</a> == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="578">578</th><td>	<a class="local col2 ref" href="#132orig" title='orig' data-ref="132orig" data-ref-filename="132orig">orig</a> = <a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a>;</td></tr>
+<tr><th id="579">579</th><td>      <a class="local col1 ref" href="#131y" title='y' data-ref="131y" data-ref-filename="131y">y</a> = <a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a>-&gt;m_right;</td></tr>
+<tr><th id="580">580</th><td>      <a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a>-&gt;m_parent = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="581">581</th><td>      <a class="member fn" href="#_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_root' data-ref="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E">insert_root</a> (<a class="local col0 ref" href="#130x" title='x' data-ref="130x" data-ref-filename="130x">x</a>);</td></tr>
+<tr><th id="582">582</th><td>    }</td></tr>
+<tr><th id="583">583</th><td></td></tr>
+<tr><th id="584">584</th><td>  <i>/* Remove the old root.  */</i></td></tr>
+<tr><th id="585">585</th><td>  <a class="member fn" href="#_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::remove_root' data-ref="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E">remove_root</a> (<a class="local col9 ref" href="#129ret" title='ret' data-ref="129ret" data-ref-filename="129ret">ret</a>);</td></tr>
+<tr><th id="586">586</th><td>  <a class="member field" href="#fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</a>--;</td></tr>
+<tr><th id="587">587</th><td></td></tr>
+<tr><th id="588">588</th><td>  <i>/* If we are left with no nodes, then the min is NULL.  */</i></td></tr>
+<tr><th id="589">589</th><td>  <b>if</b> (<a class="member field" href="#fibonacci_heap::m_nodes" title='fibonacci_heap::m_nodes' data-ref="fibonacci_heap::m_nodes" data-ref-filename="fibonacci_heap..m_nodes">m_nodes</a> == <var>0</var>)</td></tr>
+<tr><th id="590">590</th><td>    <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="591">591</th><td>  <b>else</b></td></tr>
+<tr><th id="592">592</th><td>    {</td></tr>
+<tr><th id="593">593</th><td>      <i>/* Otherwise, consolidate to find new minimum, as well as do the reorg</i></td></tr>
+<tr><th id="594">594</th><td><i>       work that needs to be done.  */</i></td></tr>
+<tr><th id="595">595</th><td>      <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> = <a class="local col9 ref" href="#129ret" title='ret' data-ref="129ret" data-ref-filename="129ret">ret</a>-&gt;m_right;</td></tr>
+<tr><th id="596">596</th><td>      <a class="member fn" href="#_ZN14fibonacci_heap11consolidateEv" title='fibonacci_heap::consolidate' data-ref="_ZN14fibonacci_heap11consolidateEv" data-ref-filename="_ZN14fibonacci_heap11consolidateEv">consolidate</a> ();</td></tr>
+<tr><th id="597">597</th><td>    }</td></tr>
+<tr><th id="598">598</th><td></td></tr>
+<tr><th id="599">599</th><td>  <b>return</b> <a class="local col9 ref" href="#129ret" title='ret' data-ref="129ret" data-ref-filename="129ret">ret</a>;</td></tr>
+<tr><th id="600">600</th><td>}</td></tr>
+<tr><th id="601">601</th><td></td></tr>
+<tr><th id="602">602</th><td><i>/* Remove root NODE from the heap.  */</i></td></tr>
+<tr><th id="603">603</th><td></td></tr>
+<tr><th id="604">604</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="605">605</th><td><em>void</em></td></tr>
+<tr><th id="606">606</th><td><a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::remove_root' data-ref="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E">remove_root</dfn> (<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col3 decl" id="133node" title='node' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="133node" data-ref-filename="133node">node</dfn>)</td></tr>
+<tr><th id="607">607</th><td>{</td></tr>
+<tr><th id="608">608</th><td>  <b>if</b> (<a class="local col3 ref" href="#133node" title='node' data-ref="133node" data-ref-filename="133node">node</a>-&gt;m_left == <a class="local col3 ref" href="#133node" title='node' data-ref="133node" data-ref-filename="133node">node</a>)</td></tr>
+<tr><th id="609">609</th><td>    <a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="610">610</th><td>  <b>else</b></td></tr>
+<tr><th id="611">611</th><td>    <a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a> = <a class="local col3 ref" href="#133node" title='node' data-ref="133node" data-ref-filename="133node">node</a>-&gt;remove ();</td></tr>
+<tr><th id="612">612</th><td>}</td></tr>
+<tr><th id="613">613</th><td></td></tr>
+<tr><th id="614">614</th><td><i>/* Consolidate heap.  */</i></td></tr>
+<tr><th id="615">615</th><td></td></tr>
+<tr><th id="616">616</th><td><b>template</b>&lt;<b>class</b> K, <b>class</b> V&gt;</td></tr>
+<tr><th id="617">617</th><td><em>void</em> <a class="type" href="#fibonacci_heap" title='fibonacci_heap' data-ref="fibonacci_heap" data-ref-filename="fibonacci_heap">fibonacci_heap</a>&lt;K,V&gt;::<dfn class="decl def fn" id="_ZN14fibonacci_heap11consolidateEv" title='fibonacci_heap::consolidate' data-ref="_ZN14fibonacci_heap11consolidateEv" data-ref-filename="_ZN14fibonacci_heap11consolidateEv">consolidate</dfn> ()</td></tr>
+<tr><th id="618">618</th><td>{</td></tr>
+<tr><th id="619">619</th><td>  <em>int</em> <dfn class="local col4 decl" id="134D" title='D' data-type='int' data-ref="134D" data-ref-filename="134D">D</dfn> = <var>1</var> + <var>8</var> * <b>sizeof</b> (<em>long</em>);</td></tr>
+<tr><th id="620">620</th><td>  <a class="type" href="vec.h.html#auto_vec" title='auto_vec' data-ref="auto_vec" data-ref-filename="auto_vec">auto_vec</a>&lt;<a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *&gt; <dfn class="local col5 decl" id="135a" title='a' data-type='auto_vec&lt;fibonacci_node&lt;K, V&gt; *&gt;' data-ref="135a" data-ref-filename="135a">a</dfn> (<a class="local col4 ref" href="#134D" title='D' data-ref="134D" data-ref-filename="134D">D</a>);</td></tr>
+<tr><th id="621">621</th><td>  <a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>.safe_grow_cleared (<a class="local col4 ref" href="#134D" title='D' data-ref="134D" data-ref-filename="134D">D</a>);</td></tr>
+<tr><th id="622">622</th><td>  <a class="type" href="#fibonacci_node" title='fibonacci_node' data-ref="fibonacci_node" data-ref-filename="fibonacci_node">fibonacci_node</a>&lt;K,V&gt; *<dfn class="local col6 decl" id="136w" title='w' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="136w" data-ref-filename="136w">w</dfn>, *<dfn class="local col7 decl" id="137x" title='x' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="137x" data-ref-filename="137x">x</dfn>, *<dfn class="local col8 decl" id="138y" title='y' data-type='fibonacci_node&lt;K, V&gt; *' data-ref="138y" data-ref-filename="138y">y</dfn>;</td></tr>
+<tr><th id="623">623</th><td>  <em>int</em> <dfn class="local col9 decl" id="139i" title='i' data-type='int' data-ref="139i" data-ref-filename="139i">i</dfn>, <dfn class="local col0 decl" id="140d" title='d' data-type='int' data-ref="140d" data-ref-filename="140d">d</dfn>;</td></tr>
+<tr><th id="624">624</th><td></td></tr>
+<tr><th id="625">625</th><td>  <b>while</b> ((<a class="local col6 ref" href="#136w" title='w' data-ref="136w" data-ref-filename="136w">w</a> = <a class="member field" href="#fibonacci_heap::m_root" title='fibonacci_heap::m_root' data-ref="fibonacci_heap::m_root" data-ref-filename="fibonacci_heap..m_root">m_root</a>) != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="626">626</th><td>    {</td></tr>
+<tr><th id="627">627</th><td>      <a class="local col7 ref" href="#137x" title='x' data-ref="137x" data-ref-filename="137x">x</a> = <a class="local col6 ref" href="#136w" title='w' data-ref="136w" data-ref-filename="136w">w</a>;</td></tr>
+<tr><th id="628">628</th><td>      <a class="member fn" href="#_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::remove_root' data-ref="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11remove_rootEP14fibonacci_nodeIT_T0_E">remove_root</a> (<a class="local col6 ref" href="#136w" title='w' data-ref="136w" data-ref-filename="136w">w</a>);</td></tr>
+<tr><th id="629">629</th><td>      <a class="local col0 ref" href="#140d" title='d' data-ref="140d" data-ref-filename="140d">d</a> = <a class="local col7 ref" href="#137x" title='x' data-ref="137x" data-ref-filename="137x">x</a>-&gt;m_degree;</td></tr>
+<tr><th id="630">630</th><td>      <b>while</b> (<a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col0 ref" href="#140d" title='d' data-ref="140d" data-ref-filename="140d">d</a>] != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="631">631</th><td>	{</td></tr>
+<tr><th id="632">632</th><td>	  <a class="local col8 ref" href="#138y" title='y' data-ref="138y" data-ref-filename="138y">y</a> = <a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col0 ref" href="#140d" title='d' data-ref="140d" data-ref-filename="140d">d</a>];</td></tr>
+<tr><th id="633">633</th><td>	  <b>if</b> (<a class="local col7 ref" href="#137x" title='x' data-ref="137x" data-ref-filename="137x">x</a>-&gt;compare (<a class="local col8 ref" href="#138y" title='y' data-ref="138y" data-ref-filename="138y">y</a>) &gt; <var>0</var>)</td></tr>
+<tr><th id="634">634</th><td>	    <span class="namespace">std::</span>swap (<a class="local col7 ref" href="#137x" title='x' data-ref="137x" data-ref-filename="137x">x</a>, <a class="local col8 ref" href="#138y" title='y' data-ref="138y" data-ref-filename="138y">y</a>);</td></tr>
+<tr><th id="635">635</th><td>	  <a class="local col8 ref" href="#138y" title='y' data-ref="138y" data-ref-filename="138y">y</a>-&gt;link (<a class="local col7 ref" href="#137x" title='x' data-ref="137x" data-ref-filename="137x">x</a>);</td></tr>
+<tr><th id="636">636</th><td>	  <a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col0 ref" href="#140d" title='d' data-ref="140d" data-ref-filename="140d">d</a>] = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="637">637</th><td>	  <a class="local col0 ref" href="#140d" title='d' data-ref="140d" data-ref-filename="140d">d</a>++;</td></tr>
+<tr><th id="638">638</th><td>	}</td></tr>
+<tr><th id="639">639</th><td>      <a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col0 ref" href="#140d" title='d' data-ref="140d" data-ref-filename="140d">d</a>] = <a class="local col7 ref" href="#137x" title='x' data-ref="137x" data-ref-filename="137x">x</a>;</td></tr>
+<tr><th id="640">640</th><td>    }</td></tr>
+<tr><th id="641">641</th><td>  <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> = <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="642">642</th><td>  <b>for</b> (<a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a> = <var>0</var>; <a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a> &lt; <a class="local col4 ref" href="#134D" title='D' data-ref="134D" data-ref-filename="134D">D</a>; <a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a>++)</td></tr>
+<tr><th id="643">643</th><td>    <b>if</b> (<a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a>] != <span class="macro" title="__null" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="644">644</th><td>      {</td></tr>
+<tr><th id="645">645</th><td>	<a class="member fn" href="#_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" title='fibonacci_heap::insert_root' data-ref="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E" data-ref-filename="_ZN14fibonacci_heap11insert_rootEP14fibonacci_nodeIT_T0_E">insert_root</a> (<a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a>]);</td></tr>
+<tr><th id="646">646</th><td>	<b>if</b> (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> == <span class="macro" title="__null" data-ref="_M/NULL">NULL</span> || <a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a>]-&gt;compare (<a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="647">647</th><td>	  <a class="member field" href="#fibonacci_heap::m_min" title='fibonacci_heap::m_min' data-ref="fibonacci_heap::m_min" data-ref-filename="fibonacci_heap..m_min">m_min</a> = <a class="local col5 ref" href="#135a" title='a' data-ref="135a" data-ref-filename="135a">a</a>[<a class="local col9 ref" href="#139i" title='i' data-ref="139i" data-ref-filename="139i">i</a>];</td></tr>
+<tr><th id="648">648</th><td>      }</td></tr>
+<tr><th id="649">649</th><td>}</td></tr>
+<tr><th id="650">650</th><td></td></tr>
+<tr><th id="651">651</th><td><u>#<span data-ppcond="40">endif</span>  // GCC_FIBONACCI_HEAP_H</u></td></tr>
+<tr><th id="652">652</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='bb-reorder.c.html'>netbsd/external/gpl3/gcc/dist/gcc/bb-reorder.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

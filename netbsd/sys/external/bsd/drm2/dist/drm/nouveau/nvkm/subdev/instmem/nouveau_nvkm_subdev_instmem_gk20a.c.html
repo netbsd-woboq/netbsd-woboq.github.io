@@ -1,0 +1,846 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>nouveau_nvkm_subdev_instmem_gk20a.c source code [netbsd/sys/external/bsd/drm2/dist/drm/nouveau/nvkm/subdev/instmem/nouveau_nvkm_subdev_instmem_gk20a.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="gk20a_instmem,gk20a_instobj,gk20a_instobj_dma,gk20a_instobj_iommu "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/external/bsd/drm2/dist/drm/nouveau/nvkm/subdev/instmem/nouveau_nvkm_subdev_instmem_gk20a.c'; var root_path = '../../../../../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../../../../../..'>netbsd</a>/<a href='../../../../../../../../..'>sys</a>/<a href='../../../../../../../..'>external</a>/<a href='../../../../../../..'>bsd</a>/<a href='../../../../../..'>drm2</a>/<a href='../../../../..'>dist</a>/<a href='../../../..'>drm</a>/<a href='../../..'>nouveau</a>/<a href='../..'>nvkm</a>/<a href='..'>subdev</a>/<a href='./'>instmem</a>/<a href='nouveau_nvkm_subdev_instmem_gk20a.c.html'>nouveau_nvkm_subdev_instmem_gk20a.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: nouveau_nvkm_subdev_instmem_gk20a.c,v 1.4 2018/08/27 07:36:37 riastradh Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2015, NVIDIA CORPORATION. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Permission is hereby granted, free of charge, to any person obtaining a</i></td></tr>
+<tr><th id="7">7</th><td><i> * copy of this software and associated documentation files (the "Software"),</i></td></tr>
+<tr><th id="8">8</th><td><i> * to deal in the Software without restriction, including without limitation</i></td></tr>
+<tr><th id="9">9</th><td><i> * the rights to use, copy, modify, merge, publish, distribute, sublicense,</i></td></tr>
+<tr><th id="10">10</th><td><i> * and/or sell copies of the Software, and to permit persons to whom the</i></td></tr>
+<tr><th id="11">11</th><td><i> * Software is furnished to do so, subject to the following conditions:</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * The above copyright notice and this permission notice shall be included in</i></td></tr>
+<tr><th id="14">14</th><td><i> * all copies or substantial portions of the Software.</i></td></tr>
+<tr><th id="15">15</th><td><i> *</i></td></tr>
+<tr><th id="16">16</th><td><i> * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR</i></td></tr>
+<tr><th id="17">17</th><td><i> * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,</i></td></tr>
+<tr><th id="18">18</th><td><i> * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL</i></td></tr>
+<tr><th id="19">19</th><td><i> * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER</i></td></tr>
+<tr><th id="20">20</th><td><i> * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING</i></td></tr>
+<tr><th id="21">21</th><td><i> * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER</i></td></tr>
+<tr><th id="22">22</th><td><i> * DEALINGS IN THE SOFTWARE.</i></td></tr>
+<tr><th id="23">23</th><td><i> */</i></td></tr>
+<tr><th id="24">24</th><td></td></tr>
+<tr><th id="25">25</th><td><i>/*</i></td></tr>
+<tr><th id="26">26</th><td><i> * GK20A does not have dedicated video memory, and to accurately represent this</i></td></tr>
+<tr><th id="27">27</th><td><i> * fact Nouveau will not create a RAM device for it. Therefore its instmem</i></td></tr>
+<tr><th id="28">28</th><td><i> * implementation must be done directly on top of system memory, while</i></td></tr>
+<tr><th id="29">29</th><td><i> * preserving coherency for read and write operations.</i></td></tr>
+<tr><th id="30">30</th><td><i> *</i></td></tr>
+<tr><th id="31">31</th><td><i> * Instmem can be allocated through two means:</i></td></tr>
+<tr><th id="32">32</th><td><i> * 1) If an IOMMU unit has been probed, the IOMMU API is used to make memory</i></td></tr>
+<tr><th id="33">33</th><td><i> *    pages contiguous to the GPU. This is the preferred way.</i></td></tr>
+<tr><th id="34">34</th><td><i> * 2) If no IOMMU unit is probed, the DMA API is used to allocate physically</i></td></tr>
+<tr><th id="35">35</th><td><i> *    contiguous memory.</i></td></tr>
+<tr><th id="36">36</th><td><i> *</i></td></tr>
+<tr><th id="37">37</th><td><i> * In both cases CPU read and writes are performed by creating a write-combined</i></td></tr>
+<tr><th id="38">38</th><td><i> * mapping. The GPU L2 cache must thus be flushed/invalidated when required. To</i></td></tr>
+<tr><th id="39">39</th><td><i> * be conservative we do this every time we acquire or release an instobj, but</i></td></tr>
+<tr><th id="40">40</th><td><i> * ideally L2 management should be handled at a higher level.</i></td></tr>
+<tr><th id="41">41</th><td><i> *</i></td></tr>
+<tr><th id="42">42</th><td><i> * To improve performance, CPU mappings are not removed upon instobj release.</i></td></tr>
+<tr><th id="43">43</th><td><i> * Instead they are placed into a LRU list to be recycled when the mapped space</i></td></tr>
+<tr><th id="44">44</th><td><i> * goes beyond a certain threshold. At the moment this limit is 1MB.</i></td></tr>
+<tr><th id="45">45</th><td><i> */</i></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../../../../../../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><a class="macro" href="../../../../../../../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: nouveau_nvkm_subdev_instmem_gk20a.c,v 1.4 2018/08/27 07:36:37 riastradh Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: nouveau_nvkm_subdev_instmem_gk20a.c,v 1.4 2018/08/27 07:36:37 riastradh Exp $"</q>);</td></tr>
+<tr><th id="48">48</th><td></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="priv.h.html">"priv.h"</a></u></td></tr>
+<tr><th id="50">50</th><td></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../../../include/nvkm/core/memory.h.html">&lt;core/memory.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../../../include/nvkm/core/mm.h.html">&lt;core/mm.h&gt;</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../../../include/nvkm/core/tegra.h.html">&lt;core/tegra.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="../../../include/nvkm/subdev/fb.h.html">&lt;subdev/fb.h&gt;</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="../../../include/nvkm/subdev/ltc.h.html">&lt;subdev/ltc.h&gt;</a></u></td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td><u>#<span data-ppcond="57">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="58">58</th><td><u>#  define	__iomem	__nvkm_memory_iomem</u></td></tr>
+<tr><th id="59">59</th><td><u>#<span data-ppcond="57">endif</span></u></td></tr>
+<tr><th id="60">60</th><td></td></tr>
+<tr><th id="61">61</th><td><b>struct</b> <dfn class="type def" id="gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</dfn> {</td></tr>
+<tr><th id="62">62</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory" title='nvkm_memory' data-ref="nvkm_memory" data-ref-filename="nvkm_memory">nvkm_memory</a> <dfn class="tu decl field" id="gk20a_instobj::memory" title='gk20a_instobj::memory' data-type='struct nvkm_memory' data-ref="gk20a_instobj::memory" data-ref-filename="gk20a_instobj..memory">memory</dfn>;</td></tr>
+<tr><th id="63">63</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem" title='nvkm_mem' data-ref="nvkm_mem" data-ref-filename="nvkm_mem">nvkm_mem</a> <dfn class="tu decl field" id="gk20a_instobj::mem" title='gk20a_instobj::mem' data-type='struct nvkm_mem' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</dfn>;</td></tr>
+<tr><th id="64">64</th><td>	<b>struct</b> <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a> *<dfn class="tu decl field" id="gk20a_instobj::imem" title='gk20a_instobj::imem' data-type='struct gk20a_instmem *' data-ref="gk20a_instobj::imem" data-ref-filename="gk20a_instobj..imem">imem</dfn>;</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td>	<i  data-doc="gk20a_instobj::vaddr">/* CPU mapping */</i></td></tr>
+<tr><th id="67">67</th><td>	<a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> *<dfn class="tu decl field" id="gk20a_instobj::vaddr" title='gk20a_instobj::vaddr' data-type='u32 *' data-ref="gk20a_instobj::vaddr" data-ref-filename="gk20a_instobj..vaddr">vaddr</dfn>;</td></tr>
+<tr><th id="68">68</th><td>	<b>struct</b> <a class="type" href="../../../../../../../common/include/linux/list.h.html#list_head" title='list_head' data-ref="list_head" data-ref-filename="list_head">list_head</a> <dfn class="tu decl field" id="gk20a_instobj::vaddr_node" title='gk20a_instobj::vaddr_node' data-type='struct list_head' data-ref="gk20a_instobj::vaddr_node" data-ref-filename="gk20a_instobj..vaddr_node">vaddr_node</dfn>;</td></tr>
+<tr><th id="69">69</th><td>};</td></tr>
+<tr><th id="70">70</th><td><u>#define <dfn class="macro" id="_M/gk20a_instobj" data-ref="_M/gk20a_instobj">gk20a_instobj</dfn>(p) container_of((p), struct <a class="type" href="#gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</a>, <a class="tu ref field" href="#gk20a_instobj::memory" title='gk20a_instobj::memory' data-use='a' data-ref="gk20a_instobj::memory" data-ref-filename="gk20a_instobj..memory">memory</a>)</u></td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td><u>#<span data-ppcond="72">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="73">73</th><td></td></tr>
+<tr><th id="74">74</th><td><b>struct</b> gk20a_instobj_netbsd {</td></tr>
+<tr><th id="75">75</th><td>	<b>struct</b> gk20a_instobj base;</td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td>	bus_dma_segment_t *segs;</td></tr>
+<tr><th id="78">78</th><td>	<em>int</em> nsegs;</td></tr>
+<tr><th id="79">79</th><td>	bus_dmamap_t map;</td></tr>
+<tr><th id="80">80</th><td>};</td></tr>
+<tr><th id="81">81</th><td><u>#define	gk20a_instobj_netbsd(p) \</u></td></tr>
+<tr><th id="82">82</th><td><u>	container_of(gk20a_instobj(p), struct gk20a_instobj_netbsd, base)</u></td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td><u>#<span data-ppcond="72">else</span></u></td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><i>/*</i></td></tr>
+<tr><th id="87">87</th><td><i> * Used for objects allocated using the DMA API</i></td></tr>
+<tr><th id="88">88</th><td><i> */</i></td></tr>
+<tr><th id="89">89</th><td><b>struct</b> <dfn class="type def" id="gk20a_instobj_dma" title='gk20a_instobj_dma' data-ref="gk20a_instobj_dma" data-ref-filename="gk20a_instobj_dma">gk20a_instobj_dma</dfn> {</td></tr>
+<tr><th id="90">90</th><td>	<b>struct</b> <a class="type" href="#gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</a> <dfn class="tu decl field" id="gk20a_instobj_dma::base" title='gk20a_instobj_dma::base' data-type='struct gk20a_instobj' data-ref="gk20a_instobj_dma::base" data-ref-filename="gk20a_instobj_dma..base">base</dfn>;</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td>	<a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> *<dfn class="tu decl field" id="gk20a_instobj_dma::cpuaddr" title='gk20a_instobj_dma::cpuaddr' data-type='u32 *' data-ref="gk20a_instobj_dma::cpuaddr" data-ref-filename="gk20a_instobj_dma..cpuaddr">cpuaddr</dfn>;</td></tr>
+<tr><th id="93">93</th><td>	<a class="typedef" href="../../../../../../include/linux/dma-mapping.h.html#dma_addr_t" title='dma_addr_t' data-type='bus_addr_t' data-ref="dma_addr_t" data-ref-filename="dma_addr_t">dma_addr_t</a> <dfn class="tu decl field" id="gk20a_instobj_dma::handle" title='gk20a_instobj_dma::handle' data-type='dma_addr_t' data-ref="gk20a_instobj_dma::handle" data-ref-filename="gk20a_instobj_dma..handle">handle</dfn>;</td></tr>
+<tr><th id="94">94</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node" title='nvkm_mm_node' data-ref="nvkm_mm_node" data-ref-filename="nvkm_mm_node">nvkm_mm_node</a> <dfn class="tu decl field" id="gk20a_instobj_dma::r" title='gk20a_instobj_dma::r' data-type='struct nvkm_mm_node' data-ref="gk20a_instobj_dma::r" data-ref-filename="gk20a_instobj_dma..r">r</dfn>;</td></tr>
+<tr><th id="95">95</th><td>};</td></tr>
+<tr><th id="96">96</th><td><u>#define <dfn class="macro" id="_M/gk20a_instobj_dma" data-ref="_M/gk20a_instobj_dma">gk20a_instobj_dma</dfn>(p) \</u></td></tr>
+<tr><th id="97">97</th><td><u>	container_of(gk20a_instobj(p), struct gk20a_instobj_dma, base)</u></td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td><i>/*</i></td></tr>
+<tr><th id="100">100</th><td><i> * Used for objects flattened using the IOMMU API</i></td></tr>
+<tr><th id="101">101</th><td><i> */</i></td></tr>
+<tr><th id="102">102</th><td><b>struct</b> <dfn class="type def" id="gk20a_instobj_iommu" title='gk20a_instobj_iommu' data-ref="gk20a_instobj_iommu" data-ref-filename="gk20a_instobj_iommu">gk20a_instobj_iommu</dfn> {</td></tr>
+<tr><th id="103">103</th><td>	<b>struct</b> <a class="type" href="#gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</a> <dfn class="tu decl field" id="gk20a_instobj_iommu::base" title='gk20a_instobj_iommu::base' data-type='struct gk20a_instobj' data-ref="gk20a_instobj_iommu::base" data-ref-filename="gk20a_instobj_iommu..base">base</dfn>;</td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td>	<i  data-doc="gk20a_instobj_iommu::dma_addrs">/* will point to the higher half of pages */</i></td></tr>
+<tr><th id="106">106</th><td>	<a class="typedef" href="../../../../../../include/linux/dma-mapping.h.html#dma_addr_t" title='dma_addr_t' data-type='bus_addr_t' data-ref="dma_addr_t" data-ref-filename="dma_addr_t">dma_addr_t</a> *<dfn class="tu decl field" id="gk20a_instobj_iommu::dma_addrs" title='gk20a_instobj_iommu::dma_addrs' data-type='dma_addr_t *' data-ref="gk20a_instobj_iommu::dma_addrs" data-ref-filename="gk20a_instobj_iommu..dma_addrs">dma_addrs</dfn>;</td></tr>
+<tr><th id="107">107</th><td>	<i  data-doc="gk20a_instobj_iommu::pages">/* array of base.mem-&gt;size pages (+ dma_addr_ts) */</i></td></tr>
+<tr><th id="108">108</th><td>	<b>struct</b> <a class="type" href="../../../../../../include/linux/mm_types.h.html#page" title='page' data-ref="page" data-ref-filename="page">page</a> *<dfn class="tu decl field" id="gk20a_instobj_iommu::pages" title='gk20a_instobj_iommu::pages' data-type='struct page *[]' data-ref="gk20a_instobj_iommu::pages" data-ref-filename="gk20a_instobj_iommu..pages">pages</dfn>[];</td></tr>
+<tr><th id="109">109</th><td>};</td></tr>
+<tr><th id="110">110</th><td><u>#define <dfn class="macro" id="_M/gk20a_instobj_iommu" data-ref="_M/gk20a_instobj_iommu">gk20a_instobj_iommu</dfn>(p) \</u></td></tr>
+<tr><th id="111">111</th><td><u>	container_of(gk20a_instobj(p), struct gk20a_instobj_iommu, base)</u></td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td><u>#<span data-ppcond="72">endif</span>	/* __NetBSD__ */</u></td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td><b>struct</b> <dfn class="type def" id="gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</dfn> {</td></tr>
+<tr><th id="116">116</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem" title='nvkm_instmem' data-ref="nvkm_instmem" data-ref-filename="nvkm_instmem">nvkm_instmem</a> <dfn class="tu decl field" id="gk20a_instmem::base" title='gk20a_instmem::base' data-type='struct nvkm_instmem' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</dfn>;</td></tr>
+<tr><th id="117">117</th><td></td></tr>
+<tr><th id="118">118</th><td>	<i  data-doc="gk20a_instmem::lock">/* protects vaddr_* and gk20a_instobj::vaddr* */</i></td></tr>
+<tr><th id="119">119</th><td>	<a class="typedef" href="../../../../../../include/linux/spinlock.h.html#spinlock_t" title='spinlock_t' data-type='struct spinlock' data-ref="spinlock_t" data-ref-filename="spinlock_t">spinlock_t</a> <dfn class="tu decl field" id="gk20a_instmem::lock" title='gk20a_instmem::lock' data-type='spinlock_t' data-ref="gk20a_instmem::lock" data-ref-filename="gk20a_instmem..lock">lock</dfn>;</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td>	<i  data-doc="gk20a_instmem::vaddr_use">/* CPU mappings LRU */</i></td></tr>
+<tr><th id="122">122</th><td>	<em>unsigned</em> <em>int</em> <dfn class="tu decl field" id="gk20a_instmem::vaddr_use" title='gk20a_instmem::vaddr_use' data-type='unsigned int' data-ref="gk20a_instmem::vaddr_use" data-ref-filename="gk20a_instmem..vaddr_use">vaddr_use</dfn>;</td></tr>
+<tr><th id="123">123</th><td>	<em>unsigned</em> <em>int</em> <dfn class="tu decl field" id="gk20a_instmem::vaddr_max" title='gk20a_instmem::vaddr_max' data-type='unsigned int' data-ref="gk20a_instmem::vaddr_max" data-ref-filename="gk20a_instmem..vaddr_max">vaddr_max</dfn>;</td></tr>
+<tr><th id="124">124</th><td>	<b>struct</b> <a class="type" href="../../../../../../../common/include/linux/list.h.html#list_head" title='list_head' data-ref="list_head" data-ref-filename="list_head">list_head</a> <dfn class="tu decl field" id="gk20a_instmem::vaddr_lru" title='gk20a_instmem::vaddr_lru' data-type='struct list_head' data-ref="gk20a_instmem::vaddr_lru" data-ref-filename="gk20a_instmem..vaddr_lru">vaddr_lru</dfn>;</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td><u>#<span data-ppcond="126">ifndef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="127">127</th><td>	<i  data-doc="gk20a_instmem::mm_mutex">/* Only used if IOMMU if present */</i></td></tr>
+<tr><th id="128">128</th><td>	<b>struct</b> <a class="type" href="../../../../../../include/linux/mutex.h.html#mutex" title='mutex' data-ref="mutex" data-ref-filename="mutex">mutex</a> *<dfn class="tu decl field" id="gk20a_instmem::mm_mutex" title='gk20a_instmem::mm_mutex' data-type='struct mutex *' data-ref="gk20a_instmem::mm_mutex" data-ref-filename="gk20a_instmem..mm_mutex">mm_mutex</dfn>;</td></tr>
+<tr><th id="129">129</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/mm.h.html#nvkm_mm" title='nvkm_mm' data-ref="nvkm_mm" data-ref-filename="nvkm_mm">nvkm_mm</a> *<dfn class="tu decl field" id="gk20a_instmem::mm" title='gk20a_instmem::mm' data-type='struct nvkm_mm *' data-ref="gk20a_instmem::mm" data-ref-filename="gk20a_instmem..mm">mm</dfn>;</td></tr>
+<tr><th id="130">130</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/tegra.h.html#iommu_domain" title='iommu_domain' data-ref="iommu_domain" data-ref-filename="iommu_domain">iommu_domain</a> *<dfn class="tu decl field" id="gk20a_instmem::domain" title='gk20a_instmem::domain' data-type='struct iommu_domain *' data-ref="gk20a_instmem::domain" data-ref-filename="gk20a_instmem..domain">domain</dfn>;</td></tr>
+<tr><th id="131">131</th><td>	<em>unsigned</em> <em>long</em> <dfn class="tu decl field" id="gk20a_instmem::iommu_pgshift" title='gk20a_instmem::iommu_pgshift' data-type='unsigned long' data-ref="gk20a_instmem::iommu_pgshift" data-ref-filename="gk20a_instmem..iommu_pgshift">iommu_pgshift</dfn>;</td></tr>
+<tr><th id="132">132</th><td>	<a class="typedef" href="../../../../../../include/linux/types.h.html#u16" title='u16' data-type='uint16_t' data-ref="u16" data-ref-filename="u16">u16</a> <dfn class="tu decl field" id="gk20a_instmem::iommu_bit" title='gk20a_instmem::iommu_bit' data-type='u16' data-ref="gk20a_instmem::iommu_bit" data-ref-filename="gk20a_instmem..iommu_bit">iommu_bit</dfn>;</td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td>	<i  data-doc="gk20a_instmem::attrs">/* Only used by DMA API */</i></td></tr>
+<tr><th id="135">135</th><td>	<b>struct</b> <dfn class="type" id="dma_attrs" title='dma_attrs' data-ref="dma_attrs" data-ref-filename="dma_attrs"><a class="type" href="#dma_attrs" title='dma_attrs' data-ref="dma_attrs" data-ref-filename="dma_attrs">dma_attrs</a></dfn> <span class='error' title="field has incomplete type &apos;struct dma_attrs&apos;"><dfn class="tu decl field" id="gk20a_instmem::attrs" title='gk20a_instmem::attrs' data-type='struct dma_attrs' data-ref="gk20a_instmem::attrs" data-ref-filename="gk20a_instmem..attrs">attrs</dfn></span>;</td></tr>
+<tr><th id="136">136</th><td><u>#<span data-ppcond="126">endif</span></u></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td>	<em>void</em> <span class='error' title="field has incomplete type &apos;void&apos;"><dfn class="tu decl field" id="gk20a_instmem::__iomem" title='gk20a_instmem::__iomem' data-type='void' data-ref="gk20a_instmem::__iomem" data-ref-filename="gk20a_instmem..__iomem">__iomem</dfn></span><span class='error' title="expected &apos;;&apos; at end of declaration list"></span> * (*cpu_map)(<b>struct</b> nvkm_memory *);</td></tr>
+<tr><th id="139">139</th><td>};</td></tr>
+<tr><th id="140">140</th><td><u>#define <dfn class="macro" id="_M/gk20a_instmem" data-ref="_M/gk20a_instmem">gk20a_instmem</dfn>(p) container_of((p), struct <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a>, <a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='a' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>)</u></td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td><em>static</em> <b>enum</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory_target" title='nvkm_memory_target' data-ref="nvkm_memory_target" data-ref-filename="nvkm_memory_target">nvkm_memory_target</a></td></tr>
+<tr><th id="143">143</th><td><dfn class="tu decl def fn" id="gk20a_instobj_target" title='gk20a_instobj_target' data-type='enum nvkm_memory_target gk20a_instobj_target(struct nvkm_memory * memory)' data-ref="gk20a_instobj_target" data-ref-filename="gk20a_instobj_target">gk20a_instobj_target</dfn>(<b>struct</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory" title='nvkm_memory' data-ref="nvkm_memory" data-ref-filename="nvkm_memory">nvkm_memory</a> *<dfn class="local col1 decl" id="1memory" title='memory' data-type='struct nvkm_memory *' data-ref="1memory" data-ref-filename="1memory">memory</dfn>)</td></tr>
+<tr><th id="144">144</th><td>{</td></tr>
+<tr><th id="145">145</th><td>	<b>return</b> <a class="enum" href="../../../include/nvkm/core/memory.h.html#NVKM_MEM_TARGET_HOST" title='NVKM_MEM_TARGET_HOST' data-ref="NVKM_MEM_TARGET_HOST" data-ref-filename="NVKM_MEM_TARGET_HOST">NVKM_MEM_TARGET_HOST</a>;</td></tr>
+<tr><th id="146">146</th><td>}</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td><em>static</em> <a class="typedef" href="../../../../../../include/linux/types.h.html#u64" title='u64' data-type='uint64_t' data-ref="u64" data-ref-filename="u64">u64</a></td></tr>
+<tr><th id="149">149</th><td><dfn class="tu decl def fn" id="gk20a_instobj_addr" title='gk20a_instobj_addr' data-type='u64 gk20a_instobj_addr(struct nvkm_memory * memory)' data-ref="gk20a_instobj_addr" data-ref-filename="gk20a_instobj_addr">gk20a_instobj_addr</dfn>(<b>struct</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory" title='nvkm_memory' data-ref="nvkm_memory" data-ref-filename="nvkm_memory">nvkm_memory</a> *<dfn class="local col2 decl" id="2memory" title='memory' data-type='struct nvkm_memory *' data-ref="2memory" data-ref-filename="2memory">memory</dfn>)</td></tr>
+<tr><th id="150">150</th><td>{</td></tr>
+<tr><th id="151">151</th><td>	<b>return</b> <a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(<a class="local col2 ref" href="#2memory" title='memory' data-ref="2memory" data-ref-filename="2memory">memory</a>)-&gt;<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::offset" title='nvkm_mem::offset' data-ref="nvkm_mem::offset" data-ref-filename="nvkm_mem..offset">offset</a>;</td></tr>
+<tr><th id="152">152</th><td>}</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><em>static</em> <a class="typedef" href="../../../../../../include/linux/types.h.html#u64" title='u64' data-type='uint64_t' data-ref="u64" data-ref-filename="u64">u64</a></td></tr>
+<tr><th id="155">155</th><td><dfn class="tu decl def fn" id="gk20a_instobj_size" title='gk20a_instobj_size' data-type='u64 gk20a_instobj_size(struct nvkm_memory * memory)' data-ref="gk20a_instobj_size" data-ref-filename="gk20a_instobj_size">gk20a_instobj_size</dfn>(<b>struct</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory" title='nvkm_memory' data-ref="nvkm_memory" data-ref-filename="nvkm_memory">nvkm_memory</a> *<dfn class="local col3 decl" id="3memory" title='memory' data-type='struct nvkm_memory *' data-ref="3memory" data-ref-filename="3memory">memory</dfn>)</td></tr>
+<tr><th id="156">156</th><td>{</td></tr>
+<tr><th id="157">157</th><td>	<b>return</b> (<a class="typedef" href="../../../../../../include/linux/types.h.html#u64" title='u64' data-type='uint64_t' data-ref="u64" data-ref-filename="u64">u64</a>)<a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(<a class="local col3 ref" href="#3memory" title='memory' data-ref="3memory" data-ref-filename="3memory">memory</a>)-&gt;<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::size" title='nvkm_mem::size' data-ref="nvkm_mem::size" data-ref-filename="nvkm_mem..size">size</a> &lt;&lt; <var>12</var>;</td></tr>
+<tr><th id="158">158</th><td>}</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td><u>#<span data-ppcond="160">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="161">161</th><td></td></tr>
+<tr><th id="162">162</th><td><em>static</em> <em>void</em> __iomem *</td></tr>
+<tr><th id="163">163</th><td>gk20a_instobj_cpu_map_netbsd(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="164">164</th><td>{</td></tr>
+<tr><th id="165">165</th><td>	<b>struct</b> gk20a_instobj_netbsd *node = gk20a_instobj_netbsd(memory);</td></tr>
+<tr><th id="166">166</th><td>	<b>struct</b> nvkm_device *device = node-&gt;base.imem-&gt;base.subdev.device;</td></tr>
+<tr><th id="167">167</th><td>	bus_dma_tag_t dmat = device-&gt;func-&gt;dma_tag(device);</td></tr>
+<tr><th id="168">168</th><td>	uint64_t nbytes = nvkm_memory_size(memory);</td></tr>
+<tr><th id="169">169</th><td>	<em>void</em> *kva;</td></tr>
+<tr><th id="170">170</th><td>	<em>int</em> ret;</td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td>	<i>/* XXX errno NetBSD-&gt;Linux */</i></td></tr>
+<tr><th id="173">173</th><td>	ret = -bus_dmamem_map(dmat, node-&gt;segs, node-&gt;nsegs, nbytes, &amp;kva,</td></tr>
+<tr><th id="174">174</th><td>	    BUS_DMA_WAITOK);</td></tr>
+<tr><th id="175">175</th><td>	<b>if</b> (ret)</td></tr>
+<tr><th id="176">176</th><td>		<b>return</b> NULL;</td></tr>
+<tr><th id="177">177</th><td></td></tr>
+<tr><th id="178">178</th><td>	<b>return</b> kva;</td></tr>
+<tr><th id="179">179</th><td>}</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="182">182</th><td>gk20a_instobj_cpu_unmap_netbsd(<b>struct</b> nvkm_memory *memory, <em>void</em> *kva)</td></tr>
+<tr><th id="183">183</th><td>{</td></tr>
+<tr><th id="184">184</th><td>	<b>struct</b> gk20a_instobj_netbsd *node = gk20a_instobj_netbsd(memory);</td></tr>
+<tr><th id="185">185</th><td>	<b>struct</b> nvkm_device *device = node-&gt;base.imem-&gt;base.subdev.device;</td></tr>
+<tr><th id="186">186</th><td>	bus_dma_tag_t dmat = device-&gt;func-&gt;dma_tag(device);</td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td>	bus_dmamem_unmap(dmat, kva, nvkm_memory_size(memory));</td></tr>
+<tr><th id="189">189</th><td>}</td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td><u>#<span data-ppcond="160">else</span></u></td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td><em>static</em> <em>void</em> <span class='error' title="variable has incomplete type &apos;void&apos;"><dfn class="tu decl def" id="__iomem" title='__iomem' data-type='void' data-ref="__iomem" data-ref-filename="__iomem">__iomem</dfn></span><span class='error' title="expected &apos;;&apos; after top level declarator"></span> *</td></tr>
+<tr><th id="194">194</th><td>gk20a_instobj_cpu_map_dma(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="195">195</th><td>{</td></tr>
+<tr><th id="196">196</th><td><u>#<span data-ppcond="196">if</span> defined(<span class="macro" data-ref="_M/CONFIG_ARM">CONFIG_ARM</span>) || defined(<span class="macro" data-ref="_M/CONFIG_ARM64">CONFIG_ARM64</span>)</u></td></tr>
+<tr><th id="197">197</th><td>	<b>struct</b> gk20a_instobj_dma *node = gk20a_instobj_dma(memory);</td></tr>
+<tr><th id="198">198</th><td>	<b>struct</b> device *dev = node-&gt;base.imem-&gt;base.subdev.device-&gt;dev;</td></tr>
+<tr><th id="199">199</th><td>	<em>int</em> npages = nvkm_memory_size(memory) &gt;&gt; <var>12</var>;</td></tr>
+<tr><th id="200">200</th><td>	<b>struct</b> page *pages[npages];</td></tr>
+<tr><th id="201">201</th><td>	<em>int</em> i;</td></tr>
+<tr><th id="202">202</th><td></td></tr>
+<tr><th id="203">203</th><td>	<i>/* we shouldn't see a gk20a on anything but arm/arm64 anyways */</i></td></tr>
+<tr><th id="204">204</th><td>	<i>/* phys_to_page does not exist on all platforms... */</i></td></tr>
+<tr><th id="205">205</th><td>	pages[<var>0</var>] = pfn_to_page(dma_to_phys(dev, node-&gt;handle) &gt;&gt; PAGE_SHIFT);</td></tr>
+<tr><th id="206">206</th><td>	<b>for</b> (i = <var>1</var>; i &lt; npages; i++)</td></tr>
+<tr><th id="207">207</th><td>		pages[i] = pages[<var>0</var>] + i;</td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td>	<b>return</b> vmap(pages, npages, VM_MAP, pgprot_writecombine(PAGE_KERNEL));</td></tr>
+<tr><th id="210">210</th><td><u>#<span data-ppcond="196">else</span></u></td></tr>
+<tr><th id="211">211</th><td>	<a class="macro" href="../../../../../../include/asm/bug.h.html#38" title="panic(&quot;%s:%d: BUG!&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/external/bsd/drm2/dist/drm/nouveau/nvkm/subdev/instmem/nouveau_nvkm_subdev_instmem_gk20a.c&quot;, 211)" data-ref="_M/BUG">BUG</a>();</td></tr>
+<tr><th id="212">212</th><td>	<b>return</b> <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="213">213</th><td><u>#<span data-ppcond="196">endif</span></u></td></tr>
+<tr><th id="214">214</th><td>}</td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td><em>static</em> <em>void</em> __iomem *</td></tr>
+<tr><th id="217">217</th><td>gk20a_instobj_cpu_map_iommu(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="218">218</th><td>{</td></tr>
+<tr><th id="219">219</th><td>	<b>struct</b> gk20a_instobj_iommu *node = <a class="macro" href="#110" title="((struct gk20a_instobj_iommu *)(((char *)(((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory))))) - __builtin_offsetof(struct gk20a_instobj_iommu, base)) + (0 * sizeof((((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))) - &amp;((struct gk20a_instobj_iommu *)(((char *)(((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory))))) - __builtin_offsetof(struct gk20a_instobj_iommu, base)))-&gt;base)))" data-ref="_M/gk20a_instobj_iommu">gk20a_instobj_iommu</a>(memory);</td></tr>
+<tr><th id="220">220</th><td>	<em>int</em> npages = <a class="macro" href="../../../include/nvkm/core/memory.h.html#48" title="(memory)-&gt;func-&gt;size(memory)" data-ref="_M/nvkm_memory_size">nvkm_memory_size</a>(memory) &gt;&gt; <var>12</var>;</td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td>	<b>return</b> vmap(node-&gt;pages, npages, VM_MAP,</td></tr>
+<tr><th id="223">223</th><td>		    pgprot_writecombine(<a class="macro" href="../../../../../../include/linux/vmalloc.h.html#80" title="0x03" data-ref="_M/PAGE_KERNEL">PAGE_KERNEL</a>));</td></tr>
+<tr><th id="224">224</th><td>}</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td><u>#<span data-ppcond="160">endif</span>	/* __NetBSD__ */</u></td></tr>
+<tr><th id="227">227</th><td></td></tr>
+<tr><th id="228">228</th><td><i>/*</i></td></tr>
+<tr><th id="229">229</th><td><i> * Must be called while holding gk20a_instmem_lock</i></td></tr>
+<tr><th id="230">230</th><td><i> */</i></td></tr>
+<tr><th id="231">231</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="232">232</th><td>gk20a_instmem_vaddr_gc(<b>struct</b> gk20a_instmem *imem, <em>const</em> u64 size)</td></tr>
+<tr><th id="233">233</th><td>{</td></tr>
+<tr><th id="234">234</th><td>	<b>while</b> (imem-&gt;vaddr_use + size &gt; imem-&gt;vaddr_max) {</td></tr>
+<tr><th id="235">235</th><td>		<b>struct</b> gk20a_instobj *obj;</td></tr>
+<tr><th id="236">236</th><td></td></tr>
+<tr><th id="237">237</th><td>		<i>/* no candidate that can be unmapped, abort... */</i></td></tr>
+<tr><th id="238">238</th><td>		<b>if</b> (list_empty(&amp;imem-&gt;vaddr_lru))</td></tr>
+<tr><th id="239">239</th><td>			<b>break</b>;</td></tr>
+<tr><th id="240">240</th><td></td></tr>
+<tr><th id="241">241</th><td>		obj = <a class="macro" href="../../../../../../../common/include/linux/list.h.html#225" title="((struct gk20a_instobj *)(((char *)(list_first((&amp;imem-&gt;vaddr_lru)))) - __builtin_offsetof(struct gk20a_instobj, vaddr_node)) + (0 * sizeof((list_first((&amp;imem-&gt;vaddr_lru))) - &amp;((struct gk20a_instobj *)(((char *)(list_first((&amp;imem-&gt;vaddr_lru)))) - __builtin_offsetof(struct gk20a_instobj, vaddr_node)))-&gt;vaddr_node)))" data-ref="_M/list_first_entry">list_first_entry</a>(&amp;imem-&gt;vaddr_lru, <b>struct</b> gk20a_instobj,</td></tr>
+<tr><th id="242">242</th><td>				       vaddr_node);</td></tr>
+<tr><th id="243">243</th><td>		list_del(&amp;obj-&gt;vaddr_node);</td></tr>
+<tr><th id="244">244</th><td><u>#<span data-ppcond="244">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="245">245</th><td>		gk20a_instobj_cpu_unmap_netbsd(&amp;obj-&gt;memory, obj-&gt;vaddr);</td></tr>
+<tr><th id="246">246</th><td><u>#<span data-ppcond="244">else</span></u></td></tr>
+<tr><th id="247">247</th><td>		vunmap(obj-&gt;vaddr);</td></tr>
+<tr><th id="248">248</th><td><u>#<span data-ppcond="244">endif</span></u></td></tr>
+<tr><th id="249">249</th><td>		obj-&gt;vaddr = <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="250">250</th><td>		imem-&gt;vaddr_use -= <a class="macro" href="../../../include/nvkm/core/memory.h.html#48" title="(&amp;obj-&gt;memory)-&gt;func-&gt;size(&amp;obj-&gt;memory)" data-ref="_M/nvkm_memory_size">nvkm_memory_size</a>(&amp;obj-&gt;memory);</td></tr>
+<tr><th id="251">251</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#49" title="do { struct nvkm_subdev *_subdev = (((&amp;imem-&gt;base.subdev))); if (_subdev-&gt;debug == (4) || _subdev-&gt;debug &gt; (4)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;(GC) vaddr used: %x/%x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use, imem-&gt;vaddr_max); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;(GC) vaddr used: %x/%x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use, imem-&gt;vaddr_max); } while (0); } } while(0)" data-ref="_M/nvkm_debug">nvkm_debug</a>(&amp;imem-&gt;base.subdev, <q>"(GC) vaddr used: %x/%x\n"</q>,</td></tr>
+<tr><th id="252">252</th><td>			   imem-&gt;vaddr_use, imem-&gt;vaddr_max);</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>	}</td></tr>
+<tr><th id="255">255</th><td>}</td></tr>
+<tr><th id="256">256</th><td></td></tr>
+<tr><th id="257">257</th><td><em>static</em> <em>void</em> __iomem *</td></tr>
+<tr><th id="258">258</th><td>gk20a_instobj_acquire(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="259">259</th><td>{</td></tr>
+<tr><th id="260">260</th><td>	<b>struct</b> gk20a_instobj *node = <a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(memory);</td></tr>
+<tr><th id="261">261</th><td>	<b>struct</b> gk20a_instmem *imem = node-&gt;imem;</td></tr>
+<tr><th id="262">262</th><td>	<b>struct</b> nvkm_ltc *ltc = imem-&gt;base.subdev.device-&gt;ltc;</td></tr>
+<tr><th id="263">263</th><td>	<em>const</em> u64 size = <a class="macro" href="../../../include/nvkm/core/memory.h.html#48" title="(memory)-&gt;func-&gt;size(memory)" data-ref="_M/nvkm_memory_size">nvkm_memory_size</a>(memory);</td></tr>
+<tr><th id="264">264</th><td>	<em>unsigned</em> <em>long</em> flags;</td></tr>
+<tr><th id="265">265</th><td></td></tr>
+<tr><th id="266">266</th><td>	nvkm_ltc_flush(ltc);</td></tr>
+<tr><th id="267">267</th><td></td></tr>
+<tr><th id="268">268</th><td>	<a class="macro" href="../../../../../../include/linux/spinlock.h.html#80" title="do { (flags) = 0; mutex_enter(&amp;((spinlock_t *)(&amp;imem-&gt;lock))-&gt;sl_lock); } while (0)" data-ref="_M/spin_lock_irqsave">spin_lock_irqsave</a>(&amp;imem-&gt;lock, flags);</td></tr>
+<tr><th id="269">269</th><td></td></tr>
+<tr><th id="270">270</th><td>	<b>if</b> (node-&gt;vaddr) {</td></tr>
+<tr><th id="271">271</th><td>		<i>/* remove us from the LRU list since we cannot be unmapped */</i></td></tr>
+<tr><th id="272">272</th><td>		list_del(&amp;node-&gt;vaddr_node);</td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td>		<b>goto</b> out;</td></tr>
+<tr><th id="275">275</th><td>	}</td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td>	<i>/* try to free some address space if we reached the limit */</i></td></tr>
+<tr><th id="278">278</th><td>	gk20a_instmem_vaddr_gc(imem, size);</td></tr>
+<tr><th id="279">279</th><td></td></tr>
+<tr><th id="280">280</th><td>	node-&gt;vaddr = imem-&gt;cpu_map(memory);</td></tr>
+<tr><th id="281">281</th><td></td></tr>
+<tr><th id="282">282</th><td>	<b>if</b> (!node-&gt;vaddr) {</td></tr>
+<tr><th id="283">283</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#46" title="do { struct nvkm_subdev *_subdev = (((&amp;imem-&gt;base.subdev))); if (_subdev-&gt;debug == (1) || _subdev-&gt;debug &gt; (1)) { do { if (_subdev-&gt;device-&gt;dev) aprint_error_dev((_subdev-&gt;device-&gt;dev), &quot;error: &quot; &quot;%s: &quot;&quot;cannot map instobj - &quot; &quot;this is not going to end well...\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_error(&quot;error: &quot; &quot;%s: &quot;&quot;cannot map instobj - &quot; &quot;this is not going to end well...\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_error">nvkm_error</a>(&amp;imem-&gt;base.subdev, <q>"cannot map instobj - "</q></td></tr>
+<tr><th id="284">284</th><td>			   <q>"this is not going to end well...\n"</q>);</td></tr>
+<tr><th id="285">285</th><td>		<b>goto</b> out;</td></tr>
+<tr><th id="286">286</th><td>	}</td></tr>
+<tr><th id="287">287</th><td></td></tr>
+<tr><th id="288">288</th><td>	imem-&gt;vaddr_use += size;</td></tr>
+<tr><th id="289">289</th><td>	<a class="macro" href="../../../include/nvkm/core/subdev.h.html#49" title="do { struct nvkm_subdev *_subdev = (((&amp;imem-&gt;base.subdev))); if (_subdev-&gt;debug == (4) || _subdev-&gt;debug &gt; (4)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;vaddr used: %x/%x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use, imem-&gt;vaddr_max); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;vaddr used: %x/%x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use, imem-&gt;vaddr_max); } while (0); } } while(0)" data-ref="_M/nvkm_debug">nvkm_debug</a>(&amp;imem-&gt;base.subdev, <q>"vaddr used: %x/%x\n"</q>,</td></tr>
+<tr><th id="290">290</th><td>		   imem-&gt;vaddr_use, imem-&gt;vaddr_max);</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td>out:</td></tr>
+<tr><th id="293">293</th><td>	spin_unlock_irqrestore(&amp;imem-&gt;lock, flags);</td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td>	<b>return</b> node-&gt;vaddr;</td></tr>
+<tr><th id="296">296</th><td>}</td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="299">299</th><td>gk20a_instobj_release(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="300">300</th><td>{</td></tr>
+<tr><th id="301">301</th><td>	<b>struct</b> gk20a_instobj *node = <a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(memory);</td></tr>
+<tr><th id="302">302</th><td>	<b>struct</b> gk20a_instmem *imem = node-&gt;imem;</td></tr>
+<tr><th id="303">303</th><td>	<b>struct</b> nvkm_ltc *ltc = imem-&gt;base.subdev.device-&gt;ltc;</td></tr>
+<tr><th id="304">304</th><td>	<em>unsigned</em> <em>long</em> flags;</td></tr>
+<tr><th id="305">305</th><td></td></tr>
+<tr><th id="306">306</th><td>	<a class="macro" href="../../../../../../include/linux/spinlock.h.html#80" title="do { (flags) = 0; mutex_enter(&amp;((spinlock_t *)(&amp;imem-&gt;lock))-&gt;sl_lock); } while (0)" data-ref="_M/spin_lock_irqsave">spin_lock_irqsave</a>(&amp;imem-&gt;lock, flags);</td></tr>
+<tr><th id="307">307</th><td></td></tr>
+<tr><th id="308">308</th><td>	<i>/* add ourselves to the LRU list so our CPU mapping can be freed */</i></td></tr>
+<tr><th id="309">309</th><td>	list_add_tail(&amp;node-&gt;vaddr_node, &amp;imem-&gt;vaddr_lru);</td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td>	spin_unlock_irqrestore(&amp;imem-&gt;lock, flags);</td></tr>
+<tr><th id="312">312</th><td></td></tr>
+<tr><th id="313">313</th><td>	<a class="macro" href="../../../../../../../common/include/asm/barrier.h.html#44" title="membar_producer" data-ref="_M/wmb">wmb</a>();</td></tr>
+<tr><th id="314">314</th><td>	nvkm_ltc_invalidate(ltc);</td></tr>
+<tr><th id="315">315</th><td>}</td></tr>
+<tr><th id="316">316</th><td></td></tr>
+<tr><th id="317">317</th><td><em>static</em> u32</td></tr>
+<tr><th id="318">318</th><td>gk20a_instobj_rd32(<b>struct</b> nvkm_memory *memory, u64 offset)</td></tr>
+<tr><th id="319">319</th><td>{</td></tr>
+<tr><th id="320">320</th><td>	<b>struct</b> gk20a_instobj *node = <a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(memory);</td></tr>
+<tr><th id="321">321</th><td></td></tr>
+<tr><th id="322">322</th><td>	<b>return</b> node-&gt;vaddr[offset / <var>4</var>];</td></tr>
+<tr><th id="323">323</th><td>}</td></tr>
+<tr><th id="324">324</th><td></td></tr>
+<tr><th id="325">325</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="326">326</th><td>gk20a_instobj_wr32(<b>struct</b> nvkm_memory *memory, u64 offset, u32 data)</td></tr>
+<tr><th id="327">327</th><td>{</td></tr>
+<tr><th id="328">328</th><td>	<b>struct</b> gk20a_instobj *node = <a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(memory);</td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td>	node-&gt;vaddr[offset / <var>4</var>] = data;</td></tr>
+<tr><th id="331">331</th><td>}</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="334">334</th><td>gk20a_instobj_map(<b>struct</b> nvkm_memory *memory, <b>struct</b> nvkm_vma *vma, u64 offset)</td></tr>
+<tr><th id="335">335</th><td>{</td></tr>
+<tr><th id="336">336</th><td>	<b>struct</b> gk20a_instobj *node = <a class="macro" href="#70" title="((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))" data-ref="_M/gk20a_instobj">gk20a_instobj</a>(memory);</td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td>	nvkm_vm_map_at(vma, offset, &amp;node-&gt;mem);</td></tr>
+<tr><th id="339">339</th><td>}</td></tr>
+<tr><th id="340">340</th><td></td></tr>
+<tr><th id="341">341</th><td><i>/*</i></td></tr>
+<tr><th id="342">342</th><td><i> * Clear the CPU mapping of an instobj if it exists</i></td></tr>
+<tr><th id="343">343</th><td><i> */</i></td></tr>
+<tr><th id="344">344</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="345">345</th><td>gk20a_instobj_dtor(<b>struct</b> gk20a_instobj *node)</td></tr>
+<tr><th id="346">346</th><td>{</td></tr>
+<tr><th id="347">347</th><td>	<b>struct</b> gk20a_instmem *imem = node-&gt;imem;</td></tr>
+<tr><th id="348">348</th><td>	<b>struct</b> gk20a_instobj *obj;</td></tr>
+<tr><th id="349">349</th><td>	<em>unsigned</em> <em>long</em> flags;</td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td>	<a class="macro" href="../../../../../../include/linux/spinlock.h.html#80" title="do { (flags) = 0; mutex_enter(&amp;((spinlock_t *)(&amp;imem-&gt;lock))-&gt;sl_lock); } while (0)" data-ref="_M/spin_lock_irqsave">spin_lock_irqsave</a>(&amp;imem-&gt;lock, flags);</td></tr>
+<tr><th id="352">352</th><td></td></tr>
+<tr><th id="353">353</th><td>	<b>if</b> (!node-&gt;vaddr)</td></tr>
+<tr><th id="354">354</th><td>		<b>goto</b> out;</td></tr>
+<tr><th id="355">355</th><td></td></tr>
+<tr><th id="356">356</th><td>	<a class="macro" href="../../../../../../../common/include/linux/list.h.html#246" title="for ((obj) = ((typeof(*(obj)) *)(((char *)(list_first((&amp;imem-&gt;vaddr_lru)))) - __builtin_offsetof(typeof(*(obj)), vaddr_node)) + (0 * sizeof((list_first((&amp;imem-&gt;vaddr_lru))) - &amp;((typeof(*(obj)) *)(((char *)(list_first((&amp;imem-&gt;vaddr_lru)))) - __builtin_offsetof(typeof(*(obj)), vaddr_node)))-&gt;vaddr_node))); &amp;(obj)-&gt;vaddr_node != (&amp;imem-&gt;vaddr_lru); (obj) = ((typeof(*(obj)) *)(((char *)(list_next(&amp;(obj)-&gt;vaddr_node))) - __builtin_offsetof(typeof(*(obj)), vaddr_node)) + (0 * sizeof((list_next(&amp;(obj)-&gt;vaddr_node)) - &amp;((typeof(*(obj)) *)(((char *)(list_next(&amp;(obj)-&gt;vaddr_node))) - __builtin_offsetof(typeof(*(obj)), vaddr_node)))-&gt;vaddr_node))))" data-ref="_M/list_for_each_entry">list_for_each_entry</a>(obj, &amp;imem-&gt;vaddr_lru, vaddr_node) {</td></tr>
+<tr><th id="357">357</th><td>		<b>if</b> (obj == node) {</td></tr>
+<tr><th id="358">358</th><td>			list_del(&amp;obj-&gt;vaddr_node);</td></tr>
+<tr><th id="359">359</th><td>			<b>break</b>;</td></tr>
+<tr><th id="360">360</th><td>		}</td></tr>
+<tr><th id="361">361</th><td>	}</td></tr>
+<tr><th id="362">362</th><td><u>#<span data-ppcond="362">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="363">363</th><td>	gk20a_instobj_cpu_unmap_netbsd(&amp;node-&gt;memory, node-&gt;vaddr);</td></tr>
+<tr><th id="364">364</th><td><u>#<span data-ppcond="362">else</span></u></td></tr>
+<tr><th id="365">365</th><td>	vunmap(node-&gt;vaddr);</td></tr>
+<tr><th id="366">366</th><td><u>#<span data-ppcond="362">endif</span></u></td></tr>
+<tr><th id="367">367</th><td>	node-&gt;vaddr = <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="368">368</th><td>	imem-&gt;vaddr_use -= <a class="macro" href="../../../include/nvkm/core/memory.h.html#48" title="(&amp;node-&gt;memory)-&gt;func-&gt;size(&amp;node-&gt;memory)" data-ref="_M/nvkm_memory_size">nvkm_memory_size</a>(&amp;node-&gt;memory);</td></tr>
+<tr><th id="369">369</th><td>	<a class="macro" href="../../../include/nvkm/core/subdev.h.html#49" title="do { struct nvkm_subdev *_subdev = (((&amp;imem-&gt;base.subdev))); if (_subdev-&gt;debug == (4) || _subdev-&gt;debug &gt; (4)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;vaddr used: %x/%x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use, imem-&gt;vaddr_max); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;vaddr used: %x/%x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use, imem-&gt;vaddr_max); } while (0); } } while(0)" data-ref="_M/nvkm_debug">nvkm_debug</a>(&amp;imem-&gt;base.subdev, <q>"vaddr used: %x/%x\n"</q>,</td></tr>
+<tr><th id="370">370</th><td>		   imem-&gt;vaddr_use, imem-&gt;vaddr_max);</td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td>out:</td></tr>
+<tr><th id="373">373</th><td>	spin_unlock_irqrestore(&amp;imem-&gt;lock, flags);</td></tr>
+<tr><th id="374">374</th><td>}</td></tr>
+<tr><th id="375">375</th><td></td></tr>
+<tr><th id="376">376</th><td><u>#<span data-ppcond="376">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="377">377</th><td></td></tr>
+<tr><th id="378">378</th><td><em>static</em> <em>void</em> *</td></tr>
+<tr><th id="379">379</th><td>gk20a_instobj_dtor_netbsd(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="380">380</th><td>{</td></tr>
+<tr><th id="381">381</th><td>	<b>struct</b> gk20a_instobj_netbsd *node = gk20a_instobj_netbsd(memory);</td></tr>
+<tr><th id="382">382</th><td>	<b>struct</b> gk20a_instmem *imem = node-&gt;base.imem;</td></tr>
+<tr><th id="383">383</th><td>	<b>struct</b> nvkm_device *device = imem-&gt;base.subdev.device;</td></tr>
+<tr><th id="384">384</th><td>	bus_dma_tag_t dmat = device-&gt;func-&gt;dma_tag(device);</td></tr>
+<tr><th id="385">385</th><td></td></tr>
+<tr><th id="386">386</th><td>	gk20a_instobj_dtor(&amp;node-&gt;base);</td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td>	<b>if</b> (unlikely(!node-&gt;map))</td></tr>
+<tr><th id="389">389</th><td>		<b>goto</b> out;</td></tr>
+<tr><th id="390">390</th><td></td></tr>
+<tr><th id="391">391</th><td>	bus_dmamap_unload(dmat, node-&gt;map);</td></tr>
+<tr><th id="392">392</th><td>	bus_dmamap_destroy(dmat, node-&gt;map);</td></tr>
+<tr><th id="393">393</th><td>	bus_dmamem_free(dmat, node-&gt;segs, nvkm_memory_size(memory));</td></tr>
+<tr><th id="394">394</th><td></td></tr>
+<tr><th id="395">395</th><td>out:</td></tr>
+<tr><th id="396">396</th><td>	<b>return</b> node;</td></tr>
+<tr><th id="397">397</th><td>}</td></tr>
+<tr><th id="398">398</th><td></td></tr>
+<tr><th id="399">399</th><td><u>#<span data-ppcond="376">else</span></u></td></tr>
+<tr><th id="400">400</th><td></td></tr>
+<tr><th id="401">401</th><td><em>static</em> <em>void</em> *</td></tr>
+<tr><th id="402">402</th><td>gk20a_instobj_dtor_dma(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="403">403</th><td>{</td></tr>
+<tr><th id="404">404</th><td>	<b>struct</b> gk20a_instobj_dma *node = <a class="macro" href="#96" title="((struct gk20a_instobj_dma *)(((char *)(((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory))))) - __builtin_offsetof(struct gk20a_instobj_dma, base)) + (0 * sizeof((((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))) - &amp;((struct gk20a_instobj_dma *)(((char *)(((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory))))) - __builtin_offsetof(struct gk20a_instobj_dma, base)))-&gt;base)))" data-ref="_M/gk20a_instobj_dma">gk20a_instobj_dma</a>(memory);</td></tr>
+<tr><th id="405">405</th><td>	<b>struct</b> gk20a_instmem *imem = node-&gt;base.imem;</td></tr>
+<tr><th id="406">406</th><td>	<b>struct</b> device *dev = imem-&gt;base.subdev.device-&gt;dev;</td></tr>
+<tr><th id="407">407</th><td></td></tr>
+<tr><th id="408">408</th><td>	gk20a_instobj_dtor(&amp;node-&gt;base);</td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td>	<b>if</b> (<a class="macro" href="../../../../../../../common/include/linux/kernel.h.html#66" title="__builtin_expect((!node-&gt;cpuaddr) != 0, 0)" data-ref="_M/unlikely">unlikely</a>(!node-&gt;cpuaddr))</td></tr>
+<tr><th id="411">411</th><td>		<b>goto</b> out;</td></tr>
+<tr><th id="412">412</th><td></td></tr>
+<tr><th id="413">413</th><td>	dma_free_attrs(dev, node-&gt;base.mem.size &lt;&lt; <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#55" title="12" data-ref="_M/PAGE_SHIFT">PAGE_SHIFT</a>, node-&gt;cpuaddr,</td></tr>
+<tr><th id="414">414</th><td>		       node-&gt;handle, &amp;imem-&gt;attrs);</td></tr>
+<tr><th id="415">415</th><td></td></tr>
+<tr><th id="416">416</th><td>out:</td></tr>
+<tr><th id="417">417</th><td>	<b>return</b> node;</td></tr>
+<tr><th id="418">418</th><td>}</td></tr>
+<tr><th id="419">419</th><td></td></tr>
+<tr><th id="420">420</th><td><em>static</em> <em>void</em> *</td></tr>
+<tr><th id="421">421</th><td>gk20a_instobj_dtor_iommu(<b>struct</b> nvkm_memory *memory)</td></tr>
+<tr><th id="422">422</th><td>{</td></tr>
+<tr><th id="423">423</th><td>	<b>struct</b> gk20a_instobj_iommu *node = <a class="macro" href="#110" title="((struct gk20a_instobj_iommu *)(((char *)(((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory))))) - __builtin_offsetof(struct gk20a_instobj_iommu, base)) + (0 * sizeof((((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory)))) - &amp;((struct gk20a_instobj_iommu *)(((char *)(((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)) + (0 * sizeof(((memory)) - &amp;((struct gk20a_instobj *)(((char *)((memory))) - __builtin_offsetof(struct gk20a_instobj, memory)))-&gt;memory))))) - __builtin_offsetof(struct gk20a_instobj_iommu, base)))-&gt;base)))" data-ref="_M/gk20a_instobj_iommu">gk20a_instobj_iommu</a>(memory);</td></tr>
+<tr><th id="424">424</th><td>	<b>struct</b> gk20a_instmem *imem = node-&gt;base.imem;</td></tr>
+<tr><th id="425">425</th><td>	<b>struct</b> device *dev = imem-&gt;base.subdev.device-&gt;dev;</td></tr>
+<tr><th id="426">426</th><td>	<b>struct</b> nvkm_mm_node *r;</td></tr>
+<tr><th id="427">427</th><td>	<em>int</em> i;</td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td>	gk20a_instobj_dtor(&amp;node-&gt;base);</td></tr>
+<tr><th id="430">430</th><td></td></tr>
+<tr><th id="431">431</th><td>	<b>if</b> (<a class="macro" href="../../../../../../../common/include/linux/kernel.h.html#66" title="__builtin_expect((list_empty(&amp;node-&gt;base.mem.regions)) != 0, 0)" data-ref="_M/unlikely">unlikely</a>(list_empty(&amp;node-&gt;base.mem.regions)))</td></tr>
+<tr><th id="432">432</th><td>		<b>goto</b> out;</td></tr>
+<tr><th id="433">433</th><td></td></tr>
+<tr><th id="434">434</th><td>	r = <a class="macro" href="../../../../../../../common/include/linux/list.h.html#225" title="((struct nvkm_mm_node *)(((char *)(list_first((&amp;node-&gt;base.mem.regions)))) - __builtin_offsetof(struct nvkm_mm_node, rl_entry)) + (0 * sizeof((list_first((&amp;node-&gt;base.mem.regions))) - &amp;((struct nvkm_mm_node *)(((char *)(list_first((&amp;node-&gt;base.mem.regions)))) - __builtin_offsetof(struct nvkm_mm_node, rl_entry)))-&gt;rl_entry)))" data-ref="_M/list_first_entry">list_first_entry</a>(&amp;node-&gt;base.mem.regions, <b>struct</b> nvkm_mm_node,</td></tr>
+<tr><th id="435">435</th><td>			     rl_entry);</td></tr>
+<tr><th id="436">436</th><td></td></tr>
+<tr><th id="437">437</th><td>	<i>/* clear IOMMU bit to unmap pages */</i></td></tr>
+<tr><th id="438">438</th><td>	r-&gt;offset &amp;= ~<a class="macro" href="../../../../../../../common/include/linux/bitops.h.html#108" title="((uintmax_t)1 &lt;&lt; (imem-&gt;iommu_bit - imem-&gt;iommu_pgshift))" data-ref="_M/BIT">BIT</a>(imem-&gt;iommu_bit - imem-&gt;iommu_pgshift);</td></tr>
+<tr><th id="439">439</th><td></td></tr>
+<tr><th id="440">440</th><td>	<i>/* Unmap pages from GPU address space and free them */</i></td></tr>
+<tr><th id="441">441</th><td>	<b>for</b> (i = <var>0</var>; i &lt; node-&gt;base.mem.size; i++) {</td></tr>
+<tr><th id="442">442</th><td>		iommu_unmap(imem-&gt;domain,</td></tr>
+<tr><th id="443">443</th><td>			    (r-&gt;offset + i) &lt;&lt; imem-&gt;iommu_pgshift, <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>);</td></tr>
+<tr><th id="444">444</th><td>		dma_unmap_page(dev, node-&gt;dma_addrs[i], <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>,</td></tr>
+<tr><th id="445">445</th><td>			       DMA_BIDIRECTIONAL);</td></tr>
+<tr><th id="446">446</th><td>		__free_page(node-&gt;pages[i]);</td></tr>
+<tr><th id="447">447</th><td>	}</td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td>	<i>/* Release area from GPU address space */</i></td></tr>
+<tr><th id="450">450</th><td>	mutex_lock(imem-&gt;mm_mutex);</td></tr>
+<tr><th id="451">451</th><td>	nvkm_mm_free(imem-&gt;mm, &amp;r);</td></tr>
+<tr><th id="452">452</th><td>	mutex_unlock(imem-&gt;mm_mutex);</td></tr>
+<tr><th id="453">453</th><td></td></tr>
+<tr><th id="454">454</th><td>out:</td></tr>
+<tr><th id="455">455</th><td>	<b>return</b> node;</td></tr>
+<tr><th id="456">456</th><td>}</td></tr>
+<tr><th id="457">457</th><td></td></tr>
+<tr><th id="458">458</th><td><u>#<span data-ppcond="376">endif</span>	/* __NetBSD__ */</u></td></tr>
+<tr><th id="459">459</th><td></td></tr>
+<tr><th id="460">460</th><td><u>#<span data-ppcond="460">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="461">461</th><td></td></tr>
+<tr><th id="462">462</th><td><em>static</em> <em>const</em> <b>struct</b> nvkm_memory_func</td></tr>
+<tr><th id="463">463</th><td>gk20a_instobj_func_netbsd = {</td></tr>
+<tr><th id="464">464</th><td>	.dtor = gk20a_instobj_dtor_netbsd,</td></tr>
+<tr><th id="465">465</th><td>	.target = gk20a_instobj_target,</td></tr>
+<tr><th id="466">466</th><td>	.addr = gk20a_instobj_addr,</td></tr>
+<tr><th id="467">467</th><td>	.size = gk20a_instobj_size,</td></tr>
+<tr><th id="468">468</th><td>	.acquire = gk20a_instobj_acquire,</td></tr>
+<tr><th id="469">469</th><td>	.release = gk20a_instobj_release,</td></tr>
+<tr><th id="470">470</th><td>	.rd32 = gk20a_instobj_rd32,</td></tr>
+<tr><th id="471">471</th><td>	.wr32 = gk20a_instobj_wr32,</td></tr>
+<tr><th id="472">472</th><td>	.map = gk20a_instobj_map,</td></tr>
+<tr><th id="473">473</th><td>};</td></tr>
+<tr><th id="474">474</th><td></td></tr>
+<tr><th id="475">475</th><td><u>#<span data-ppcond="460">else</span></u></td></tr>
+<tr><th id="476">476</th><td></td></tr>
+<tr><th id="477">477</th><td><em>static</em> <em>const</em> <b>struct</b> nvkm_memory_func</td></tr>
+<tr><th id="478">478</th><td>gk20a_instobj_func_dma = {</td></tr>
+<tr><th id="479">479</th><td>	.dtor = gk20a_instobj_dtor_dma,</td></tr>
+<tr><th id="480">480</th><td>	.target = gk20a_instobj_target,</td></tr>
+<tr><th id="481">481</th><td>	.addr = gk20a_instobj_addr,</td></tr>
+<tr><th id="482">482</th><td>	.size = gk20a_instobj_size,</td></tr>
+<tr><th id="483">483</th><td>	.acquire = gk20a_instobj_acquire,</td></tr>
+<tr><th id="484">484</th><td>	.release = gk20a_instobj_release,</td></tr>
+<tr><th id="485">485</th><td>	.rd32 = gk20a_instobj_rd32,</td></tr>
+<tr><th id="486">486</th><td>	.wr32 = gk20a_instobj_wr32,</td></tr>
+<tr><th id="487">487</th><td>	.map = gk20a_instobj_map,</td></tr>
+<tr><th id="488">488</th><td>};</td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td><em>static</em> <em>const</em> <b>struct</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory_func" title='nvkm_memory_func' data-ref="nvkm_memory_func" data-ref-filename="nvkm_memory_func">nvkm_memory_func</a></td></tr>
+<tr><th id="491">491</th><td><dfn class="tu decl def" id="gk20a_instobj_func_iommu" title='gk20a_instobj_func_iommu' data-type='const struct nvkm_memory_func' data-ref="gk20a_instobj_func_iommu" data-ref-filename="gk20a_instobj_func_iommu">gk20a_instobj_func_iommu</dfn> = {</td></tr>
+<tr><th id="492">492</th><td>	.dtor = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_dtor_iommu&apos;">gk20a_instobj_dtor_iommu</span>,</td></tr>
+<tr><th id="493">493</th><td>	.target = gk20a_instobj_target,</td></tr>
+<tr><th id="494">494</th><td>	.addr = gk20a_instobj_addr,</td></tr>
+<tr><th id="495">495</th><td>	.size = gk20a_instobj_size,</td></tr>
+<tr><th id="496">496</th><td>	.acquire = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_acquire&apos;">gk20a_instobj_acquire</span>,</td></tr>
+<tr><th id="497">497</th><td>	.release = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_release&apos;">gk20a_instobj_release</span>,</td></tr>
+<tr><th id="498">498</th><td>	.rd32 = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_rd32&apos;">gk20a_instobj_rd32</span>,</td></tr>
+<tr><th id="499">499</th><td>	.wr32 = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_wr32&apos;">gk20a_instobj_wr32</span>,</td></tr>
+<tr><th id="500">500</th><td>	.map = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_map&apos;">gk20a_instobj_map</span>,</td></tr>
+<tr><th id="501">501</th><td>};</td></tr>
+<tr><th id="502">502</th><td></td></tr>
+<tr><th id="503">503</th><td><u>#<span data-ppcond="460">endif</span></u></td></tr>
+<tr><th id="504">504</th><td></td></tr>
+<tr><th id="505">505</th><td><u>#<span data-ppcond="505">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="506">506</th><td></td></tr>
+<tr><th id="507">507</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="508">508</th><td>gk20a_instobj_ctor_netbsd(<b>struct</b> gk20a_instmem *imem, u32 pages, u32 align,</td></tr>
+<tr><th id="509">509</th><td>			  <b>struct</b> gk20a_instobj **_node)</td></tr>
+<tr><th id="510">510</th><td>{</td></tr>
+<tr><th id="511">511</th><td>	<b>struct</b> gk20a_instobj_netbsd *node;</td></tr>
+<tr><th id="512">512</th><td>	<b>struct</b> nvkm_subdev *subdev = &amp;imem-&gt;base.subdev;</td></tr>
+<tr><th id="513">513</th><td>	<b>struct</b> nvkm_device *device = subdev-&gt;device;</td></tr>
+<tr><th id="514">514</th><td>	bus_dma_tag_t dmat = device-&gt;func-&gt;dma_tag(device);</td></tr>
+<tr><th id="515">515</th><td>	bus_size_t nbytes = (bus_size_t)pages &lt;&lt; PAGE_SHIFT;</td></tr>
+<tr><th id="516">516</th><td>	<em>int</em> ret;</td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td>	<b>if</b> (!(node = kzalloc(<b>sizeof</b>(*node), GFP_KERNEL))) {</td></tr>
+<tr><th id="519">519</th><td>		ret = -ENOMEM;</td></tr>
+<tr><th id="520">520</th><td>fail0:		<b>return</b> ret;</td></tr>
+<tr><th id="521">521</th><td>	}</td></tr>
+<tr><th id="522">522</th><td>	*_node = &amp;node-&gt;base;</td></tr>
+<tr><th id="523">523</th><td></td></tr>
+<tr><th id="524">524</th><td>	nvkm_memory_ctor(&amp;gk20a_instobj_func_netbsd, &amp;node-&gt;base.memory);</td></tr>
+<tr><th id="525">525</th><td></td></tr>
+<tr><th id="526">526</th><td>	node-&gt;segs = kcalloc(pages, <b>sizeof</b>(node-&gt;segs[<var>0</var>]), GFP_KERNEL);</td></tr>
+<tr><th id="527">527</th><td>	<b>if</b> (node-&gt;segs == NULL) {</td></tr>
+<tr><th id="528">528</th><td>		ret = -ENOMEM;</td></tr>
+<tr><th id="529">529</th><td>		<b>goto</b> fail0;</td></tr>
+<tr><th id="530">530</th><td>	}</td></tr>
+<tr><th id="531">531</th><td></td></tr>
+<tr><th id="532">532</th><td>	ret = -bus_dmamem_alloc(dmat, nbytes, align, <var>0</var>, node-&gt;segs, pages,</td></tr>
+<tr><th id="533">533</th><td>	    &amp;node-&gt;nsegs, BUS_DMA_WAITOK);</td></tr>
+<tr><th id="534">534</th><td>	<b>if</b> (ret) {</td></tr>
+<tr><th id="535">535</th><td>		kfree(node-&gt;segs);</td></tr>
+<tr><th id="536">536</th><td>		node-&gt;segs = NULL;</td></tr>
+<tr><th id="537">537</th><td>fail1:		<b>goto</b> fail0;</td></tr>
+<tr><th id="538">538</th><td>	}</td></tr>
+<tr><th id="539">539</th><td>	KASSERT(<var>0</var> &lt;= node-&gt;nsegs);</td></tr>
+<tr><th id="540">540</th><td>	KASSERT(node-&gt;nsegs &lt;= pages);</td></tr>
+<tr><th id="541">541</th><td></td></tr>
+<tr><th id="542">542</th><td>	<i>/*</i></td></tr>
+<tr><th id="543">543</th><td><i>	 * Must be a contiguous address range in bus space, so maxsegsz</i></td></tr>
+<tr><th id="544">544</th><td><i>	 * is the full mapping size.</i></td></tr>
+<tr><th id="545">545</th><td><i>	 */</i></td></tr>
+<tr><th id="546">546</th><td>	ret = -bus_dmamap_create(dmat, nbytes, node-&gt;nsegs, nbytes, <var>0</var>,</td></tr>
+<tr><th id="547">547</th><td>	    BUS_DMA_WAITOK, &amp;node-&gt;map);</td></tr>
+<tr><th id="548">548</th><td>	<b>if</b> (ret) {</td></tr>
+<tr><th id="549">549</th><td>fail2:		bus_dmamem_free(dmat, node-&gt;segs, node-&gt;nsegs);</td></tr>
+<tr><th id="550">550</th><td>		<b>goto</b> fail1;</td></tr>
+<tr><th id="551">551</th><td>	}</td></tr>
+<tr><th id="552">552</th><td></td></tr>
+<tr><th id="553">553</th><td>	ret = -bus_dmamap_load_raw(dmat, node-&gt;map, node-&gt;segs, node-&gt;nsegs,</td></tr>
+<tr><th id="554">554</th><td>	    nbytes, BUS_DMA_WAITOK);</td></tr>
+<tr><th id="555">555</th><td>	<b>if</b> (ret) {</td></tr>
+<tr><th id="556">556</th><td>fail3: __unused</td></tr>
+<tr><th id="557">557</th><td>		bus_dmamap_destroy(dmat, node-&gt;map);</td></tr>
+<tr><th id="558">558</th><td>		node-&gt;map = NULL;</td></tr>
+<tr><th id="559">559</th><td>		<b>goto</b> fail2;</td></tr>
+<tr><th id="560">560</th><td>	}</td></tr>
+<tr><th id="561">561</th><td></td></tr>
+<tr><th id="562">562</th><td>	<i>/* Success!  */</i></td></tr>
+<tr><th id="563">563</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="564">564</th><td>}</td></tr>
+<tr><th id="565">565</th><td></td></tr>
+<tr><th id="566">566</th><td><u>#<span data-ppcond="505">else</span></u></td></tr>
+<tr><th id="567">567</th><td></td></tr>
+<tr><th id="568">568</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="569">569</th><td><dfn class="tu decl def fn" id="gk20a_instobj_ctor_dma" title='gk20a_instobj_ctor_dma' data-type='int gk20a_instobj_ctor_dma(struct gk20a_instmem * imem, u32 npages, u32 align, struct gk20a_instobj ** _node)' data-ref="gk20a_instobj_ctor_dma" data-ref-filename="gk20a_instobj_ctor_dma">gk20a_instobj_ctor_dma</dfn>(<b>struct</b> <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a> *<dfn class="local col4 decl" id="4imem" title='imem' data-type='struct gk20a_instmem *' data-ref="4imem" data-ref-filename="4imem">imem</dfn>, <a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col5 decl" id="5npages" title='npages' data-type='u32' data-ref="5npages" data-ref-filename="5npages">npages</dfn>, <a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col6 decl" id="6align" title='align' data-type='u32' data-ref="6align" data-ref-filename="6align">align</dfn>,</td></tr>
+<tr><th id="570">570</th><td>		       <b>struct</b> <a class="type" href="#gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</a> **<dfn class="local col7 decl" id="7_node" title='_node' data-type='struct gk20a_instobj **' data-ref="7_node" data-ref-filename="7_node">_node</dfn>)</td></tr>
+<tr><th id="571">571</th><td>{</td></tr>
+<tr><th id="572">572</th><td>	<b>struct</b> <a class="type" href="#gk20a_instobj_dma" title='gk20a_instobj_dma' data-ref="gk20a_instobj_dma" data-ref-filename="gk20a_instobj_dma">gk20a_instobj_dma</a> *<dfn class="local col8 decl" id="8node" title='node' data-type='struct gk20a_instobj_dma *' data-ref="8node" data-ref-filename="8node">node</dfn>;</td></tr>
+<tr><th id="573">573</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/subdev.h.html#nvkm_subdev" title='nvkm_subdev' data-ref="nvkm_subdev" data-ref-filename="nvkm_subdev">nvkm_subdev</a> *<dfn class="local col9 decl" id="9subdev" title='subdev' data-type='struct nvkm_subdev *' data-ref="9subdev" data-ref-filename="9subdev">subdev</dfn> = &amp;<a class="local col4 ref" href="#4imem" title='imem' data-ref="4imem" data-ref-filename="4imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='m' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>.<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>;</td></tr>
+<tr><th id="574">574</th><td>	<b>struct</b> <a class="type" href="../../../../../../../../../sys/device.h.html#device" title='device' data-ref="device" data-ref-filename="device">device</a> *<dfn class="local col0 decl" id="10dev" title='dev' data-type='struct device *' data-ref="10dev" data-ref-filename="10dev">dev</dfn> = <a class="local col9 ref" href="#9subdev" title='subdev' data-ref="9subdev" data-ref-filename="9subdev">subdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/subdev.h.html#nvkm_subdev::device" title='nvkm_subdev::device' data-ref="nvkm_subdev::device" data-ref-filename="nvkm_subdev..device">device</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/device.h.html#nvkm_device::dev" title='nvkm_device::dev' data-ref="nvkm_device::dev" data-ref-filename="nvkm_device..dev">dev</a>;</td></tr>
+<tr><th id="575">575</th><td></td></tr>
+<tr><th id="576">576</th><td>	<b>if</b> (!(<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a> = <a class="ref fn" href="../../../../../../../common/include/linux/slab.h.html#kzalloc" title='kzalloc' data-ref="kzalloc" data-ref-filename="kzalloc">kzalloc</a>(<b>sizeof</b>(*<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>), <a class="macro" href="../../../../../../../common/include/linux/gfp.h.html#46" title="((((uintmax_t)(2) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((2) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(6) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((6) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(11) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((11) &amp; (8 * sizeof(uintmax_t) - 1)))))" data-ref="_M/GFP_KERNEL">GFP_KERNEL</a>)))</td></tr>
+<tr><th id="577">577</th><td>		<b>return</b> -<a class="macro" href="../../../../../../../../../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="578">578</th><td>	*<a class="local col7 ref" href="#7_node" title='_node' data-ref="7_node" data-ref-filename="7_node">_node</a> = &amp;<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::base" title='gk20a_instobj_dma::base' data-use='a' data-ref="gk20a_instobj_dma::base" data-ref-filename="gk20a_instobj_dma..base">base</a>;</td></tr>
+<tr><th id="579">579</th><td></td></tr>
+<tr><th id="580">580</th><td>	nvkm_memory_ctor(&amp;<span class='error' title="use of undeclared identifier &apos;gk20a_instobj_func_dma&apos;">gk20a_instobj_func_dma</span>, &amp;node-&gt;base.memory);</td></tr>
+<tr><th id="581">581</th><td></td></tr>
+<tr><th id="582">582</th><td>	node-&gt;cpuaddr = dma_alloc_attrs(dev, npages &lt;&lt; <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#55" title="12" data-ref="_M/PAGE_SHIFT">PAGE_SHIFT</a>,</td></tr>
+<tr><th id="583">583</th><td>					&amp;node-&gt;handle, <a class="macro" href="../../../../../../../common/include/linux/gfp.h.html#46" title="((((uintmax_t)(2) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((2) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(6) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((6) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(11) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((11) &amp; (8 * sizeof(uintmax_t) - 1)))))" data-ref="_M/GFP_KERNEL">GFP_KERNEL</a>,</td></tr>
+<tr><th id="584">584</th><td>					&amp;imem-&gt;attrs);</td></tr>
+<tr><th id="585">585</th><td>	<b>if</b> (!<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::cpuaddr" title='gk20a_instobj_dma::cpuaddr' data-use='r' data-ref="gk20a_instobj_dma::cpuaddr" data-ref-filename="gk20a_instobj_dma..cpuaddr">cpuaddr</a>) {</td></tr>
+<tr><th id="586">586</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#46" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (1) || _subdev-&gt;debug &gt; (1)) { do { if (_subdev-&gt;device-&gt;dev) aprint_error_dev((_subdev-&gt;device-&gt;dev), &quot;error: &quot; &quot;%s: &quot;&quot;cannot allocate DMA memory\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_error(&quot;error: &quot; &quot;%s: &quot;&quot;cannot allocate DMA memory\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_error">nvkm_error</a>(<a class="local col9 ref" href="#9subdev" title='subdev' data-ref="9subdev" data-ref-filename="9subdev">subdev</a>, <q>"cannot allocate DMA memory\n"</q>);</td></tr>
+<tr><th id="587">587</th><td>		<b>return</b> -<a class="macro" href="../../../../../../../../../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="588">588</th><td>	}</td></tr>
+<tr><th id="589">589</th><td></td></tr>
+<tr><th id="590">590</th><td>	<i>/* alignment check */</i></td></tr>
+<tr><th id="591">591</th><td>	<b>if</b> (<a class="macro" href="../../../../../../../common/include/linux/kernel.h.html#66" title="__builtin_expect((node-&gt;handle &amp; (align - 1)) != 0, 0)" data-ref="_M/unlikely">unlikely</a>(<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::handle" title='gk20a_instobj_dma::handle' data-use='r' data-ref="gk20a_instobj_dma::handle" data-ref-filename="gk20a_instobj_dma..handle">handle</a> &amp; (<a class="local col6 ref" href="#6align" title='align' data-ref="6align" data-ref-filename="6align">align</a> - <var>1</var>)))</td></tr>
+<tr><th id="592">592</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#47" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (2) || _subdev-&gt;debug &gt; (2)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;notice: &quot; &quot;%s: &quot;&quot;memory not aligned as requested: %pad (0x%x)\n&quot;, nvkm_subdev_name[_subdev-&gt;index], &amp;node-&gt;handle, align); else aprint_normal(&quot;notice: &quot; &quot;%s: &quot;&quot;memory not aligned as requested: %pad (0x%x)\n&quot;, nvkm_subdev_name[_subdev-&gt;index], &amp;node-&gt;handle, align); } while (0); } } while(0)" data-ref="_M/nvkm_warn">nvkm_warn</a>(<a class="local col9 ref" href="#9subdev" title='subdev' data-ref="9subdev" data-ref-filename="9subdev">subdev</a>,</td></tr>
+<tr><th id="593">593</th><td>			  <q>"memory not aligned as requested: %pad (0x%x)\n"</q>,</td></tr>
+<tr><th id="594">594</th><td>			  &amp;<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::handle" title='gk20a_instobj_dma::handle' data-use='a' data-ref="gk20a_instobj_dma::handle" data-ref-filename="gk20a_instobj_dma..handle">handle</a>, <a class="local col6 ref" href="#6align" title='align' data-ref="6align" data-ref-filename="6align">align</a>);</td></tr>
+<tr><th id="595">595</th><td></td></tr>
+<tr><th id="596">596</th><td>	<i>/* present memory for being mapped using small pages */</i></td></tr>
+<tr><th id="597">597</th><td>	<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::r" title='gk20a_instobj_dma::r' data-use='m' data-ref="gk20a_instobj_dma::r" data-ref-filename="gk20a_instobj_dma..r">r</a>.<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::type" title='nvkm_mm_node::type' data-ref="nvkm_mm_node::type" data-ref-filename="nvkm_mm_node..type">type</a> = <var>12</var>;</td></tr>
+<tr><th id="598">598</th><td>	<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::r" title='gk20a_instobj_dma::r' data-use='m' data-ref="gk20a_instobj_dma::r" data-ref-filename="gk20a_instobj_dma..r">r</a>.<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::offset" title='nvkm_mm_node::offset' data-ref="nvkm_mm_node::offset" data-ref-filename="nvkm_mm_node..offset">offset</a> = <a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::handle" title='gk20a_instobj_dma::handle' data-use='r' data-ref="gk20a_instobj_dma::handle" data-ref-filename="gk20a_instobj_dma..handle">handle</a> &gt;&gt; <var>12</var>;</td></tr>
+<tr><th id="599">599</th><td>	<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::r" title='gk20a_instobj_dma::r' data-use='m' data-ref="gk20a_instobj_dma::r" data-ref-filename="gk20a_instobj_dma..r">r</a>.<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::length" title='nvkm_mm_node::length' data-ref="nvkm_mm_node::length" data-ref-filename="nvkm_mm_node..length">length</a> = (<a class="local col5 ref" href="#5npages" title='npages' data-ref="5npages" data-ref-filename="5npages">npages</a> &lt;&lt; <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#55" title="12" data-ref="_M/PAGE_SHIFT">PAGE_SHIFT</a>) &gt;&gt; <var>12</var>;</td></tr>
+<tr><th id="600">600</th><td></td></tr>
+<tr><th id="601">601</th><td>	<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::base" title='gk20a_instobj_dma::base' data-use='m' data-ref="gk20a_instobj_dma::base" data-ref-filename="gk20a_instobj_dma..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::offset" title='nvkm_mem::offset' data-ref="nvkm_mem::offset" data-ref-filename="nvkm_mem..offset">offset</a> = <a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::handle" title='gk20a_instobj_dma::handle' data-use='r' data-ref="gk20a_instobj_dma::handle" data-ref-filename="gk20a_instobj_dma..handle">handle</a>;</td></tr>
+<tr><th id="602">602</th><td></td></tr>
+<tr><th id="603">603</th><td>	<a class="ref fn" href="../../../../../../../common/include/linux/list.h.html#INIT_LIST_HEAD" title='INIT_LIST_HEAD' data-ref="INIT_LIST_HEAD" data-ref-filename="INIT_LIST_HEAD">INIT_LIST_HEAD</a>(&amp;<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::base" title='gk20a_instobj_dma::base' data-use='m' data-ref="gk20a_instobj_dma::base" data-ref-filename="gk20a_instobj_dma..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::regions" title='nvkm_mem::regions' data-ref="nvkm_mem::regions" data-ref-filename="nvkm_mem..regions">regions</a>);</td></tr>
+<tr><th id="604">604</th><td>	<a class="ref fn" href="../../../../../../../common/include/linux/list.h.html#list_add_tail" title='list_add_tail' data-ref="list_add_tail" data-ref-filename="list_add_tail">list_add_tail</a>(&amp;<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::r" title='gk20a_instobj_dma::r' data-use='m' data-ref="gk20a_instobj_dma::r" data-ref-filename="gk20a_instobj_dma..r">r</a>.<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::rl_entry" title='nvkm_mm_node::rl_entry' data-ref="nvkm_mm_node::rl_entry" data-ref-filename="nvkm_mm_node..rl_entry">rl_entry</a>, &amp;<a class="local col8 ref" href="#8node" title='node' data-ref="8node" data-ref-filename="8node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_dma::base" title='gk20a_instobj_dma::base' data-use='m' data-ref="gk20a_instobj_dma::base" data-ref-filename="gk20a_instobj_dma..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::regions" title='nvkm_mem::regions' data-ref="nvkm_mem::regions" data-ref-filename="nvkm_mem..regions">regions</a>);</td></tr>
+<tr><th id="605">605</th><td></td></tr>
+<tr><th id="606">606</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="607">607</th><td>}</td></tr>
+<tr><th id="608">608</th><td></td></tr>
+<tr><th id="609">609</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="610">610</th><td><dfn class="tu decl def fn" id="gk20a_instobj_ctor_iommu" title='gk20a_instobj_ctor_iommu' data-type='int gk20a_instobj_ctor_iommu(struct gk20a_instmem * imem, u32 npages, u32 align, struct gk20a_instobj ** _node)' data-ref="gk20a_instobj_ctor_iommu" data-ref-filename="gk20a_instobj_ctor_iommu">gk20a_instobj_ctor_iommu</dfn>(<b>struct</b> <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a> *<dfn class="local col1 decl" id="11imem" title='imem' data-type='struct gk20a_instmem *' data-ref="11imem" data-ref-filename="11imem">imem</dfn>, <a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col2 decl" id="12npages" title='npages' data-type='u32' data-ref="12npages" data-ref-filename="12npages">npages</dfn>, <a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col3 decl" id="13align" title='align' data-type='u32' data-ref="13align" data-ref-filename="13align">align</dfn>,</td></tr>
+<tr><th id="611">611</th><td>			 <b>struct</b> <a class="type" href="#gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</a> **<dfn class="local col4 decl" id="14_node" title='_node' data-type='struct gk20a_instobj **' data-ref="14_node" data-ref-filename="14_node">_node</dfn>)</td></tr>
+<tr><th id="612">612</th><td>{</td></tr>
+<tr><th id="613">613</th><td>	<b>struct</b> <a class="type" href="#gk20a_instobj_iommu" title='gk20a_instobj_iommu' data-ref="gk20a_instobj_iommu" data-ref-filename="gk20a_instobj_iommu">gk20a_instobj_iommu</a> *<dfn class="local col5 decl" id="15node" title='node' data-type='struct gk20a_instobj_iommu *' data-ref="15node" data-ref-filename="15node">node</dfn>;</td></tr>
+<tr><th id="614">614</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/subdev.h.html#nvkm_subdev" title='nvkm_subdev' data-ref="nvkm_subdev" data-ref-filename="nvkm_subdev">nvkm_subdev</a> *<dfn class="local col6 decl" id="16subdev" title='subdev' data-type='struct nvkm_subdev *' data-ref="16subdev" data-ref-filename="16subdev">subdev</dfn> = &amp;<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='m' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>.<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>;</td></tr>
+<tr><th id="615">615</th><td>	<b>struct</b> <a class="type" href="../../../../../../../../../sys/device.h.html#device" title='device' data-ref="device" data-ref-filename="device">device</a> *<dfn class="local col7 decl" id="17dev" title='dev' data-type='struct device *' data-ref="17dev" data-ref-filename="17dev">dev</dfn> = <a class="local col6 ref" href="#16subdev" title='subdev' data-ref="16subdev" data-ref-filename="16subdev">subdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/subdev.h.html#nvkm_subdev::device" title='nvkm_subdev::device' data-ref="nvkm_subdev::device" data-ref-filename="nvkm_subdev..device">device</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/device.h.html#nvkm_device::dev" title='nvkm_device::dev' data-ref="nvkm_device::dev" data-ref-filename="nvkm_device..dev">dev</a>;</td></tr>
+<tr><th id="616">616</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node" title='nvkm_mm_node' data-ref="nvkm_mm_node" data-ref-filename="nvkm_mm_node">nvkm_mm_node</a> *<dfn class="local col8 decl" id="18r" title='r' data-type='struct nvkm_mm_node *' data-ref="18r" data-ref-filename="18r">r</dfn>;</td></tr>
+<tr><th id="617">617</th><td>	<em>int</em> <dfn class="local col9 decl" id="19ret" title='ret' data-type='int' data-ref="19ret" data-ref-filename="19ret">ret</dfn>;</td></tr>
+<tr><th id="618">618</th><td>	<em>int</em> <dfn class="local col0 decl" id="20i" title='i' data-type='int' data-ref="20i" data-ref-filename="20i">i</dfn>;</td></tr>
+<tr><th id="619">619</th><td></td></tr>
+<tr><th id="620">620</th><td>	<i>/*</i></td></tr>
+<tr><th id="621">621</th><td><i>	 * despite their variable size, instmem allocations are small enough</i></td></tr>
+<tr><th id="622">622</th><td><i>	 * (&lt; 1 page) to be handled by kzalloc</i></td></tr>
+<tr><th id="623">623</th><td><i>	 */</i></td></tr>
+<tr><th id="624">624</th><td>	<b>if</b> (!(<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a> = <a class="ref fn" href="../../../../../../../common/include/linux/slab.h.html#kzalloc" title='kzalloc' data-ref="kzalloc" data-ref-filename="kzalloc">kzalloc</a>(<b>sizeof</b>(*<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>) + ((<b>sizeof</b>(<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::pages" title='gk20a_instobj_iommu::pages' data-use='r' data-ref="gk20a_instobj_iommu::pages" data-ref-filename="gk20a_instobj_iommu..pages">pages</a>[<var>0</var>]) +</td></tr>
+<tr><th id="625">625</th><td>			     <b>sizeof</b>(*<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::dma_addrs" title='gk20a_instobj_iommu::dma_addrs' data-use='r' data-ref="gk20a_instobj_iommu::dma_addrs" data-ref-filename="gk20a_instobj_iommu..dma_addrs">dma_addrs</a>)) * <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a>), <a class="macro" href="../../../../../../../common/include/linux/gfp.h.html#46" title="((((uintmax_t)(2) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((2) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(6) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((6) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(11) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((11) &amp; (8 * sizeof(uintmax_t) - 1)))))" data-ref="_M/GFP_KERNEL">GFP_KERNEL</a>)))</td></tr>
+<tr><th id="626">626</th><td>		<b>return</b> -<a class="macro" href="../../../../../../../../../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="627">627</th><td>	*<a class="local col4 ref" href="#14_node" title='_node' data-ref="14_node" data-ref-filename="14_node">_node</a> = &amp;<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::base" title='gk20a_instobj_iommu::base' data-use='a' data-ref="gk20a_instobj_iommu::base" data-ref-filename="gk20a_instobj_iommu..base">base</a>;</td></tr>
+<tr><th id="628">628</th><td>	<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::dma_addrs" title='gk20a_instobj_iommu::dma_addrs' data-use='w' data-ref="gk20a_instobj_iommu::dma_addrs" data-ref-filename="gk20a_instobj_iommu..dma_addrs">dma_addrs</a> = (<em>void</em> *)(<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::pages" title='gk20a_instobj_iommu::pages' data-use='r' data-ref="gk20a_instobj_iommu::pages" data-ref-filename="gk20a_instobj_iommu..pages">pages</a> + <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a>);</td></tr>
+<tr><th id="629">629</th><td></td></tr>
+<tr><th id="630">630</th><td>	<a class="ref fn" href="../../../include/nvkm/core/memory.h.html#nvkm_memory_ctor" title='nvkm_memory_ctor' data-ref="nvkm_memory_ctor" data-ref-filename="nvkm_memory_ctor">nvkm_memory_ctor</a>(&amp;<a class="tu ref" href="#gk20a_instobj_func_iommu" title='gk20a_instobj_func_iommu' data-use='a' data-ref="gk20a_instobj_func_iommu" data-ref-filename="gk20a_instobj_func_iommu">gk20a_instobj_func_iommu</a>, &amp;<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::base" title='gk20a_instobj_iommu::base' data-use='m' data-ref="gk20a_instobj_iommu::base" data-ref-filename="gk20a_instobj_iommu..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::memory" title='gk20a_instobj::memory' data-use='a' data-ref="gk20a_instobj::memory" data-ref-filename="gk20a_instobj..memory">memory</a>);</td></tr>
+<tr><th id="631">631</th><td></td></tr>
+<tr><th id="632">632</th><td>	<i>/* Allocate backing memory */</i></td></tr>
+<tr><th id="633">633</th><td>	<b>for</b> (<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a> = <var>0</var>; <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a> &lt; <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a>; <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>++) {</td></tr>
+<tr><th id="634">634</th><td>		<b>struct</b> <a class="type" href="../../../../../../include/linux/mm_types.h.html#page" title='page' data-ref="page" data-ref-filename="page">page</a> *<dfn class="local col1 decl" id="21p" title='p' data-type='struct page *' data-ref="21p" data-ref-filename="21p">p</dfn> = <a class="ref fn" href="#634" title='alloc_page' data-ref="alloc_page" data-ref-filename="alloc_page">alloc_page</a>(<a class="macro" href="../../../../../../../common/include/linux/gfp.h.html#46" title="((((uintmax_t)(2) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((2) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(6) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((6) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(11) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((11) &amp; (8 * sizeof(uintmax_t) - 1)))))" data-ref="_M/GFP_KERNEL">GFP_KERNEL</a>);</td></tr>
+<tr><th id="635">635</th><td>		<a class="typedef" href="../../../../../../include/linux/dma-mapping.h.html#dma_addr_t" title='dma_addr_t' data-type='bus_addr_t' data-ref="dma_addr_t" data-ref-filename="dma_addr_t">dma_addr_t</a> <dfn class="local col2 decl" id="22dma_adr" title='dma_adr' data-type='dma_addr_t' data-ref="22dma_adr" data-ref-filename="22dma_adr">dma_adr</dfn>;</td></tr>
+<tr><th id="636">636</th><td></td></tr>
+<tr><th id="637">637</th><td>		<b>if</b> (<a class="local col1 ref" href="#21p" title='p' data-ref="21p" data-ref-filename="21p">p</a> == <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="638">638</th><td>			<a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a> = -<a class="macro" href="../../../../../../../../../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="639">639</th><td>			<b>goto</b> <a class="lbl" href="#23free_pages" data-ref="23free_pages" data-ref-filename="23free_pages">free_pages</a>;</td></tr>
+<tr><th id="640">640</th><td>		}</td></tr>
+<tr><th id="641">641</th><td>		<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::pages" title='gk20a_instobj_iommu::pages' data-use='w' data-ref="gk20a_instobj_iommu::pages" data-ref-filename="gk20a_instobj_iommu..pages">pages</a>[<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>] = <a class="local col1 ref" href="#21p" title='p' data-ref="21p" data-ref-filename="21p">p</a>;</td></tr>
+<tr><th id="642">642</th><td>		dma_adr = dma_map_page(dev, p, <var>0</var>, <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>, <span class='error' title="use of undeclared identifier &apos;DMA_BIDIRECTIONAL&apos;">DMA_BIDIRECTIONAL</span>);</td></tr>
+<tr><th id="643">643</th><td>		<b>if</b> (<a class="ref fn" href="#643" title='dma_mapping_error' data-ref="dma_mapping_error" data-ref-filename="dma_mapping_error">dma_mapping_error</a>(<a class="local col7 ref" href="#17dev" title='dev' data-ref="17dev" data-ref-filename="17dev">dev</a>, <a class="local col2 ref" href="#22dma_adr" title='dma_adr' data-ref="22dma_adr" data-ref-filename="22dma_adr">dma_adr</a>)) {</td></tr>
+<tr><th id="644">644</th><td>			<a class="macro" href="../../../include/nvkm/core/subdev.h.html#46" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (1) || _subdev-&gt;debug &gt; (1)) { do { if (_subdev-&gt;device-&gt;dev) aprint_error_dev((_subdev-&gt;device-&gt;dev), &quot;error: &quot; &quot;%s: &quot;&quot;DMA mapping error!\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_error(&quot;error: &quot; &quot;%s: &quot;&quot;DMA mapping error!\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_error">nvkm_error</a>(<a class="local col6 ref" href="#16subdev" title='subdev' data-ref="16subdev" data-ref-filename="16subdev">subdev</a>, <q>"DMA mapping error!\n"</q>);</td></tr>
+<tr><th id="645">645</th><td>			<a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a> = -<a class="macro" href="../../../../../../../../../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="646">646</th><td>			<b>goto</b> <a class="lbl" href="#23free_pages" data-ref="23free_pages" data-ref-filename="23free_pages">free_pages</a>;</td></tr>
+<tr><th id="647">647</th><td>		}</td></tr>
+<tr><th id="648">648</th><td>		<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::dma_addrs" title='gk20a_instobj_iommu::dma_addrs' data-use='r' data-ref="gk20a_instobj_iommu::dma_addrs" data-ref-filename="gk20a_instobj_iommu..dma_addrs">dma_addrs</a>[<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>] = <a class="local col2 ref" href="#22dma_adr" title='dma_adr' data-ref="22dma_adr" data-ref-filename="22dma_adr">dma_adr</a>;</td></tr>
+<tr><th id="649">649</th><td>	}</td></tr>
+<tr><th id="650">650</th><td></td></tr>
+<tr><th id="651">651</th><td>	<a class="ref fn" href="../../../../../../include/linux/mutex.h.html#mutex_lock" title='mutex_lock' data-ref="mutex_lock" data-ref-filename="mutex_lock">mutex_lock</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm_mutex" title='gk20a_instmem::mm_mutex' data-use='r' data-ref="gk20a_instmem::mm_mutex" data-ref-filename="gk20a_instmem..mm_mutex">mm_mutex</a>);</td></tr>
+<tr><th id="652">652</th><td>	<i>/* Reserve area from GPU address space */</i></td></tr>
+<tr><th id="653">653</th><td>	<a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a> = <a class="ref fn" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_head" title='nvkm_mm_head' data-ref="nvkm_mm_head" data-ref-filename="nvkm_mm_head">nvkm_mm_head</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm" title='gk20a_instmem::mm' data-use='r' data-ref="gk20a_instmem::mm" data-ref-filename="gk20a_instmem..mm">mm</a>, <var>0</var>, <var>1</var>, <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a>, <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a>,</td></tr>
+<tr><th id="654">654</th><td>			   <a class="local col3 ref" href="#13align" title='align' data-ref="13align" data-ref-filename="13align">align</a> &gt;&gt; <a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_pgshift" title='gk20a_instmem::iommu_pgshift' data-use='r' data-ref="gk20a_instmem::iommu_pgshift" data-ref-filename="gk20a_instmem..iommu_pgshift">iommu_pgshift</a>, &amp;<a class="local col8 ref" href="#18r" title='r' data-ref="18r" data-ref-filename="18r">r</a>);</td></tr>
+<tr><th id="655">655</th><td>	<a class="ref fn" href="../../../../../../include/linux/mutex.h.html#mutex_unlock" title='mutex_unlock' data-ref="mutex_unlock" data-ref-filename="mutex_unlock">mutex_unlock</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm_mutex" title='gk20a_instmem::mm_mutex' data-use='r' data-ref="gk20a_instmem::mm_mutex" data-ref-filename="gk20a_instmem..mm_mutex">mm_mutex</a>);</td></tr>
+<tr><th id="656">656</th><td>	<b>if</b> (<a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a>) {</td></tr>
+<tr><th id="657">657</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#46" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (1) || _subdev-&gt;debug &gt; (1)) { do { if (_subdev-&gt;device-&gt;dev) aprint_error_dev((_subdev-&gt;device-&gt;dev), &quot;error: &quot; &quot;%s: &quot;&quot;IOMMU space is full!\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_error(&quot;error: &quot; &quot;%s: &quot;&quot;IOMMU space is full!\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_error">nvkm_error</a>(<a class="local col6 ref" href="#16subdev" title='subdev' data-ref="16subdev" data-ref-filename="16subdev">subdev</a>, <q>"IOMMU space is full!\n"</q>);</td></tr>
+<tr><th id="658">658</th><td>		<b>goto</b> <a class="lbl" href="#23free_pages" data-ref="23free_pages" data-ref-filename="23free_pages">free_pages</a>;</td></tr>
+<tr><th id="659">659</th><td>	}</td></tr>
+<tr><th id="660">660</th><td></td></tr>
+<tr><th id="661">661</th><td>	<i>/* Map into GPU address space */</i></td></tr>
+<tr><th id="662">662</th><td>	<b>for</b> (<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a> = <var>0</var>; <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a> &lt; <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a>; <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>++) {</td></tr>
+<tr><th id="663">663</th><td>		<a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col4 decl" id="24offset" title='offset' data-type='u32' data-ref="24offset" data-ref-filename="24offset">offset</dfn> = (<a class="local col8 ref" href="#18r" title='r' data-ref="18r" data-ref-filename="18r">r</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::offset" title='nvkm_mm_node::offset' data-ref="nvkm_mm_node::offset" data-ref-filename="nvkm_mm_node..offset">offset</a> + <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>) &lt;&lt; <a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_pgshift" title='gk20a_instmem::iommu_pgshift' data-use='r' data-ref="gk20a_instmem::iommu_pgshift" data-ref-filename="gk20a_instmem..iommu_pgshift">iommu_pgshift</a>;</td></tr>
+<tr><th id="664">664</th><td></td></tr>
+<tr><th id="665">665</th><td>		ret = iommu_map(imem-&gt;domain, offset, node-&gt;dma_addrs[i],</td></tr>
+<tr><th id="666">666</th><td>				<a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>, <span class='error' title="use of undeclared identifier &apos;IOMMU_READ&apos;">IOMMU_READ</span> | <span class='error' title="use of undeclared identifier &apos;IOMMU_WRITE&apos;">IOMMU_WRITE</span>);</td></tr>
+<tr><th id="667">667</th><td>		<b>if</b> (<a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="668">668</th><td>			<a class="macro" href="../../../include/nvkm/core/subdev.h.html#46" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (1) || _subdev-&gt;debug &gt; (1)) { do { if (_subdev-&gt;device-&gt;dev) aprint_error_dev((_subdev-&gt;device-&gt;dev), &quot;error: &quot; &quot;%s: &quot;&quot;IOMMU mapping failure: %d\n&quot;, nvkm_subdev_name[_subdev-&gt;index], ret); else aprint_error(&quot;error: &quot; &quot;%s: &quot;&quot;IOMMU mapping failure: %d\n&quot;, nvkm_subdev_name[_subdev-&gt;index], ret); } while (0); } } while(0)" data-ref="_M/nvkm_error">nvkm_error</a>(<a class="local col6 ref" href="#16subdev" title='subdev' data-ref="16subdev" data-ref-filename="16subdev">subdev</a>, <q>"IOMMU mapping failure: %d\n"</q>, <a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a>);</td></tr>
+<tr><th id="669">669</th><td></td></tr>
+<tr><th id="670">670</th><td>			<b>while</b> (<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>-- &gt; <var>0</var>) {</td></tr>
+<tr><th id="671">671</th><td>				<a class="local col4 ref" href="#24offset" title='offset' data-ref="24offset" data-ref-filename="24offset">offset</a> -= <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>;</td></tr>
+<tr><th id="672">672</th><td>				<a class="ref fn" href="#672" title='iommu_unmap' data-ref="iommu_unmap" data-ref-filename="iommu_unmap">iommu_unmap</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::domain" title='gk20a_instmem::domain' data-use='r' data-ref="gk20a_instmem::domain" data-ref-filename="gk20a_instmem..domain">domain</a>, <a class="local col4 ref" href="#24offset" title='offset' data-ref="24offset" data-ref-filename="24offset">offset</a>, <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>);</td></tr>
+<tr><th id="673">673</th><td>			}</td></tr>
+<tr><th id="674">674</th><td>			<b>goto</b> <a class="lbl" href="#25release_area" data-ref="25release_area" data-ref-filename="25release_area">release_area</a>;</td></tr>
+<tr><th id="675">675</th><td>		}</td></tr>
+<tr><th id="676">676</th><td>	}</td></tr>
+<tr><th id="677">677</th><td></td></tr>
+<tr><th id="678">678</th><td>	<i>/* IOMMU bit tells that an address is to be resolved through the IOMMU */</i></td></tr>
+<tr><th id="679">679</th><td>	<a class="local col8 ref" href="#18r" title='r' data-ref="18r" data-ref-filename="18r">r</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::offset" title='nvkm_mm_node::offset' data-ref="nvkm_mm_node::offset" data-ref-filename="nvkm_mm_node..offset">offset</a> |= <a class="macro" href="../../../../../../../common/include/linux/bitops.h.html#108" title="((uintmax_t)1 &lt;&lt; (imem-&gt;iommu_bit - imem-&gt;iommu_pgshift))" data-ref="_M/BIT">BIT</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_bit" title='gk20a_instmem::iommu_bit' data-use='r' data-ref="gk20a_instmem::iommu_bit" data-ref-filename="gk20a_instmem..iommu_bit">iommu_bit</a> - <a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_pgshift" title='gk20a_instmem::iommu_pgshift' data-use='r' data-ref="gk20a_instmem::iommu_pgshift" data-ref-filename="gk20a_instmem..iommu_pgshift">iommu_pgshift</a>);</td></tr>
+<tr><th id="680">680</th><td></td></tr>
+<tr><th id="681">681</th><td>	<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::base" title='gk20a_instobj_iommu::base' data-use='m' data-ref="gk20a_instobj_iommu::base" data-ref-filename="gk20a_instobj_iommu..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::offset" title='nvkm_mem::offset' data-ref="nvkm_mem::offset" data-ref-filename="nvkm_mem..offset">offset</a> = ((<a class="typedef" href="../../../../../../include/linux/types.h.html#u64" title='u64' data-type='uint64_t' data-ref="u64" data-ref-filename="u64">u64</a>)<a class="local col8 ref" href="#18r" title='r' data-ref="18r" data-ref-filename="18r">r</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::offset" title='nvkm_mm_node::offset' data-ref="nvkm_mm_node::offset" data-ref-filename="nvkm_mm_node..offset">offset</a>) &lt;&lt; <a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_pgshift" title='gk20a_instmem::iommu_pgshift' data-use='r' data-ref="gk20a_instmem::iommu_pgshift" data-ref-filename="gk20a_instmem..iommu_pgshift">iommu_pgshift</a>;</td></tr>
+<tr><th id="682">682</th><td></td></tr>
+<tr><th id="683">683</th><td>	<a class="ref fn" href="../../../../../../../common/include/linux/list.h.html#INIT_LIST_HEAD" title='INIT_LIST_HEAD' data-ref="INIT_LIST_HEAD" data-ref-filename="INIT_LIST_HEAD">INIT_LIST_HEAD</a>(&amp;<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::base" title='gk20a_instobj_iommu::base' data-use='m' data-ref="gk20a_instobj_iommu::base" data-ref-filename="gk20a_instobj_iommu..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::regions" title='nvkm_mem::regions' data-ref="nvkm_mem::regions" data-ref-filename="nvkm_mem..regions">regions</a>);</td></tr>
+<tr><th id="684">684</th><td>	<a class="ref fn" href="../../../../../../../common/include/linux/list.h.html#list_add_tail" title='list_add_tail' data-ref="list_add_tail" data-ref-filename="list_add_tail">list_add_tail</a>(&amp;<a class="local col8 ref" href="#18r" title='r' data-ref="18r" data-ref-filename="18r">r</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_node::rl_entry" title='nvkm_mm_node::rl_entry' data-ref="nvkm_mm_node::rl_entry" data-ref-filename="nvkm_mm_node..rl_entry">rl_entry</a>, &amp;<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::base" title='gk20a_instobj_iommu::base' data-use='m' data-ref="gk20a_instobj_iommu::base" data-ref-filename="gk20a_instobj_iommu..base">base</a>.<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::regions" title='nvkm_mem::regions' data-ref="nvkm_mem::regions" data-ref-filename="nvkm_mem..regions">regions</a>);</td></tr>
+<tr><th id="685">685</th><td></td></tr>
+<tr><th id="686">686</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="687">687</th><td></td></tr>
+<tr><th id="688">688</th><td><dfn class="lbl" id="25release_area" data-ref="25release_area" data-ref-filename="25release_area">release_area</dfn>:</td></tr>
+<tr><th id="689">689</th><td>	<a class="ref fn" href="../../../../../../include/linux/mutex.h.html#mutex_lock" title='mutex_lock' data-ref="mutex_lock" data-ref-filename="mutex_lock">mutex_lock</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm_mutex" title='gk20a_instmem::mm_mutex' data-use='r' data-ref="gk20a_instmem::mm_mutex" data-ref-filename="gk20a_instmem..mm_mutex">mm_mutex</a>);</td></tr>
+<tr><th id="690">690</th><td>	<a class="ref fn" href="../../../include/nvkm/core/mm.h.html#nvkm_mm_free" title='nvkm_mm_free' data-ref="nvkm_mm_free" data-ref-filename="nvkm_mm_free">nvkm_mm_free</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm" title='gk20a_instmem::mm' data-use='r' data-ref="gk20a_instmem::mm" data-ref-filename="gk20a_instmem..mm">mm</a>, &amp;<a class="local col8 ref" href="#18r" title='r' data-ref="18r" data-ref-filename="18r">r</a>);</td></tr>
+<tr><th id="691">691</th><td>	<a class="ref fn" href="../../../../../../include/linux/mutex.h.html#mutex_unlock" title='mutex_unlock' data-ref="mutex_unlock" data-ref-filename="mutex_unlock">mutex_unlock</a>(<a class="local col1 ref" href="#11imem" title='imem' data-ref="11imem" data-ref-filename="11imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm_mutex" title='gk20a_instmem::mm_mutex' data-use='r' data-ref="gk20a_instmem::mm_mutex" data-ref-filename="gk20a_instmem..mm_mutex">mm_mutex</a>);</td></tr>
+<tr><th id="692">692</th><td></td></tr>
+<tr><th id="693">693</th><td><dfn class="lbl" id="23free_pages" data-ref="23free_pages" data-ref-filename="23free_pages">free_pages</dfn>:</td></tr>
+<tr><th id="694">694</th><td>	<b>for</b> (<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a> = <var>0</var>; <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a> &lt; <a class="local col2 ref" href="#12npages" title='npages' data-ref="12npages" data-ref-filename="12npages">npages</a> &amp;&amp; <a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::pages" title='gk20a_instobj_iommu::pages' data-use='r' data-ref="gk20a_instobj_iommu::pages" data-ref-filename="gk20a_instobj_iommu..pages">pages</a>[<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>] != <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>; <a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>++) {</td></tr>
+<tr><th id="695">695</th><td>		<a class="typedef" href="../../../../../../include/linux/dma-mapping.h.html#dma_addr_t" title='dma_addr_t' data-type='bus_addr_t' data-ref="dma_addr_t" data-ref-filename="dma_addr_t">dma_addr_t</a> <dfn class="local col6 decl" id="26dma_addr" title='dma_addr' data-type='dma_addr_t' data-ref="26dma_addr" data-ref-filename="26dma_addr">dma_addr</dfn> = <a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::dma_addrs" title='gk20a_instobj_iommu::dma_addrs' data-use='r' data-ref="gk20a_instobj_iommu::dma_addrs" data-ref-filename="gk20a_instobj_iommu..dma_addrs">dma_addrs</a>[<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>];</td></tr>
+<tr><th id="696">696</th><td>		<b>if</b> (dma_addr)</td></tr>
+<tr><th id="697">697</th><td>			dma_unmap_page(dev, dma_addr, <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>,</td></tr>
+<tr><th id="698">698</th><td>				       <span class='error' title="use of undeclared identifier &apos;DMA_BIDIRECTIONAL&apos;">DMA_BIDIRECTIONAL</span>);</td></tr>
+<tr><th id="699">699</th><td>		<a class="ref fn" href="#699" title='__free_page' data-ref="__free_page" data-ref-filename="__free_page">__free_page</a>(<a class="local col5 ref" href="#15node" title='node' data-ref="15node" data-ref-filename="15node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj_iommu::pages" title='gk20a_instobj_iommu::pages' data-use='r' data-ref="gk20a_instobj_iommu::pages" data-ref-filename="gk20a_instobj_iommu..pages">pages</a>[<a class="local col0 ref" href="#20i" title='i' data-ref="20i" data-ref-filename="20i">i</a>]);</td></tr>
+<tr><th id="700">700</th><td>	}</td></tr>
+<tr><th id="701">701</th><td></td></tr>
+<tr><th id="702">702</th><td>	<b>return</b> <a class="local col9 ref" href="#19ret" title='ret' data-ref="19ret" data-ref-filename="19ret">ret</a>;</td></tr>
+<tr><th id="703">703</th><td>}</td></tr>
+<tr><th id="704">704</th><td></td></tr>
+<tr><th id="705">705</th><td><u>#<span data-ppcond="505">endif</span>	/* __NetBSD__ */</u></td></tr>
+<tr><th id="706">706</th><td></td></tr>
+<tr><th id="707">707</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="708">708</th><td><dfn class="tu decl def fn" id="gk20a_instobj_new" title='gk20a_instobj_new' data-type='int gk20a_instobj_new(struct nvkm_instmem * base, u32 size, u32 align, _Bool zero, struct nvkm_memory ** pmemory)' data-ref="gk20a_instobj_new" data-ref-filename="gk20a_instobj_new">gk20a_instobj_new</dfn>(<b>struct</b> <a class="type" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem" title='nvkm_instmem' data-ref="nvkm_instmem" data-ref-filename="nvkm_instmem">nvkm_instmem</a> *<dfn class="local col7 decl" id="27base" title='base' data-type='struct nvkm_instmem *' data-ref="27base" data-ref-filename="27base">base</dfn>, <a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col8 decl" id="28size" title='size' data-type='u32' data-ref="28size" data-ref-filename="28size">size</dfn>, <a class="typedef" href="../../../../../../include/linux/types.h.html#u32" title='u32' data-type='uint32_t' data-ref="u32" data-ref-filename="u32">u32</a> <dfn class="local col9 decl" id="29align" title='align' data-type='u32' data-ref="29align" data-ref-filename="29align">align</dfn>, <a class="macro" href="../../../../../../../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col0 decl" id="30zero" title='zero' data-type='_Bool' data-ref="30zero" data-ref-filename="30zero">zero</dfn>,</td></tr>
+<tr><th id="709">709</th><td>		  <b>struct</b> <a class="type" href="../../../include/nvkm/core/memory.h.html#nvkm_memory" title='nvkm_memory' data-ref="nvkm_memory" data-ref-filename="nvkm_memory">nvkm_memory</a> **<dfn class="local col1 decl" id="31pmemory" title='pmemory' data-type='struct nvkm_memory **' data-ref="31pmemory" data-ref-filename="31pmemory">pmemory</dfn>)</td></tr>
+<tr><th id="710">710</th><td>{</td></tr>
+<tr><th id="711">711</th><td>	<b>struct</b> <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a> *<dfn class="local col2 decl" id="32imem" title='imem' data-type='struct gk20a_instmem *' data-ref="32imem" data-ref-filename="32imem">imem</dfn> = <a class="macro" href="#140" title="((struct gk20a_instmem *)(((char *)((base))) - __builtin_offsetof(struct gk20a_instmem, base)) + (0 * sizeof(((base)) - &amp;((struct gk20a_instmem *)(((char *)((base))) - __builtin_offsetof(struct gk20a_instmem, base)))-&gt;base)))" data-ref="_M/gk20a_instmem">gk20a_instmem</a>(<a class="local col7 ref" href="#27base" title='base' data-ref="27base" data-ref-filename="27base">base</a>);</td></tr>
+<tr><th id="712">712</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/subdev.h.html#nvkm_subdev" title='nvkm_subdev' data-ref="nvkm_subdev" data-ref-filename="nvkm_subdev">nvkm_subdev</a> *<dfn class="local col3 decl" id="33subdev" title='subdev' data-type='struct nvkm_subdev *' data-ref="33subdev" data-ref-filename="33subdev">subdev</dfn> = &amp;<a class="local col2 ref" href="#32imem" title='imem' data-ref="32imem" data-ref-filename="32imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='m' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>.<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>;</td></tr>
+<tr><th id="713">713</th><td>	<b>struct</b> <a class="type" href="#gk20a_instobj" title='gk20a_instobj' data-ref="gk20a_instobj" data-ref-filename="gk20a_instobj">gk20a_instobj</a> *<dfn class="local col4 decl" id="34node" title='node' data-type='struct gk20a_instobj *' data-ref="34node" data-ref-filename="34node">node</dfn> = <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="714">714</th><td>	<em>int</em> <dfn class="local col5 decl" id="35ret" title='ret' data-type='int' data-ref="35ret" data-ref-filename="35ret">ret</dfn> = <var>0</var>;</td></tr>
+<tr><th id="715">715</th><td></td></tr>
+<tr><th id="716">716</th><td><u>#<span data-ppcond="716">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="717">717</th><td>	nvkm_debug(subdev, <q>"%s (%s): size: %x align: %x\n"</q>, <b>__func__</b>,</td></tr>
+<tr><th id="718">718</th><td>		   <q>"bus_dma"</q>, size, align);</td></tr>
+<tr><th id="719">719</th><td><u>#<span data-ppcond="716">else</span></u></td></tr>
+<tr><th id="720">720</th><td>	<a class="macro" href="../../../include/nvkm/core/subdev.h.html#49" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (4) || _subdev-&gt;debug &gt; (4)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;%s (%s): size: %x align: %x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], __func__, imem-&gt;domain ? &quot;IOMMU&quot; : &quot;DMA&quot;, size, align); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;%s (%s): size: %x align: %x\n&quot;, nvkm_subdev_name[_subdev-&gt;index], __func__, imem-&gt;domain ? &quot;IOMMU&quot; : &quot;DMA&quot;, size, align); } while (0); } } while(0)" data-ref="_M/nvkm_debug">nvkm_debug</a>(<a class="local col3 ref" href="#33subdev" title='subdev' data-ref="33subdev" data-ref-filename="33subdev">subdev</a>, <q>"%s (%s): size: %x align: %x\n"</q>, <b>__func__</b>,</td></tr>
+<tr><th id="721">721</th><td>		   <a class="local col2 ref" href="#32imem" title='imem' data-ref="32imem" data-ref-filename="32imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::domain" title='gk20a_instmem::domain' data-use='r' data-ref="gk20a_instmem::domain" data-ref-filename="gk20a_instmem..domain">domain</a> ? <q>"IOMMU"</q> : <q>"DMA"</q>, <a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a>, <a class="local col9 ref" href="#29align" title='align' data-ref="29align" data-ref-filename="29align">align</a>);</td></tr>
+<tr><th id="722">722</th><td><u>#<span data-ppcond="716">endif</span></u></td></tr>
+<tr><th id="723">723</th><td></td></tr>
+<tr><th id="724">724</th><td>	<i>/* Round size and align to page bounds */</i></td></tr>
+<tr><th id="725">725</th><td>	<a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a> = <a class="macro" href="../../../../../../../common/include/linux/kernel.h.html#76" title="(( (((((size)+(((1 &lt;&lt; 12))-1))/((1 &lt;&lt; 12)))*((1 &lt;&lt; 12))))&gt;((1 &lt;&lt; 12)))?(((((size)+(((1 &lt;&lt; 12))-1))/((1 &lt;&lt; 12)))*((1 &lt;&lt; 12)))):((1 &lt;&lt; 12)))" data-ref="_M/max">max</a>(<a class="macro" href="../../../../../../../../../sys/param.h.html#390" title="((((size)+(((1 &lt;&lt; 12))-1))/((1 &lt;&lt; 12)))*((1 &lt;&lt; 12)))" data-ref="_M/roundup">roundup</a>(<a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a>, <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>), <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>);</td></tr>
+<tr><th id="726">726</th><td>	<a class="local col9 ref" href="#29align" title='align' data-ref="29align" data-ref-filename="29align">align</a> = <a class="macro" href="../../../../../../../common/include/linux/kernel.h.html#76" title="(( (((((align)+(((1 &lt;&lt; 12))-1))/((1 &lt;&lt; 12)))*((1 &lt;&lt; 12))))&gt;((1 &lt;&lt; 12)))?(((((align)+(((1 &lt;&lt; 12))-1))/((1 &lt;&lt; 12)))*((1 &lt;&lt; 12)))):((1 &lt;&lt; 12)))" data-ref="_M/max">max</a>(<a class="macro" href="../../../../../../../../../sys/param.h.html#390" title="((((align)+(((1 &lt;&lt; 12))-1))/((1 &lt;&lt; 12)))*((1 &lt;&lt; 12)))" data-ref="_M/roundup">roundup</a>(<a class="local col9 ref" href="#29align" title='align' data-ref="29align" data-ref-filename="29align">align</a>, <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>), <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a>);</td></tr>
+<tr><th id="727">727</th><td></td></tr>
+<tr><th id="728">728</th><td><u>#<span data-ppcond="728">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="729">729</th><td>	ret = gk20a_instobj_ctor_netbsd(imem, size &gt;&gt; PAGE_SHIFT, align,</td></tr>
+<tr><th id="730">730</th><td>	    &amp;node);</td></tr>
+<tr><th id="731">731</th><td><u>#<span data-ppcond="728">else</span></u></td></tr>
+<tr><th id="732">732</th><td>	<b>if</b> (<a class="local col2 ref" href="#32imem" title='imem' data-ref="32imem" data-ref-filename="32imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::domain" title='gk20a_instmem::domain' data-use='r' data-ref="gk20a_instmem::domain" data-ref-filename="gk20a_instmem..domain">domain</a>)</td></tr>
+<tr><th id="733">733</th><td>		<a class="local col5 ref" href="#35ret" title='ret' data-ref="35ret" data-ref-filename="35ret">ret</a> = <a class="tu ref fn" href="#gk20a_instobj_ctor_iommu" title='gk20a_instobj_ctor_iommu' data-use='c' data-ref="gk20a_instobj_ctor_iommu" data-ref-filename="gk20a_instobj_ctor_iommu">gk20a_instobj_ctor_iommu</a>(<a class="local col2 ref" href="#32imem" title='imem' data-ref="32imem" data-ref-filename="32imem">imem</a>, <a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a> &gt;&gt; <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#55" title="12" data-ref="_M/PAGE_SHIFT">PAGE_SHIFT</a>,</td></tr>
+<tr><th id="734">734</th><td>					       <a class="local col9 ref" href="#29align" title='align' data-ref="29align" data-ref-filename="29align">align</a>, &amp;<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>);</td></tr>
+<tr><th id="735">735</th><td>	<b>else</b></td></tr>
+<tr><th id="736">736</th><td>		<a class="local col5 ref" href="#35ret" title='ret' data-ref="35ret" data-ref-filename="35ret">ret</a> = <a class="tu ref fn" href="#gk20a_instobj_ctor_dma" title='gk20a_instobj_ctor_dma' data-use='c' data-ref="gk20a_instobj_ctor_dma" data-ref-filename="gk20a_instobj_ctor_dma">gk20a_instobj_ctor_dma</a>(<a class="local col2 ref" href="#32imem" title='imem' data-ref="32imem" data-ref-filename="32imem">imem</a>, <a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a> &gt;&gt; <a class="macro" href="../../../../../../../../../arch/amd64/include/vmparam.h.html#55" title="12" data-ref="_M/PAGE_SHIFT">PAGE_SHIFT</a>,</td></tr>
+<tr><th id="737">737</th><td>					     <a class="local col9 ref" href="#29align" title='align' data-ref="29align" data-ref-filename="29align">align</a>, &amp;<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>);</td></tr>
+<tr><th id="738">738</th><td><u>#<span data-ppcond="728">endif</span></u></td></tr>
+<tr><th id="739">739</th><td>	*<a class="local col1 ref" href="#31pmemory" title='pmemory' data-ref="31pmemory" data-ref-filename="31pmemory">pmemory</a> = <a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a> ? &amp;<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj::memory" title='gk20a_instobj::memory' data-use='a' data-ref="gk20a_instobj::memory" data-ref-filename="gk20a_instobj..memory">memory</a> : <a class="macro" href="../../../../../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="740">740</th><td>	<b>if</b> (<a class="local col5 ref" href="#35ret" title='ret' data-ref="35ret" data-ref-filename="35ret">ret</a>)</td></tr>
+<tr><th id="741">741</th><td>		<b>return</b> <a class="local col5 ref" href="#35ret" title='ret' data-ref="35ret" data-ref-filename="35ret">ret</a>;</td></tr>
+<tr><th id="742">742</th><td></td></tr>
+<tr><th id="743">743</th><td>	<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj::imem" title='gk20a_instobj::imem' data-use='w' data-ref="gk20a_instobj::imem" data-ref-filename="gk20a_instobj..imem">imem</a> = <a class="local col2 ref" href="#32imem" title='imem' data-ref="32imem" data-ref-filename="32imem">imem</a>;</td></tr>
+<tr><th id="744">744</th><td></td></tr>
+<tr><th id="745">745</th><td>	<i>/* present memory for being mapped using small pages */</i></td></tr>
+<tr><th id="746">746</th><td>	<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::size" title='nvkm_mem::size' data-ref="nvkm_mem::size" data-ref-filename="nvkm_mem..size">size</a> = <a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a> &gt;&gt; <var>12</var>;</td></tr>
+<tr><th id="747">747</th><td>	<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::memtype" title='nvkm_mem::memtype' data-ref="nvkm_mem::memtype" data-ref-filename="nvkm_mem..memtype">memtype</a> = <var>0</var>;</td></tr>
+<tr><th id="748">748</th><td>	<a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::page_shift" title='nvkm_mem::page_shift' data-ref="nvkm_mem::page_shift" data-ref-filename="nvkm_mem..page_shift">page_shift</a> = <var>12</var>;</td></tr>
+<tr><th id="749">749</th><td></td></tr>
+<tr><th id="750">750</th><td>	<a class="macro" href="../../../include/nvkm/core/subdev.h.html#49" title="do { struct nvkm_subdev *_subdev = (((subdev))); if (_subdev-&gt;debug == (4) || _subdev-&gt;debug &gt; (4)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;alloc size: 0x%x, align: 0x%x, gaddr: 0x%&quot;&quot;lx&quot;&quot;\n&quot;, nvkm_subdev_name[_subdev-&gt;index], size, align, node-&gt;mem.offset); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;alloc size: 0x%x, align: 0x%x, gaddr: 0x%&quot;&quot;lx&quot;&quot;\n&quot;, nvkm_subdev_name[_subdev-&gt;index], size, align, node-&gt;mem.offset); } while (0); } } while(0)" data-ref="_M/nvkm_debug">nvkm_debug</a>(<a class="local col3 ref" href="#33subdev" title='subdev' data-ref="33subdev" data-ref-filename="33subdev">subdev</a>, <q>"alloc size: 0x%x, align: 0x%x, gaddr: 0x%"</q><a class="macro" href="../../../../../../../../../sys/common_int_fmtio.h.html#109" title="&quot;lx&quot;" data-ref="_M/PRIx64">PRIx64</a><q>"\n"</q>,</td></tr>
+<tr><th id="751">751</th><td>		   <a class="local col8 ref" href="#28size" title='size' data-ref="28size" data-ref-filename="28size">size</a>, <a class="local col9 ref" href="#29align" title='align' data-ref="29align" data-ref-filename="29align">align</a>, <a class="local col4 ref" href="#34node" title='node' data-ref="34node" data-ref-filename="34node">node</a>-&gt;<a class="tu ref field" href="#gk20a_instobj::mem" title='gk20a_instobj::mem' data-use='m' data-ref="gk20a_instobj::mem" data-ref-filename="gk20a_instobj..mem">mem</a>.<a class="ref field" href="../../../include/nvkm/subdev/fb.h.html#nvkm_mem::offset" title='nvkm_mem::offset' data-ref="nvkm_mem::offset" data-ref-filename="nvkm_mem..offset">offset</a>);</td></tr>
+<tr><th id="752">752</th><td></td></tr>
+<tr><th id="753">753</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="754">754</th><td>}</td></tr>
+<tr><th id="755">755</th><td></td></tr>
+<tr><th id="756">756</th><td><em>static</em> <em>void</em> *</td></tr>
+<tr><th id="757">757</th><td><dfn class="tu decl def fn" id="gk20a_instmem_dtor" title='gk20a_instmem_dtor' data-type='void * gk20a_instmem_dtor(struct nvkm_instmem * base)' data-ref="gk20a_instmem_dtor" data-ref-filename="gk20a_instmem_dtor">gk20a_instmem_dtor</dfn>(<b>struct</b> <a class="type" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem" title='nvkm_instmem' data-ref="nvkm_instmem" data-ref-filename="nvkm_instmem">nvkm_instmem</a> *<dfn class="local col6 decl" id="36base" title='base' data-type='struct nvkm_instmem *' data-ref="36base" data-ref-filename="36base">base</dfn>)</td></tr>
+<tr><th id="758">758</th><td>{</td></tr>
+<tr><th id="759">759</th><td>	<b>struct</b> <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a> *<dfn class="local col7 decl" id="37imem" title='imem' data-type='struct gk20a_instmem *' data-ref="37imem" data-ref-filename="37imem">imem</dfn> = <a class="macro" href="#140" title="((struct gk20a_instmem *)(((char *)((base))) - __builtin_offsetof(struct gk20a_instmem, base)) + (0 * sizeof(((base)) - &amp;((struct gk20a_instmem *)(((char *)((base))) - __builtin_offsetof(struct gk20a_instmem, base)))-&gt;base)))" data-ref="_M/gk20a_instmem">gk20a_instmem</a>(<a class="local col6 ref" href="#36base" title='base' data-ref="36base" data-ref-filename="36base">base</a>);</td></tr>
+<tr><th id="760">760</th><td></td></tr>
+<tr><th id="761">761</th><td>	<i>/* perform some sanity checks... */</i></td></tr>
+<tr><th id="762">762</th><td>	<b>if</b> (!<a class="ref fn" href="../../../../../../../common/include/linux/list.h.html#list_empty" title='list_empty' data-ref="list_empty" data-ref-filename="list_empty">list_empty</a>(&amp;<a class="local col7 ref" href="#37imem" title='imem' data-ref="37imem" data-ref-filename="37imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::vaddr_lru" title='gk20a_instmem::vaddr_lru' data-use='a' data-ref="gk20a_instmem::vaddr_lru" data-ref-filename="gk20a_instmem..vaddr_lru">vaddr_lru</a>))</td></tr>
+<tr><th id="763">763</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#47" title="do { struct nvkm_subdev *_subdev = (((&amp;base-&gt;subdev))); if (_subdev-&gt;debug == (2) || _subdev-&gt;debug &gt; (2)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;notice: &quot; &quot;%s: &quot;&quot;instobj LRU not empty!\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_normal(&quot;notice: &quot; &quot;%s: &quot;&quot;instobj LRU not empty!\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_warn">nvkm_warn</a>(&amp;<a class="local col6 ref" href="#36base" title='base' data-ref="36base" data-ref-filename="36base">base</a>-&gt;<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>, <q>"instobj LRU not empty!\n"</q>);</td></tr>
+<tr><th id="764">764</th><td></td></tr>
+<tr><th id="765">765</th><td>	<b>if</b> (<a class="local col7 ref" href="#37imem" title='imem' data-ref="37imem" data-ref-filename="37imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::vaddr_use" title='gk20a_instmem::vaddr_use' data-use='r' data-ref="gk20a_instmem::vaddr_use" data-ref-filename="gk20a_instmem..vaddr_use">vaddr_use</a> != <var>0</var>)</td></tr>
+<tr><th id="766">766</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#47" title="do { struct nvkm_subdev *_subdev = (((&amp;base-&gt;subdev))); if (_subdev-&gt;debug == (2) || _subdev-&gt;debug &gt; (2)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;notice: &quot; &quot;%s: &quot;&quot;instobj vmap area not empty! &quot; &quot;0x%x bytes still mapped\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use); else aprint_normal(&quot;notice: &quot; &quot;%s: &quot;&quot;instobj vmap area not empty! &quot; &quot;0x%x bytes still mapped\n&quot;, nvkm_subdev_name[_subdev-&gt;index], imem-&gt;vaddr_use); } while (0); } } while(0)" data-ref="_M/nvkm_warn">nvkm_warn</a>(&amp;<a class="local col6 ref" href="#36base" title='base' data-ref="36base" data-ref-filename="36base">base</a>-&gt;<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>, <q>"instobj vmap area not empty! "</q></td></tr>
+<tr><th id="767">767</th><td>			  <q>"0x%x bytes still mapped\n"</q>, <a class="local col7 ref" href="#37imem" title='imem' data-ref="37imem" data-ref-filename="37imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::vaddr_use" title='gk20a_instmem::vaddr_use' data-use='r' data-ref="gk20a_instmem::vaddr_use" data-ref-filename="gk20a_instmem..vaddr_use">vaddr_use</a>);</td></tr>
+<tr><th id="768">768</th><td></td></tr>
+<tr><th id="769">769</th><td>	<b>return</b> <a class="local col7 ref" href="#37imem" title='imem' data-ref="37imem" data-ref-filename="37imem">imem</a>;</td></tr>
+<tr><th id="770">770</th><td>}</td></tr>
+<tr><th id="771">771</th><td></td></tr>
+<tr><th id="772">772</th><td><em>static</em> <em>const</em> <b>struct</b> <a class="type" href="priv.h.html#nvkm_instmem_func" title='nvkm_instmem_func' data-ref="nvkm_instmem_func" data-ref-filename="nvkm_instmem_func">nvkm_instmem_func</a></td></tr>
+<tr><th id="773">773</th><td><dfn class="tu decl def" id="gk20a_instmem" title='gk20a_instmem' data-type='const struct nvkm_instmem_func' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</dfn> = {</td></tr>
+<tr><th id="774">774</th><td>	.<a class="ref field" href="priv.h.html#nvkm_instmem_func::dtor" title='nvkm_instmem_func::dtor' data-ref="nvkm_instmem_func::dtor" data-ref-filename="nvkm_instmem_func..dtor">dtor</a> = <a class="tu ref fn" href="#gk20a_instmem_dtor" title='gk20a_instmem_dtor' data-ref="gk20a_instmem_dtor" data-ref-filename="gk20a_instmem_dtor">gk20a_instmem_dtor</a>,</td></tr>
+<tr><th id="775">775</th><td>	.<a class="ref field" href="priv.h.html#nvkm_instmem_func::memory_new" title='nvkm_instmem_func::memory_new' data-ref="nvkm_instmem_func::memory_new" data-ref-filename="nvkm_instmem_func..memory_new">memory_new</a> = <a class="tu ref fn" href="#gk20a_instobj_new" title='gk20a_instobj_new' data-ref="gk20a_instobj_new" data-ref-filename="gk20a_instobj_new">gk20a_instobj_new</a>,</td></tr>
+<tr><th id="776">776</th><td>	.<a class="ref field" href="priv.h.html#nvkm_instmem_func::persistent" title='nvkm_instmem_func::persistent' data-ref="nvkm_instmem_func::persistent" data-ref-filename="nvkm_instmem_func..persistent">persistent</a> = <a class="macro" href="../../../../../../../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>,</td></tr>
+<tr><th id="777">777</th><td>	.<a class="ref field" href="priv.h.html#nvkm_instmem_func::zero" title='nvkm_instmem_func::zero' data-ref="nvkm_instmem_func::zero" data-ref-filename="nvkm_instmem_func..zero">zero</a> = <a class="macro" href="../../../../../../../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>,</td></tr>
+<tr><th id="778">778</th><td>};</td></tr>
+<tr><th id="779">779</th><td></td></tr>
+<tr><th id="780">780</th><td><em>int</em></td></tr>
+<tr><th id="781">781</th><td><dfn class="decl def fn" id="gk20a_instmem_new" title='gk20a_instmem_new' data-ref="gk20a_instmem_new" data-ref-filename="gk20a_instmem_new">gk20a_instmem_new</dfn>(<b>struct</b> <a class="type" href="../../../include/nvkm/core/device.h.html#nvkm_device" title='nvkm_device' data-ref="nvkm_device" data-ref-filename="nvkm_device">nvkm_device</a> *<dfn class="local col8 decl" id="38device" title='device' data-type='struct nvkm_device *' data-ref="38device" data-ref-filename="38device">device</dfn>, <em>int</em> <dfn class="local col9 decl" id="39index" title='index' data-type='int' data-ref="39index" data-ref-filename="39index">index</dfn>,</td></tr>
+<tr><th id="782">782</th><td>		  <b>struct</b> <a class="type" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem" title='nvkm_instmem' data-ref="nvkm_instmem" data-ref-filename="nvkm_instmem">nvkm_instmem</a> **<dfn class="local col0 decl" id="40pimem" title='pimem' data-type='struct nvkm_instmem **' data-ref="40pimem" data-ref-filename="40pimem">pimem</dfn>)</td></tr>
+<tr><th id="783">783</th><td>{</td></tr>
+<tr><th id="784">784</th><td><u>#<span data-ppcond="784">ifndef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="785">785</th><td>	<b>struct</b> <a class="type" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra" title='nvkm_device_tegra' data-ref="nvkm_device_tegra" data-ref-filename="nvkm_device_tegra">nvkm_device_tegra</a> *<dfn class="local col1 decl" id="41tdev" title='tdev' data-type='struct nvkm_device_tegra *' data-ref="41tdev" data-ref-filename="41tdev">tdev</dfn> = <a class="local col8 ref" href="#38device" title='device' data-ref="38device" data-ref-filename="38device">device</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/device.h.html#nvkm_device::func" title='nvkm_device::func' data-ref="nvkm_device::func" data-ref-filename="nvkm_device..func">func</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/device.h.html#nvkm_device_func::tegra" title='nvkm_device_func::tegra' data-ref="nvkm_device_func::tegra" data-ref-filename="nvkm_device_func..tegra">tegra</a>(<a class="local col8 ref" href="#38device" title='device' data-ref="38device" data-ref-filename="38device">device</a>);</td></tr>
+<tr><th id="786">786</th><td><u>#<span data-ppcond="784">endif</span></u></td></tr>
+<tr><th id="787">787</th><td>	<b>struct</b> <a class="type" href="#gk20a_instmem" title='gk20a_instmem' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a> *<dfn class="local col2 decl" id="42imem" title='imem' data-type='struct gk20a_instmem *' data-ref="42imem" data-ref-filename="42imem">imem</dfn>;</td></tr>
+<tr><th id="788">788</th><td></td></tr>
+<tr><th id="789">789</th><td>	<b>if</b> (!(<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a> = <a class="ref fn" href="../../../../../../../common/include/linux/slab.h.html#kzalloc" title='kzalloc' data-ref="kzalloc" data-ref-filename="kzalloc">kzalloc</a>(<b>sizeof</b>(*<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>), <a class="macro" href="../../../../../../../common/include/linux/gfp.h.html#46" title="((((uintmax_t)(2) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((2) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(6) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((6) &amp; (8 * sizeof(uintmax_t) - 1)))) | (((uintmax_t)(11) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((11) &amp; (8 * sizeof(uintmax_t) - 1)))))" data-ref="_M/GFP_KERNEL">GFP_KERNEL</a>)))</td></tr>
+<tr><th id="790">790</th><td>		<b>return</b> -<a class="macro" href="../../../../../../../../../sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="791">791</th><td>	<a class="ref fn" href="priv.h.html#nvkm_instmem_ctor" title='nvkm_instmem_ctor' data-ref="nvkm_instmem_ctor" data-ref-filename="nvkm_instmem_ctor">nvkm_instmem_ctor</a>(&amp;<a class="tu ref" href="#gk20a_instmem" title='gk20a_instmem' data-use='a' data-ref="gk20a_instmem" data-ref-filename="gk20a_instmem">gk20a_instmem</a>, <a class="local col8 ref" href="#38device" title='device' data-ref="38device" data-ref-filename="38device">device</a>, <a class="local col9 ref" href="#39index" title='index' data-ref="39index" data-ref-filename="39index">index</a>, &amp;<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='a' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>);</td></tr>
+<tr><th id="792">792</th><td>	<a class="ref fn" href="../../../../../../include/linux/spinlock.h.html#spin_lock_init" title='spin_lock_init' data-ref="spin_lock_init" data-ref-filename="spin_lock_init">spin_lock_init</a>(&amp;<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::lock" title='gk20a_instmem::lock' data-use='a' data-ref="gk20a_instmem::lock" data-ref-filename="gk20a_instmem..lock">lock</a>);</td></tr>
+<tr><th id="793">793</th><td>	*<a class="local col0 ref" href="#40pimem" title='pimem' data-ref="40pimem" data-ref-filename="40pimem">pimem</a> = &amp;<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='a' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>;</td></tr>
+<tr><th id="794">794</th><td></td></tr>
+<tr><th id="795">795</th><td>	<i>/* do not allow more than 1MB of CPU-mapped instmem */</i></td></tr>
+<tr><th id="796">796</th><td>	<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::vaddr_use" title='gk20a_instmem::vaddr_use' data-use='w' data-ref="gk20a_instmem::vaddr_use" data-ref-filename="gk20a_instmem..vaddr_use">vaddr_use</a> = <var>0</var>;</td></tr>
+<tr><th id="797">797</th><td>	<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::vaddr_max" title='gk20a_instmem::vaddr_max' data-use='w' data-ref="gk20a_instmem::vaddr_max" data-ref-filename="gk20a_instmem..vaddr_max">vaddr_max</a> = <var>0x100000</var>;</td></tr>
+<tr><th id="798">798</th><td>	<a class="ref fn" href="../../../../../../../common/include/linux/list.h.html#INIT_LIST_HEAD" title='INIT_LIST_HEAD' data-ref="INIT_LIST_HEAD" data-ref-filename="INIT_LIST_HEAD">INIT_LIST_HEAD</a>(&amp;<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::vaddr_lru" title='gk20a_instmem::vaddr_lru' data-use='a' data-ref="gk20a_instmem::vaddr_lru" data-ref-filename="gk20a_instmem..vaddr_lru">vaddr_lru</a>);</td></tr>
+<tr><th id="799">799</th><td></td></tr>
+<tr><th id="800">800</th><td><u>#<span data-ppcond="800">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="801">801</th><td>	imem-&gt;cpu_map = gk20a_instobj_cpu_map_netbsd;</td></tr>
+<tr><th id="802">802</th><td>	nvkm_info(&amp;imem-&gt;base.subdev, <q>"using bus_dma\n"</q>);</td></tr>
+<tr><th id="803">803</th><td><u>#<span data-ppcond="800">else</span></u></td></tr>
+<tr><th id="804">804</th><td>	<b>if</b> (<a class="local col1 ref" href="#41tdev" title='tdev' data-ref="41tdev" data-ref-filename="41tdev">tdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::iommu" title='nvkm_device_tegra::iommu' data-ref="nvkm_device_tegra::iommu" data-ref-filename="nvkm_device_tegra..iommu">iommu</a>.<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::(anonymous)::domain" title='nvkm_device_tegra::(anonymous struct)::domain' data-ref="nvkm_device_tegra::(anonymous)::domain" data-ref-filename="nvkm_device_tegra..(anonymous)..domain">domain</a>) {</td></tr>
+<tr><th id="805">805</th><td>		<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm_mutex" title='gk20a_instmem::mm_mutex' data-use='w' data-ref="gk20a_instmem::mm_mutex" data-ref-filename="gk20a_instmem..mm_mutex">mm_mutex</a> = &amp;<a class="local col1 ref" href="#41tdev" title='tdev' data-ref="41tdev" data-ref-filename="41tdev">tdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::iommu" title='nvkm_device_tegra::iommu' data-ref="nvkm_device_tegra::iommu" data-ref-filename="nvkm_device_tegra..iommu">iommu</a>.<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::(anonymous)::mutex" title='nvkm_device_tegra::(anonymous struct)::mutex' data-ref="nvkm_device_tegra::(anonymous)::mutex" data-ref-filename="nvkm_device_tegra..(anonymous)..mutex">mutex</a>;</td></tr>
+<tr><th id="806">806</th><td>		<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::mm" title='gk20a_instmem::mm' data-use='w' data-ref="gk20a_instmem::mm" data-ref-filename="gk20a_instmem..mm">mm</a> = &amp;<a class="local col1 ref" href="#41tdev" title='tdev' data-ref="41tdev" data-ref-filename="41tdev">tdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::iommu" title='nvkm_device_tegra::iommu' data-ref="nvkm_device_tegra::iommu" data-ref-filename="nvkm_device_tegra..iommu">iommu</a>.<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::(anonymous)::mm" title='nvkm_device_tegra::(anonymous struct)::mm' data-ref="nvkm_device_tegra::(anonymous)::mm" data-ref-filename="nvkm_device_tegra..(anonymous)..mm">mm</a>;</td></tr>
+<tr><th id="807">807</th><td>		<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::domain" title='gk20a_instmem::domain' data-use='w' data-ref="gk20a_instmem::domain" data-ref-filename="gk20a_instmem..domain">domain</a> = <a class="local col1 ref" href="#41tdev" title='tdev' data-ref="41tdev" data-ref-filename="41tdev">tdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::iommu" title='nvkm_device_tegra::iommu' data-ref="nvkm_device_tegra::iommu" data-ref-filename="nvkm_device_tegra..iommu">iommu</a>.<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::(anonymous)::domain" title='nvkm_device_tegra::(anonymous struct)::domain' data-ref="nvkm_device_tegra::(anonymous)::domain" data-ref-filename="nvkm_device_tegra..(anonymous)..domain">domain</a>;</td></tr>
+<tr><th id="808">808</th><td>		<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_pgshift" title='gk20a_instmem::iommu_pgshift' data-use='w' data-ref="gk20a_instmem::iommu_pgshift" data-ref-filename="gk20a_instmem..iommu_pgshift">iommu_pgshift</a> = <a class="local col1 ref" href="#41tdev" title='tdev' data-ref="41tdev" data-ref-filename="41tdev">tdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::iommu" title='nvkm_device_tegra::iommu' data-ref="nvkm_device_tegra::iommu" data-ref-filename="nvkm_device_tegra..iommu">iommu</a>.<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::(anonymous)::pgshift" title='nvkm_device_tegra::(anonymous struct)::pgshift' data-ref="nvkm_device_tegra::(anonymous)::pgshift" data-ref-filename="nvkm_device_tegra..(anonymous)..pgshift">pgshift</a>;</td></tr>
+<tr><th id="809">809</th><td>		imem-&gt;<span class='error' title="no member named &apos;cpu_map&apos; in &apos;struct gk20a_instmem&apos;">cpu_map</span> = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_cpu_map_iommu&apos;">gk20a_instobj_cpu_map_iommu</span>;</td></tr>
+<tr><th id="810">810</th><td>		<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::iommu_bit" title='gk20a_instmem::iommu_bit' data-use='w' data-ref="gk20a_instmem::iommu_bit" data-ref-filename="gk20a_instmem..iommu_bit">iommu_bit</a> = <a class="local col1 ref" href="#41tdev" title='tdev' data-ref="41tdev" data-ref-filename="41tdev">tdev</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra::func" title='nvkm_device_tegra::func' data-ref="nvkm_device_tegra::func" data-ref-filename="nvkm_device_tegra..func">func</a>-&gt;<a class="ref field" href="../../../include/nvkm/core/tegra.h.html#nvkm_device_tegra_func::iommu_bit" title='nvkm_device_tegra_func::iommu_bit' data-ref="nvkm_device_tegra_func::iommu_bit" data-ref-filename="nvkm_device_tegra_func..iommu_bit">iommu_bit</a>;</td></tr>
+<tr><th id="811">811</th><td></td></tr>
+<tr><th id="812">812</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#48" title="do { struct nvkm_subdev *_subdev = (((&amp;imem-&gt;base.subdev))); if (_subdev-&gt;debug == (3) || _subdev-&gt;debug &gt; (3)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;using IOMMU\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;using IOMMU\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_info">nvkm_info</a>(&amp;<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='m' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>.<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>, <q>"using IOMMU\n"</q>);</td></tr>
+<tr><th id="813">813</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="814">814</th><td>		init_dma_attrs(&amp;imem-&gt;attrs);</td></tr>
+<tr><th id="815">815</th><td>		<i>/* We will access the memory through our own mapping */</i></td></tr>
+<tr><th id="816">816</th><td>		dma_set_attr(<span class='error' title="use of undeclared identifier &apos;DMA_ATTR_NON_CONSISTENT&apos;">DMA_ATTR_NON_CONSISTENT</span>, &amp;imem-&gt;attrs);</td></tr>
+<tr><th id="817">817</th><td>		dma_set_attr(<span class='error' title="use of undeclared identifier &apos;DMA_ATTR_WEAK_ORDERING&apos;">DMA_ATTR_WEAK_ORDERING</span>, &amp;imem-&gt;attrs);</td></tr>
+<tr><th id="818">818</th><td>		dma_set_attr(<span class='error' title="use of undeclared identifier &apos;DMA_ATTR_WRITE_COMBINE&apos;">DMA_ATTR_WRITE_COMBINE</span>, &amp;imem-&gt;attrs);</td></tr>
+<tr><th id="819">819</th><td>		dma_set_attr(<span class='error' title="use of undeclared identifier &apos;DMA_ATTR_NO_KERNEL_MAPPING&apos;">DMA_ATTR_NO_KERNEL_MAPPING</span>, &amp;imem-&gt;attrs);</td></tr>
+<tr><th id="820">820</th><td>		imem-&gt;<span class='error' title="no member named &apos;cpu_map&apos; in &apos;struct gk20a_instmem&apos;">cpu_map</span> = <span class='error' title="use of undeclared identifier &apos;gk20a_instobj_cpu_map_dma&apos;">gk20a_instobj_cpu_map_dma</span>;</td></tr>
+<tr><th id="821">821</th><td></td></tr>
+<tr><th id="822">822</th><td>		<a class="macro" href="../../../include/nvkm/core/subdev.h.html#48" title="do { struct nvkm_subdev *_subdev = (((&amp;imem-&gt;base.subdev))); if (_subdev-&gt;debug == (3) || _subdev-&gt;debug &gt; (3)) { do { if (_subdev-&gt;device-&gt;dev) aprint_normal_dev((_subdev-&gt;device-&gt;dev), &quot;info: &quot; &quot;%s: &quot;&quot;using DMA API\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); else aprint_normal(&quot;info: &quot; &quot;%s: &quot;&quot;using DMA API\n&quot;, nvkm_subdev_name[_subdev-&gt;index]); } while (0); } } while(0)" data-ref="_M/nvkm_info">nvkm_info</a>(&amp;<a class="local col2 ref" href="#42imem" title='imem' data-ref="42imem" data-ref-filename="42imem">imem</a>-&gt;<a class="tu ref field" href="#gk20a_instmem::base" title='gk20a_instmem::base' data-use='m' data-ref="gk20a_instmem::base" data-ref-filename="gk20a_instmem..base">base</a>.<a class="ref field" href="../../../include/nvkm/subdev/instmem.h.html#nvkm_instmem::subdev" title='nvkm_instmem::subdev' data-ref="nvkm_instmem::subdev" data-ref-filename="nvkm_instmem..subdev">subdev</a>, <q>"using DMA API\n"</q>);</td></tr>
+<tr><th id="823">823</th><td>	}</td></tr>
+<tr><th id="824">824</th><td><u>#<span data-ppcond="800">endif</span></u></td></tr>
+<tr><th id="825">825</th><td></td></tr>
+<tr><th id="826">826</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="827">827</th><td>}</td></tr>
+<tr><th id="828">828</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

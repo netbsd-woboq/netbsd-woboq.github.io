@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>refclock_tpro.c source code [netbsd/external/bsd/ntp/dist/ntpd/refclock_tpro.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/refclock_tpro.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='refclock_tpro.c.html'>refclock_tpro.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: refclock_tpro.c,v 1.4 2016/01/08 21:35:39 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * refclock_tpro - clock driver for the KSI/Odetics TPRO-S IRIG-B reader</i></td></tr>
+<tr><th id="5">5</th><td><i> */</i></td></tr>
+<tr><th id="6">6</th><td></td></tr>
+<tr><th id="7">7</th><td><u>#<span data-ppcond="7">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="8">8</th><td><u>#include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="9">9</th><td><u>#<span data-ppcond="7">endif</span></u></td></tr>
+<tr><th id="10">10</th><td></td></tr>
+<tr><th id="11">11</th><td><u>#<span data-ppcond="11">if</span> defined(<a class="macro" href="../../include/config.h.html#1519" data-ref="_M/REFCLOCK">REFCLOCK</a>) &amp;&amp; defined(<span class="macro" data-ref="_M/CLOCK_TPRO">CLOCK_TPRO</span>)</u></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#include "ntpd.h"</u></td></tr>
+<tr><th id="14">14</th><td><u>#include "ntp_io.h"</u></td></tr>
+<tr><th id="15">15</th><td><u>#include "ntp_refclock.h"</u></td></tr>
+<tr><th id="16">16</th><td><u>#include "ntp_unixtime.h"</u></td></tr>
+<tr><th id="17">17</th><td><u>#include "sys/tpro.h"</u></td></tr>
+<tr><th id="18">18</th><td><u>#include "ntp_stdlib.h"</u></td></tr>
+<tr><th id="19">19</th><td></td></tr>
+<tr><th id="20">20</th><td><u>#include &lt;stdio.h&gt;</u></td></tr>
+<tr><th id="21">21</th><td><u>#include &lt;ctype.h&gt;</u></td></tr>
+<tr><th id="22">22</th><td></td></tr>
+<tr><th id="23">23</th><td><i>/*</i></td></tr>
+<tr><th id="24">24</th><td><i> * This driver supports the KSI/Odetecs TPRO-S IRIG-B reader and TPRO-</i></td></tr>
+<tr><th id="25">25</th><td><i> * SAT GPS receiver for the Sun Microsystems SBus. It requires that the</i></td></tr>
+<tr><th id="26">26</th><td><i> * tpro.o device driver be installed and loaded.</i></td></tr>
+<tr><th id="27">27</th><td><i> */</i> </td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><i>/*</i></td></tr>
+<tr><th id="30">30</th><td><i> * TPRO interface definitions</i></td></tr>
+<tr><th id="31">31</th><td><i> */</i></td></tr>
+<tr><th id="32">32</th><td><u>#define	DEVICE		 "/dev/tpro%d" /* device name and unit */</u></td></tr>
+<tr><th id="33">33</th><td><u>#define	PRECISION	(-20)	/* precision assumed (1 us) */</u></td></tr>
+<tr><th id="34">34</th><td><u>#define	REFID		"IRIG"	/* reference ID */</u></td></tr>
+<tr><th id="35">35</th><td><u>#define	DESCRIPTION	"KSI/Odetics TPRO/S IRIG Interface" /* WRU */</u></td></tr>
+<tr><th id="36">36</th><td></td></tr>
+<tr><th id="37">37</th><td><i>/*</i></td></tr>
+<tr><th id="38">38</th><td><i> * Unit control structure</i></td></tr>
+<tr><th id="39">39</th><td><i> */</i></td></tr>
+<tr><th id="40">40</th><td><b>struct</b> tprounit {</td></tr>
+<tr><th id="41">41</th><td>	<b>struct</b>	tproval tprodata; <i>/* data returned from tpro read */</i></td></tr>
+<tr><th id="42">42</th><td>};</td></tr>
+<tr><th id="43">43</th><td></td></tr>
+<tr><th id="44">44</th><td><i>/*</i></td></tr>
+<tr><th id="45">45</th><td><i> * Function prototypes</i></td></tr>
+<tr><th id="46">46</th><td><i> */</i></td></tr>
+<tr><th id="47">47</th><td><em>static</em>	<em>int</em>	tpro_start	(<em>int</em>, <b>struct</b> peer *);</td></tr>
+<tr><th id="48">48</th><td><em>static</em>	<em>void</em>	tpro_shutdown	(<em>int</em>, <b>struct</b> peer *);</td></tr>
+<tr><th id="49">49</th><td><em>static</em>	<em>void</em>	tpro_poll	(<em>int</em> unit, <b>struct</b> peer *);</td></tr>
+<tr><th id="50">50</th><td></td></tr>
+<tr><th id="51">51</th><td><i>/*</i></td></tr>
+<tr><th id="52">52</th><td><i> * Transfer vector</i></td></tr>
+<tr><th id="53">53</th><td><i> */</i></td></tr>
+<tr><th id="54">54</th><td><b>struct</b>	refclock refclock_tpro = {</td></tr>
+<tr><th id="55">55</th><td>	tpro_start,		<i>/* start up driver */</i></td></tr>
+<tr><th id="56">56</th><td>	tpro_shutdown,		<i>/* shut down driver */</i></td></tr>
+<tr><th id="57">57</th><td>	tpro_poll,		<i>/* transmit poll message */</i></td></tr>
+<tr><th id="58">58</th><td>	noentry,		<i>/* not used (old tpro_control) */</i></td></tr>
+<tr><th id="59">59</th><td>	noentry,		<i>/* initialize driver (not used) */</i></td></tr>
+<tr><th id="60">60</th><td>	noentry,		<i>/* not used (old tpro_buginfo) */</i></td></tr>
+<tr><th id="61">61</th><td>	NOFLAGS			<i>/* not used */</i></td></tr>
+<tr><th id="62">62</th><td>};</td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td></td></tr>
+<tr><th id="65">65</th><td><i>/*</i></td></tr>
+<tr><th id="66">66</th><td><i> * tpro_start - open the TPRO device and initialize data for processing</i></td></tr>
+<tr><th id="67">67</th><td><i> */</i></td></tr>
+<tr><th id="68">68</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="69">69</th><td>tpro_start(</td></tr>
+<tr><th id="70">70</th><td>	<em>int</em> unit,</td></tr>
+<tr><th id="71">71</th><td>	<b>struct</b> peer *peer</td></tr>
+<tr><th id="72">72</th><td>	)</td></tr>
+<tr><th id="73">73</th><td>{</td></tr>
+<tr><th id="74">74</th><td>	<em>register</em> <b>struct</b> tprounit *up;</td></tr>
+<tr><th id="75">75</th><td>	<b>struct</b> refclockproc *pp;</td></tr>
+<tr><th id="76">76</th><td>	<em>char</em> device[<var>20</var>];</td></tr>
+<tr><th id="77">77</th><td>	<em>int</em> fd;</td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td>	<i>/*</i></td></tr>
+<tr><th id="80">80</th><td><i>	 * Open TPRO device</i></td></tr>
+<tr><th id="81">81</th><td><i>	 */</i></td></tr>
+<tr><th id="82">82</th><td>	snprintf(device, <b>sizeof</b>(device), DEVICE, unit);</td></tr>
+<tr><th id="83">83</th><td>	fd = open(device, O_RDONLY | O_NDELAY, <var>0777</var>);</td></tr>
+<tr><th id="84">84</th><td>	<b>if</b> (fd == -<var>1</var>) {</td></tr>
+<tr><th id="85">85</th><td>		msyslog(LOG_ERR, <q>"tpro_start: open of %s: %m"</q>, device);</td></tr>
+<tr><th id="86">86</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="87">87</th><td>	}</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td>	<i>/*</i></td></tr>
+<tr><th id="90">90</th><td><i>	 * Allocate and initialize unit structure</i></td></tr>
+<tr><th id="91">91</th><td><i>	 */</i></td></tr>
+<tr><th id="92">92</th><td>	up = emalloc_zero(<b>sizeof</b>(*up));</td></tr>
+<tr><th id="93">93</th><td>	pp = peer-&gt;procptr;</td></tr>
+<tr><th id="94">94</th><td>	pp-&gt;io.clock_recv = noentry;</td></tr>
+<tr><th id="95">95</th><td>	pp-&gt;io.srcclock = peer;</td></tr>
+<tr><th id="96">96</th><td>	pp-&gt;io.datalen = <var>0</var>;</td></tr>
+<tr><th id="97">97</th><td>	pp-&gt;io.fd = fd;</td></tr>
+<tr><th id="98">98</th><td>	pp-&gt;unitptr = up;</td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td>	<i>/*</i></td></tr>
+<tr><th id="101">101</th><td><i>	 * Initialize miscellaneous peer variables</i></td></tr>
+<tr><th id="102">102</th><td><i>	 */</i></td></tr>
+<tr><th id="103">103</th><td>	peer-&gt;precision = PRECISION;</td></tr>
+<tr><th id="104">104</th><td>	pp-&gt;clockdesc = DESCRIPTION;</td></tr>
+<tr><th id="105">105</th><td>	memcpy((<em>char</em> *)&amp;pp-&gt;refid, REFID, <var>4</var>);</td></tr>
+<tr><th id="106">106</th><td>	<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="107">107</th><td>}</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td><i>/*</i></td></tr>
+<tr><th id="111">111</th><td><i> * tpro_shutdown - shut down the clock</i></td></tr>
+<tr><th id="112">112</th><td><i> */</i></td></tr>
+<tr><th id="113">113</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="114">114</th><td>tpro_shutdown(</td></tr>
+<tr><th id="115">115</th><td>	<em>int</em> unit,</td></tr>
+<tr><th id="116">116</th><td>	<b>struct</b> peer *peer</td></tr>
+<tr><th id="117">117</th><td>	)</td></tr>
+<tr><th id="118">118</th><td>{</td></tr>
+<tr><th id="119">119</th><td>	<em>register</em> <b>struct</b> tprounit *up;</td></tr>
+<tr><th id="120">120</th><td>	<b>struct</b> refclockproc *pp;</td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td>	pp = peer-&gt;procptr;</td></tr>
+<tr><th id="123">123</th><td>	up = pp-&gt;unitptr;</td></tr>
+<tr><th id="124">124</th><td>	io_closeclock(&amp;pp-&gt;io);</td></tr>
+<tr><th id="125">125</th><td>	<b>if</b> (NULL != up)</td></tr>
+<tr><th id="126">126</th><td>		free(up);</td></tr>
+<tr><th id="127">127</th><td>}</td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td><i>/*</i></td></tr>
+<tr><th id="131">131</th><td><i> * tpro_poll - called by the transmit procedure</i></td></tr>
+<tr><th id="132">132</th><td><i> */</i></td></tr>
+<tr><th id="133">133</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="134">134</th><td>tpro_poll(</td></tr>
+<tr><th id="135">135</th><td>	<em>int</em> unit,</td></tr>
+<tr><th id="136">136</th><td>	<b>struct</b> peer *peer</td></tr>
+<tr><th id="137">137</th><td>	)</td></tr>
+<tr><th id="138">138</th><td>{</td></tr>
+<tr><th id="139">139</th><td>	<em>register</em> <b>struct</b> tprounit *up;</td></tr>
+<tr><th id="140">140</th><td>	<b>struct</b> refclockproc *pp;</td></tr>
+<tr><th id="141">141</th><td>	<b>struct</b> tproval *tp;</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td>	<i>/*</i></td></tr>
+<tr><th id="144">144</th><td><i>	 * This is the main routine. It snatches the time from the TPRO</i></td></tr>
+<tr><th id="145">145</th><td><i>	 * board and tacks on a local timestamp.</i></td></tr>
+<tr><th id="146">146</th><td><i>	 */</i></td></tr>
+<tr><th id="147">147</th><td>	pp = peer-&gt;procptr;</td></tr>
+<tr><th id="148">148</th><td>	up = pp-&gt;unitptr;</td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td>	tp = &amp;up-&gt;tprodata;</td></tr>
+<tr><th id="151">151</th><td>	<b>if</b> (read(pp-&gt;io.fd, (<em>char</em> *)tp, <b>sizeof</b>(<b>struct</b> tproval)) &lt; <var>0</var>) {</td></tr>
+<tr><th id="152">152</th><td>		refclock_report(peer, CEVNT_FAULT);</td></tr>
+<tr><th id="153">153</th><td>		<b>return</b>;</td></tr>
+<tr><th id="154">154</th><td>	}</td></tr>
+<tr><th id="155">155</th><td>	get_systime(&amp;pp-&gt;lastrec);</td></tr>
+<tr><th id="156">156</th><td>	pp-&gt;polls++;</td></tr>
+<tr><th id="157">157</th><td></td></tr>
+<tr><th id="158">158</th><td>	<i>/*</i></td></tr>
+<tr><th id="159">159</th><td><i>	 * We get down to business, check the timecode format and decode</i></td></tr>
+<tr><th id="160">160</th><td><i>	 * its contents. If the timecode has invalid length or is not in</i></td></tr>
+<tr><th id="161">161</th><td><i>	 * proper format, we declare bad format and exit. Note: we</i></td></tr>
+<tr><th id="162">162</th><td><i>	 * can't use the sec/usec conversion produced by the driver,</i></td></tr>
+<tr><th id="163">163</th><td><i>	 * since the year may be suspect. All format error checking is</i></td></tr>
+<tr><th id="164">164</th><td><i>	 * done by the snprintf() and sscanf() routines.</i></td></tr>
+<tr><th id="165">165</th><td><i>	 *</i></td></tr>
+<tr><th id="166">166</th><td><i>	 * Note that the refclockproc usec member has now become nsec.</i></td></tr>
+<tr><th id="167">167</th><td><i>	 * We could either multiply the read-in usec value by 1000 or</i></td></tr>
+<tr><th id="168">168</th><td><i>	 * we could pad the written string appropriately and read the</i></td></tr>
+<tr><th id="169">169</th><td><i>	 * resulting value in already scaled.</i></td></tr>
+<tr><th id="170">170</th><td><i>	 */</i></td></tr>
+<tr><th id="171">171</th><td>	snprintf(pp-&gt;a_lastcode, <b>sizeof</b>(pp-&gt;a_lastcode),</td></tr>
+<tr><th id="172">172</th><td>		 <q>"%1x%1x%1x %1x%1x:%1x%1x:%1x%1x.%1x%1x%1x%1x%1x%1x %1x"</q>,</td></tr>
+<tr><th id="173">173</th><td>		 tp-&gt;day100, tp-&gt;day10, tp-&gt;day1, tp-&gt;hour10, tp-&gt;hour1,</td></tr>
+<tr><th id="174">174</th><td>		 tp-&gt;min10, tp-&gt;min1, tp-&gt;sec10, tp-&gt;sec1, tp-&gt;ms100,</td></tr>
+<tr><th id="175">175</th><td>		 tp-&gt;ms10, tp-&gt;ms1, tp-&gt;usec100, tp-&gt;usec10, tp-&gt;usec1,</td></tr>
+<tr><th id="176">176</th><td>		 tp-&gt;status);</td></tr>
+<tr><th id="177">177</th><td>	pp-&gt;lencode = strlen(pp-&gt;a_lastcode);</td></tr>
+<tr><th id="178">178</th><td><u>#ifdef DEBUG</u></td></tr>
+<tr><th id="179">179</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="180">180</th><td>		printf(<q>"tpro: time %s timecode %d %s\n"</q>,</td></tr>
+<tr><th id="181">181</th><td>		   ulfptoa(&amp;pp-&gt;lastrec, <var>6</var>), pp-&gt;lencode,</td></tr>
+<tr><th id="182">182</th><td>		   pp-&gt;a_lastcode);</td></tr>
+<tr><th id="183">183</th><td><u>#endif</u></td></tr>
+<tr><th id="184">184</th><td>	<b>if</b> (sscanf(pp-&gt;a_lastcode, <q>"%3d %2d:%2d:%2d.%6ld"</q>, &amp;pp-&gt;day,</td></tr>
+<tr><th id="185">185</th><td>	    &amp;pp-&gt;hour, &amp;pp-&gt;minute, &amp;pp-&gt;second, &amp;pp-&gt;nsec)</td></tr>
+<tr><th id="186">186</th><td>	    != <var>5</var>) {</td></tr>
+<tr><th id="187">187</th><td>		refclock_report(peer, CEVNT_BADTIME);</td></tr>
+<tr><th id="188">188</th><td>		<b>return</b>;</td></tr>
+<tr><th id="189">189</th><td>	}</td></tr>
+<tr><th id="190">190</th><td>	pp-&gt;nsec *= <var>1000</var>;	<i>/* Convert usec to nsec */</i></td></tr>
+<tr><th id="191">191</th><td>	<b>if</b> (!tp-&gt;status &amp; <var>0x3</var>)</td></tr>
+<tr><th id="192">192</th><td>		pp-&gt;leap = LEAP_NOTINSYNC;</td></tr>
+<tr><th id="193">193</th><td>	<b>else</b></td></tr>
+<tr><th id="194">194</th><td>		pp-&gt;leap = LEAP_NOWARNING;</td></tr>
+<tr><th id="195">195</th><td>	<b>if</b> (!refclock_process(pp)) {</td></tr>
+<tr><th id="196">196</th><td>		refclock_report(peer, CEVNT_BADTIME);</td></tr>
+<tr><th id="197">197</th><td>		<b>return</b>;</td></tr>
+<tr><th id="198">198</th><td>	}</td></tr>
+<tr><th id="199">199</th><td>	<b>if</b> (pp-&gt;coderecv == pp-&gt;codeproc) {</td></tr>
+<tr><th id="200">200</th><td>		refclock_report(peer, CEVNT_TIMEOUT);</td></tr>
+<tr><th id="201">201</th><td>		<b>return</b>;</td></tr>
+<tr><th id="202">202</th><td>	}</td></tr>
+<tr><th id="203">203</th><td>	pp-&gt;lastref = pp-&gt;lastrec;</td></tr>
+<tr><th id="204">204</th><td>	record_clock_stats(&amp;peer-&gt;srcadr, pp-&gt;a_lastcode);</td></tr>
+<tr><th id="205">205</th><td>	refclock_receive(peer);</td></tr>
+<tr><th id="206">206</th><td>}</td></tr>
+<tr><th id="207">207</th><td></td></tr>
+<tr><th id="208">208</th><td><u>#<span data-ppcond="11">else</span></u></td></tr>
+<tr><th id="209">209</th><td><em>int</em> <dfn class="decl def" id="refclock_tpro_bs" title='refclock_tpro_bs' data-ref="refclock_tpro_bs" data-ref-filename="refclock_tpro_bs">refclock_tpro_bs</dfn>;</td></tr>
+<tr><th id="210">210</th><td><u>#<span data-ppcond="11">endif</span> /* REFCLOCK */</u></td></tr>
+<tr><th id="211">211</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

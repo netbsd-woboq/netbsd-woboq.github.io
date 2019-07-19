@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>hash-table.c source code [netbsd/external/gpl3/gcc/dist/gcc/hash-table.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/gcc/hash-table.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>gcc</a>/<a href='hash-table.c.html'>hash-table.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* A type-safe hash table template.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 2012-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Contributed by Lawrence Crowl &lt;crowl@google.com&gt;</i></td></tr>
+<tr><th id="4">4</th><td><i></i></td></tr>
+<tr><th id="5">5</th><td><i>This file is part of GCC.</i></td></tr>
+<tr><th id="6">6</th><td><i></i></td></tr>
+<tr><th id="7">7</th><td><i>GCC is free software; you can redistribute it and/or modify it under</i></td></tr>
+<tr><th id="8">8</th><td><i>the terms of the GNU General Public License as published by the Free</i></td></tr>
+<tr><th id="9">9</th><td><i>Software Foundation; either version 3, or (at your option) any later</i></td></tr>
+<tr><th id="10">10</th><td><i>version.</i></td></tr>
+<tr><th id="11">11</th><td><i></i></td></tr>
+<tr><th id="12">12</th><td><i>GCC is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="13">13</th><td><i>WARRANTY; without even the implied warranty of MERCHANTABILITY or</i></td></tr>
+<tr><th id="14">14</th><td><i>FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License</i></td></tr>
+<tr><th id="15">15</th><td><i>for more details.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="18">18</th><td><i>along with GCC; see the file COPYING3.  If not see</i></td></tr>
+<tr><th id="19">19</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="20">20</th><td></td></tr>
+<tr><th id="21">21</th><td></td></tr>
+<tr><th id="22">22</th><td><i>/* This file implements a typed hash table.</i></td></tr>
+<tr><th id="23">23</th><td><i>   The implementation borrows from libiberty's hashtab.  */</i></td></tr>
+<tr><th id="24">24</th><td></td></tr>
+<tr><th id="25">25</th><td><u>#<span data-ppcond="25">ifdef</span> <span class="macro" data-ref="_M/GENERATOR_FILE">GENERATOR_FILE</span></u></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="../../usr.bin/gcc/arch/x86_64/bconfig.h.html">"bconfig.h"</a></u></td></tr>
+<tr><th id="27">27</th><td><u>#<span data-ppcond="25">else</span></u></td></tr>
+<tr><th id="28">28</th><td><u>#include "config.h"</u></td></tr>
+<tr><th id="29">29</th><td><u>#<span data-ppcond="25">endif</span></u></td></tr>
+<tr><th id="30">30</th><td><u>#include <a href="system.h.html">"system.h"</a></u></td></tr>
+<tr><th id="31">31</th><td><u>#include <a href="coretypes.h.html">"coretypes.h"</a></u></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="hash-table.h.html">"hash-table.h"</a></u></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/* Table of primes and multiplicative inverses.</i></td></tr>
+<tr><th id="35">35</th><td><i></i></td></tr>
+<tr><th id="36">36</th><td><i>   Note that these are not minimally reduced inverses.  Unlike when generating</i></td></tr>
+<tr><th id="37">37</th><td><i>   code to divide by a constant, we want to be able to use the same algorithm</i></td></tr>
+<tr><th id="38">38</th><td><i>   all the time.  All of these inverses (are implied to) have bit 32 set.</i></td></tr>
+<tr><th id="39">39</th><td><i></i></td></tr>
+<tr><th id="40">40</th><td><i>   For the record, here's the function that computed the table; it's a </i></td></tr>
+<tr><th id="41">41</th><td><i>   vastly simplified version of the function of the same name from gcc.  */</i></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><b>struct</b> <a class="type" href="hash-table.h.html#prime_ent" title='prime_ent' data-ref="prime_ent" data-ref-filename="prime_ent">prime_ent</a> <em>const</em> <dfn class="decl def" id="prime_tab" title='prime_tab' data-ref="prime_tab" data-ref-filename="prime_tab">prime_tab</dfn>[] = {</td></tr>
+<tr><th id="44">44</th><td>  {          <var>7</var>, <var>0x24924925</var>, <var>0x9999999b</var>, <var>2</var> },</td></tr>
+<tr><th id="45">45</th><td>  {         <var>13</var>, <var>0x3b13b13c</var>, <var>0x745d1747</var>, <var>3</var> },</td></tr>
+<tr><th id="46">46</th><td>  {         <var>31</var>, <var>0x08421085</var>, <var>0x1a7b9612</var>, <var>4</var> },</td></tr>
+<tr><th id="47">47</th><td>  {         <var>61</var>, <var>0x0c9714fc</var>, <var>0x15b1e5f8</var>, <var>5</var> },</td></tr>
+<tr><th id="48">48</th><td>  {        <var>127</var>, <var>0x02040811</var>, <var>0x0624dd30</var>, <var>6</var> },</td></tr>
+<tr><th id="49">49</th><td>  {        <var>251</var>, <var>0x05197f7e</var>, <var>0x073260a5</var>, <var>7</var> },</td></tr>
+<tr><th id="50">50</th><td>  {        <var>509</var>, <var>0x01824366</var>, <var>0x02864fc8</var>, <var>8</var> },</td></tr>
+<tr><th id="51">51</th><td>  {       <var>1021</var>, <var>0x00c0906d</var>, <var>0x014191f7</var>, <var>9</var> },</td></tr>
+<tr><th id="52">52</th><td>  {       <var>2039</var>, <var>0x0121456f</var>, <var>0x0161e69e</var>, <var>10</var> },</td></tr>
+<tr><th id="53">53</th><td>  {       <var>4093</var>, <var>0x00300902</var>, <var>0x00501908</var>, <var>11</var> },</td></tr>
+<tr><th id="54">54</th><td>  {       <var>8191</var>, <var>0x00080041</var>, <var>0x00180241</var>, <var>12</var> },</td></tr>
+<tr><th id="55">55</th><td>  {      <var>16381</var>, <var>0x000c0091</var>, <var>0x00140191</var>, <var>13</var> },</td></tr>
+<tr><th id="56">56</th><td>  {      <var>32749</var>, <var>0x002605a5</var>, <var>0x002a06e6</var>, <var>14</var> },</td></tr>
+<tr><th id="57">57</th><td>  {      <var>65521</var>, <var>0x000f00e2</var>, <var>0x00110122</var>, <var>15</var> },</td></tr>
+<tr><th id="58">58</th><td>  {     <var>131071</var>, <var>0x00008001</var>, <var>0x00018003</var>, <var>16</var> },</td></tr>
+<tr><th id="59">59</th><td>  {     <var>262139</var>, <var>0x00014002</var>, <var>0x0001c004</var>, <var>17</var> },</td></tr>
+<tr><th id="60">60</th><td>  {     <var>524287</var>, <var>0x00002001</var>, <var>0x00006001</var>, <var>18</var> },</td></tr>
+<tr><th id="61">61</th><td>  {    <var>1048573</var>, <var>0x00003001</var>, <var>0x00005001</var>, <var>19</var> },</td></tr>
+<tr><th id="62">62</th><td>  {    <var>2097143</var>, <var>0x00004801</var>, <var>0x00005801</var>, <var>20</var> },</td></tr>
+<tr><th id="63">63</th><td>  {    <var>4194301</var>, <var>0x00000c01</var>, <var>0x00001401</var>, <var>21</var> },</td></tr>
+<tr><th id="64">64</th><td>  {    <var>8388593</var>, <var>0x00001e01</var>, <var>0x00002201</var>, <var>22</var> },</td></tr>
+<tr><th id="65">65</th><td>  {   <var>16777213</var>, <var>0x00000301</var>, <var>0x00000501</var>, <var>23</var> },</td></tr>
+<tr><th id="66">66</th><td>  {   <var>33554393</var>, <var>0x00001381</var>, <var>0x00001481</var>, <var>24</var> },</td></tr>
+<tr><th id="67">67</th><td>  {   <var>67108859</var>, <var>0x00000141</var>, <var>0x000001c1</var>, <var>25</var> },</td></tr>
+<tr><th id="68">68</th><td>  {  <var>134217689</var>, <var>0x000004e1</var>, <var>0x00000521</var>, <var>26</var> },</td></tr>
+<tr><th id="69">69</th><td>  {  <var>268435399</var>, <var>0x00000391</var>, <var>0x000003b1</var>, <var>27</var> },</td></tr>
+<tr><th id="70">70</th><td>  {  <var>536870909</var>, <var>0x00000019</var>, <var>0x00000029</var>, <var>28</var> },</td></tr>
+<tr><th id="71">71</th><td>  { <var>1073741789</var>, <var>0x0000008d</var>, <var>0x00000095</var>, <var>29</var> },</td></tr>
+<tr><th id="72">72</th><td>  { <var>2147483647</var>, <var>0x00000003</var>, <var>0x00000007</var>, <var>30</var> },</td></tr>
+<tr><th id="73">73</th><td>  <i>/* Avoid "decimal constant so large it is unsigned" for 4294967291.  */</i></td></tr>
+<tr><th id="74">74</th><td>  { <var>0xfffffffb</var>, <var>0x00000006</var>, <var>0x00000008</var>, <var>31</var> }</td></tr>
+<tr><th id="75">75</th><td>};</td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td><i>/* The following function returns an index into the above table of the</i></td></tr>
+<tr><th id="78">78</th><td><i>   nearest prime number which is greater than N, and near a power of two. */</i></td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><em>unsigned</em> <em>int</em></td></tr>
+<tr><th id="81">81</th><td><dfn class="decl def fn" id="_Z29hash_table_higher_prime_indexm" title='hash_table_higher_prime_index' data-ref="_Z29hash_table_higher_prime_indexm" data-ref-filename="_Z29hash_table_higher_prime_indexm">hash_table_higher_prime_index</dfn> (<em>unsigned</em> <em>long</em> <dfn class="local col1 decl" id="1n" title='n' data-type='unsigned long' data-ref="1n" data-ref-filename="1n">n</dfn>)</td></tr>
+<tr><th id="82">82</th><td>{</td></tr>
+<tr><th id="83">83</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col2 decl" id="2low" title='low' data-type='unsigned int' data-ref="2low" data-ref-filename="2low">low</dfn> = <var>0</var>;</td></tr>
+<tr><th id="84">84</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col3 decl" id="3high" title='high' data-type='unsigned int' data-ref="3high" data-ref-filename="3high">high</dfn> = <b>sizeof</b> (<a class="ref" href="hash-table.h.html#prime_tab" title='prime_tab' data-ref="prime_tab" data-ref-filename="prime_tab">prime_tab</a>) / <b>sizeof</b> (<a class="ref" href="hash-table.h.html#prime_tab" title='prime_tab' data-ref="prime_tab" data-ref-filename="prime_tab">prime_tab</a>[<var>0</var>]);</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td>  <b>while</b> (<a class="local col2 ref" href="#2low" title='low' data-ref="2low" data-ref-filename="2low">low</a> != <a class="local col3 ref" href="#3high" title='high' data-ref="3high" data-ref-filename="3high">high</a>)</td></tr>
+<tr><th id="87">87</th><td>    {</td></tr>
+<tr><th id="88">88</th><td>      <em>unsigned</em> <em>int</em> <dfn class="local col4 decl" id="4mid" title='mid' data-type='unsigned int' data-ref="4mid" data-ref-filename="4mid">mid</dfn> = <a class="local col2 ref" href="#2low" title='low' data-ref="2low" data-ref-filename="2low">low</a> + (<a class="local col3 ref" href="#3high" title='high' data-ref="3high" data-ref-filename="3high">high</a> - <a class="local col2 ref" href="#2low" title='low' data-ref="2low" data-ref-filename="2low">low</a>) / <var>2</var>;</td></tr>
+<tr><th id="89">89</th><td>      <b>if</b> (<a class="local col1 ref" href="#1n" title='n' data-ref="1n" data-ref-filename="1n">n</a> &gt; <a class="ref" href="hash-table.h.html#prime_tab" title='prime_tab' data-ref="prime_tab" data-ref-filename="prime_tab">prime_tab</a>[<a class="local col4 ref" href="#4mid" title='mid' data-ref="4mid" data-ref-filename="4mid">mid</a>].<a class="ref field" href="hash-table.h.html#prime_ent::prime" title='prime_ent::prime' data-ref="prime_ent::prime" data-ref-filename="prime_ent..prime">prime</a>)</td></tr>
+<tr><th id="90">90</th><td>	<a class="local col2 ref" href="#2low" title='low' data-ref="2low" data-ref-filename="2low">low</a> = <a class="local col4 ref" href="#4mid" title='mid' data-ref="4mid" data-ref-filename="4mid">mid</a> + <var>1</var>;</td></tr>
+<tr><th id="91">91</th><td>      <b>else</b></td></tr>
+<tr><th id="92">92</th><td>	<a class="local col3 ref" href="#3high" title='high' data-ref="3high" data-ref-filename="3high">high</a> = <a class="local col4 ref" href="#4mid" title='mid' data-ref="4mid" data-ref-filename="4mid">mid</a>;</td></tr>
+<tr><th id="93">93</th><td>    }</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td>  <i>/* If we've run out of primes, abort.  */</i></td></tr>
+<tr><th id="96">96</th><td>  <a class="macro" href="system.h.html#736" title="((void)(!(n &lt;= prime_tab[low].prime) ? fancy_abort (&quot;/___NETBSD_SRC___/objdir.amd64/external/gpl3/gcc/usr.bin/backend/../../../../../../external/gpl3/gcc/dist/gcc/hash-table.c&quot;, 96, __FUNCTION__), 0 : 0))" data-ref="_M/gcc_assert">gcc_assert</a> (<a class="local col1 ref" href="#1n" title='n' data-ref="1n" data-ref-filename="1n">n</a> &lt;= <a class="ref" href="hash-table.h.html#prime_tab" title='prime_tab' data-ref="prime_tab" data-ref-filename="prime_tab">prime_tab</a>[<a class="local col2 ref" href="#2low" title='low' data-ref="2low" data-ref-filename="2low">low</a>].<a class="ref field" href="hash-table.h.html#prime_ent::prime" title='prime_ent::prime' data-ref="prime_ent::prime" data-ref-filename="prime_ent..prime">prime</a>);</td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td>  <b>return</b> <a class="local col2 ref" href="#2low" title='low' data-ref="2low" data-ref-filename="2low">low</a>;</td></tr>
+<tr><th id="99">99</th><td>}</td></tr>
+<tr><th id="100">100</th><td></td></tr>
+<tr><th id="101">101</th><td><a class="type" href="mem-stats.h.html#mem_alloc_description" title='mem_alloc_description' data-ref="mem_alloc_description" data-ref-filename="mem_alloc_description">mem_alloc_description</a>&lt;<a class="type" href="mem-stats.h.html#mem_usage" title='mem_usage' data-ref="mem_usage" data-ref-filename="mem_usage">mem_usage</a>&gt; <a class="ref fn fake" href="mem-stats.h.html#_ZN21mem_alloc_descriptionC1Ev" title='mem_alloc_description::mem_alloc_description&lt;T&gt;' data-ref="_ZN21mem_alloc_descriptionC1Ev" data-ref-filename="_ZN21mem_alloc_descriptionC1Ev"></a><dfn class="decl def" id="hash_table_usage" title='hash_table_usage' data-ref="hash_table_usage" data-ref-filename="hash_table_usage">hash_table_usage</dfn>;</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><i>/* Support function for statistics.  */</i></td></tr>
+<tr><th id="104">104</th><td><em>void</em> <dfn class="decl def fn" id="_Z30dump_hash_table_loc_statisticsv" title='dump_hash_table_loc_statistics' data-ref="_Z30dump_hash_table_loc_statisticsv" data-ref-filename="_Z30dump_hash_table_loc_statisticsv">dump_hash_table_loc_statistics</dfn> (<em>void</em>)</td></tr>
+<tr><th id="105">105</th><td>{</td></tr>
+<tr><th id="106">106</th><td>  <b>if</b> (!<a class="macro" href="../../../../../objdir.amd64/external/gpl3/gcc/usr.bin/backend/auto-build.h.html#266" title="0" data-ref="_M/GATHER_STATISTICS">GATHER_STATISTICS</a>)</td></tr>
+<tr><th id="107">107</th><td>    <b>return</b>;</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td>  <b>for</b> (<em>unsigned</em> <dfn class="local col5 decl" id="5i" title='i' data-type='unsigned int' data-ref="5i" data-ref-filename="5i">i</dfn> = <a class="enum" href="mem-stats-traits.h.html#HASH_TABLE_ORIGIN" title='HASH_TABLE_ORIGIN' data-ref="HASH_TABLE_ORIGIN" data-ref-filename="HASH_TABLE_ORIGIN">HASH_TABLE_ORIGIN</a>; <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a> &lt;= <a class="enum" href="mem-stats-traits.h.html#HASH_SET_ORIGIN" title='HASH_SET_ORIGIN' data-ref="HASH_SET_ORIGIN" data-ref-filename="HASH_SET_ORIGIN">HASH_SET_ORIGIN</a>; <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>++)</td></tr>
+<tr><th id="110">110</th><td>    {</td></tr>
+<tr><th id="111">111</th><td>      <a class="type" href="mem-stats-traits.h.html#mem_alloc_origin" title='mem_alloc_origin' data-ref="mem_alloc_origin" data-ref-filename="mem_alloc_origin">mem_alloc_origin</a> <dfn class="local col6 decl" id="6origin" title='origin' data-type='mem_alloc_origin' data-ref="6origin" data-ref-filename="6origin">origin</dfn> = (<a class="type" href="mem-stats-traits.h.html#mem_alloc_origin" title='mem_alloc_origin' data-ref="mem_alloc_origin" data-ref-filename="mem_alloc_origin">mem_alloc_origin</a>) <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>;</td></tr>
+<tr><th id="112">112</th><td>      <a class="ref" href="hash-table.h.html#hash_table_usage" title='hash_table_usage' data-ref="hash_table_usage" data-ref-filename="hash_table_usage">hash_table_usage</a>.<a class="ref fn" href="mem-stats.h.html#_ZN21mem_alloc_description4dumpE16mem_alloc_originPFiPKvS2_E" title='mem_alloc_description::dump' data-ref="_ZN21mem_alloc_description4dumpE16mem_alloc_originPFiPKvS2_E" data-ref-filename="_ZN21mem_alloc_description4dumpE16mem_alloc_originPFiPKvS2_E">dump</a> (<a class="local col6 ref" href="#6origin" title='origin' data-ref="6origin" data-ref-filename="6origin">origin</a>);</td></tr>
+<tr><th id="113">113</th><td>    }</td></tr>
+<tr><th id="114">114</th><td>}</td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

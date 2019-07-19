@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>fifo.c source code [netbsd/external/cddl/osnet/dist/tools/ctf/cvt/fifo.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="fifo,fifonode "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/cddl/osnet/dist/tools/ctf/cvt/fifo.c'; var root_path = '../../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../../..'>netbsd</a>/<a href='../../../../../..'>external</a>/<a href='../../../../..'>cddl</a>/<a href='../../../..'>osnet</a>/<a href='../../..'>dist</a>/<a href='../..'>tools</a>/<a href='..'>ctf</a>/<a href='./'>cvt</a>/<a href='fifo.c.html'>fifo.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * CDDL HEADER START</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * The contents of this file are subject to the terms of the</i></td></tr>
+<tr><th id="5">5</th><td><i> * Common Development and Distribution License, Version 1.0 only</i></td></tr>
+<tr><th id="6">6</th><td><i> * (the "License").  You may not use this file except in compliance</i></td></tr>
+<tr><th id="7">7</th><td><i> * with the License.</i></td></tr>
+<tr><th id="8">8</th><td><i> *</i></td></tr>
+<tr><th id="9">9</th><td><i> * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE</i></td></tr>
+<tr><th id="10">10</th><td><i> * or <a href="http://www.opensolaris.org/os/licensing">http://www.opensolaris.org/os/licensing</a>.</i></td></tr>
+<tr><th id="11">11</th><td><i> * See the License for the specific language governing permissions</i></td></tr>
+<tr><th id="12">12</th><td><i> * and limitations under the License.</i></td></tr>
+<tr><th id="13">13</th><td><i> *</i></td></tr>
+<tr><th id="14">14</th><td><i> * When distributing Covered Code, include this CDDL HEADER in each</i></td></tr>
+<tr><th id="15">15</th><td><i> * file and include the License file at usr/src/OPENSOLARIS.LICENSE.</i></td></tr>
+<tr><th id="16">16</th><td><i> * If applicable, add the following below this CDDL HEADER, with the</i></td></tr>
+<tr><th id="17">17</th><td><i> * fields enclosed by brackets "[]" replaced with your own identifying</i></td></tr>
+<tr><th id="18">18</th><td><i> * information: Portions Copyright [yyyy] [name of copyright owner]</i></td></tr>
+<tr><th id="19">19</th><td><i> *</i></td></tr>
+<tr><th id="20">20</th><td><i> * CDDL HEADER END</i></td></tr>
+<tr><th id="21">21</th><td><i> */</i></td></tr>
+<tr><th id="22">22</th><td></td></tr>
+<tr><th id="23">23</th><td><u>#<span data-ppcond="23">ifdef</span> <span class="macro" data-ref="_M/HAVE_NBTOOL_CONFIG_H">HAVE_NBTOOL_CONFIG_H</span></u></td></tr>
+<tr><th id="24">24</th><td><u>#include "nbtool_config.h"</u></td></tr>
+<tr><th id="25">25</th><td><u>#<span data-ppcond="23">endif</span></u></td></tr>
+<tr><th id="26">26</th><td></td></tr>
+<tr><th id="27">27</th><td><i>/*</i></td></tr>
+<tr><th id="28">28</th><td><i> * Copyright 2002 Sun Microsystems, Inc.  All rights reserved.</i></td></tr>
+<tr><th id="29">29</th><td><i> * Use is subject to license terms.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><u>#pragma ident	"%Z%%M%	%I%	%E% SMI"</u></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/*</i></td></tr>
+<tr><th id="35">35</th><td><i> * Routines for manipulating a FIFO queue</i></td></tr>
+<tr><th id="36">36</th><td><i> */</i></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="../../../../include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="fifo.h.html">"fifo.h"</a></u></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../common/memory.h.html">"memory.h"</a></u></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="fifonode" title='fifonode' data-ref="fifonode" data-ref-filename="fifonode"><a class="type" href="#fifonode" title='fifonode' data-ref="fifonode" data-ref-filename="fifonode">fifonode</a></dfn> {</td></tr>
+<tr><th id="44">44</th><td>	<em>void</em> *<dfn class="tu decl field" id="fifonode::fn_data" title='fifonode::fn_data' data-type='void *' data-ref="fifonode::fn_data" data-ref-filename="fifonode..fn_data">fn_data</dfn>;</td></tr>
+<tr><th id="45">45</th><td>	<b>struct</b> <a class="type" href="#fifonode" title='fifonode' data-ref="fifonode" data-ref-filename="fifonode">fifonode</a> *<dfn class="tu decl field" id="fifonode::fn_next" title='fifonode::fn_next' data-type='struct fifonode *' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</dfn>;</td></tr>
+<tr><th id="46">46</th><td>} <dfn class="typedef" id="fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</dfn>;</td></tr>
+<tr><th id="47">47</th><td></td></tr>
+<tr><th id="48">48</th><td><b>struct</b> <dfn class="type def" id="fifo" title='fifo' data-ref="fifo" data-ref-filename="fifo">fifo</dfn> {</td></tr>
+<tr><th id="49">49</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="decl field" id="fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</dfn>;</td></tr>
+<tr><th id="50">50</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="decl field" id="fifo::f_tail" title='fifo::f_tail' data-ref="fifo::f_tail" data-ref-filename="fifo..f_tail">f_tail</dfn>;</td></tr>
+<tr><th id="51">51</th><td>};</td></tr>
+<tr><th id="52">52</th><td></td></tr>
+<tr><th id="53">53</th><td><a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *</td></tr>
+<tr><th id="54">54</th><td><dfn class="decl def fn" id="fifo_new" title='fifo_new' data-ref="fifo_new" data-ref-filename="fifo_new">fifo_new</dfn>(<em>void</em>)</td></tr>
+<tr><th id="55">55</th><td>{</td></tr>
+<tr><th id="56">56</th><td>	<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col1 decl" id="1f" title='f' data-type='fifo_t *' data-ref="1f" data-ref-filename="1f">f</dfn>;</td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td>	<a class="local col1 ref" href="#1f" title='f' data-ref="1f" data-ref-filename="1f">f</a> = <a class="ref fn" href="../common/memory.h.html#xcalloc" title='xcalloc' data-ref="xcalloc" data-ref-filename="xcalloc">xcalloc</a>(<b>sizeof</b> (<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a>));</td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td>	<b>return</b> (<a class="local col1 ref" href="#1f" title='f' data-ref="1f" data-ref-filename="1f">f</a>);</td></tr>
+<tr><th id="61">61</th><td>}</td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td><i>/* Add to the end of the fifo */</i></td></tr>
+<tr><th id="64">64</th><td><em>void</em></td></tr>
+<tr><th id="65">65</th><td><dfn class="decl def fn" id="fifo_add" title='fifo_add' data-ref="fifo_add" data-ref-filename="fifo_add">fifo_add</dfn>(<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col2 decl" id="2f" title='f' data-type='fifo_t *' data-ref="2f" data-ref-filename="2f">f</dfn>, <em>void</em> *<dfn class="local col3 decl" id="3data" title='data' data-type='void *' data-ref="3data" data-ref-filename="3data">data</dfn>)</td></tr>
+<tr><th id="66">66</th><td>{</td></tr>
+<tr><th id="67">67</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="local col4 decl" id="4fn" title='fn' data-type='fifonode_t *' data-ref="4fn" data-ref-filename="4fn">fn</dfn> = <a class="ref fn" href="../common/memory.h.html#xmalloc" title='xmalloc' data-ref="xmalloc" data-ref-filename="xmalloc">xmalloc</a>(<b>sizeof</b> (<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a>));</td></tr>
+<tr><th id="68">68</th><td></td></tr>
+<tr><th id="69">69</th><td>	<a class="local col4 ref" href="#4fn" title='fn' data-ref="4fn" data-ref-filename="4fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_data" title='fifonode::fn_data' data-use='w' data-ref="fifonode::fn_data" data-ref-filename="fifonode..fn_data">fn_data</a> = <a class="local col3 ref" href="#3data" title='data' data-ref="3data" data-ref-filename="3data">data</a>;</td></tr>
+<tr><th id="70">70</th><td>	<a class="local col4 ref" href="#4fn" title='fn' data-ref="4fn" data-ref-filename="4fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_next" title='fifonode::fn_next' data-use='w' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</a> = <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td>	<b>if</b> (<a class="local col2 ref" href="#2f" title='f' data-ref="2f" data-ref-filename="2f">f</a>-&gt;<a class="ref field" href="#fifo::f_tail" title='fifo::f_tail' data-ref="fifo::f_tail" data-ref-filename="fifo..f_tail">f_tail</a> == <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="73">73</th><td>		<a class="local col2 ref" href="#2f" title='f' data-ref="2f" data-ref-filename="2f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a> = <a class="local col2 ref" href="#2f" title='f' data-ref="2f" data-ref-filename="2f">f</a>-&gt;<a class="ref field" href="#fifo::f_tail" title='fifo::f_tail' data-ref="fifo::f_tail" data-ref-filename="fifo..f_tail">f_tail</a> = <a class="local col4 ref" href="#4fn" title='fn' data-ref="4fn" data-ref-filename="4fn">fn</a>;</td></tr>
+<tr><th id="74">74</th><td>	<b>else</b> {</td></tr>
+<tr><th id="75">75</th><td>		<a class="local col2 ref" href="#2f" title='f' data-ref="2f" data-ref-filename="2f">f</a>-&gt;<a class="ref field" href="#fifo::f_tail" title='fifo::f_tail' data-ref="fifo::f_tail" data-ref-filename="fifo..f_tail">f_tail</a>-&gt;<a class="tu ref field" href="#fifonode::fn_next" title='fifonode::fn_next' data-use='w' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</a> = <a class="local col4 ref" href="#4fn" title='fn' data-ref="4fn" data-ref-filename="4fn">fn</a>;</td></tr>
+<tr><th id="76">76</th><td>		<a class="local col2 ref" href="#2f" title='f' data-ref="2f" data-ref-filename="2f">f</a>-&gt;<a class="ref field" href="#fifo::f_tail" title='fifo::f_tail' data-ref="fifo::f_tail" data-ref-filename="fifo..f_tail">f_tail</a> = <a class="local col4 ref" href="#4fn" title='fn' data-ref="4fn" data-ref-filename="4fn">fn</a>;</td></tr>
+<tr><th id="77">77</th><td>	}</td></tr>
+<tr><th id="78">78</th><td>}</td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><i>/* Remove from the front of the fifo */</i></td></tr>
+<tr><th id="81">81</th><td><em>void</em> *</td></tr>
+<tr><th id="82">82</th><td><dfn class="decl def fn" id="fifo_remove" title='fifo_remove' data-ref="fifo_remove" data-ref-filename="fifo_remove">fifo_remove</dfn>(<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col5 decl" id="5f" title='f' data-type='fifo_t *' data-ref="5f" data-ref-filename="5f">f</dfn>)</td></tr>
+<tr><th id="83">83</th><td>{</td></tr>
+<tr><th id="84">84</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="local col6 decl" id="6fn" title='fn' data-type='fifonode_t *' data-ref="6fn" data-ref-filename="6fn">fn</dfn>;</td></tr>
+<tr><th id="85">85</th><td>	<em>void</em> *<dfn class="local col7 decl" id="7data" title='data' data-type='void *' data-ref="7data" data-ref-filename="7data">data</dfn>;</td></tr>
+<tr><th id="86">86</th><td></td></tr>
+<tr><th id="87">87</th><td>	<b>if</b> ((<a class="local col6 ref" href="#6fn" title='fn' data-ref="6fn" data-ref-filename="6fn">fn</a> = <a class="local col5 ref" href="#5f" title='f' data-ref="5f" data-ref-filename="5f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a>) == <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="88">88</th><td>		<b>return</b> (<a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td>	<a class="local col7 ref" href="#7data" title='data' data-ref="7data" data-ref-filename="7data">data</a> = <a class="local col6 ref" href="#6fn" title='fn' data-ref="6fn" data-ref-filename="6fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_data" title='fifonode::fn_data' data-use='r' data-ref="fifonode::fn_data" data-ref-filename="fifonode..fn_data">fn_data</a>;</td></tr>
+<tr><th id="91">91</th><td>	<b>if</b> ((<a class="local col5 ref" href="#5f" title='f' data-ref="5f" data-ref-filename="5f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a> = <a class="local col6 ref" href="#6fn" title='fn' data-ref="6fn" data-ref-filename="6fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_next" title='fifonode::fn_next' data-use='r' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</a>) == <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="92">92</th><td>		<a class="local col5 ref" href="#5f" title='f' data-ref="5f" data-ref-filename="5f">f</a>-&gt;<a class="ref field" href="#fifo::f_tail" title='fifo::f_tail' data-ref="fifo::f_tail" data-ref-filename="fifo..f_tail">f_tail</a> = <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td>	<a class="ref fn" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col6 ref" href="#6fn" title='fn' data-ref="6fn" data-ref-filename="6fn">fn</a>);</td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td>	<b>return</b> (<a class="local col7 ref" href="#7data" title='data' data-ref="7data" data-ref-filename="7data">data</a>);</td></tr>
+<tr><th id="97">97</th><td>}</td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td><i  data-doc="fifo_nullfree">/*ARGSUSED*/</i></td></tr>
+<tr><th id="100">100</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="101">101</th><td><dfn class="tu decl def fn" id="fifo_nullfree" title='fifo_nullfree' data-type='void fifo_nullfree(void * arg)' data-ref="fifo_nullfree" data-ref-filename="fifo_nullfree">fifo_nullfree</dfn>(<em>void</em> *<dfn class="local col8 decl" id="8arg" title='arg' data-type='void *' data-ref="8arg" data-ref-filename="8arg">arg</dfn>)</td></tr>
+<tr><th id="102">102</th><td>{</td></tr>
+<tr><th id="103">103</th><td>	<i>/* this function intentionally left blank */</i></td></tr>
+<tr><th id="104">104</th><td>}</td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><i>/* Free an entire fifo */</i></td></tr>
+<tr><th id="107">107</th><td><em>void</em></td></tr>
+<tr><th id="108">108</th><td><dfn class="decl def fn" id="fifo_free" title='fifo_free' data-ref="fifo_free" data-ref-filename="fifo_free">fifo_free</dfn>(<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col9 decl" id="9f" title='f' data-type='fifo_t *' data-ref="9f" data-ref-filename="9f">f</dfn>, <em>void</em> (*<dfn class="local col0 decl" id="10freefn" title='freefn' data-type='void (*)(void *)' data-ref="10freefn" data-ref-filename="10freefn">freefn</dfn>)(<em>void</em> *))</td></tr>
+<tr><th id="109">109</th><td>{</td></tr>
+<tr><th id="110">110</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="local col1 decl" id="11fn" title='fn' data-type='fifonode_t *' data-ref="11fn" data-ref-filename="11fn">fn</dfn> = <a class="local col9 ref" href="#9f" title='f' data-ref="9f" data-ref-filename="9f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a>;</td></tr>
+<tr><th id="111">111</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="local col2 decl" id="12tmp" title='tmp' data-type='fifonode_t *' data-ref="12tmp" data-ref-filename="12tmp">tmp</dfn>;</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td>	<b>if</b> (<a class="local col0 ref" href="#10freefn" title='freefn' data-ref="10freefn" data-ref-filename="10freefn">freefn</a> == <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="114">114</th><td>		<a class="local col0 ref" href="#10freefn" title='freefn' data-ref="10freefn" data-ref-filename="10freefn">freefn</a> = <a class="tu ref fn" href="#fifo_nullfree" title='fifo_nullfree' data-use='r' data-ref="fifo_nullfree" data-ref-filename="fifo_nullfree">fifo_nullfree</a>;</td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td>	<b>while</b> (<a class="local col1 ref" href="#11fn" title='fn' data-ref="11fn" data-ref-filename="11fn">fn</a>) {</td></tr>
+<tr><th id="117">117</th><td>		(*<a class="local col0 ref" href="#10freefn" title='freefn' data-ref="10freefn" data-ref-filename="10freefn">freefn</a>)(<a class="local col1 ref" href="#11fn" title='fn' data-ref="11fn" data-ref-filename="11fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_data" title='fifonode::fn_data' data-use='r' data-ref="fifonode::fn_data" data-ref-filename="fifonode..fn_data">fn_data</a>);</td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td>		<a class="local col2 ref" href="#12tmp" title='tmp' data-ref="12tmp" data-ref-filename="12tmp">tmp</a> = <a class="local col1 ref" href="#11fn" title='fn' data-ref="11fn" data-ref-filename="11fn">fn</a>;</td></tr>
+<tr><th id="120">120</th><td>		<a class="local col1 ref" href="#11fn" title='fn' data-ref="11fn" data-ref-filename="11fn">fn</a> = <a class="local col1 ref" href="#11fn" title='fn' data-ref="11fn" data-ref-filename="11fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_next" title='fifonode::fn_next' data-use='r' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</a>;</td></tr>
+<tr><th id="121">121</th><td>		<a class="ref fn" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col2 ref" href="#12tmp" title='tmp' data-ref="12tmp" data-ref-filename="12tmp">tmp</a>);</td></tr>
+<tr><th id="122">122</th><td>	}</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td>	<a class="ref fn" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col9 ref" href="#9f" title='f' data-ref="9f" data-ref-filename="9f">f</a>);</td></tr>
+<tr><th id="125">125</th><td>}</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td><em>int</em></td></tr>
+<tr><th id="128">128</th><td><dfn class="decl def fn" id="fifo_len" title='fifo_len' data-ref="fifo_len" data-ref-filename="fifo_len">fifo_len</dfn>(<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col3 decl" id="13f" title='f' data-type='fifo_t *' data-ref="13f" data-ref-filename="13f">f</dfn>)</td></tr>
+<tr><th id="129">129</th><td>{</td></tr>
+<tr><th id="130">130</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="local col4 decl" id="14fn" title='fn' data-type='fifonode_t *' data-ref="14fn" data-ref-filename="14fn">fn</dfn>;</td></tr>
+<tr><th id="131">131</th><td>	<em>int</em> <dfn class="local col5 decl" id="15i" title='i' data-type='int' data-ref="15i" data-ref-filename="15i">i</dfn>;</td></tr>
+<tr><th id="132">132</th><td></td></tr>
+<tr><th id="133">133</th><td>	<b>for</b> (<a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a> = <var>0</var>, <a class="local col4 ref" href="#14fn" title='fn' data-ref="14fn" data-ref-filename="14fn">fn</a> = <a class="local col3 ref" href="#13f" title='f' data-ref="13f" data-ref-filename="13f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a>; <a class="local col4 ref" href="#14fn" title='fn' data-ref="14fn" data-ref-filename="14fn">fn</a>; <a class="local col4 ref" href="#14fn" title='fn' data-ref="14fn" data-ref-filename="14fn">fn</a> = <a class="local col4 ref" href="#14fn" title='fn' data-ref="14fn" data-ref-filename="14fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_next" title='fifonode::fn_next' data-use='r' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</a>, <a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a>++);</td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td>	<b>return</b> (<a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a>);</td></tr>
+<tr><th id="136">136</th><td>}</td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><em>int</em></td></tr>
+<tr><th id="139">139</th><td><dfn class="decl def fn" id="fifo_empty" title='fifo_empty' data-ref="fifo_empty" data-ref-filename="fifo_empty">fifo_empty</dfn>(<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col6 decl" id="16f" title='f' data-type='fifo_t *' data-ref="16f" data-ref-filename="16f">f</dfn>)</td></tr>
+<tr><th id="140">140</th><td>{</td></tr>
+<tr><th id="141">141</th><td>	<b>return</b> (<a class="local col6 ref" href="#16f" title='f' data-ref="16f" data-ref-filename="16f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a> == <a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="142">142</th><td>}</td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><em>int</em></td></tr>
+<tr><th id="145">145</th><td><dfn class="decl def fn" id="fifo_iter" title='fifo_iter' data-ref="fifo_iter" data-ref-filename="fifo_iter">fifo_iter</dfn>(<a class="typedef" href="fifo.h.html#fifo_t" title='fifo_t' data-type='struct fifo' data-ref="fifo_t" data-ref-filename="fifo_t">fifo_t</a> *<dfn class="local col7 decl" id="17f" title='f' data-type='fifo_t *' data-ref="17f" data-ref-filename="17f">f</dfn>, <em>int</em> (*<dfn class="local col8 decl" id="18iter" title='iter' data-type='int (*)(void *, void *)' data-ref="18iter" data-ref-filename="18iter">iter</dfn>)(<em>void</em> *<dfn class="local col9 decl" id="19data" title='data' data-type='void *' data-ref="19data" data-ref-filename="19data">data</dfn>, <em>void</em> *<dfn class="local col0 decl" id="20arg" title='arg' data-type='void *' data-ref="20arg" data-ref-filename="20arg">arg</dfn>), <em>void</em> *<dfn class="local col1 decl" id="21arg" title='arg' data-type='void *' data-ref="21arg" data-ref-filename="21arg">arg</dfn>)</td></tr>
+<tr><th id="146">146</th><td>{</td></tr>
+<tr><th id="147">147</th><td>	<a class="typedef" href="#fifonode_t" title='fifonode_t' data-type='struct fifonode' data-ref="fifonode_t" data-ref-filename="fifonode_t">fifonode_t</a> *<dfn class="local col2 decl" id="22fn" title='fn' data-type='fifonode_t *' data-ref="22fn" data-ref-filename="22fn">fn</dfn>;</td></tr>
+<tr><th id="148">148</th><td>	<em>int</em> <dfn class="local col3 decl" id="23rc" title='rc' data-type='int' data-ref="23rc" data-ref-filename="23rc">rc</dfn>;</td></tr>
+<tr><th id="149">149</th><td>	<em>int</em> <dfn class="local col4 decl" id="24ret" title='ret' data-type='int' data-ref="24ret" data-ref-filename="24ret">ret</dfn> = <var>0</var>;</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td>	<b>for</b> (<a class="local col2 ref" href="#22fn" title='fn' data-ref="22fn" data-ref-filename="22fn">fn</a> = <a class="local col7 ref" href="#17f" title='f' data-ref="17f" data-ref-filename="17f">f</a>-&gt;<a class="ref field" href="#fifo::f_head" title='fifo::f_head' data-ref="fifo::f_head" data-ref-filename="fifo..f_head">f_head</a>; <a class="local col2 ref" href="#22fn" title='fn' data-ref="22fn" data-ref-filename="22fn">fn</a>; <a class="local col2 ref" href="#22fn" title='fn' data-ref="22fn" data-ref-filename="22fn">fn</a> = <a class="local col2 ref" href="#22fn" title='fn' data-ref="22fn" data-ref-filename="22fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_next" title='fifonode::fn_next' data-use='r' data-ref="fifonode::fn_next" data-ref-filename="fifonode..fn_next">fn_next</a>) {</td></tr>
+<tr><th id="152">152</th><td>		<b>if</b> ((<a class="local col3 ref" href="#23rc" title='rc' data-ref="23rc" data-ref-filename="23rc">rc</a> = <a class="local col8 ref" href="#18iter" title='iter' data-ref="18iter" data-ref-filename="18iter">iter</a>(<a class="local col2 ref" href="#22fn" title='fn' data-ref="22fn" data-ref-filename="22fn">fn</a>-&gt;<a class="tu ref field" href="#fifonode::fn_data" title='fifonode::fn_data' data-use='r' data-ref="fifonode::fn_data" data-ref-filename="fifonode..fn_data">fn_data</a>, <a class="local col1 ref" href="#21arg" title='arg' data-ref="21arg" data-ref-filename="21arg">arg</a>)) &lt; <var>0</var>)</td></tr>
+<tr><th id="153">153</th><td>			<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="154">154</th><td>		<a class="local col4 ref" href="#24ret" title='ret' data-ref="24ret" data-ref-filename="24ret">ret</a> += <a class="local col3 ref" href="#23rc" title='rc' data-ref="23rc" data-ref-filename="23rc">rc</a>;</td></tr>
+<tr><th id="155">155</th><td>	}</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>	<b>return</b> (<a class="local col4 ref" href="#24ret" title='ret' data-ref="24ret" data-ref-filename="24ret">ret</a>);</td></tr>
+<tr><th id="158">158</th><td>}</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

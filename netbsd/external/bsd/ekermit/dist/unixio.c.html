@@ -1,0 +1,645 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>unixio.c source code [netbsd/external/bsd/ekermit/dist/unixio.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ekermit/dist/unixio.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>external</a>/<a href='../..'>bsd</a>/<a href='..'>ekermit</a>/<a href='./'>dist</a>/<a href='unixio.c.html'>unixio.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* Sample system-dependent communications i/o routines for embedded Kermit. */</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i>  Author: Frank da Cruz.</i></td></tr>
+<tr><th id="5">5</th><td><i>  Copyright (C) 1995, 2011.</i></td></tr>
+<tr><th id="6">6</th><td><i>  Trustees of Columbia University in the City of New York.</i></td></tr>
+<tr><th id="7">7</th><td><i>  All rights reserved.</i></td></tr>
+<tr><th id="8">8</th><td><i>  See kermit.c for license.</i></td></tr>
+<tr><th id="9">9</th><td><i>*/</i></td></tr>
+<tr><th id="10">10</th><td></td></tr>
+<tr><th id="11">11</th><td><i>/*</i></td></tr>
+<tr><th id="12">12</th><td><i>  The sample i/o routines for UNIX that provide packet i/o</i></td></tr>
+<tr><th id="13">13</th><td><i>  functions on the console (login) device.</i></td></tr>
+<tr><th id="14">14</th><td><i>  Copy this file, rename it appropriately, and replace the contents</i></td></tr>
+<tr><th id="15">15</th><td><i>  of each routine appropriately for your platform.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>  Device i/o:</i></td></tr>
+<tr><th id="18">18</th><td><i></i></td></tr>
+<tr><th id="19">19</th><td><i>    int devopen()    Communications device - open</i></td></tr>
+<tr><th id="20">20</th><td><i>    int pktmode()    Communications device - enter/exit packet mode</i></td></tr>
+<tr><th id="21">21</th><td><i>    int readpkt()    Communications device - read a packet</i></td></tr>
+<tr><th id="22">22</th><td><i>    int tx_data()    Communications device - send data</i></td></tr>
+<tr><th id="23">23</th><td><i>    int devclose()   Communications device - close</i></td></tr>
+<tr><th id="24">24</th><td><i>    int inchk()      Communications device - check if bytes are ready to read</i></td></tr>
+<tr><th id="25">25</th><td><i></i></td></tr>
+<tr><th id="26">26</th><td><i>  File i/o:</i></td></tr>
+<tr><th id="27">27</th><td><i></i></td></tr>
+<tr><th id="28">28</th><td><i>    int openfile()   File - open for input or output</i></td></tr>
+<tr><th id="29">29</th><td><i>    ULONG fileinfo() Get input file modtime and size</i></td></tr>
+<tr><th id="30">30</th><td><i>    int readfile()   Input file - read data</i></td></tr>
+<tr><th id="31">31</th><td><i>    int writefile()  Output file - write data</i></td></tr>
+<tr><th id="32">32</th><td><i>    int closefile()  Input or output file - close</i></td></tr>
+<tr><th id="33">33</th><td><i></i></td></tr>
+<tr><th id="34">34</th><td><i>  Full definitions below, prototypes in kermit.h.</i></td></tr>
+<tr><th id="35">35</th><td><i></i></td></tr>
+<tr><th id="36">36</th><td><i>  These routines must handle speed setting, parity, flow control, file i/o,</i></td></tr>
+<tr><th id="37">37</th><td><i>  and similar items without the kermit() routine knowing anything about it.</i></td></tr>
+<tr><th id="38">38</th><td><i>  If parity is in effect, these routines must add it to outbound characters</i></td></tr>
+<tr><th id="39">39</th><td><i>  and strip it from inbound characters.</i></td></tr>
+<tr><th id="40">40</th><td><i>*/</i></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html">&lt;sys/stat.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html">&lt;time.h&gt;</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html">&lt;errno.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#<span data-ppcond="45">ifndef</span> <span class="macro" data-ref="_M/O_WRONLY">O_WRONLY</span></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/file.h.html">&lt;sys/file.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#<span data-ppcond="47">ifdef</span> <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/unistd.h.html#173" data-ref="_M/X_OK">X_OK</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#undef <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/unistd.h.html#173" data-ref="_M/X_OK">X_OK</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#<span data-ppcond="47">endif</span> /* X_OK */</u></td></tr>
+<tr><th id="50">50</th><td><u>#<span data-ppcond="45">endif</span> /* O_WRONLY */</u></td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="cdefs.h.html">"cdefs.h"</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="debug.h.html">"debug.h"</a></u></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="platform.h.html">"platform.h"</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="kermit.h.html">"kermit.h"</a></u></td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td><a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> <dfn class="decl def" id="o_buf" title='o_buf' data-ref="o_buf" data-ref-filename="o_buf">o_buf</dfn>[<a class="macro" href="platform.h.html#17" title="8192" data-ref="_M/OBUFLEN">OBUFLEN</a>+<var>8</var>];			<i>/* File output buffer */</i></td></tr>
+<tr><th id="58">58</th><td><a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> <dfn class="decl def" id="i_buf" title='i_buf' data-ref="i_buf" data-ref-filename="i_buf">i_buf</dfn>[<a class="macro" href="platform.h.html#13" title="4096" data-ref="_M/IBUFLEN">IBUFLEN</a>+<var>8</var>];			<i>/* File output buffer */</i></td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td><i>/*</i></td></tr>
+<tr><th id="61">61</th><td><i>  In this example, the output file is unbuffered to ensure that every</i></td></tr>
+<tr><th id="62">62</th><td><i>  output byte is commited.  The input file, however, is buffered for speed.</i></td></tr>
+<tr><th id="63">63</th><td><i>  This is just one of many possible implmentation choices, invisible to the</i></td></tr>
+<tr><th id="64">64</th><td><i>  Kermit protocol module.</i></td></tr>
+<tr><th id="65">65</th><td><i>*/</i></td></tr>
+<tr><th id="66">66</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="ttyfd" title='ttyfd' data-type='int' data-ref="ttyfd" data-ref-filename="ttyfd">ttyfd</dfn>, <dfn class="tu decl def" id="ofile" title='ofile' data-type='int' data-ref="ofile" data-ref-filename="ofile">ofile</dfn> = -<var>1</var>;		<i>/* File descriptors */</i></td></tr>
+<tr><th id="67">67</th><td><em>static</em> <a class="typedef" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> * <dfn class="tu decl def" id="ifile" title='ifile' data-type='FILE *' data-ref="ifile" data-ref-filename="ifile">ifile</dfn> = (<a class="typedef" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *)<var>0</var>;	<i  data-doc="ifile">/* and pointers */</i></td></tr>
+<tr><th id="68">68</th><td></td></tr>
+<tr><th id="69">69</th><td><i>/* Debugging */</i></td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><u>#<span data-ppcond="71">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="72">72</th><td><em>static</em> <a class="typedef" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> * <dfn class="tu decl def" id="dp" title='dp' data-type='FILE *' data-ref="dp" data-ref-filename="dp">dp</dfn> = (<a class="typedef" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *)<var>0</var>;		<i  data-doc="dp">/* Debug log */</i></td></tr>
+<tr><th id="73">73</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="xdebug" title='xdebug' data-type='int' data-ref="xdebug" data-ref-filename="xdebug">xdebug</dfn> = <var>0</var>;			<i  data-doc="xdebug">/* Debugging on/off */</i></td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td><em>void</em></td></tr>
+<tr><th id="76">76</th><td><dfn class="decl def fn" id="dodebug" title='dodebug' data-ref="dodebug" data-ref-filename="dodebug">dodebug</dfn>(<em>int</em> <dfn class="local col1 decl" id="1fc" title='fc' data-type='int' data-ref="1fc" data-ref-filename="1fc">fc</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col2 decl" id="2label" title='label' data-type='UCHAR *' data-ref="2label" data-ref-filename="2label">label</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col3 decl" id="3sval" title='sval' data-type='UCHAR *' data-ref="3sval" data-ref-filename="3sval">sval</dfn>, <em>long</em> <dfn class="local col4 decl" id="4nval" title='nval' data-type='long' data-ref="4nval" data-ref-filename="4nval">nval</dfn>) {</td></tr>
+<tr><th id="77">77</th><td></td></tr>
+<tr><th id="78">78</th><td>    <b>if</b> (<a class="local col1 ref" href="#1fc" title='fc' data-ref="1fc" data-ref-filename="1fc">fc</a> != <a class="macro" href="debug.h.html#13" title="1" data-ref="_M/DB_OPN">DB_OPN</a> &amp;&amp; !<a class="tu ref" href="#xdebug" title='xdebug' data-use='r' data-ref="xdebug" data-ref-filename="xdebug">xdebug</a>)</td></tr>
+<tr><th id="79">79</th><td>      <b>return</b>;</td></tr>
+<tr><th id="80">80</th><td>    <b>if</b> (!<a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a>)</td></tr>
+<tr><th id="81">81</th><td>      <a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a> <span class='warning' title="assigning to &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) from &apos;char [1]&apos; converts between pointers to integer types with different sign">=</span> <q>""</q>;</td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td>    <b>switch</b> (<a class="local col1 ref" href="#1fc" title='fc' data-ref="1fc" data-ref-filename="1fc">fc</a>) {			<i>/* Function code */</i></td></tr>
+<tr><th id="84">84</th><td>      <b>case</b> <a class="macro" href="debug.h.html#13" title="1" data-ref="_M/DB_OPN">DB_OPN</a>:			<i>/* Open debug log */</i></td></tr>
+<tr><th id="85">85</th><td>	<b>if</b> (<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>) <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>);</td></tr>
+<tr><th id="86">86</th><td>	<b>if</b> (!*<a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a>) <a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a> <span class='warning' title="assigning to &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) from &apos;char [10]&apos; converts between pointers to integer types with different sign">=</span> <q>"debug.log"</q>;</td></tr>
+<tr><th id="87">87</th><td>	<a class="tu ref" href="#dp" title='dp' data-use='w' data-ref="dp" data-ref-filename="dp">dp</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fopen" title='fopen' data-ref="fopen" data-ref-filename="fopen">fopen</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;const char *&apos; converts between pointers to integer types with different sign"><a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a></span>,<q>"w"</q>);</td></tr>
+<tr><th id="88">88</th><td>	<b>if</b> (!<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>) {</td></tr>
+<tr><th id="89">89</th><td>	    <a class="tu ref" href="#dp" title='dp' data-use='w' data-ref="dp" data-ref-filename="dp">dp</a> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#217" title="(&amp;__sF[2])" data-ref="_M/stderr">stderr</a>;</td></tr>
+<tr><th id="90">90</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="91">91</th><td>	    <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#setbuf" title='setbuf' data-ref="setbuf" data-ref-filename="setbuf">setbuf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,(<em>char</em> *)<var>0</var>);</td></tr>
+<tr><th id="92">92</th><td>	}</td></tr>
+<tr><th id="93">93</th><td>	<a class="tu ref" href="#xdebug" title='xdebug' data-use='w' data-ref="xdebug" data-ref-filename="xdebug">xdebug</a> = <var>1</var>;</td></tr>
+<tr><th id="94">94</th><td>	<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,<q>"DEBUG LOG OPEN\n"</q>);</td></tr>
+<tr><th id="95">95</th><td>	<b>return</b>;</td></tr>
+<tr><th id="96">96</th><td>      <b>case</b> <a class="macro" href="debug.h.html#15" title="3" data-ref="_M/DB_MSG">DB_MSG</a>:			<i>/* Write a message */</i></td></tr>
+<tr><th id="97">97</th><td>	<b>if</b> (<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>) <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,<q>"%s\n"</q>,<a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a>);</td></tr>
+<tr><th id="98">98</th><td>	<b>return</b>;</td></tr>
+<tr><th id="99">99</th><td>      <b>case</b> <a class="macro" href="debug.h.html#16" title="4" data-ref="_M/DB_CHR">DB_CHR</a>:			<i>/* Write label and character */</i></td></tr>
+<tr><th id="100">100</th><td>	<b>if</b> (<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>) <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,<q>"%s=[%c]\n"</q>,<a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a>,(<em>char</em>)<a class="local col4 ref" href="#4nval" title='nval' data-ref="4nval" data-ref-filename="4nval">nval</a>);</td></tr>
+<tr><th id="101">101</th><td>	<b>return</b>;</td></tr>
+<tr><th id="102">102</th><td>      <b>case</b> <a class="macro" href="debug.h.html#17" title="5" data-ref="_M/DB_PKT">DB_PKT</a>:			<i>/* Log a packet */</i></td></tr>
+<tr><th id="103">103</th><td>	<i>/* (fill in later, fall thru for now...) */</i></td></tr>
+<tr><th id="104">104</th><td>      <b>case</b> <a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>:			<i>/* Write label and string or number */</i></td></tr>
+<tr><th id="105">105</th><td>	<b>if</b> (<a class="local col3 ref" href="#3sval" title='sval' data-ref="3sval" data-ref-filename="3sval">sval</a> &amp;&amp; <a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>)</td></tr>
+<tr><th id="106">106</th><td>	  <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,<q>"%s[%s]\n"</q>,<a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a>,<a class="local col3 ref" href="#3sval" title='sval' data-ref="3sval" data-ref-filename="3sval">sval</a>);</td></tr>
+<tr><th id="107">107</th><td>	<b>else</b></td></tr>
+<tr><th id="108">108</th><td>	  <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,<q>"%s=%ld\n"</q>,<a class="local col2 ref" href="#2label" title='label' data-ref="2label" data-ref-filename="2label">label</a>,<a class="local col4 ref" href="#4nval" title='nval' data-ref="4nval" data-ref-filename="4nval">nval</a>);</td></tr>
+<tr><th id="109">109</th><td>	<b>return</b>;</td></tr>
+<tr><th id="110">110</th><td>      <b>case</b> <a class="macro" href="debug.h.html#18" title="6" data-ref="_M/DB_CLS">DB_CLS</a>:			<i>/* Close debug log */</i></td></tr>
+<tr><th id="111">111</th><td>	<b>if</b> (<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>) {</td></tr>
+<tr><th id="112">112</th><td>	    <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>);</td></tr>
+<tr><th id="113">113</th><td>	    <a class="tu ref" href="#dp" title='dp' data-use='w' data-ref="dp" data-ref-filename="dp">dp</a> = (<a class="typedef" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *)<var>0</var>;</td></tr>
+<tr><th id="114">114</th><td>	}</td></tr>
+<tr><th id="115">115</th><td>	<a class="tu ref" href="#xdebug" title='xdebug' data-use='w' data-ref="xdebug" data-ref-filename="xdebug">xdebug</a> = <var>0</var>;</td></tr>
+<tr><th id="116">116</th><td>    }</td></tr>
+<tr><th id="117">117</th><td>}</td></tr>
+<tr><th id="118">118</th><td><u>#<span data-ppcond="71">endif</span> /* DEBUG */</u></td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><i>/*  D E V O P E N  --  Open communications device  */</i></td></tr>
+<tr><th id="121">121</th><td><i>/*  </i></td></tr>
+<tr><th id="122">122</th><td><i></i></td></tr>
+<tr><th id="123">123</th><td><i>  Call with: string pointer to device name.  This routine should get the</i></td></tr>
+<tr><th id="124">124</th><td><i>  current device settings and save them so devclose() can restore them.</i></td></tr>
+<tr><th id="125">125</th><td><i>  It should open the device.  If the device is a serial port, devopen()</i></td></tr>
+<tr><th id="126">126</th><td><i>  set the speed, stop bits, flow control, etc.</i></td></tr>
+<tr><th id="127">127</th><td><i>  Returns: 0 on failure, 1 on success.</i></td></tr>
+<tr><th id="128">128</th><td><i>*/</i></td></tr>
+<tr><th id="129">129</th><td><em>int</em></td></tr>
+<tr><th id="130">130</th><td><dfn class="decl def fn" id="devopen" title='devopen' data-ref="devopen" data-ref-filename="devopen">devopen</dfn>(<em>char</em> *<dfn class="local col5 decl" id="5device" title='device' data-type='char *' data-ref="5device" data-ref-filename="5device">device</dfn>) {</td></tr>
+<tr><th id="131">131</th><td>    <a class="tu ref" href="#ttyfd" title='ttyfd' data-use='w' data-ref="ttyfd" data-ref-filename="ttyfd">ttyfd</a> = <var>0</var>;</td></tr>
+<tr><th id="132">132</th><td>    <b>return</b>(<var>1</var>);</td></tr>
+<tr><th id="133">133</th><td>}</td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td><i>/*  P K T M O D E  --  Put communications device into or out of packet mode  */</i></td></tr>
+<tr><th id="136">136</th><td><i>/*  </i></td></tr>
+<tr><th id="137">137</th><td><i>  Call with: 0 to put in normal (cooked) mode, 1 to put in packet (raw) mode.</i></td></tr>
+<tr><th id="138">138</th><td><i>  For a "dumb i/o device" like an i/o port that does not have a login attached</i></td></tr>
+<tr><th id="139">139</th><td><i>  to it, this routine can usually be a no-op.</i></td></tr>
+<tr><th id="140">140</th><td><i>  Returns: 0 on failure, 1 on success.</i></td></tr>
+<tr><th id="141">141</th><td><i>*/</i></td></tr>
+<tr><th id="142">142</th><td><em>int</em></td></tr>
+<tr><th id="143">143</th><td><dfn class="decl def fn" id="pktmode" title='pktmode' data-ref="pktmode" data-ref-filename="pktmode">pktmode</dfn>(<em>short</em> <dfn class="local col6 decl" id="6on" title='on' data-type='short' data-ref="6on" data-ref-filename="6on">on</dfn>) {</td></tr>
+<tr><th id="144">144</th><td>    <b>if</b> (<a class="tu ref" href="#ttyfd" title='ttyfd' data-use='r' data-ref="ttyfd" data-ref-filename="ttyfd">ttyfd</a> &lt; <var>0</var>)                      <i>/* Device must be open */</i></td></tr>
+<tr><th id="145">145</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="146">146</th><td>    <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#system" title='system' data-ref="system" data-ref-filename="system">system</a>(<a class="local col6 ref" href="#6on" title='on' data-ref="6on" data-ref-filename="6on">on</a> ? <q>"stty raw -echo"</q> : <q>"stty sane"</q>); <i>/* Crude but effective */</i></td></tr>
+<tr><th id="147">147</th><td>    <b>return</b>(<var>1</var>);</td></tr>
+<tr><th id="148">148</th><td>}</td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td><i>/*  D E V S E T T I N G S  */</i></td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td><em>int</em></td></tr>
+<tr><th id="154">154</th><td><dfn class="decl def fn" id="devsettings" title='devsettings' data-ref="devsettings" data-ref-filename="devsettings">devsettings</dfn>(<em>char</em> * <dfn class="local col7 decl" id="7s" title='s' data-type='char *' data-ref="7s" data-ref-filename="7s">s</dfn>) {</td></tr>
+<tr><th id="155">155</th><td>    <i>/* Get current device settings, save them for devrestore() */</i></td></tr>
+<tr><th id="156">156</th><td>    <i>/* Parse string s, do whatever it says, e.g. "9600;8N1" */</i></td></tr>
+<tr><th id="157">157</th><td>    <b>if</b> (!<a class="ref fn" href="#pktmode" title='pktmode' data-ref="pktmode" data-ref-filename="pktmode">pktmode</a>(<a class="macro" href="kermit.h.html#212" title="1" data-ref="_M/ON">ON</a>))			<i>/* And put device in packet mode */</i></td></tr>
+<tr><th id="158">158</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="159">159</th><td>    <b>return</b>(<var>1</var>);</td></tr>
+<tr><th id="160">160</th><td>}</td></tr>
+<tr><th id="161">161</th><td></td></tr>
+<tr><th id="162">162</th><td><i>/*  D E V R E S T O R E  */</i></td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td><em>int</em></td></tr>
+<tr><th id="165">165</th><td><dfn class="decl def fn" id="devrestore" title='devrestore' data-ref="devrestore" data-ref-filename="devrestore">devrestore</dfn>(<em>void</em>) {</td></tr>
+<tr><th id="166">166</th><td>    <i>/* Put device back as we found it */</i></td></tr>
+<tr><th id="167">167</th><td>    <a class="ref fn" href="#pktmode" title='pktmode' data-ref="pktmode" data-ref-filename="pktmode">pktmode</a>(<a class="macro" href="kermit.h.html#211" title="0" data-ref="_M/OFF">OFF</a>);</td></tr>
+<tr><th id="168">168</th><td>    <b>return</b>(<var>1</var>);</td></tr>
+<tr><th id="169">169</th><td>}</td></tr>
+<tr><th id="170">170</th><td></td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td><i>/*  D E V C L O S E  --  Closes the current open communications device  */</i></td></tr>
+<tr><th id="173">173</th><td><i>/*  </i></td></tr>
+<tr><th id="174">174</th><td><i>  Call with: nothing</i></td></tr>
+<tr><th id="175">175</th><td><i>  Closes the device and puts it back the way it was found by devopen().</i></td></tr>
+<tr><th id="176">176</th><td><i>  Returns: 0 on failure, 1 on success.</i></td></tr>
+<tr><th id="177">177</th><td><i>*/</i></td></tr>
+<tr><th id="178">178</th><td><em>int</em></td></tr>
+<tr><th id="179">179</th><td><dfn class="decl def fn" id="devclose" title='devclose' data-ref="devclose" data-ref-filename="devclose">devclose</dfn>(<em>void</em>) {</td></tr>
+<tr><th id="180">180</th><td>    <a class="tu ref" href="#ttyfd" title='ttyfd' data-use='w' data-ref="ttyfd" data-ref-filename="ttyfd">ttyfd</a> = -<var>1</var>;</td></tr>
+<tr><th id="181">181</th><td>    <b>return</b>(<var>1</var>);</td></tr>
+<tr><th id="182">182</th><td>}</td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><i>/* I N C H K  --  Check if input waiting */</i></td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td><i>/*</i></td></tr>
+<tr><th id="187">187</th><td><i>  Check if input is waiting to be read, needed for sliding windows.  This</i></td></tr>
+<tr><th id="188">188</th><td><i>  sample version simply looks in the stdin buffer (which is not portable</i></td></tr>
+<tr><th id="189">189</th><td><i>  even among different Unixes).  If your platform does not provide a way to</i></td></tr>
+<tr><th id="190">190</th><td><i>  look at the device input buffer without blocking and without actually</i></td></tr>
+<tr><th id="191">191</th><td><i>  reading from it, make this routine return -1.  On success, returns the</i></td></tr>
+<tr><th id="192">192</th><td><i>  numbers of characters waiting to be read, i.e. that can be safely read</i></td></tr>
+<tr><th id="193">193</th><td><i>  without blocking.</i></td></tr>
+<tr><th id="194">194</th><td><i>*/</i></td></tr>
+<tr><th id="195">195</th><td><em>int</em></td></tr>
+<tr><th id="196">196</th><td><dfn class="decl def fn" id="inchk" title='inchk' data-ref="inchk" data-ref-filename="inchk">inchk</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col8 decl" id="8k" title='k' data-type='struct k_data *' data-ref="8k" data-ref-filename="8k">k</dfn>) {</td></tr>
+<tr><th id="197">197</th><td><u>#<span data-ppcond="197">ifdef</span> <span class="macro" data-ref="_M/_IO_file_flags">_IO_file_flags</span>			/* Linux */</u></td></tr>
+<tr><th id="198">198</th><td>    <b>if</b> (ttyfd &lt; <var>0</var>)                      <i>/* Device must be open */</i></td></tr>
+<tr><th id="199">199</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="200">200</th><td>    <b>return</b>((<em>int</em>) ((stdin-&gt;_IO_read_end) - (stdin-&gt;_IO_read_ptr)));</td></tr>
+<tr><th id="201">201</th><td><u>#<span data-ppcond="197">else</span></u></td></tr>
+<tr><th id="202">202</th><td><u>#<span data-ppcond="202">ifdef</span> <span class="macro" data-ref="_M/AIX">AIX</span>				/* AIX */</u></td></tr>
+<tr><th id="203">203</th><td>    <b>if</b> (ttyfd &lt; <var>0</var>)</td></tr>
+<tr><th id="204">204</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="205">205</th><td>    <b>return</b>(stdin-&gt;_cnt);</td></tr>
+<tr><th id="206">206</th><td><u>#<span data-ppcond="202">else</span></u></td></tr>
+<tr><th id="207">207</th><td><u>#<span data-ppcond="207">ifdef</span> <span class="macro" data-ref="_M/SunOS">SunOS</span>				/* Solaris and SunOS */</u></td></tr>
+<tr><th id="208">208</th><td>    <b>if</b> (ttyfd &lt; <var>0</var>)</td></tr>
+<tr><th id="209">209</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="210">210</th><td>    <b>return</b>(stdin-&gt;_cnt);</td></tr>
+<tr><th id="211">211</th><td><u>#<span data-ppcond="207">else</span></u>  </td></tr>
+<tr><th id="212">212</th><td><u>#<span data-ppcond="212">ifdef</span> <span class="macro" data-ref="_M/HPUX">HPUX</span>				/* HPUX */</u></td></tr>
+<tr><th id="213">213</th><td>    <b>if</b> (ttyfd &lt; <var>0</var>)</td></tr>
+<tr><th id="214">214</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="215">215</th><td>    <b>return</b>(stdin-&gt;__cnt);</td></tr>
+<tr><th id="216">216</th><td><u>#<span data-ppcond="212">else</span></u></td></tr>
+<tr><th id="217">217</th><td>    <b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="218">218</th><td><u>#<span data-ppcond="212">endif</span> /* HPUX */</u></td></tr>
+<tr><th id="219">219</th><td><u>#<span data-ppcond="207">endif</span> /* SunOS */</u></td></tr>
+<tr><th id="220">220</th><td><u>#<span data-ppcond="202">endif</span> /* AIX */</u></td></tr>
+<tr><th id="221">221</th><td><u>#<span data-ppcond="197">endif</span> /* _IO_file_flags */</u></td></tr>
+<tr><th id="222">222</th><td>}</td></tr>
+<tr><th id="223">223</th><td></td></tr>
+<tr><th id="224">224</th><td><i>/*  R E A D P K T  --  Read a Kermit packet from the communications device  */</i></td></tr>
+<tr><th id="225">225</th><td><i>/*</i></td></tr>
+<tr><th id="226">226</th><td><i>  Call with:</i></td></tr>
+<tr><th id="227">227</th><td><i>    k   - Kermit struct pointer</i></td></tr>
+<tr><th id="228">228</th><td><i>    p   - pointer to read buffer</i></td></tr>
+<tr><th id="229">229</th><td><i>    len - length of read buffer</i></td></tr>
+<tr><th id="230">230</th><td><i></i></td></tr>
+<tr><th id="231">231</th><td><i>  When reading a packet, this function looks for start of Kermit packet</i></td></tr>
+<tr><th id="232">232</th><td><i>  (k-&gt;r_soh), then reads everything between it and the end of the packet</i></td></tr>
+<tr><th id="233">233</th><td><i>  (k-&gt;r_eom) into the indicated buffer.  Returns the number of bytes read, or:</i></td></tr>
+<tr><th id="234">234</th><td><i>     0   - timeout or other possibly correctable error;</i></td></tr>
+<tr><th id="235">235</th><td><i>    -1   - fatal error, such as loss of connection, or no buffer to read into.</i></td></tr>
+<tr><th id="236">236</th><td><i>*/</i></td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td><em>int</em></td></tr>
+<tr><th id="239">239</th><td><dfn class="decl def fn" id="readpkt" title='readpkt' data-ref="readpkt" data-ref-filename="readpkt">readpkt</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col9 decl" id="9k" title='k' data-type='struct k_data *' data-ref="9k" data-ref-filename="9k">k</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> *<dfn class="local col0 decl" id="10p" title='p' data-type='UCHAR *' data-ref="10p" data-ref-filename="10p">p</dfn>, <em>int</em> <dfn class="local col1 decl" id="11len" title='len' data-type='int' data-ref="11len" data-ref-filename="11len">len</dfn>, <em>int</em> <dfn class="local col2 decl" id="12fc" title='fc' data-type='int' data-ref="12fc" data-ref-filename="12fc">fc</dfn>) {</td></tr>
+<tr><th id="240">240</th><td>    <em>int</em> <dfn class="local col3 decl" id="13x" title='x' data-type='int' data-ref="13x" data-ref-filename="13x">x</dfn>, <dfn class="local col4 decl" id="14n" title='n' data-type='int' data-ref="14n" data-ref-filename="14n">n</dfn>, <dfn class="local col5 decl" id="15max" title='max' data-type='int' data-ref="15max" data-ref-filename="15max">max</dfn>;</td></tr>
+<tr><th id="241">241</th><td>    <em>short</em> <dfn class="local col6 decl" id="16flag" title='flag' data-type='short' data-ref="16flag" data-ref-filename="16flag">flag</dfn>;</td></tr>
+<tr><th id="242">242</th><td>    <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> <dfn class="local col7 decl" id="17c" title='c' data-type='UCHAR' data-ref="17c" data-ref-filename="17c">c</dfn>;</td></tr>
+<tr><th id="243">243</th><td><i>/*</i></td></tr>
+<tr><th id="244">244</th><td><i>  Timeout not implemented in this sample.</i></td></tr>
+<tr><th id="245">245</th><td><i>  It should not be needed.  All non-embedded Kermits that are capable of</i></td></tr>
+<tr><th id="246">246</th><td><i>  making connections are also capable of timing out, and only one Kermit</i></td></tr>
+<tr><th id="247">247</th><td><i>  needs to time out.  NOTE: This simple example waits for SOH and then</i></td></tr>
+<tr><th id="248">248</th><td><i>  reads everything up to the negotiated packet terminator.  A more robust</i></td></tr>
+<tr><th id="249">249</th><td><i>  version might be driven by the value of the packet-length field.</i></td></tr>
+<tr><th id="250">250</th><td><i>*/</i></td></tr>
+<tr><th id="251">251</th><td><u>#<span data-ppcond="251">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="252">252</th><td>    <em>char</em> * <dfn class="local col8 decl" id="18p2" title='p2' data-type='char *' data-ref="18p2" data-ref-filename="18p2">p2</dfn>;</td></tr>
+<tr><th id="253">253</th><td><u>#<span data-ppcond="251">endif</span>	/* DEBUG */</u></td></tr>
+<tr><th id="254">254</th><td></td></tr>
+<tr><th id="255">255</th><td><u>#<span data-ppcond="255">ifdef</span> <a class="macro" href="kermit.h.html#95" data-ref="_M/F_CTRLC">F_CTRLC</a></u></td></tr>
+<tr><th id="256">256</th><td>    <em>short</em> <dfn class="local col9 decl" id="19ccn" title='ccn' data-type='short' data-ref="19ccn" data-ref-filename="19ccn">ccn</dfn>;</td></tr>
+<tr><th id="257">257</th><td>    <a class="local col9 ref" href="#19ccn" title='ccn' data-ref="19ccn" data-ref-filename="19ccn">ccn</a> = <var>0</var>;</td></tr>
+<tr><th id="258">258</th><td><u>#<span data-ppcond="255">endif</span> /* F_CTRLC */</u></td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td>    <b>if</b> (<a class="tu ref" href="#ttyfd" title='ttyfd' data-use='r' data-ref="ttyfd" data-ref-filename="ttyfd">ttyfd</a> &lt; <var>0</var> || !<a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a>) {		<i>/* Device not open or no buffer */</i></td></tr>
+<tr><th id="261">261</th><td>	<a class="macro" href="debug.h.html#34" title="dodebug(3,(UCHAR *)&quot;readpkt FAIL&quot;,(UCHAR *)0,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#15" title="3" data-ref="_M/DB_MSG">DB_MSG</a>,<q>"readpkt FAIL"</q>,<var>0</var>,<var>0</var>);</td></tr>
+<tr><th id="262">262</th><td>	<b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="263">263</th><td>    }</td></tr>
+<tr><th id="264">264</th><td>    <a class="local col6 ref" href="#16flag" title='flag' data-ref="16flag" data-ref-filename="16flag">flag</a> = <a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a> = <var>0</var>;                       <i>/* Init local variables */</i></td></tr>
+<tr><th id="265">265</th><td></td></tr>
+<tr><th id="266">266</th><td><u>#<span data-ppcond="266">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="267">267</th><td>    <a class="local col8 ref" href="#18p2" title='p2' data-ref="18p2" data-ref-filename="18p2">p2</a> <span class='warning' title="assigning to &apos;char *&apos; from &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) converts between pointers to integer types with different sign">=</span> <a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a>;</td></tr>
+<tr><th id="268">268</th><td><u>#<span data-ppcond="266">endif</span>	/* DEBUG */</u></td></tr>
+<tr><th id="269">269</th><td></td></tr>
+<tr><th id="270">270</th><td>    <b>while</b> (<var>1</var>) {</td></tr>
+<tr><th id="271">271</th><td>        <a class="local col3 ref" href="#13x" title='x' data-ref="13x" data-ref-filename="13x">x</a> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#500" title="(--((&amp;__sF[0]))-&gt;_r &lt; 0 ? __srget((&amp;__sF[0])) : (int)(*((&amp;__sF[0]))-&gt;_p++))" data-ref="_M/getchar">getchar</a>();                  <i>/* Replace this with real i/o */</i></td></tr>
+<tr><th id="272">272</th><td>        <a class="local col7 ref" href="#17c" title='c' data-ref="17c" data-ref-filename="17c">c</a> = (<a class="local col9 ref" href="#9k" title='k' data-ref="9k" data-ref-filename="9k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::parity" title='k_data::parity' data-ref="k_data::parity" data-ref-filename="k_data..parity">parity</a>) ? <a class="local col3 ref" href="#13x" title='x' data-ref="13x" data-ref-filename="13x">x</a> &amp; <var>0x7f</var> : <a class="local col3 ref" href="#13x" title='x' data-ref="13x" data-ref-filename="13x">x</a> &amp; <var>0xff</var>; <i>/* Strip parity */</i></td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td><u>#<span data-ppcond="274">ifdef</span> <a class="macro" href="kermit.h.html#95" data-ref="_M/F_CTRLC">F_CTRLC</a></u></td></tr>
+<tr><th id="275">275</th><td>	<i>/* In remote mode only: three consecutive ^C's to quit */</i></td></tr>
+<tr><th id="276">276</th><td>        <b>if</b> (<a class="local col9 ref" href="#9k" title='k' data-ref="9k" data-ref-filename="9k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::remote" title='k_data::remote' data-ref="k_data::remote" data-ref-filename="k_data..remote">remote</a> &amp;&amp; <a class="local col7 ref" href="#17c" title='c' data-ref="17c" data-ref-filename="17c">c</a> == (<a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a>) <var>3</var>) {</td></tr>
+<tr><th id="277">277</th><td>            <b>if</b> (++<a class="local col9 ref" href="#19ccn" title='ccn' data-ref="19ccn" data-ref-filename="19ccn">ccn</a> &gt; <var>2</var>) {</td></tr>
+<tr><th id="278">278</th><td>		<a class="macro" href="debug.h.html#34" title="dodebug(3,(UCHAR *)&quot;readpkt ^C^C^C&quot;,(UCHAR *)0,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#15" title="3" data-ref="_M/DB_MSG">DB_MSG</a>,<q>"readpkt ^C^C^C"</q>,<var>0</var>,<var>0</var>);</td></tr>
+<tr><th id="279">279</th><td>		<b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="280">280</th><td>	    }</td></tr>
+<tr><th id="281">281</th><td>        } <b>else</b> {</td></tr>
+<tr><th id="282">282</th><td>	    <a class="local col9 ref" href="#19ccn" title='ccn' data-ref="19ccn" data-ref-filename="19ccn">ccn</a> = <var>0</var>;</td></tr>
+<tr><th id="283">283</th><td>	}</td></tr>
+<tr><th id="284">284</th><td><u>#<span data-ppcond="274">endif</span> /* F_CTRLC */</u></td></tr>
+<tr><th id="285">285</th><td></td></tr>
+<tr><th id="286">286</th><td>        <b>if</b> (!<a class="local col6 ref" href="#16flag" title='flag' data-ref="16flag" data-ref-filename="16flag">flag</a> &amp;&amp; <a class="local col7 ref" href="#17c" title='c' data-ref="17c" data-ref-filename="17c">c</a> != <a class="local col9 ref" href="#9k" title='k' data-ref="9k" data-ref-filename="9k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::r_soh" title='k_data::r_soh' data-ref="k_data::r_soh" data-ref-filename="k_data..r_soh">r_soh</a>)	<i>/* No start of packet yet */</i></td></tr>
+<tr><th id="287">287</th><td>          <b>continue</b>;                     <i>/* so discard these bytes. */</i></td></tr>
+<tr><th id="288">288</th><td>        <b>if</b> (<a class="local col7 ref" href="#17c" title='c' data-ref="17c" data-ref-filename="17c">c</a> == <a class="local col9 ref" href="#9k" title='k' data-ref="9k" data-ref-filename="9k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::r_soh" title='k_data::r_soh' data-ref="k_data::r_soh" data-ref-filename="k_data..r_soh">r_soh</a>) {		<i>/* Start of packet */</i></td></tr>
+<tr><th id="289">289</th><td>            <a class="local col6 ref" href="#16flag" title='flag' data-ref="16flag" data-ref-filename="16flag">flag</a> = <var>1</var>;                   <i>/* Remember */</i></td></tr>
+<tr><th id="290">290</th><td>            <b>continue</b>;                   <i>/* But discard. */</i></td></tr>
+<tr><th id="291">291</th><td>        } <b>else</b> <b>if</b> (<a class="local col7 ref" href="#17c" title='c' data-ref="17c" data-ref-filename="17c">c</a> == <a class="local col9 ref" href="#9k" title='k' data-ref="9k" data-ref-filename="9k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::r_eom" title='k_data::r_eom' data-ref="k_data::r_eom" data-ref-filename="k_data..r_eom">r_eom</a>	<i>/* Packet terminator */</i></td></tr>
+<tr><th id="292">292</th><td>		   || <a class="local col7 ref" href="#17c" title='c' data-ref="17c" data-ref-filename="17c">c</a> == <kbd>'\012'</kbd>	<i>/* 1.3: For HyperTerminal */</i></td></tr>
+<tr><th id="293">293</th><td>		   ) {</td></tr>
+<tr><th id="294">294</th><td><u>#<span data-ppcond="294">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="295">295</th><td>            *<a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a> = <a class="macro" href="kermit.h.html#143" title="&apos;\0&apos;" data-ref="_M/NUL">NUL</a>;                   <i>/* Terminate for printing */</i></td></tr>
+<tr><th id="296">296</th><td>	    <a class="macro" href="debug.h.html#34" title="dodebug(5,(UCHAR *)&quot;RPKT&quot;,(UCHAR *)p2,(long)(n))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#17" title="5" data-ref="_M/DB_PKT">DB_PKT</a>,<q>"RPKT"</q>,<a class="local col8 ref" href="#18p2" title='p2' data-ref="18p2" data-ref-filename="18p2">p2</a>,<a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>);</td></tr>
+<tr><th id="297">297</th><td><u>#<span data-ppcond="294">endif</span> /* DEBUG */</u></td></tr>
+<tr><th id="298">298</th><td>            <b>return</b>(<a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>);</td></tr>
+<tr><th id="299">299</th><td>        } <b>else</b> {                        <i>/* Contents of packet */</i></td></tr>
+<tr><th id="300">300</th><td>            <b>if</b> (<a class="local col4 ref" href="#14n" title='n' data-ref="14n" data-ref-filename="14n">n</a>++ &gt; <a class="local col9 ref" href="#9k" title='k' data-ref="9k" data-ref-filename="9k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::r_maxlen" title='k_data::r_maxlen' data-ref="k_data::r_maxlen" data-ref-filename="k_data..r_maxlen">r_maxlen</a>)	<i>/* Check length */</i></td></tr>
+<tr><th id="301">301</th><td>              <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="302">302</th><td>            <b>else</b></td></tr>
+<tr><th id="303">303</th><td>              *<a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a>++ = <a class="local col3 ref" href="#13x" title='x' data-ref="13x" data-ref-filename="13x">x</a> &amp; <var>0xff</var>;</td></tr>
+<tr><th id="304">304</th><td>        }</td></tr>
+<tr><th id="305">305</th><td>    }</td></tr>
+<tr><th id="306">306</th><td>    <a class="macro" href="debug.h.html#34" title="dodebug(3,(UCHAR *)&quot;READPKT FAIL (end)&quot;,(UCHAR *)0,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#15" title="3" data-ref="_M/DB_MSG">DB_MSG</a>,<q>"READPKT FAIL (end)"</q>,<var>0</var>,<var>0</var>);</td></tr>
+<tr><th id="307">307</th><td>    <b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="308">308</th><td>}</td></tr>
+<tr><th id="309">309</th><td></td></tr>
+<tr><th id="310">310</th><td><i>/*  T X _ D A T A  --  Writes n bytes of data to communication device.  */</i></td></tr>
+<tr><th id="311">311</th><td><i>/*</i></td></tr>
+<tr><th id="312">312</th><td><i>  Call with:</i></td></tr>
+<tr><th id="313">313</th><td><i>    k = pointer to Kermit struct.</i></td></tr>
+<tr><th id="314">314</th><td><i>    p = pointer to data to transmit.</i></td></tr>
+<tr><th id="315">315</th><td><i>    n = length.</i></td></tr>
+<tr><th id="316">316</th><td><i>  Returns:</i></td></tr>
+<tr><th id="317">317</th><td><i>    X_OK on success.</i></td></tr>
+<tr><th id="318">318</th><td><i>    X_ERROR on failure to write - i/o error.</i></td></tr>
+<tr><th id="319">319</th><td><i>*/</i></td></tr>
+<tr><th id="320">320</th><td><em>int</em></td></tr>
+<tr><th id="321">321</th><td><dfn class="decl def fn" id="tx_data" title='tx_data' data-ref="tx_data" data-ref-filename="tx_data">tx_data</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col0 decl" id="20k" title='k' data-type='struct k_data *' data-ref="20k" data-ref-filename="20k">k</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> *<dfn class="local col1 decl" id="21p" title='p' data-type='UCHAR *' data-ref="21p" data-ref-filename="21p">p</dfn>, <em>int</em> <dfn class="local col2 decl" id="22n" title='n' data-type='int' data-ref="22n" data-ref-filename="22n">n</dfn>) {</td></tr>
+<tr><th id="322">322</th><td>    <em>int</em> <dfn class="local col3 decl" id="23x" title='x' data-type='int' data-ref="23x" data-ref-filename="23x">x</dfn>;</td></tr>
+<tr><th id="323">323</th><td>    <em>int</em> <dfn class="local col4 decl" id="24max" title='max' data-type='int' data-ref="24max" data-ref-filename="24max">max</dfn>;</td></tr>
+<tr><th id="324">324</th><td></td></tr>
+<tr><th id="325">325</th><td>    <a class="local col4 ref" href="#24max" title='max' data-ref="24max" data-ref-filename="24max">max</a> = <var>10</var>;                           <i>/* Loop breaker */</i></td></tr>
+<tr><th id="326">326</th><td></td></tr>
+<tr><th id="327">327</th><td>    <b>while</b> (<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a> &gt; <var>0</var>) {                     <i>/* Keep trying till done */</i></td></tr>
+<tr><th id="328">328</th><td>        <a class="local col3 ref" href="#23x" title='x' data-ref="23x" data-ref-filename="23x">x</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="tu ref" href="#ttyfd" title='ttyfd' data-use='r' data-ref="ttyfd" data-ref-filename="ttyfd">ttyfd</a>,<a class="local col1 ref" href="#21p" title='p' data-ref="21p" data-ref-filename="21p">p</a>,<a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a>);</td></tr>
+<tr><th id="329">329</th><td>        <a class="macro" href="debug.h.html#34" title="dodebug(3,(UCHAR *)&quot;tx_data write&quot;,(UCHAR *)0,(long)(x))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#15" title="3" data-ref="_M/DB_MSG">DB_MSG</a>,<q>"tx_data write"</q>,<var>0</var>,<a class="local col3 ref" href="#23x" title='x' data-ref="23x" data-ref-filename="23x">x</a>);</td></tr>
+<tr><th id="330">330</th><td>        <b>if</b> (<a class="local col3 ref" href="#23x" title='x' data-ref="23x" data-ref-filename="23x">x</a> &lt; <var>0</var> || --<a class="local col4 ref" href="#24max" title='max' data-ref="24max" data-ref-filename="24max">max</a> &lt; <var>1</var>)         <i>/* Errors are fatal */</i></td></tr>
+<tr><th id="331">331</th><td>          <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="332">332</th><td>        <a class="local col2 ref" href="#22n" title='n' data-ref="22n" data-ref-filename="22n">n</a> -= <a class="local col3 ref" href="#23x" title='x' data-ref="23x" data-ref-filename="23x">x</a>;</td></tr>
+<tr><th id="333">333</th><td>	<a class="local col1 ref" href="#21p" title='p' data-ref="21p" data-ref-filename="21p">p</a> += <a class="local col3 ref" href="#23x" title='x' data-ref="23x" data-ref-filename="23x">x</a>;</td></tr>
+<tr><th id="334">334</th><td>    }</td></tr>
+<tr><th id="335">335</th><td>    <b>return</b>(<a class="macro" href="kermit.h.html#290" title="0" data-ref="_M/X_OK">X_OK</a>);                       <i>/* Success */</i></td></tr>
+<tr><th id="336">336</th><td>}</td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td><i>/*  O P E N F I L E  --  Open output file  */</i></td></tr>
+<tr><th id="339">339</th><td><i>/*</i></td></tr>
+<tr><th id="340">340</th><td><i>  Call with:</i></td></tr>
+<tr><th id="341">341</th><td><i>    Pointer to filename.</i></td></tr>
+<tr><th id="342">342</th><td><i>    Size in bytes.</i></td></tr>
+<tr><th id="343">343</th><td><i>    Creation date in format yyyymmdd hh:mm:ss, e.g. 19950208 14:00:00</i></td></tr>
+<tr><th id="344">344</th><td><i>    Mode: 1 = read, 2 = create, 3 = append.</i></td></tr>
+<tr><th id="345">345</th><td><i>  Returns:</i></td></tr>
+<tr><th id="346">346</th><td><i>    X_OK on success.</i></td></tr>
+<tr><th id="347">347</th><td><i>    X_ERROR on failure, including rejection based on name, size, or date.    </i></td></tr>
+<tr><th id="348">348</th><td><i>*/</i></td></tr>
+<tr><th id="349">349</th><td><em>int</em></td></tr>
+<tr><th id="350">350</th><td><dfn class="decl def fn" id="openfile" title='openfile' data-ref="openfile" data-ref-filename="openfile">openfile</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col5 decl" id="25k" title='k' data-type='struct k_data *' data-ref="25k" data-ref-filename="25k">k</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col6 decl" id="26s" title='s' data-type='UCHAR *' data-ref="26s" data-ref-filename="26s">s</dfn>, <em>int</em> <dfn class="local col7 decl" id="27mode" title='mode' data-type='int' data-ref="27mode" data-ref-filename="27mode">mode</dfn>) {</td></tr>
+<tr><th id="351">351</th><td></td></tr>
+<tr><th id="352">352</th><td>    <b>switch</b> (<a class="local col7 ref" href="#27mode" title='mode' data-ref="27mode" data-ref-filename="27mode">mode</a>) {</td></tr>
+<tr><th id="353">353</th><td>      <b>case</b> <var>1</var>:				<i>/* Read */</i></td></tr>
+<tr><th id="354">354</th><td>	<b>if</b> (!(<a class="tu ref" href="#ifile" title='ifile' data-use='w' data-ref="ifile" data-ref-filename="ifile">ifile</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fopen" title='fopen' data-ref="fopen" data-ref-filename="fopen">fopen</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;const char *&apos; converts between pointers to integer types with different sign"><a class="local col6 ref" href="#26s" title='s' data-ref="26s" data-ref-filename="26s">s</a></span>,<q>"r"</q>))) {</td></tr>
+<tr><th id="355">355</th><td>	    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;openfile read error&quot;,(UCHAR *)s,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"openfile read error"</q>,<a class="local col6 ref" href="#26s" title='s' data-ref="26s" data-ref-filename="26s">s</a>,<var>0</var>);</td></tr>
+<tr><th id="356">356</th><td>	    <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="357">357</th><td>	}</td></tr>
+<tr><th id="358">358</th><td>	<a class="local col5 ref" href="#25k" title='k' data-ref="25k" data-ref-filename="25k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::s_first" title='k_data::s_first' data-ref="k_data::s_first" data-ref-filename="k_data..s_first">s_first</a>   = <var>1</var>;		<i>/* Set up for getkpt */</i></td></tr>
+<tr><th id="359">359</th><td>	<a class="local col5 ref" href="#25k" title='k' data-ref="25k" data-ref-filename="25k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>[<var>0</var>] = <kbd>'\0'</kbd>;		<i>/* Initialize buffer */</i></td></tr>
+<tr><th id="360">360</th><td>	<a class="local col5 ref" href="#25k" title='k' data-ref="25k" data-ref-filename="25k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinptr" title='k_data::zinptr' data-ref="k_data::zinptr" data-ref-filename="k_data..zinptr">zinptr</a>    = <a class="local col5 ref" href="#25k" title='k' data-ref="25k" data-ref-filename="25k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>;	<i>/* Set up buffer pointer */</i></td></tr>
+<tr><th id="361">361</th><td>	<a class="local col5 ref" href="#25k" title='k' data-ref="25k" data-ref-filename="25k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>    = <var>0</var>;		<i>/* and count */</i></td></tr>
+<tr><th id="362">362</th><td>	<a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;openfile read ok&quot;,(UCHAR *)s,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"openfile read ok"</q>,<a class="local col6 ref" href="#26s" title='s' data-ref="26s" data-ref-filename="26s">s</a>,<var>0</var>);</td></tr>
+<tr><th id="363">363</th><td>	<b>return</b>(<a class="macro" href="kermit.h.html#290" title="0" data-ref="_M/X_OK">X_OK</a>);</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td>      <b>case</b> <var>2</var>:				<i>/* Write (create) */</i></td></tr>
+<tr><th id="366">366</th><td>        <a class="tu ref" href="#ofile" title='ofile' data-use='w' data-ref="ofile" data-ref-filename="ofile">ofile</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#creat" title='creat' data-ref="creat" data-ref-filename="creat">creat</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;const char *&apos; converts between pointers to integer types with different sign"><a class="local col6 ref" href="#26s" title='s' data-ref="26s" data-ref-filename="26s">s</a></span>,<var>0644</var>);</td></tr>
+<tr><th id="367">367</th><td>	<b>if</b> (<a class="tu ref" href="#ofile" title='ofile' data-use='r' data-ref="ofile" data-ref-filename="ofile">ofile</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="368">368</th><td>	    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;openfile write error&quot;,(UCHAR *)s,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"openfile write error"</q>,<a class="local col6 ref" href="#26s" title='s' data-ref="26s" data-ref-filename="26s">s</a>,<var>0</var>);</td></tr>
+<tr><th id="369">369</th><td>	    <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="370">370</th><td>	}</td></tr>
+<tr><th id="371">371</th><td>	<a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;openfile write ok&quot;,(UCHAR *)s,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"openfile write ok"</q>,<a class="local col6 ref" href="#26s" title='s' data-ref="26s" data-ref-filename="26s">s</a>,<var>0</var>);</td></tr>
+<tr><th id="372">372</th><td>	<b>return</b>(<a class="macro" href="kermit.h.html#290" title="0" data-ref="_M/X_OK">X_OK</a>);</td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td><u>#<span data-ppcond="374">ifdef</span> <span class="macro" data-ref="_M/COMMENT">COMMENT</span></u></td></tr>
+<tr><th id="375">375</th><td>      <b>case</b> <var>3</var>:				<i>/* Append (not used) */</i></td></tr>
+<tr><th id="376">376</th><td>        ofile = open(s,O_WRONLY|O_APPEND);</td></tr>
+<tr><th id="377">377</th><td>	<b>if</b> (ofile &lt; <var>0</var>) {</td></tr>
+<tr><th id="378">378</th><td>	    debug(DB_LOG,<q>"openfile append error"</q>,s,<var>0</var>);</td></tr>
+<tr><th id="379">379</th><td>	    <b>return</b>(X_ERROR);</td></tr>
+<tr><th id="380">380</th><td>	}</td></tr>
+<tr><th id="381">381</th><td>	    debug(DB_LOG,<q>"openfile append ok"</q>,s,<var>0</var>);</td></tr>
+<tr><th id="382">382</th><td>	<b>return</b>(X_OK);</td></tr>
+<tr><th id="383">383</th><td><u>#<span data-ppcond="374">endif</span> /* COMMENT */</u></td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td>      <b>default</b>:</td></tr>
+<tr><th id="386">386</th><td>        <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="387">387</th><td>    }</td></tr>
+<tr><th id="388">388</th><td>}</td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td><i>/*  F I L E I N F O  --  Get info about existing file  */</i></td></tr>
+<tr><th id="391">391</th><td><i>/*</i></td></tr>
+<tr><th id="392">392</th><td><i>  Call with:</i></td></tr>
+<tr><th id="393">393</th><td><i>    Pointer to filename</i></td></tr>
+<tr><th id="394">394</th><td><i>    Pointer to buffer for date-time string</i></td></tr>
+<tr><th id="395">395</th><td><i>    Length of date-time string buffer (must be at least 18 bytes)</i></td></tr>
+<tr><th id="396">396</th><td><i>    Pointer to int file type:</i></td></tr>
+<tr><th id="397">397</th><td><i>       0: Prevailing type is text.</i></td></tr>
+<tr><th id="398">398</th><td><i>       1: Prevailing type is binary.</i></td></tr>
+<tr><th id="399">399</th><td><i>    Transfer mode (0 = auto, 1 = manual):</i></td></tr>
+<tr><th id="400">400</th><td><i>       0: Figure out whether file is text or binary and return type.</i></td></tr>
+<tr><th id="401">401</th><td><i>       1: (nonzero) Don't try to figure out file type. </i></td></tr>
+<tr><th id="402">402</th><td><i>  Returns:</i></td></tr>
+<tr><th id="403">403</th><td><i>    X_ERROR on failure.</i></td></tr>
+<tr><th id="404">404</th><td><i>    0L or greater on success == file length.</i></td></tr>
+<tr><th id="405">405</th><td><i>    Date-time string set to yyyymmdd hh:mm:ss modtime of file.</i></td></tr>
+<tr><th id="406">406</th><td><i>    If date can't be determined, first byte of buffer is set to NUL.</i></td></tr>
+<tr><th id="407">407</th><td><i>    Type set to 0 (text) or 1 (binary) if mode == 0.</i></td></tr>
+<tr><th id="408">408</th><td><i>*/</i></td></tr>
+<tr><th id="409">409</th><td><u>#<span data-ppcond="409">ifdef</span> <a class="macro" href="kermit.h.html#103" data-ref="_M/F_SCAN">F_SCAN</a></u></td></tr>
+<tr><th id="410">410</th><td><u>#define <dfn class="macro" id="_M/SCANBUF" data-ref="_M/SCANBUF">SCANBUF</dfn> 1024</u></td></tr>
+<tr><th id="411">411</th><td><u>#define <dfn class="macro" id="_M/SCANSIZ" data-ref="_M/SCANSIZ">SCANSIZ</dfn> 49152</u></td></tr>
+<tr><th id="412">412</th><td><u>#<span data-ppcond="409">endif</span> /* F_SCAN */</u></td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td><a class="typedef" href="cdefs.h.html#ULONG" title='ULONG' data-type='unsigned long' data-ref="ULONG" data-ref-filename="ULONG">ULONG</a></td></tr>
+<tr><th id="415">415</th><td><dfn class="decl def fn" id="fileinfo" title='fileinfo' data-ref="fileinfo" data-ref-filename="fileinfo">fileinfo</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col8 decl" id="28k" title='k' data-type='struct k_data *' data-ref="28k" data-ref-filename="28k">k</dfn>,</td></tr>
+<tr><th id="416">416</th><td>	 <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col9 decl" id="29filename" title='filename' data-type='UCHAR *' data-ref="29filename" data-ref-filename="29filename">filename</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col0 decl" id="30buf" title='buf' data-type='UCHAR *' data-ref="30buf" data-ref-filename="30buf">buf</dfn>, <em>int</em> <dfn class="local col1 decl" id="31buflen" title='buflen' data-type='int' data-ref="31buflen" data-ref-filename="31buflen">buflen</dfn>, <em>short</em> * <dfn class="local col2 decl" id="32type" title='type' data-type='short *' data-ref="32type" data-ref-filename="32type">type</dfn>, <em>short</em> <dfn class="local col3 decl" id="33mode" title='mode' data-type='short' data-ref="33mode" data-ref-filename="33mode">mode</dfn>) {</td></tr>
+<tr><th id="417">417</th><td>    <b>struct</b> <a class="type" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> <dfn class="local col4 decl" id="34statbuf" title='statbuf' data-type='struct stat' data-ref="34statbuf" data-ref-filename="34statbuf">statbuf</dfn>;</td></tr>
+<tr><th id="418">418</th><td>    <b>struct</b> <a class="type" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm" title='tm' data-ref="tm" data-ref-filename="tm">tm</a> * <dfn class="local col5 decl" id="35timestamp" title='timestamp' data-type='struct tm *' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</dfn>, * <a class="decl fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__locatime50" title='localtime' data-ref="__locatime50" data-ref-filename="__locatime50" id="__locatime50">localtime</a>();</td></tr>
+<tr><th id="419">419</th><td></td></tr>
+<tr><th id="420">420</th><td><u>#<span data-ppcond="420">ifdef</span> <a class="macro" href="kermit.h.html#103" data-ref="_M/F_SCAN">F_SCAN</a></u></td></tr>
+<tr><th id="421">421</th><td>    <a class="typedef" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> * <dfn class="local col6 decl" id="36fp" title='fp' data-type='FILE *' data-ref="36fp" data-ref-filename="36fp">fp</dfn>;				<i>/* File scan pointer */</i></td></tr>
+<tr><th id="422">422</th><td>    <em>char</em> <dfn class="local col7 decl" id="37inbuf" title='inbuf' data-type='char [1024]' data-ref="37inbuf" data-ref-filename="37inbuf">inbuf</dfn>[<a class="macro" href="#410" title="1024" data-ref="_M/SCANBUF">SCANBUF</a>];		<i>/* and buffer */</i></td></tr>
+<tr><th id="423">423</th><td><u>#<span data-ppcond="420">endif</span> /* F_SCAN */</u></td></tr>
+<tr><th id="424">424</th><td></td></tr>
+<tr><th id="425">425</th><td>    <b>if</b> (!<a class="local col0 ref" href="#30buf" title='buf' data-ref="30buf" data-ref-filename="30buf">buf</a>)</td></tr>
+<tr><th id="426">426</th><td>      <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="427">427</th><td>    <a class="local col0 ref" href="#30buf" title='buf' data-ref="30buf" data-ref-filename="30buf">buf</a>[<var>0</var>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="428">428</th><td>    <b>if</b> (<a class="local col1 ref" href="#31buflen" title='buflen' data-ref="31buflen" data-ref-filename="31buflen">buflen</a> &lt; <var>18</var>)</td></tr>
+<tr><th id="429">429</th><td>      <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="430">430</th><td>    <b>if</b> (<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;const char *&apos; converts between pointers to integer types with different sign"><a class="local col9 ref" href="#29filename" title='filename' data-ref="29filename" data-ref-filename="29filename">filename</a></span>,&amp;<a class="local col4 ref" href="#34statbuf" title='statbuf' data-ref="34statbuf" data-ref-filename="34statbuf">statbuf</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="431">431</th><td>      <b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="432">432</th><td>    <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__locatime50" title='localtime' data-ref="__locatime50" data-ref-filename="__locatime50">localtime</a>(&amp;(<a class="local col4 ref" href="#34statbuf" title='statbuf' data-ref="34statbuf" data-ref-filename="34statbuf">statbuf</a>.<a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#95" title="st_mtim.tv_sec" data-ref="_M/st_mtime">st_mtime</a>));</td></tr>
+<tr><th id="433">433</th><td>    <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sprintf" title='sprintf' data-ref="sprintf" data-ref-filename="sprintf">sprintf</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;char *&apos; converts between pointers to integer types with different sign"><a class="local col0 ref" href="#30buf" title='buf' data-ref="30buf" data-ref-filename="30buf">buf</a></span>,<q>"%04d%02d%02d %02d:%02d:%02d"</q>,</td></tr>
+<tr><th id="434">434</th><td>	    <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a>-&gt;<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_year" title='tm::tm_year' data-ref="tm::tm_year" data-ref-filename="tm..tm_year">tm_year</a> + <var>1900</var>,</td></tr>
+<tr><th id="435">435</th><td>            <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a>-&gt;<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mon" title='tm::tm_mon' data-ref="tm::tm_mon" data-ref-filename="tm..tm_mon">tm_mon</a> + <var>1</var>,</td></tr>
+<tr><th id="436">436</th><td>            <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a>-&gt;<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_mday" title='tm::tm_mday' data-ref="tm::tm_mday" data-ref-filename="tm..tm_mday">tm_mday</a>,</td></tr>
+<tr><th id="437">437</th><td>            <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a>-&gt;<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_hour" title='tm::tm_hour' data-ref="tm::tm_hour" data-ref-filename="tm..tm_hour">tm_hour</a>,</td></tr>
+<tr><th id="438">438</th><td>            <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a>-&gt;<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_min" title='tm::tm_min' data-ref="tm::tm_min" data-ref-filename="tm..tm_min">tm_min</a>,</td></tr>
+<tr><th id="439">439</th><td>            <a class="local col5 ref" href="#35timestamp" title='timestamp' data-ref="35timestamp" data-ref-filename="35timestamp">timestamp</a>-&gt;<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#tm::tm_sec" title='tm::tm_sec' data-ref="tm::tm_sec" data-ref-filename="tm..tm_sec">tm_sec</a></td></tr>
+<tr><th id="440">440</th><td>	    );</td></tr>
+<tr><th id="441">441</th><td><u>#<span data-ppcond="441">ifdef</span> <a class="macro" href="kermit.h.html#103" data-ref="_M/F_SCAN">F_SCAN</a></u></td></tr>
+<tr><th id="442">442</th><td><i>/*</i></td></tr>
+<tr><th id="443">443</th><td><i>  Here we determine if the file is text or binary if the transfer mode is</i></td></tr>
+<tr><th id="444">444</th><td><i>  not forced.  This is an extremely crude sample, which diagnoses any file</i></td></tr>
+<tr><th id="445">445</th><td><i>  that contains a control character other than HT, LF, FF, or CR as binary.</i></td></tr>
+<tr><th id="446">446</th><td><i>  A more thorough content analysis can be done that accounts for various</i></td></tr>
+<tr><th id="447">447</th><td><i>  character sets as well as various forms of Unicode (UTF-8, UTF-16, etc).</i></td></tr>
+<tr><th id="448">448</th><td><i>  Or the diagnosis could be based wholly or in part on the filename.</i></td></tr>
+<tr><th id="449">449</th><td><i>  etc etc.  Or the implementation could skip this entirely by not defining</i></td></tr>
+<tr><th id="450">450</th><td><i>  F_SCAN and/or by always calling this routine with type set to -1.</i></td></tr>
+<tr><th id="451">451</th><td><i>*/</i></td></tr>
+<tr><th id="452">452</th><td>    <b>if</b> (!<a class="local col3 ref" href="#33mode" title='mode' data-ref="33mode" data-ref-filename="33mode">mode</a>) {			<i>/* File type determination requested */</i></td></tr>
+<tr><th id="453">453</th><td>	<em>int</em> <dfn class="local col8 decl" id="38isbinary" title='isbinary' data-type='int' data-ref="38isbinary" data-ref-filename="38isbinary">isbinary</dfn> = <var>1</var>;</td></tr>
+<tr><th id="454">454</th><td>	<a class="local col6 ref" href="#36fp" title='fp' data-ref="36fp" data-ref-filename="36fp">fp</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fopen" title='fopen' data-ref="fopen" data-ref-filename="fopen">fopen</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;const char *&apos; converts between pointers to integer types with different sign"><a class="local col9 ref" href="#29filename" title='filename' data-ref="29filename" data-ref-filename="29filename">filename</a></span>,<q>"r"</q>);	<i>/* Open the file for scanning */</i></td></tr>
+<tr><th id="455">455</th><td>	<b>if</b> (<a class="local col6 ref" href="#36fp" title='fp' data-ref="36fp" data-ref-filename="36fp">fp</a>) {</td></tr>
+<tr><th id="456">456</th><td>	    <em>int</em> <dfn class="local col9 decl" id="39n" title='n' data-type='int' data-ref="39n" data-ref-filename="39n">n</dfn> = <var>0</var>, <dfn class="local col0 decl" id="40count" title='count' data-type='int' data-ref="40count" data-ref-filename="40count">count</dfn> = <var>0</var>;</td></tr>
+<tr><th id="457">457</th><td>	    <em>char</em> <dfn class="local col1 decl" id="41c" title='c' data-type='char' data-ref="41c" data-ref-filename="41c">c</dfn>, * <dfn class="local col2 decl" id="42p" title='p' data-type='char *' data-ref="42p" data-ref-filename="42p">p</dfn>;</td></tr>
+<tr><th id="458">458</th><td></td></tr>
+<tr><th id="459">459</th><td>	    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;fileinfo scan &quot;,(UCHAR *)filename,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"fileinfo scan "</q>,<a class="local col9 ref" href="#29filename" title='filename' data-ref="29filename" data-ref-filename="29filename">filename</a>,<var>0</var>);</td></tr>
+<tr><th id="460">460</th><td></td></tr>
+<tr><th id="461">461</th><td>	    <a class="local col8 ref" href="#38isbinary" title='isbinary' data-ref="38isbinary" data-ref-filename="38isbinary">isbinary</a> = <var>0</var>;</td></tr>
+<tr><th id="462">462</th><td>	    <b>while</b> (<a class="local col0 ref" href="#40count" title='count' data-ref="40count" data-ref-filename="40count">count</a> &lt; <a class="macro" href="#411" title="49152" data-ref="_M/SCANSIZ">SCANSIZ</a> &amp;&amp; !<a class="local col8 ref" href="#38isbinary" title='isbinary' data-ref="38isbinary" data-ref-filename="38isbinary">isbinary</a>) { <i>/* Scan this much */</i></td></tr>
+<tr><th id="463">463</th><td>		<a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fread" title='fread' data-ref="fread" data-ref-filename="fread">fread</a>(<a class="local col7 ref" href="#37inbuf" title='inbuf' data-ref="37inbuf" data-ref-filename="37inbuf">inbuf</a>,<var>1</var>,<a class="macro" href="#410" title="1024" data-ref="_M/SCANBUF">SCANBUF</a>,<a class="local col6 ref" href="#36fp" title='fp' data-ref="36fp" data-ref-filename="36fp">fp</a>);</td></tr>
+<tr><th id="464">464</th><td>		<b>if</b> (<a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a> == <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#183" title="(-1)" data-ref="_M/EOF">EOF</a> || <a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a> == <var>0</var>)</td></tr>
+<tr><th id="465">465</th><td>		  <b>break</b>;</td></tr>
+<tr><th id="466">466</th><td>		<a class="local col0 ref" href="#40count" title='count' data-ref="40count" data-ref-filename="40count">count</a> += <a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a>;</td></tr>
+<tr><th id="467">467</th><td>		<a class="local col2 ref" href="#42p" title='p' data-ref="42p" data-ref-filename="42p">p</a> = <a class="local col7 ref" href="#37inbuf" title='inbuf' data-ref="37inbuf" data-ref-filename="37inbuf">inbuf</a>;</td></tr>
+<tr><th id="468">468</th><td>		<b>while</b> (<a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a>--) {</td></tr>
+<tr><th id="469">469</th><td>		    <a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> = *<a class="local col2 ref" href="#42p" title='p' data-ref="42p" data-ref-filename="42p">p</a>++;</td></tr>
+<tr><th id="470">470</th><td>		    <b>if</b> (<a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> &lt; <var>32</var> || <a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> == <var>127</var>) {</td></tr>
+<tr><th id="471">471</th><td>			<b>if</b> (<a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> !=  <var>9</var> &amp;&amp;	<i>/* Tab */</i></td></tr>
+<tr><th id="472">472</th><td>			    <a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> != <var>10</var> &amp;&amp;	<i>/* LF */</i></td></tr>
+<tr><th id="473">473</th><td>			    <a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> != <var>12</var> &amp;&amp;	<i>/* FF */</i></td></tr>
+<tr><th id="474">474</th><td>			    <a class="local col1 ref" href="#41c" title='c' data-ref="41c" data-ref-filename="41c">c</a> != <var>13</var>) {	<i>/* CR */</i></td></tr>
+<tr><th id="475">475</th><td>			    <a class="local col8 ref" href="#38isbinary" title='isbinary' data-ref="38isbinary" data-ref-filename="38isbinary">isbinary</a> = <var>1</var>;</td></tr>
+<tr><th id="476">476</th><td>			    <a class="macro" href="debug.h.html#34" title="dodebug(3,(UCHAR *)&quot;fileinfo BINARY&quot;,(UCHAR *)0,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#15" title="3" data-ref="_M/DB_MSG">DB_MSG</a>,<q>"fileinfo BINARY"</q>,<var>0</var>,<var>0</var>);</td></tr>
+<tr><th id="477">477</th><td>			    <b>break</b>;</td></tr>
+<tr><th id="478">478</th><td>			}</td></tr>
+<tr><th id="479">479</th><td>		    }</td></tr>
+<tr><th id="480">480</th><td>		}</td></tr>
+<tr><th id="481">481</th><td>	    }</td></tr>
+<tr><th id="482">482</th><td>	    <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a>(<a class="local col6 ref" href="#36fp" title='fp' data-ref="36fp" data-ref-filename="36fp">fp</a>);</td></tr>
+<tr><th id="483">483</th><td>	    *<a class="local col2 ref" href="#32type" title='type' data-ref="32type" data-ref-filename="32type">type</a> = <a class="local col8 ref" href="#38isbinary" title='isbinary' data-ref="38isbinary" data-ref-filename="38isbinary">isbinary</a>;</td></tr>
+<tr><th id="484">484</th><td>	}</td></tr>
+<tr><th id="485">485</th><td>    }</td></tr>
+<tr><th id="486">486</th><td><u>#<span data-ppcond="441">endif</span> /* F_SCAN */</u></td></tr>
+<tr><th id="487">487</th><td></td></tr>
+<tr><th id="488">488</th><td>    <b>return</b>((<a class="typedef" href="cdefs.h.html#ULONG" title='ULONG' data-type='unsigned long' data-ref="ULONG" data-ref-filename="ULONG">ULONG</a>)(<a class="local col4 ref" href="#34statbuf" title='statbuf' data-ref="34statbuf" data-ref-filename="34statbuf">statbuf</a>.<a class="ref field" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_size" title='stat::st_size' data-ref="stat::st_size" data-ref-filename="stat..st_size">st_size</a>));</td></tr>
+<tr><th id="489">489</th><td>}</td></tr>
+<tr><th id="490">490</th><td></td></tr>
+<tr><th id="491">491</th><td></td></tr>
+<tr><th id="492">492</th><td><i>/*  R E A D F I L E  --  Read data from a file  */</i></td></tr>
+<tr><th id="493">493</th><td></td></tr>
+<tr><th id="494">494</th><td><em>int</em></td></tr>
+<tr><th id="495">495</th><td><dfn class="decl def fn" id="readfile" title='readfile' data-ref="readfile" data-ref-filename="readfile">readfile</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col3 decl" id="43k" title='k' data-type='struct k_data *' data-ref="43k" data-ref-filename="43k">k</dfn>) {</td></tr>
+<tr><th id="496">496</th><td>    <b>if</b> (!<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinptr" title='k_data::zinptr' data-ref="k_data::zinptr" data-ref-filename="k_data..zinptr">zinptr</a>) {</td></tr>
+<tr><th id="497">497</th><td><u>#<span data-ppcond="497">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="498">498</th><td>	<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fprintf" title='fprintf' data-ref="fprintf" data-ref-filename="fprintf">fprintf</a>(<a class="tu ref" href="#dp" title='dp' data-use='r' data-ref="dp" data-ref-filename="dp">dp</a>,<q>"readfile ZINPTR NOT SET\n"</q>);</td></tr>
+<tr><th id="499">499</th><td><u>#<span data-ppcond="497">endif</span> /* DEBUG */</u></td></tr>
+<tr><th id="500">500</th><td>	<b>return</b>(<a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>);</td></tr>
+<tr><th id="501">501</th><td>    }</td></tr>
+<tr><th id="502">502</th><td>    <b>if</b> (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a> &lt; <var>1</var>) {		<i>/* Nothing in buffer - must refill */</i></td></tr>
+<tr><th id="503">503</th><td>	<b>if</b> (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::binary" title='k_data::binary' data-ref="k_data::binary" data-ref-filename="k_data..binary">binary</a>) {		<i>/* Binary - just read raw buffers */</i></td></tr>
+<tr><th id="504">504</th><td>	    <a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::dummy" title='k_data::dummy' data-ref="k_data::dummy" data-ref-filename="k_data..dummy">dummy</a> = <var>0</var>;</td></tr>
+<tr><th id="505">505</th><td>	    <a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fread" title='fread' data-ref="fread" data-ref-filename="fread">fread</a>(<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>, <var>1</var>, <a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinlen" title='k_data::zinlen' data-ref="k_data::zinlen" data-ref-filename="k_data..zinlen">zinlen</a>, <a class="tu ref" href="#ifile" title='ifile' data-use='r' data-ref="ifile" data-ref-filename="ifile">ifile</a>);</td></tr>
+<tr><th id="506">506</th><td>	    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;readfile binary ok zincnt&quot;,(UCHAR *)0,(long)(k-&gt;zincnt))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"readfile binary ok zincnt"</q>,<var>0</var>,<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>);</td></tr>
+<tr><th id="507">507</th><td></td></tr>
+<tr><th id="508">508</th><td>	} <b>else</b> {			<i>/* Text mode needs LF/CRLF handling */</i></td></tr>
+<tr><th id="509">509</th><td>	    <em>int</em> <dfn class="local col4 decl" id="44c" title='c' data-type='int' data-ref="44c" data-ref-filename="44c">c</dfn>;			<i>/* Current character */</i></td></tr>
+<tr><th id="510">510</th><td>	    <b>for</b> (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a> = <var>0</var>; (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a> &lt; (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinlen" title='k_data::zinlen' data-ref="k_data::zinlen" data-ref-filename="k_data..zinlen">zinlen</a> - <var>2</var>)); (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>)++) {</td></tr>
+<tr><th id="511">511</th><td>		<b>if</b> ((<a class="local col4 ref" href="#44c" title='c' data-ref="44c" data-ref-filename="44c">c</a> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#496" title="(--(ifile)-&gt;_r &lt; 0 ? __srget(ifile) : (int)(*(ifile)-&gt;_p++))" data-ref="_M/getc">getc</a>(<a class="tu ref" href="#ifile" title='ifile' data-use='r' data-ref="ifile" data-ref-filename="ifile">ifile</a>)) == <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#183" title="(-1)" data-ref="_M/EOF">EOF</a>)</td></tr>
+<tr><th id="512">512</th><td>		  <b>break</b>;</td></tr>
+<tr><th id="513">513</th><td>		<b>if</b> (<a class="local col4 ref" href="#44c" title='c' data-ref="44c" data-ref-filename="44c">c</a> == <kbd>'\n'</kbd>)		<i>/* Have newline? */</i></td></tr>
+<tr><th id="514">514</th><td>		  <a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>[(<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>)++] = <kbd>'\r'</kbd>; <i>/* Insert CR */</i></td></tr>
+<tr><th id="515">515</th><td>		<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>[<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>] = <a class="local col4 ref" href="#44c" title='c' data-ref="44c" data-ref-filename="44c">c</a>;</td></tr>
+<tr><th id="516">516</th><td>	    }</td></tr>
+<tr><th id="517">517</th><td><u>#<span data-ppcond="517">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="518">518</th><td>	    <a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>[<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="519">519</th><td>	    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;readfile text ok zincnt&quot;,(UCHAR *)0,(long)(k-&gt;zincnt))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"readfile text ok zincnt"</q>,<var>0</var>,<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>);</td></tr>
+<tr><th id="520">520</th><td><u>#<span data-ppcond="517">endif</span> /* DEBUG */</u></td></tr>
+<tr><th id="521">521</th><td>	}</td></tr>
+<tr><th id="522">522</th><td>	<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>[<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>] = <kbd>'\0'</kbd>;	<i>/* Terminate. */</i></td></tr>
+<tr><th id="523">523</th><td>	<b>if</b> (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a> == <var>0</var>)		<i>/* Check for EOF */</i></td></tr>
+<tr><th id="524">524</th><td>	  <b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="525">525</th><td>	<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinptr" title='k_data::zinptr' data-ref="k_data::zinptr" data-ref-filename="k_data..zinptr">zinptr</a> = <a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinbuf" title='k_data::zinbuf' data-ref="k_data::zinbuf" data-ref-filename="k_data..zinbuf">zinbuf</a>;		<i>/* Not EOF - reset pointer */</i></td></tr>
+<tr><th id="526">526</th><td>    }</td></tr>
+<tr><th id="527">527</th><td>    (<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>)--;			<i>/* Return first byte. */</i></td></tr>
+<tr><th id="528">528</th><td></td></tr>
+<tr><th id="529">529</th><td>    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;readfile exit zincnt&quot;,(UCHAR *)0,(long)(k-&gt;zincnt))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"readfile exit zincnt"</q>,<var>0</var>,<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zincnt" title='k_data::zincnt' data-ref="k_data::zincnt" data-ref-filename="k_data..zincnt">zincnt</a>);</td></tr>
+<tr><th id="530">530</th><td>    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;readfile exit zinptr&quot;,(UCHAR *)0,(long)(k-&gt;zinptr))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"readfile exit zinptr"</q>,<var>0</var>,<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinptr" title='k_data::zinptr' data-ref="k_data::zinptr" data-ref-filename="k_data..zinptr">zinptr</a>);</td></tr>
+<tr><th id="531">531</th><td>    <b>return</b>(*(<a class="local col3 ref" href="#43k" title='k' data-ref="43k" data-ref-filename="43k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::zinptr" title='k_data::zinptr' data-ref="k_data::zinptr" data-ref-filename="k_data..zinptr">zinptr</a>)++ &amp; <var>0xff</var>);</td></tr>
+<tr><th id="532">532</th><td>}</td></tr>
+<tr><th id="533">533</th><td></td></tr>
+<tr><th id="534">534</th><td></td></tr>
+<tr><th id="535">535</th><td><i>/*  W R I T E F I L E  --  Write data to file  */</i></td></tr>
+<tr><th id="536">536</th><td><i>/*</i></td></tr>
+<tr><th id="537">537</th><td><i>  Call with:</i></td></tr>
+<tr><th id="538">538</th><td><i>    Kermit struct</i></td></tr>
+<tr><th id="539">539</th><td><i>    String pointer</i></td></tr>
+<tr><th id="540">540</th><td><i>    Length</i></td></tr>
+<tr><th id="541">541</th><td><i>  Returns:</i></td></tr>
+<tr><th id="542">542</th><td><i>    X_OK on success</i></td></tr>
+<tr><th id="543">543</th><td><i>    X_ERROR on failure, such as i/o error, space used up, etc</i></td></tr>
+<tr><th id="544">544</th><td><i>*/</i></td></tr>
+<tr><th id="545">545</th><td><em>int</em></td></tr>
+<tr><th id="546">546</th><td><dfn class="decl def fn" id="writefile" title='writefile' data-ref="writefile" data-ref-filename="writefile">writefile</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col5 decl" id="45k" title='k' data-type='struct k_data *' data-ref="45k" data-ref-filename="45k">k</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col6 decl" id="46s" title='s' data-type='UCHAR *' data-ref="46s" data-ref-filename="46s">s</dfn>, <em>int</em> <dfn class="local col7 decl" id="47n" title='n' data-type='int' data-ref="47n" data-ref-filename="47n">n</dfn>) {</td></tr>
+<tr><th id="547">547</th><td>    <em>int</em> <dfn class="local col8 decl" id="48rc" title='rc' data-type='int' data-ref="48rc" data-ref-filename="48rc">rc</dfn>;</td></tr>
+<tr><th id="548">548</th><td>    <a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a> = <a class="macro" href="kermit.h.html#290" title="0" data-ref="_M/X_OK">X_OK</a>;</td></tr>
+<tr><th id="549">549</th><td></td></tr>
+<tr><th id="550">550</th><td>    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;writefile binary&quot;,(UCHAR *)0,(long)(k-&gt;binary))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"writefile binary"</q>,<var>0</var>,<a class="local col5 ref" href="#45k" title='k' data-ref="45k" data-ref-filename="45k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::binary" title='k_data::binary' data-ref="k_data::binary" data-ref-filename="k_data..binary">binary</a>);</td></tr>
+<tr><th id="551">551</th><td></td></tr>
+<tr><th id="552">552</th><td>    <b>if</b> (<a class="local col5 ref" href="#45k" title='k' data-ref="45k" data-ref-filename="45k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::binary" title='k_data::binary' data-ref="k_data::binary" data-ref-filename="k_data..binary">binary</a>) {			<i>/* Binary mode, just write it */</i></td></tr>
+<tr><th id="553">553</th><td>	<b>if</b> (<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="tu ref" href="#ofile" title='ofile' data-use='r' data-ref="ofile" data-ref-filename="ofile">ofile</a>,<a class="local col6 ref" href="#46s" title='s' data-ref="46s" data-ref-filename="46s">s</a>,<a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>) != <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>)</td></tr>
+<tr><th id="554">554</th><td>	  <a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a> = <a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>;</td></tr>
+<tr><th id="555">555</th><td>    } <b>else</b> {				<i>/* Text mode, skip CRs */</i></td></tr>
+<tr><th id="556">556</th><td>	<a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> * <dfn class="local col9 decl" id="49p" title='p' data-type='UCHAR *' data-ref="49p" data-ref-filename="49p">p</dfn>, * <dfn class="local col0 decl" id="50q" title='q' data-type='UCHAR *' data-ref="50q" data-ref-filename="50q">q</dfn>;</td></tr>
+<tr><th id="557">557</th><td>	<em>int</em> <dfn class="local col1 decl" id="51i" title='i' data-type='int' data-ref="51i" data-ref-filename="51i">i</dfn>;</td></tr>
+<tr><th id="558">558</th><td>	<a class="local col0 ref" href="#50q" title='q' data-ref="50q" data-ref-filename="50q">q</a> = <a class="local col6 ref" href="#46s" title='s' data-ref="46s" data-ref-filename="46s">s</a>;</td></tr>
+<tr><th id="559">559</th><td></td></tr>
+<tr><th id="560">560</th><td>	<b>while</b> (<var>1</var>) {</td></tr>
+<tr><th id="561">561</th><td>	    <b>for</b> (<a class="local col9 ref" href="#49p" title='p' data-ref="49p" data-ref-filename="49p">p</a> = <a class="local col0 ref" href="#50q" title='q' data-ref="50q" data-ref-filename="50q">q</a>, <a class="local col1 ref" href="#51i" title='i' data-ref="51i" data-ref-filename="51i">i</a> = <var>0</var>; ((*<a class="local col9 ref" href="#49p" title='p' data-ref="49p" data-ref-filename="49p">p</a>) &amp;&amp; (*<a class="local col9 ref" href="#49p" title='p' data-ref="49p" data-ref-filename="49p">p</a> != (<a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a>)<var>13</var>)); <a class="local col9 ref" href="#49p" title='p' data-ref="49p" data-ref-filename="49p">p</a>++, <a class="local col1 ref" href="#51i" title='i' data-ref="51i" data-ref-filename="51i">i</a>++) ;</td></tr>
+<tr><th id="562">562</th><td>	    <b>if</b> (<a class="local col1 ref" href="#51i" title='i' data-ref="51i" data-ref-filename="51i">i</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="563">563</th><td>	      <b>if</b> (<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="tu ref" href="#ofile" title='ofile' data-use='r' data-ref="ofile" data-ref-filename="ofile">ofile</a>,<a class="local col0 ref" href="#50q" title='q' data-ref="50q" data-ref-filename="50q">q</a>,<a class="local col1 ref" href="#51i" title='i' data-ref="51i" data-ref-filename="51i">i</a>) != <a class="local col1 ref" href="#51i" title='i' data-ref="51i" data-ref-filename="51i">i</a>)</td></tr>
+<tr><th id="564">564</th><td>		<a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a> = <a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>;</td></tr>
+<tr><th id="565">565</th><td>	    <b>if</b> (!*<a class="local col9 ref" href="#49p" title='p' data-ref="49p" data-ref-filename="49p">p</a>) <b>break</b>;</td></tr>
+<tr><th id="566">566</th><td>	    <a class="local col0 ref" href="#50q" title='q' data-ref="50q" data-ref-filename="50q">q</a> = <a class="local col9 ref" href="#49p" title='p' data-ref="49p" data-ref-filename="49p">p</a>+<var>1</var>;</td></tr>
+<tr><th id="567">567</th><td>	}</td></tr>
+<tr><th id="568">568</th><td>    }</td></tr>
+<tr><th id="569">569</th><td>    <b>return</b>(<a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a>);</td></tr>
+<tr><th id="570">570</th><td>}</td></tr>
+<tr><th id="571">571</th><td></td></tr>
+<tr><th id="572">572</th><td><i>/*  C L O S E F I L E  --  Close output file  */</i></td></tr>
+<tr><th id="573">573</th><td><i>/*</i></td></tr>
+<tr><th id="574">574</th><td><i>  Mode = 1 for input file, mode = 2 or 3 for output file.</i></td></tr>
+<tr><th id="575">575</th><td><i></i></td></tr>
+<tr><th id="576">576</th><td><i>  For output files, the character c is the character (if any) from the Z</i></td></tr>
+<tr><th id="577">577</th><td><i>  packet data field.  If it is D, it means the file transfer was canceled</i></td></tr>
+<tr><th id="578">578</th><td><i>  in midstream by the sender, and the file is therefore incomplete.  This</i></td></tr>
+<tr><th id="579">579</th><td><i>  routine should check for that and decide what to do.  It should be</i></td></tr>
+<tr><th id="580">580</th><td><i>  harmless to call this routine for a file that that is not open.</i></td></tr>
+<tr><th id="581">581</th><td><i>*/</i></td></tr>
+<tr><th id="582">582</th><td><em>int</em></td></tr>
+<tr><th id="583">583</th><td><dfn class="decl def fn" id="closefile" title='closefile' data-ref="closefile" data-ref-filename="closefile">closefile</dfn>(<b>struct</b> <a class="type" href="kermit.h.html#k_data" title='k_data' data-ref="k_data" data-ref-filename="k_data">k_data</a> * <dfn class="local col2 decl" id="52k" title='k' data-type='struct k_data *' data-ref="52k" data-ref-filename="52k">k</dfn>, <a class="typedef" href="cdefs.h.html#UCHAR" title='UCHAR' data-type='unsigned char' data-ref="UCHAR" data-ref-filename="UCHAR">UCHAR</a> <dfn class="local col3 decl" id="53c" title='c' data-type='UCHAR' data-ref="53c" data-ref-filename="53c">c</dfn>, <em>int</em> <dfn class="local col4 decl" id="54mode" title='mode' data-type='int' data-ref="54mode" data-ref-filename="54mode">mode</dfn>) {</td></tr>
+<tr><th id="584">584</th><td>    <em>int</em> <dfn class="local col5 decl" id="55rc" title='rc' data-type='int' data-ref="55rc" data-ref-filename="55rc">rc</dfn> = <a class="macro" href="kermit.h.html#290" title="0" data-ref="_M/X_OK">X_OK</a>;			<i>/* Return code */</i></td></tr>
+<tr><th id="585">585</th><td></td></tr>
+<tr><th id="586">586</th><td>    <b>switch</b> (<a class="local col4 ref" href="#54mode" title='mode' data-ref="54mode" data-ref-filename="54mode">mode</a>) {</td></tr>
+<tr><th id="587">587</th><td>      <b>case</b> <var>1</var>:				<i>/* Closing input file */</i></td></tr>
+<tr><th id="588">588</th><td>	<b>if</b> (!<a class="tu ref" href="#ifile" title='ifile' data-use='r' data-ref="ifile" data-ref-filename="ifile">ifile</a>)			<i>/* If not not open */</i></td></tr>
+<tr><th id="589">589</th><td>	  <b>break</b>;			<i>/* do nothing but succeed */</i></td></tr>
+<tr><th id="590">590</th><td>	<a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;closefile (input)&quot;,(UCHAR *)k-&gt;filename,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"closefile (input)"</q>,<a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::filename" title='k_data::filename' data-ref="k_data::filename" data-ref-filename="k_data..filename">filename</a>,<var>0</var>);</td></tr>
+<tr><th id="591">591</th><td>	<b>if</b> (<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a>(<a class="tu ref" href="#ifile" title='ifile' data-use='r' data-ref="ifile" data-ref-filename="ifile">ifile</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="592">592</th><td>	  <a class="local col5 ref" href="#55rc" title='rc' data-ref="55rc" data-ref-filename="55rc">rc</a> = <a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>;</td></tr>
+<tr><th id="593">593</th><td>	<b>break</b>;</td></tr>
+<tr><th id="594">594</th><td>      <b>case</b> <var>2</var>:				<i>/* Closing output file */</i></td></tr>
+<tr><th id="595">595</th><td>      <b>case</b> <var>3</var>:</td></tr>
+<tr><th id="596">596</th><td>	<b>if</b> (<a class="tu ref" href="#ofile" title='ofile' data-use='r' data-ref="ofile" data-ref-filename="ofile">ofile</a> &lt; <var>0</var>)			<i>/* If not open */</i></td></tr>
+<tr><th id="597">597</th><td>	  <b>break</b>;			<i>/* do nothing but succeed */</i></td></tr>
+<tr><th id="598">598</th><td>	<a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;closefile (output) name&quot;,(UCHAR *)k-&gt;filename,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"closefile (output) name"</q>,<a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::filename" title='k_data::filename' data-ref="k_data::filename" data-ref-filename="k_data..filename">filename</a>,<var>0</var>);</td></tr>
+<tr><th id="599">599</th><td>	<a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;closefile (output) keep&quot;,(UCHAR *)0,(long)(k-&gt;ikeep))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"closefile (output) keep"</q>,<var>0</var>,<a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::ikeep" title='k_data::ikeep' data-ref="k_data::ikeep" data-ref-filename="k_data..ikeep">ikeep</a>);</td></tr>
+<tr><th id="600">600</th><td>	<b>if</b> (<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#ofile" title='ofile' data-use='r' data-ref="ofile" data-ref-filename="ofile">ofile</a>) &lt; <var>0</var>) {		<i>/* Try to close */</i></td></tr>
+<tr><th id="601">601</th><td>	    <a class="local col5 ref" href="#55rc" title='rc' data-ref="55rc" data-ref-filename="55rc">rc</a> = <a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>;</td></tr>
+<tr><th id="602">602</th><td>	} <b>else</b> <b>if</b> ((<a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::ikeep" title='k_data::ikeep' data-ref="k_data::ikeep" data-ref-filename="k_data..ikeep">ikeep</a> == <var>0</var>) &amp;&amp;	<i>/* Don't keep incomplete files */</i></td></tr>
+<tr><th id="603">603</th><td>		   (<a class="local col3 ref" href="#53c" title='c' data-ref="53c" data-ref-filename="53c">c</a> == <kbd>'D'</kbd>)) {	<i>/* This file was incomplete */</i></td></tr>
+<tr><th id="604">604</th><td>	    <b>if</b> (<a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::filename" title='k_data::filename' data-ref="k_data::filename" data-ref-filename="k_data..filename">filename</a>) {</td></tr>
+<tr><th id="605">605</th><td>		<a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;deleting incomplete&quot;,(UCHAR *)k-&gt;filename,(long)(0))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"deleting incomplete"</q>,<a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a>-&gt;<a class="ref field" href="kermit.h.html#k_data::filename" title='k_data::filename' data-ref="k_data::filename" data-ref-filename="k_data..filename">filename</a>,<var>0</var>);</td></tr>
+<tr><th id="606">606</th><td>		<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#unlink" title='unlink' data-ref="unlink" data-ref-filename="unlink">unlink</a>(<span class='warning' title="passing &apos;UCHAR *&apos; (aka &apos;unsigned char *&apos;) to parameter of type &apos;const char *&apos; converts between pointers to integer types with different sign"><a class="local col2 ref" href="#52k" title='k' data-ref="52k" data-ref-filename="52k">k</a></span>-&gt;<a class="ref field" href="kermit.h.html#k_data::filename" title='k_data::filename' data-ref="k_data::filename" data-ref-filename="k_data..filename">filename</a>);	<i>/* Delete it. */</i></td></tr>
+<tr><th id="607">607</th><td>	    }</td></tr>
+<tr><th id="608">608</th><td>	}</td></tr>
+<tr><th id="609">609</th><td>	<b>break</b>;</td></tr>
+<tr><th id="610">610</th><td>      <b>default</b>:</td></tr>
+<tr><th id="611">611</th><td>	<a class="local col5 ref" href="#55rc" title='rc' data-ref="55rc" data-ref-filename="55rc">rc</a> = <a class="macro" href="kermit.h.html#289" title="-1" data-ref="_M/X_ERROR">X_ERROR</a>;</td></tr>
+<tr><th id="612">612</th><td>    }</td></tr>
+<tr><th id="613">613</th><td>    <b>return</b>(<a class="local col5 ref" href="#55rc" title='rc' data-ref="55rc" data-ref-filename="55rc">rc</a>);</td></tr>
+<tr><th id="614">614</th><td>}</td></tr>
+<tr><th id="615">615</th><td></td></tr>
+<tr><th id="616">616</th><td><u>#<span data-ppcond="616">ifdef</span> <a class="macro" href="debug.h.html#5" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="617">617</th><td><em>int</em> <dfn class="decl def fn" id="xerror" title='xerror' data-ref="xerror" data-ref-filename="xerror">xerror</dfn>() {</td></tr>
+<tr><th id="618">618</th><td>    <em>unsigned</em> <em>int</em> <dfn class="local col6 decl" id="56x" title='x' data-type='unsigned int' data-ref="56x" data-ref-filename="56x">x</dfn>;</td></tr>
+<tr><th id="619">619</th><td>    <b>extern</b> <em>int</em> <dfn class="decl" id="errorrate" title='errorrate' data-ref="errorrate" data-ref-filename="errorrate">errorrate</dfn>;		<i>/* Fix this - NO EXTERNS */</i></td></tr>
+<tr><th id="620">620</th><td>    <b>if</b> (!<a class="ref" href="#errorrate" title='errorrate' data-ref="errorrate" data-ref-filename="errorrate">errorrate</a>)</td></tr>
+<tr><th id="621">621</th><td>      <b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="622">622</th><td>    <a class="local col6 ref" href="#56x" title='x' data-ref="56x" data-ref-filename="56x">x</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#rand" title='rand' data-ref="rand" data-ref-filename="rand">rand</a>() % <var>100</var>;			<i>/* Fix this - NO C LIBRARY */</i></td></tr>
+<tr><th id="623">623</th><td>    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;RANDOM&quot;,(UCHAR *)0,(long)(x))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"RANDOM"</q>,<var>0</var>,<a class="local col6 ref" href="#56x" title='x' data-ref="56x" data-ref-filename="56x">x</a>);</td></tr>
+<tr><th id="624">624</th><td>    <a class="macro" href="debug.h.html#34" title="dodebug(2,(UCHAR *)&quot;ERROR&quot;,(UCHAR *)0,(long)((x &lt; errorrate)))" data-ref="_M/debug">debug</a>(<a class="macro" href="debug.h.html#14" title="2" data-ref="_M/DB_LOG">DB_LOG</a>,<q>"ERROR"</q>,<var>0</var>,(<a class="local col6 ref" href="#56x" title='x' data-ref="56x" data-ref-filename="56x">x</a> &lt; <a class="ref" href="#errorrate" title='errorrate' data-ref="errorrate" data-ref-filename="errorrate">errorrate</a>));</td></tr>
+<tr><th id="625">625</th><td>    <b>return</b>(<a class="local col6 ref" href="#56x" title='x' data-ref="56x" data-ref-filename="56x">x</a> &lt; <a class="ref" href="#errorrate" title='errorrate' data-ref="errorrate" data-ref-filename="errorrate">errorrate</a>);</td></tr>
+<tr><th id="626">626</th><td>}</td></tr>
+<tr><th id="627">627</th><td><u>#<span data-ppcond="616">endif</span> /* DEBUG */</u></td></tr>
+<tr><th id="628">628</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

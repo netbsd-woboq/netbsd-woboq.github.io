@@ -1,0 +1,864 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>decimal64.c source code [netbsd/external/gpl3/gcc/dist/libdecnumber/dpd/decimal64.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/libdecnumber/dpd/decimal64.c'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>external</a>/<a href='../../../..'>gpl3</a>/<a href='../../..'>gcc</a>/<a href='../..'>dist</a>/<a href='..'>libdecnumber</a>/<a href='./'>dpd</a>/<a href='decimal64.c.html'>decimal64.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* Decimal 64-bit format module for the decNumber C Library.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 2005-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Contributed by IBM Corporation.  Author Mike Cowlishaw.</i></td></tr>
+<tr><th id="4">4</th><td><i></i></td></tr>
+<tr><th id="5">5</th><td><i>   This file is part of GCC.</i></td></tr>
+<tr><th id="6">6</th><td><i></i></td></tr>
+<tr><th id="7">7</th><td><i>   GCC is free software; you can redistribute it and/or modify it under</i></td></tr>
+<tr><th id="8">8</th><td><i>   the terms of the GNU General Public License as published by the Free</i></td></tr>
+<tr><th id="9">9</th><td><i>   Software Foundation; either version 3, or (at your option) any later</i></td></tr>
+<tr><th id="10">10</th><td><i>   version.</i></td></tr>
+<tr><th id="11">11</th><td><i></i></td></tr>
+<tr><th id="12">12</th><td><i>   GCC is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="13">13</th><td><i>   WARRANTY; without even the implied warranty of MERCHANTABILITY or</i></td></tr>
+<tr><th id="14">14</th><td><i>   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License</i></td></tr>
+<tr><th id="15">15</th><td><i>   for more details.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>Under Section 7 of GPL version 3, you are granted additional</i></td></tr>
+<tr><th id="18">18</th><td><i>permissions described in the GCC Runtime Library Exception, version</i></td></tr>
+<tr><th id="19">19</th><td><i>3.1, as published by the Free Software Foundation.</i></td></tr>
+<tr><th id="20">20</th><td><i></i></td></tr>
+<tr><th id="21">21</th><td><i>You should have received a copy of the GNU General Public License and</i></td></tr>
+<tr><th id="22">22</th><td><i>a copy of the GCC Runtime Library Exception along with this program;</i></td></tr>
+<tr><th id="23">23</th><td><i>see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see</i></td></tr>
+<tr><th id="24">24</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="25">25</th><td></td></tr>
+<tr><th id="26">26</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="27">27</th><td><i>/* Decimal 64-bit format module 				      */</i></td></tr>
+<tr><th id="28">28</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="29">29</th><td><i>/* This module comprises the routines for decimal64 format numbers.   */</i></td></tr>
+<tr><th id="30">30</th><td><i>/* Conversions are supplied to and from decNumber and String.	      */</i></td></tr>
+<tr><th id="31">31</th><td><i>/*								      */</i></td></tr>
+<tr><th id="32">32</th><td><i>/* This is used when decNumber provides operations, either for all    */</i></td></tr>
+<tr><th id="33">33</th><td><i>/* operations or as a proxy between decNumber and decSingle.	      */</i></td></tr>
+<tr><th id="34">34</th><td><i>/*								      */</i></td></tr>
+<tr><th id="35">35</th><td><i>/* Error handling is the same as decNumber (qv.).		      */</i></td></tr>
+<tr><th id="36">36</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="37">37</th><td><u>#include <a href="../../../../../../../include/string.h.html">&lt;string.h&gt;</a>	      /* [for memset/memcpy] */</u></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="../../../../../../../include/stdio.h.html">&lt;stdio.h&gt;</a>	      /* [for printf] */</u></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../dconfig.h.html">"dconfig.h"</a>          /* GCC definitions */</u></td></tr>
+<tr><th id="41">41</th><td><u>#define  <dfn class="macro" id="_M/DECNUMDIGITS" data-ref="_M/DECNUMDIGITS">DECNUMDIGITS</dfn> 16      /* make decNumbers with space for 16 */</u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../decNumber.h.html">"decNumber.h"</a>	      /* base number library */</u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../decNumberLocal.h.html">"decNumberLocal.h"</a>   /* decNumber local types, etc. */</u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="decimal64.h.html">"decimal64.h"</a>	      /* our primary include */</u></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><i>/* Utility routines and tables [in decimal64.c]; externs for C++ */</i></td></tr>
+<tr><th id="47">47</th><td><b>extern</b> <em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="decl" id="COMBEXP" title='COMBEXP' data-ref="COMBEXP" data-ref-filename="COMBEXP">COMBEXP</dfn>[<var>32</var>], <dfn class="decl" id="COMBMSD" title='COMBMSD' data-ref="COMBMSD" data-ref-filename="COMBMSD">COMBMSD</dfn>[<var>32</var>];</td></tr>
+<tr><th id="48">48</th><td><b>extern</b> <em>const</em> <a class="macro" href="../decNumberLocal.h.html#90" title="uint16_t" data-ref="_M/uShort">uShort</a> <a class="decl" href="../decNumberLocal.h.html#DPD2BIN" title='DPD2BIN' data-ref="DPD2BIN" data-ref-filename="DPD2BIN" id="DPD2BIN">DPD2BIN</a>[<var>1024</var>];</td></tr>
+<tr><th id="49">49</th><td><b>extern</b> <em>const</em> <a class="macro" href="../decNumberLocal.h.html#90" title="uint16_t" data-ref="_M/uShort">uShort</a> <a class="decl" href="../decNumberLocal.h.html#BIN2DPD" title='BIN2DPD' data-ref="BIN2DPD" data-ref-filename="BIN2DPD" id="BIN2DPD">BIN2DPD</a>[<var>1000</var>];</td></tr>
+<tr><th id="50">50</th><td><b>extern</b> <em>const</em> <a class="macro" href="../decNumberLocal.h.html#88" title="uint8_t" data-ref="_M/uByte">uByte</a>  <dfn class="decl" id="BIN2CHAR" title='BIN2CHAR' data-ref="BIN2CHAR" data-ref-filename="BIN2CHAR">BIN2CHAR</dfn>[<var>4001</var>];</td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td><b>extern</b> <em>void</em> <a class="decl fn" href="#decDigitsFromDPD" title='decDigitsFromDPD' data-ref="decDigitsFromDPD" data-ref-filename="decDigitsFromDPD">decDigitsFromDPD</a>(<a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> *, <em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> *, <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>);</td></tr>
+<tr><th id="53">53</th><td><b>extern</b> <em>void</em> <a class="decl fn" href="#decDigitsToDPD" title='decDigitsToDPD' data-ref="decDigitsToDPD" data-ref-filename="decDigitsToDPD">decDigitsToDPD</a>(<em>const</em> <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> *, <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> *, <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>);</td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><u>#<span data-ppcond="55">if</span> <a class="macro" href="../decNumberLocal.h.html#69" title="0" data-ref="_M/DECTRACE">DECTRACE</a> || <a class="macro" href="../decNumberLocal.h.html#63" title="0" data-ref="_M/DECCHECK">DECCHECK</a></u></td></tr>
+<tr><th id="56">56</th><td><em>void</em> decimal64Show(<em>const</em> decimal64 *);		  <i>/* for debug */</i></td></tr>
+<tr><th id="57">57</th><td><b>extern</b> <em>void</em> decNumberShow(<em>const</em> decNumber *);	  <i>/* .. */</i></td></tr>
+<tr><th id="58">58</th><td><u>#<span data-ppcond="55">endif</span></u></td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td><i>/* Useful macro */</i></td></tr>
+<tr><th id="61">61</th><td><i>/* Clear a structure (e.g., a decNumber) */</i></td></tr>
+<tr><th id="62">62</th><td><u>#define <dfn class="macro" id="_M/DEC_clear" data-ref="_M/DEC_clear">DEC_clear</dfn>(d) memset(d, 0, sizeof(*d))</u></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><i>/* define and include the tables to use for conversions */</i></td></tr>
+<tr><th id="65">65</th><td><u>#define <dfn class="macro" id="_M/DEC_BIN2CHAR" data-ref="_M/DEC_BIN2CHAR">DEC_BIN2CHAR</dfn> 1</u></td></tr>
+<tr><th id="66">66</th><td><u>#define <dfn class="macro" id="_M/DEC_DPD2BIN" data-ref="_M/DEC_DPD2BIN">DEC_DPD2BIN</dfn>  1</u></td></tr>
+<tr><th id="67">67</th><td><u>#define <dfn class="macro" id="_M/DEC_BIN2DPD" data-ref="_M/DEC_BIN2DPD">DEC_BIN2DPD</dfn>  1		   /* used for all sizes */</u></td></tr>
+<tr><th id="68">68</th><td><u>#include <a href="../decDPD.h.html">"decDPD.h"</a>		   /* lookup tables */</u></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="71">71</th><td><i>/* decimal64FromNumber -- convert decNumber to decimal64	      */</i></td></tr>
+<tr><th id="72">72</th><td><i>/*								      */</i></td></tr>
+<tr><th id="73">73</th><td><i>/*   ds is the target decimal64 				      */</i></td></tr>
+<tr><th id="74">74</th><td><i>/*   dn is the source number (assumed valid)			      */</i></td></tr>
+<tr><th id="75">75</th><td><i>/*   set is the context, used only for reporting errors 	      */</i></td></tr>
+<tr><th id="76">76</th><td><i>/*								      */</i></td></tr>
+<tr><th id="77">77</th><td><i>/* The set argument is used only for status reporting and for the     */</i></td></tr>
+<tr><th id="78">78</th><td><i>/* rounding mode (used if the coefficient is more than DECIMAL64_Pmax */</i></td></tr>
+<tr><th id="79">79</th><td><i>/* digits or an overflow is detected).	If the exponent is out of the */</i></td></tr>
+<tr><th id="80">80</th><td><i>/* valid range then Overflow or Underflow will be raised.	      */</i></td></tr>
+<tr><th id="81">81</th><td><i>/* After Underflow a subnormal result is possible.		      */</i></td></tr>
+<tr><th id="82">82</th><td><i>/*								      */</i></td></tr>
+<tr><th id="83">83</th><td><i>/* DEC_Clamped is set if the number has to be 'folded down' to fit,   */</i></td></tr>
+<tr><th id="84">84</th><td><i>/* by reducing its exponent and multiplying the coefficient by a      */</i></td></tr>
+<tr><th id="85">85</th><td><i>/* power of ten, or if the exponent on a zero had to be clamped.      */</i></td></tr>
+<tr><th id="86">86</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="87">87</th><td><a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> * <dfn class="decl def fn" id="decimal64FromNumber" title='decimal64FromNumber' data-ref="decimal64FromNumber" data-ref-filename="decimal64FromNumber">decimal64FromNumber</dfn>(<a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col1 decl" id="1d64" title='d64' data-type='decimal64 *' data-ref="1d64" data-ref-filename="1d64">d64</dfn>, <em>const</em> <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> *<dfn class="local col2 decl" id="2dn" title='dn' data-type='const decNumber *' data-ref="2dn" data-ref-filename="2dn">dn</dfn>,</td></tr>
+<tr><th id="88">88</th><td>				<a class="typedef" href="../decContext.h.html#decContext" title='decContext' data-type='struct decContext' data-ref="decContext" data-ref-filename="decContext">decContext</a> *<dfn class="local col3 decl" id="3set" title='set' data-type='decContext *' data-ref="3set" data-ref-filename="3set">set</dfn>) {</td></tr>
+<tr><th id="89">89</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col4 decl" id="4status" title='status' data-type='uint32_t' data-ref="4status" data-ref-filename="4status">status</dfn>=<var>0</var>;		   <i>/* status accumulator */</i></td></tr>
+<tr><th id="90">90</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a> <dfn class="local col5 decl" id="5ae" title='ae' data-type='int32_t' data-ref="5ae" data-ref-filename="5ae">ae</dfn>;			   <i>/* adjusted exponent */</i></td></tr>
+<tr><th id="91">91</th><td>  <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a>  <dfn class="local col6 decl" id="6dw" title='dw' data-type='decNumber' data-ref="6dw" data-ref-filename="6dw">dw</dfn>;		   <i>/* work */</i></td></tr>
+<tr><th id="92">92</th><td>  <a class="typedef" href="../decContext.h.html#decContext" title='decContext' data-type='struct decContext' data-ref="decContext" data-ref-filename="decContext">decContext</a> <dfn class="local col7 decl" id="7dc" title='dc' data-type='decContext' data-ref="7dc" data-ref-filename="7dc">dc</dfn>;		   <i>/* .. */</i></td></tr>
+<tr><th id="93">93</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col8 decl" id="8comb" title='comb' data-type='uint32_t' data-ref="8comb" data-ref-filename="8comb">comb</dfn>, <dfn class="local col9 decl" id="9exp" title='exp' data-type='uint32_t' data-ref="9exp" data-ref-filename="9exp">exp</dfn>;		   <i>/* .. */</i></td></tr>
+<tr><th id="94">94</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col0 decl" id="10uiwork" title='uiwork' data-type='uint32_t' data-ref="10uiwork" data-ref-filename="10uiwork">uiwork</dfn>;			   <i>/* for macros */</i></td></tr>
+<tr><th id="95">95</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col1 decl" id="11targar" title='targar' data-type='uint32_t [2]' data-ref="11targar" data-ref-filename="11targar">targar</dfn>[<var>2</var>]={<var>0</var>, <var>0</var>};	   <i>/* target 64-bit */</i></td></tr>
+<tr><th id="96">96</th><td>  <u>#define <dfn class="macro" id="_M/targhi" data-ref="_M/targhi">targhi</dfn> <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>[1]	   /* name the word with the sign */</u></td></tr>
+<tr><th id="97">97</th><td>  <u>#define <dfn class="macro" id="_M/targlo" data-ref="_M/targlo">targlo</dfn> <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>[0]	   /* and the other */</u></td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td>  <i>/* If the number has too many digits, or the exponent could be */</i></td></tr>
+<tr><th id="100">100</th><td>  <i>/* out of range then reduce the number under the appropriate */</i></td></tr>
+<tr><th id="101">101</th><td>  <i>/* constraints.  This could push the number to Infinity or zero, */</i></td></tr>
+<tr><th id="102">102</th><td>  <i>/* so this check and rounding must be done before generating the */</i></td></tr>
+<tr><th id="103">103</th><td>  <i>/* decimal64] */</i></td></tr>
+<tr><th id="104">104</th><td>  <a class="local col5 ref" href="#5ae" title='ae' data-ref="5ae" data-ref-filename="5ae">ae</a>=<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::exponent" title='(anonymous struct)::exponent' data-ref="(anonymous)::exponent" data-ref-filename="(anonymous)..exponent">exponent</a>+<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>-<var>1</var>; 	     <i>/* [0 if special] */</i></td></tr>
+<tr><th id="105">105</th><td>  <b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>&gt;<a class="macro" href="decimal64.h.html#39" title="16" data-ref="_M/DECIMAL64_Pmax">DECIMAL64_Pmax</a> 	     <i>/* too many digits */</i></td></tr>
+<tr><th id="106">106</th><td>   || <a class="local col5 ref" href="#5ae" title='ae' data-ref="5ae" data-ref-filename="5ae">ae</a>&gt;<a class="macro" href="decimal64.h.html#40" title="384" data-ref="_M/DECIMAL64_Emax">DECIMAL64_Emax</a> 		     <i>/* likely overflow */</i></td></tr>
+<tr><th id="107">107</th><td>   || <a class="local col5 ref" href="#5ae" title='ae' data-ref="5ae" data-ref-filename="5ae">ae</a>&lt;<a class="macro" href="decimal64.h.html#41" title="-383" data-ref="_M/DECIMAL64_Emin">DECIMAL64_Emin</a>) {		     <i>/* likely underflow */</i></td></tr>
+<tr><th id="108">108</th><td>    <a class="ref fn" href="../decContext.h.html#decContextDefault" title='decContextDefault' data-ref="decContextDefault" data-ref-filename="decContextDefault">decContextDefault</a>(&amp;<a class="local col7 ref" href="#7dc" title='dc' data-ref="7dc" data-ref-filename="7dc">dc</a>, <a class="macro" href="../decContext.h.html#237" title="64" data-ref="_M/DEC_INIT_DECIMAL64">DEC_INIT_DECIMAL64</a>); <i>/* [no traps] */</i></td></tr>
+<tr><th id="109">109</th><td>    <a class="local col7 ref" href="#7dc" title='dc' data-ref="7dc" data-ref-filename="7dc">dc</a>.<a class="ref field" href="../decContext.h.html#(anonymous)::round" title='(anonymous struct)::round' data-ref="(anonymous)::round" data-ref-filename="(anonymous)..round">round</a>=<a class="local col3 ref" href="#3set" title='set' data-ref="3set" data-ref-filename="3set">set</a>-&gt;<a class="ref field" href="../decContext.h.html#(anonymous)::round" title='(anonymous struct)::round' data-ref="(anonymous)::round" data-ref-filename="(anonymous)..round">round</a>;		     <i>/* use supplied rounding */</i></td></tr>
+<tr><th id="110">110</th><td>    <a class="ref fn" href="../decNumber.h.html#decNumberPlus" title='decNumberPlus' data-ref="decNumberPlus" data-ref-filename="decNumberPlus">decNumberPlus</a>(&amp;<a class="local col6 ref" href="#6dw" title='dw' data-ref="6dw" data-ref-filename="6dw">dw</a>, <a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>, &amp;<a class="local col7 ref" href="#7dc" title='dc' data-ref="7dc" data-ref-filename="7dc">dc</a>);	     <i>/* (round and check) */</i></td></tr>
+<tr><th id="111">111</th><td>    <i>/* [this changes -0 to 0, so enforce the sign...] */</i></td></tr>
+<tr><th id="112">112</th><td>    <a class="local col6 ref" href="#6dw" title='dw' data-ref="6dw" data-ref-filename="6dw">dw</a>.<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>|=<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>&amp;<a class="macro" href="../decNumber.h.html#41" title="0x80" data-ref="_M/DECNEG">DECNEG</a>;</td></tr>
+<tr><th id="113">113</th><td>    <a class="local col4 ref" href="#4status" title='status' data-ref="4status" data-ref-filename="4status">status</a>=<a class="local col7 ref" href="#7dc" title='dc' data-ref="7dc" data-ref-filename="7dc">dc</a>.<a class="ref field" href="../decContext.h.html#(anonymous)::status" title='(anonymous struct)::status' data-ref="(anonymous)::status" data-ref-filename="(anonymous)..status">status</a>;			     <i>/* save status */</i></td></tr>
+<tr><th id="114">114</th><td>    <a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>=&amp;<a class="local col6 ref" href="#6dw" title='dw' data-ref="6dw" data-ref-filename="6dw">dw</a>;				     <i>/* use the work number */</i></td></tr>
+<tr><th id="115">115</th><td>    } <i>/* maybe out of range */</i></td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td>  <b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>&amp;<a class="macro" href="../decNumber.h.html#46" title="(0x40|0x20|0x10)" data-ref="_M/DECSPECIAL">DECSPECIAL</a>) {			  <i>/* a special value */</i></td></tr>
+<tr><th id="118">118</th><td>    <b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>&amp;<a class="macro" href="../decNumber.h.html#42" title="0x40" data-ref="_M/DECINF">DECINF</a>) <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>=<a class="macro" href="decimal64.h.html#73" title="0x78" data-ref="_M/DECIMAL_Inf">DECIMAL_Inf</a>&lt;&lt;<var>24</var>;</td></tr>
+<tr><th id="119">119</th><td>     <b>else</b> {					  <i>/* sNaN or qNaN */</i></td></tr>
+<tr><th id="120">120</th><td>      <b>if</b> ((*<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>!=<var>0</var> || <a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>&gt;<var>1</var>) 	  <i>/* non-zero coefficient */</i></td></tr>
+<tr><th id="121">121</th><td>       &amp;&amp; (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>&lt;<a class="macro" href="decimal64.h.html#39" title="16" data-ref="_M/DECIMAL64_Pmax">DECIMAL64_Pmax</a>)) {	  <i>/* coefficient fits */</i></td></tr>
+<tr><th id="122">122</th><td>	<a class="ref fn" href="#decDigitsToDPD" title='decDigitsToDPD' data-ref="decDigitsToDPD" data-ref-filename="decDigitsToDPD">decDigitsToDPD</a>(<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>, <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>, <var>0</var>);</td></tr>
+<tr><th id="123">123</th><td>	}</td></tr>
+<tr><th id="124">124</th><td>      <b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>&amp;<a class="macro" href="../decNumber.h.html#43" title="0x20" data-ref="_M/DECNAN">DECNAN</a>) <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>|=<a class="macro" href="decimal64.h.html#71" title="0x7c" data-ref="_M/DECIMAL_NaN">DECIMAL_NaN</a>&lt;&lt;<var>24</var>;</td></tr>
+<tr><th id="125">125</th><td>       <b>else</b> <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>|=<a class="macro" href="decimal64.h.html#72" title="0x7e" data-ref="_M/DECIMAL_sNaN">DECIMAL_sNaN</a>&lt;&lt;<var>24</var>;</td></tr>
+<tr><th id="126">126</th><td>      } <i>/* a NaN */</i></td></tr>
+<tr><th id="127">127</th><td>    } <i>/* special */</i></td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td>   <b>else</b> { <i>/* is finite */</i></td></tr>
+<tr><th id="130">130</th><td>    <b>if</b> (<a class="macro" href="../decNumber.h.html#194" title="(*(dn)-&gt;lsu==0 &amp;&amp; (dn)-&gt;digits==1 &amp;&amp; (((dn)-&gt;bits&amp;(0x40|0x20|0x10))==0))" data-ref="_M/decNumberIsZero">decNumberIsZero</a>(<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>)) {		     <i>/* is a zero */</i></td></tr>
+<tr><th id="131">131</th><td>      <i>/* set and clamp exponent */</i></td></tr>
+<tr><th id="132">132</th><td>      <b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::exponent" title='(anonymous struct)::exponent' data-ref="(anonymous)::exponent" data-ref-filename="(anonymous)..exponent">exponent</a>&lt;-<a class="macro" href="decimal64.h.html#42" title="398" data-ref="_M/DECIMAL64_Bias">DECIMAL64_Bias</a>) {</td></tr>
+<tr><th id="133">133</th><td>	<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>=<var>0</var>;				     <i>/* low clamp */</i></td></tr>
+<tr><th id="134">134</th><td>	<a class="local col4 ref" href="#4status" title='status' data-ref="4status" data-ref-filename="4status">status</a>|=<a class="macro" href="../decContext.h.html#148" title="0x00000400" data-ref="_M/DEC_Clamped">DEC_Clamped</a>;</td></tr>
+<tr><th id="135">135</th><td>	}</td></tr>
+<tr><th id="136">136</th><td>       <b>else</b> {</td></tr>
+<tr><th id="137">137</th><td>	<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>=<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::exponent" title='(anonymous struct)::exponent' data-ref="(anonymous)::exponent" data-ref-filename="(anonymous)..exponent">exponent</a>+<a class="macro" href="decimal64.h.html#42" title="398" data-ref="_M/DECIMAL64_Bias">DECIMAL64_Bias</a>;     <i>/* bias exponent */</i></td></tr>
+<tr><th id="138">138</th><td>	<b>if</b> (<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>&gt;<a class="macro" href="decimal64.h.html#46" title="(384+398-16+1)" data-ref="_M/DECIMAL64_Ehigh">DECIMAL64_Ehigh</a>) {	     <i>/* top clamp */</i></td></tr>
+<tr><th id="139">139</th><td>	  <a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>=<a class="macro" href="decimal64.h.html#46" title="(384+398-16+1)" data-ref="_M/DECIMAL64_Ehigh">DECIMAL64_Ehigh</a>;</td></tr>
+<tr><th id="140">140</th><td>	  <a class="local col4 ref" href="#4status" title='status' data-ref="4status" data-ref-filename="4status">status</a>|=<a class="macro" href="../decContext.h.html#148" title="0x00000400" data-ref="_M/DEC_Clamped">DEC_Clamped</a>;</td></tr>
+<tr><th id="141">141</th><td>	  }</td></tr>
+<tr><th id="142">142</th><td>	}</td></tr>
+<tr><th id="143">143</th><td>      <a class="local col8 ref" href="#8comb" title='comb' data-ref="8comb" data-ref-filename="8comb">comb</a>=(<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>&gt;&gt;<var>5</var>) &amp; <var>0x18</var>;		<i>/* msd=0, exp top 2 bits .. */</i></td></tr>
+<tr><th id="144">144</th><td>      }</td></tr>
+<tr><th id="145">145</th><td>     <b>else</b> {				<i>/* non-zero finite number */</i></td></tr>
+<tr><th id="146">146</th><td>      <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col2 decl" id="12msd" title='msd' data-type='uint32_t' data-ref="12msd" data-ref-filename="12msd">msd</dfn>; 			<i>/* work */</i></td></tr>
+<tr><th id="147">147</th><td>      <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a> <dfn class="local col3 decl" id="13pad" title='pad' data-type='int32_t' data-ref="13pad" data-ref-filename="13pad">pad</dfn>=<var>0</var>;			<i>/* coefficient pad digits */</i></td></tr>
+<tr><th id="148">148</th><td></td></tr>
+<tr><th id="149">149</th><td>      <i>/* the dn is known to fit, but it may need to be padded */</i></td></tr>
+<tr><th id="150">150</th><td>      <a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>=(<a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a>)(<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::exponent" title='(anonymous struct)::exponent' data-ref="(anonymous)::exponent" data-ref-filename="(anonymous)..exponent">exponent</a>+<a class="macro" href="decimal64.h.html#42" title="398" data-ref="_M/DECIMAL64_Bias">DECIMAL64_Bias</a>);	  <i>/* bias exponent */</i></td></tr>
+<tr><th id="151">151</th><td>      <b>if</b> (<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>&gt;<a class="macro" href="decimal64.h.html#46" title="(384+398-16+1)" data-ref="_M/DECIMAL64_Ehigh">DECIMAL64_Ehigh</a>) {		  <i>/* fold-down case */</i></td></tr>
+<tr><th id="152">152</th><td>	<a class="local col3 ref" href="#13pad" title='pad' data-ref="13pad" data-ref-filename="13pad">pad</a>=<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>-<a class="macro" href="decimal64.h.html#46" title="(384+398-16+1)" data-ref="_M/DECIMAL64_Ehigh">DECIMAL64_Ehigh</a>;</td></tr>
+<tr><th id="153">153</th><td>	<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>=<a class="macro" href="decimal64.h.html#46" title="(384+398-16+1)" data-ref="_M/DECIMAL64_Ehigh">DECIMAL64_Ehigh</a>;			  <i>/* [to maximum] */</i></td></tr>
+<tr><th id="154">154</th><td>	<a class="local col4 ref" href="#4status" title='status' data-ref="4status" data-ref-filename="4status">status</a>|=<a class="macro" href="../decContext.h.html#148" title="0x00000400" data-ref="_M/DEC_Clamped">DEC_Clamped</a>;</td></tr>
+<tr><th id="155">155</th><td>	}</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>      <i>/* fastpath common case */</i></td></tr>
+<tr><th id="158">158</th><td>      <b>if</b> (<a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>==<var>3</var> &amp;&amp; <a class="local col3 ref" href="#13pad" title='pad' data-ref="13pad" data-ref-filename="13pad">pad</a>==<var>0</var>) {</td></tr>
+<tr><th id="159">159</th><td>	<a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col4 decl" id="14dpd" title='dpd' data-type='uint32_t [6]' data-ref="14dpd" data-ref-filename="14dpd">dpd</dfn>[<var>6</var>]={<var>0</var>,<var>0</var>,<var>0</var>,<var>0</var>,<var>0</var>,<var>0</var>};</td></tr>
+<tr><th id="160">160</th><td>	<a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col5 decl" id="15i" title='i' data-type='uint32_t' data-ref="15i" data-ref-filename="15i">i</dfn>;</td></tr>
+<tr><th id="161">161</th><td>	<a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a> <dfn class="local col6 decl" id="16d" title='d' data-type='int32_t' data-ref="16d" data-ref-filename="16d">d</dfn>=<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>;</td></tr>
+<tr><th id="162">162</th><td>	<b>for</b> (<a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a>=<var>0</var>; <a class="local col6 ref" href="#16d" title='d' data-ref="16d" data-ref-filename="16d">d</a>&gt;<var>0</var>; <a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a>++, <a class="local col6 ref" href="#16d" title='d' data-ref="16d" data-ref-filename="16d">d</a>-=<var>3</var>) <a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a>]=<a class="ref" href="../decNumberLocal.h.html#BIN2DPD" title='BIN2DPD' data-ref="BIN2DPD" data-ref-filename="BIN2DPD">BIN2DPD</a>[<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>[<a class="local col5 ref" href="#15i" title='i' data-ref="15i" data-ref-filename="15i">i</a>]];</td></tr>
+<tr><th id="163">163</th><td>	<a class="macro" href="#97" title="targar[0]" data-ref="_M/targlo">targlo</a> =<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>0</var>];</td></tr>
+<tr><th id="164">164</th><td>	<a class="macro" href="#97" title="targar[0]" data-ref="_M/targlo">targlo</a>|=<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>1</var>]&lt;&lt;<var>10</var>;</td></tr>
+<tr><th id="165">165</th><td>	<a class="macro" href="#97" title="targar[0]" data-ref="_M/targlo">targlo</a>|=<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>2</var>]&lt;&lt;<var>20</var>;</td></tr>
+<tr><th id="166">166</th><td>	<b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>&gt;<var>6</var>) {</td></tr>
+<tr><th id="167">167</th><td>	  <a class="macro" href="#97" title="targar[0]" data-ref="_M/targlo">targlo</a>|=<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>3</var>]&lt;&lt;<var>30</var>;</td></tr>
+<tr><th id="168">168</th><td>	  <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a> =<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>3</var>]&gt;&gt;<var>2</var>;</td></tr>
+<tr><th id="169">169</th><td>	  <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>|=<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>4</var>]&lt;&lt;<var>8</var>;</td></tr>
+<tr><th id="170">170</th><td>	  }</td></tr>
+<tr><th id="171">171</th><td>	<a class="local col2 ref" href="#12msd" title='msd' data-ref="12msd" data-ref-filename="12msd">msd</a>=<a class="local col4 ref" href="#14dpd" title='dpd' data-ref="14dpd" data-ref-filename="14dpd">dpd</a>[<var>5</var>];		   <i>/* [did not really need conversion] */</i></td></tr>
+<tr><th id="172">172</th><td>	}</td></tr>
+<tr><th id="173">173</th><td>       <b>else</b> { <i>/* general case */</i></td></tr>
+<tr><th id="174">174</th><td>	<a class="ref fn" href="#decDigitsToDPD" title='decDigitsToDPD' data-ref="decDigitsToDPD" data-ref-filename="decDigitsToDPD">decDigitsToDPD</a>(<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>, <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>, <a class="local col3 ref" href="#13pad" title='pad' data-ref="13pad" data-ref-filename="13pad">pad</a>);</td></tr>
+<tr><th id="175">175</th><td>	<i>/* save and clear the top digit */</i></td></tr>
+<tr><th id="176">176</th><td>	<a class="local col2 ref" href="#12msd" title='msd' data-ref="12msd" data-ref-filename="12msd">msd</a>=<a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>&gt;&gt;<var>18</var>;</td></tr>
+<tr><th id="177">177</th><td>	<a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>&amp;=<var>0x0003ffff</var>;</td></tr>
+<tr><th id="178">178</th><td>	}</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td>      <i>/* create the combination field */</i></td></tr>
+<tr><th id="181">181</th><td>      <b>if</b> (<a class="local col2 ref" href="#12msd" title='msd' data-ref="12msd" data-ref-filename="12msd">msd</a>&gt;=<var>8</var>) <a class="local col8 ref" href="#8comb" title='comb' data-ref="8comb" data-ref-filename="8comb">comb</a>=<var>0x18</var> | ((<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>&gt;&gt;<var>7</var>) &amp; <var>0x06</var>) | (<a class="local col2 ref" href="#12msd" title='msd' data-ref="12msd" data-ref-filename="12msd">msd</a> &amp; <var>0x01</var>);</td></tr>
+<tr><th id="182">182</th><td>	     <b>else</b> <a class="local col8 ref" href="#8comb" title='comb' data-ref="8comb" data-ref-filename="8comb">comb</a>=((<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>&gt;&gt;<var>5</var>) &amp; <var>0x18</var>) | <a class="local col2 ref" href="#12msd" title='msd' data-ref="12msd" data-ref-filename="12msd">msd</a>;</td></tr>
+<tr><th id="183">183</th><td>      }</td></tr>
+<tr><th id="184">184</th><td>    <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>|=<a class="local col8 ref" href="#8comb" title='comb' data-ref="8comb" data-ref-filename="8comb">comb</a>&lt;&lt;<var>26</var>;		   <i>/* add combination field .. */</i></td></tr>
+<tr><th id="185">185</th><td>    <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>|=(<a class="local col9 ref" href="#9exp" title='exp' data-ref="9exp" data-ref-filename="9exp">exp</a>&amp;<var>0xff</var>)&lt;&lt;<var>18</var>;	   <i>/* .. and exponent continuation */</i></td></tr>
+<tr><th id="186">186</th><td>    } <i>/* finite */</i></td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td>  <b>if</b> (<a class="local col2 ref" href="#2dn" title='dn' data-ref="2dn" data-ref-filename="2dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>&amp;<a class="macro" href="../decNumber.h.html#41" title="0x80" data-ref="_M/DECNEG">DECNEG</a>) <a class="macro" href="#96" title="targar[1]" data-ref="_M/targhi">targhi</a>|=<var>0x80000000</var>; <i>/* add sign bit */</i></td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>  <i>/* now write to storage; this is now always endian */</i></td></tr>
+<tr><th id="191">191</th><td>  <b>if</b> (<a class="macro" href="../decNumberLocal.h.html#49" title="1" data-ref="_M/DECLITEND">DECLITEND</a>) {</td></tr>
+<tr><th id="192">192</th><td>    <i>/* lo int then hi */</i></td></tr>
+<tr><th id="193">193</th><td>    <a class="macro" href="../decNumberLocal.h.html#158" title="(uiwork=(targar[0]), memcpy(d64-&gt;bytes, (void *)&amp;uiwork, 4))" data-ref="_M/UBFROMUI">UBFROMUI</a>(<a class="local col1 ref" href="#1d64" title='d64' data-ref="1d64" data-ref-filename="1d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>,   <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>[<var>0</var>]);</td></tr>
+<tr><th id="194">194</th><td>    <a class="macro" href="../decNumberLocal.h.html#158" title="(uiwork=(targar[1]), memcpy(d64-&gt;bytes+4, (void *)&amp;uiwork, 4))" data-ref="_M/UBFROMUI">UBFROMUI</a>(<a class="local col1 ref" href="#1d64" title='d64' data-ref="1d64" data-ref-filename="1d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>+<var>4</var>, <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>[<var>1</var>]);</td></tr>
+<tr><th id="195">195</th><td>    }</td></tr>
+<tr><th id="196">196</th><td>   <b>else</b> {</td></tr>
+<tr><th id="197">197</th><td>    <i>/* hi int then lo */</i></td></tr>
+<tr><th id="198">198</th><td>    <a class="macro" href="../decNumberLocal.h.html#158" title="(uiwork=(targar[1]), memcpy(d64-&gt;bytes, (void *)&amp;uiwork, 4))" data-ref="_M/UBFROMUI">UBFROMUI</a>(<a class="local col1 ref" href="#1d64" title='d64' data-ref="1d64" data-ref-filename="1d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>,   <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>[<var>1</var>]);</td></tr>
+<tr><th id="199">199</th><td>    <a class="macro" href="../decNumberLocal.h.html#158" title="(uiwork=(targar[0]), memcpy(d64-&gt;bytes+4, (void *)&amp;uiwork, 4))" data-ref="_M/UBFROMUI">UBFROMUI</a>(<a class="local col1 ref" href="#1d64" title='d64' data-ref="1d64" data-ref-filename="1d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>+<var>4</var>, <a class="local col1 ref" href="#11targar" title='targar' data-ref="11targar" data-ref-filename="11targar">targar</a>[<var>0</var>]);</td></tr>
+<tr><th id="200">200</th><td>    }</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td>  <b>if</b> (<a class="local col4 ref" href="#4status" title='status' data-ref="4status" data-ref-filename="4status">status</a>!=<var>0</var>) <a class="ref fn" href="../decContext.h.html#decContextSetStatus" title='decContextSetStatus' data-ref="decContextSetStatus" data-ref-filename="decContextSetStatus">decContextSetStatus</a>(<a class="local col3 ref" href="#3set" title='set' data-ref="3set" data-ref-filename="3set">set</a>, <a class="local col4 ref" href="#4status" title='status' data-ref="4status" data-ref-filename="4status">status</a>); <i>/* pass on status */</i></td></tr>
+<tr><th id="203">203</th><td>  <i>/* decimal64Show(d64); */</i></td></tr>
+<tr><th id="204">204</th><td>  <b>return</b> <a class="local col1 ref" href="#1d64" title='d64' data-ref="1d64" data-ref-filename="1d64">d64</a>;</td></tr>
+<tr><th id="205">205</th><td>  } <i>/* decimal64FromNumber */</i></td></tr>
+<tr><th id="206">206</th><td></td></tr>
+<tr><th id="207">207</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="208">208</th><td><i>/* decimal64ToNumber -- convert decimal64 to decNumber		      */</i></td></tr>
+<tr><th id="209">209</th><td><i>/*   d64 is the source decimal64				      */</i></td></tr>
+<tr><th id="210">210</th><td><i>/*   dn is the target number, with appropriate space		      */</i></td></tr>
+<tr><th id="211">211</th><td><i>/* No error is possible.					      */</i></td></tr>
+<tr><th id="212">212</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="213">213</th><td><a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> * <dfn class="decl def fn" id="decimal64ToNumber" title='decimal64ToNumber' data-ref="decimal64ToNumber" data-ref-filename="decimal64ToNumber">decimal64ToNumber</dfn>(<em>const</em> <a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col7 decl" id="17d64" title='d64' data-type='const decimal64 *' data-ref="17d64" data-ref-filename="17d64">d64</dfn>, <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> *<dfn class="local col8 decl" id="18dn" title='dn' data-type='decNumber *' data-ref="18dn" data-ref-filename="18dn">dn</dfn>) {</td></tr>
+<tr><th id="214">214</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col9 decl" id="19msd" title='msd' data-type='uint32_t' data-ref="19msd" data-ref-filename="19msd">msd</dfn>;			   <i>/* coefficient MSD */</i></td></tr>
+<tr><th id="215">215</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col0 decl" id="20exp" title='exp' data-type='uint32_t' data-ref="20exp" data-ref-filename="20exp">exp</dfn>;			   <i>/* exponent top two bits */</i></td></tr>
+<tr><th id="216">216</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col1 decl" id="21comb" title='comb' data-type='uint32_t' data-ref="21comb" data-ref-filename="21comb">comb</dfn>;			   <i>/* combination field */</i></td></tr>
+<tr><th id="217">217</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col2 decl" id="22need" title='need' data-type='int32_t' data-ref="22need" data-ref-filename="22need">need</dfn>;			   <i>/* work */</i></td></tr>
+<tr><th id="218">218</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col3 decl" id="23uiwork" title='uiwork' data-type='uint32_t' data-ref="23uiwork" data-ref-filename="23uiwork">uiwork</dfn>;			   <i>/* for macros */</i></td></tr>
+<tr><th id="219">219</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col4 decl" id="24sourar" title='sourar' data-type='uint32_t [2]' data-ref="24sourar" data-ref-filename="24sourar">sourar</dfn>[<var>2</var>];		   <i>/* source 64-bit */</i></td></tr>
+<tr><th id="220">220</th><td>  <u>#define <dfn class="macro" id="_M/sourhi" data-ref="_M/sourhi">sourhi</dfn> <a class="local col4 ref" href="#24sourar" title='sourar' data-ref="24sourar" data-ref-filename="24sourar">sourar</a>[1]	   /* name the word with the sign */</u></td></tr>
+<tr><th id="221">221</th><td>  <u>#define <dfn class="macro" id="_M/sourlo" data-ref="_M/sourlo">sourlo</dfn> <a class="local col4 ref" href="#24sourar" title='sourar' data-ref="24sourar" data-ref-filename="24sourar">sourar</a>[0]	   /* and the lower word */</u></td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td>  <i>/* load source from storage; this is endian */</i></td></tr>
+<tr><th id="224">224</th><td>  <b>if</b> (<a class="macro" href="../decNumberLocal.h.html#49" title="1" data-ref="_M/DECLITEND">DECLITEND</a>) {</td></tr>
+<tr><th id="225">225</th><td>    <a class="macro" href="#221" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col7 ref" href="#17d64" title='d64' data-ref="17d64" data-ref-filename="17d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>  );   <i>/* directly load the low int */</i></td></tr>
+<tr><th id="226">226</th><td>    <a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes+4, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col7 ref" href="#17d64" title='d64' data-ref="17d64" data-ref-filename="17d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>+<var>4</var>);   <i>/* then the high int */</i></td></tr>
+<tr><th id="227">227</th><td>    }</td></tr>
+<tr><th id="228">228</th><td>   <b>else</b> {</td></tr>
+<tr><th id="229">229</th><td>    <a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col7 ref" href="#17d64" title='d64' data-ref="17d64" data-ref-filename="17d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>  );   <i>/* directly load the high int */</i></td></tr>
+<tr><th id="230">230</th><td>    <a class="macro" href="#221" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes+4, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col7 ref" href="#17d64" title='d64' data-ref="17d64" data-ref-filename="17d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>+<var>4</var>);   <i>/* then the low int */</i></td></tr>
+<tr><th id="231">231</th><td>    }</td></tr>
+<tr><th id="232">232</th><td></td></tr>
+<tr><th id="233">233</th><td>  <a class="local col1 ref" href="#21comb" title='comb' data-ref="21comb" data-ref-filename="21comb">comb</a>=(<a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&gt;&gt;<var>26</var>)&amp;<var>0x1f</var>;	   <i>/* combination field */</i></td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td>  <a class="ref fn" href="../decNumber.h.html#decNumberZero" title='decNumberZero' data-ref="decNumberZero" data-ref-filename="decNumberZero">decNumberZero</a>(<a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>);		   <i>/* clean number */</i></td></tr>
+<tr><th id="236">236</th><td>  <b>if</b> (<a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;<var>0x80000000</var>) <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>=<a class="macro" href="../decNumber.h.html#41" title="0x80" data-ref="_M/DECNEG">DECNEG</a>; <i>/* set sign if negative */</i></td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td>  <a class="local col9 ref" href="#19msd" title='msd' data-ref="19msd" data-ref-filename="19msd">msd</a>=<a class="ref" href="#COMBMSD" title='COMBMSD' data-ref="COMBMSD" data-ref-filename="COMBMSD">COMBMSD</a>[<a class="local col1 ref" href="#21comb" title='comb' data-ref="21comb" data-ref-filename="21comb">comb</a>];		   <i>/* decode the combination field */</i></td></tr>
+<tr><th id="239">239</th><td>  <a class="local col0 ref" href="#20exp" title='exp' data-ref="20exp" data-ref-filename="20exp">exp</a>=<a class="ref" href="#COMBEXP" title='COMBEXP' data-ref="COMBEXP" data-ref-filename="COMBEXP">COMBEXP</a>[<a class="local col1 ref" href="#21comb" title='comb' data-ref="21comb" data-ref-filename="21comb">comb</a>];		   <i>/* .. */</i></td></tr>
+<tr><th id="240">240</th><td></td></tr>
+<tr><th id="241">241</th><td>  <b>if</b> (<a class="local col0 ref" href="#20exp" title='exp' data-ref="20exp" data-ref-filename="20exp">exp</a>==<var>3</var>) { 		   <i>/* is a special */</i></td></tr>
+<tr><th id="242">242</th><td>    <b>if</b> (<a class="local col9 ref" href="#19msd" title='msd' data-ref="19msd" data-ref-filename="19msd">msd</a>==<var>0</var>) {</td></tr>
+<tr><th id="243">243</th><td>      <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>|=<a class="macro" href="../decNumber.h.html#42" title="0x40" data-ref="_M/DECINF">DECINF</a>;</td></tr>
+<tr><th id="244">244</th><td>      <b>return</b> <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>;		   <i>/* no coefficient needed */</i></td></tr>
+<tr><th id="245">245</th><td>      }</td></tr>
+<tr><th id="246">246</th><td>    <b>else</b> <b>if</b> (<a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;<var>0x02000000</var>) <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>|=<a class="macro" href="../decNumber.h.html#44" title="0x10" data-ref="_M/DECSNAN">DECSNAN</a>;</td></tr>
+<tr><th id="247">247</th><td>    <b>else</b> <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::bits" title='(anonymous struct)::bits' data-ref="(anonymous)::bits" data-ref-filename="(anonymous)..bits">bits</a>|=<a class="macro" href="../decNumber.h.html#43" title="0x20" data-ref="_M/DECNAN">DECNAN</a>;</td></tr>
+<tr><th id="248">248</th><td>    <a class="local col9 ref" href="#19msd" title='msd' data-ref="19msd" data-ref-filename="19msd">msd</a>=<var>0</var>;			   <i>/* no top digit */</i></td></tr>
+<tr><th id="249">249</th><td>    }</td></tr>
+<tr><th id="250">250</th><td>   <b>else</b> {			   <i>/* is a finite number */</i></td></tr>
+<tr><th id="251">251</th><td>    <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::exponent" title='(anonymous struct)::exponent' data-ref="(anonymous)::exponent" data-ref-filename="(anonymous)..exponent">exponent</a>=(<a class="local col0 ref" href="#20exp" title='exp' data-ref="20exp" data-ref-filename="20exp">exp</a>&lt;&lt;<var>8</var>)+((<a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&gt;&gt;<var>18</var>)&amp;<var>0xff</var>)-<a class="macro" href="decimal64.h.html#42" title="398" data-ref="_M/DECIMAL64_Bias">DECIMAL64_Bias</a>; <i>/* unbiased */</i></td></tr>
+<tr><th id="252">252</th><td>    }</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>  <i>/* get the coefficient */</i></td></tr>
+<tr><th id="255">255</th><td>  <a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;=<var>0x0003ffff</var>;		   <i>/* clean coefficient continuation */</i></td></tr>
+<tr><th id="256">256</th><td>  <b>if</b> (<a class="local col9 ref" href="#19msd" title='msd' data-ref="19msd" data-ref-filename="19msd">msd</a>) {			   <i>/* non-zero msd */</i></td></tr>
+<tr><th id="257">257</th><td>    <a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>|=<a class="local col9 ref" href="#19msd" title='msd' data-ref="19msd" data-ref-filename="19msd">msd</a>&lt;&lt;<var>18</var>;		   <i>/* prefix to coefficient */</i></td></tr>
+<tr><th id="258">258</th><td>    <a class="local col2 ref" href="#22need" title='need' data-ref="22need" data-ref-filename="22need">need</a>=<var>6</var>;			   <i>/* process 6 declets */</i></td></tr>
+<tr><th id="259">259</th><td>    }</td></tr>
+<tr><th id="260">260</th><td>   <b>else</b> { <i>/* msd=0 */</i></td></tr>
+<tr><th id="261">261</th><td>    <b>if</b> (!<a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>) {		   <i>/* top word 0 */</i></td></tr>
+<tr><th id="262">262</th><td>      <b>if</b> (!<a class="macro" href="#221" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>) <b>return</b> <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>;	   <i>/* easy: coefficient is 0 */</i></td></tr>
+<tr><th id="263">263</th><td>      <a class="local col2 ref" href="#22need" title='need' data-ref="22need" data-ref-filename="22need">need</a>=<var>3</var>;			   <i>/* process at least 3 declets */</i></td></tr>
+<tr><th id="264">264</th><td>      <b>if</b> (<a class="macro" href="#221" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>&amp;<var>0xc0000000</var>) <a class="local col2 ref" href="#22need" title='need' data-ref="22need" data-ref-filename="22need">need</a>++; <i>/* process 4 declets */</i></td></tr>
+<tr><th id="265">265</th><td>      <i>/* [could reduce some more, here] */</i></td></tr>
+<tr><th id="266">266</th><td>      }</td></tr>
+<tr><th id="267">267</th><td>     <b>else</b> {			   <i>/* some bits in top word, msd=0 */</i></td></tr>
+<tr><th id="268">268</th><td>      <a class="local col2 ref" href="#22need" title='need' data-ref="22need" data-ref-filename="22need">need</a>=<var>4</var>;			   <i>/* process at least 4 declets */</i></td></tr>
+<tr><th id="269">269</th><td>      <b>if</b> (<a class="macro" href="#220" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;<var>0x0003ff00</var>) <a class="local col2 ref" href="#22need" title='need' data-ref="22need" data-ref-filename="22need">need</a>++; <i>/* top declet!=0, process 5 */</i></td></tr>
+<tr><th id="270">270</th><td>      }</td></tr>
+<tr><th id="271">271</th><td>    } <i>/*msd=0 */</i></td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td>  <a class="ref fn" href="#decDigitsFromDPD" title='decDigitsFromDPD' data-ref="decDigitsFromDPD" data-ref-filename="decDigitsFromDPD">decDigitsFromDPD</a>(<a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>, <a class="local col4 ref" href="#24sourar" title='sourar' data-ref="24sourar" data-ref-filename="24sourar">sourar</a>, <a class="local col2 ref" href="#22need" title='need' data-ref="22need" data-ref-filename="22need">need</a>);	<i>/* process declets */</i></td></tr>
+<tr><th id="274">274</th><td>  <b>return</b> <a class="local col8 ref" href="#18dn" title='dn' data-ref="18dn" data-ref-filename="18dn">dn</a>;</td></tr>
+<tr><th id="275">275</th><td>  } <i>/* decimal64ToNumber */</i></td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td></td></tr>
+<tr><th id="278">278</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="279">279</th><td><i>/* to-scientific-string -- conversion to numeric string 	      */</i></td></tr>
+<tr><th id="280">280</th><td><i>/* to-engineering-string -- conversion to numeric string	      */</i></td></tr>
+<tr><th id="281">281</th><td><i>/*								      */</i></td></tr>
+<tr><th id="282">282</th><td><i>/*   decimal64ToString(d64, string);				      */</i></td></tr>
+<tr><th id="283">283</th><td><i>/*   decimal64ToEngString(d64, string); 			      */</i></td></tr>
+<tr><th id="284">284</th><td><i>/*								      */</i></td></tr>
+<tr><th id="285">285</th><td><i>/*  d64 is the decimal64 format number to convert		      */</i></td></tr>
+<tr><th id="286">286</th><td><i>/*  string is the string where the result will be laid out	      */</i></td></tr>
+<tr><th id="287">287</th><td><i>/*								      */</i></td></tr>
+<tr><th id="288">288</th><td><i>/*  string must be at least 24 characters			      */</i></td></tr>
+<tr><th id="289">289</th><td><i>/*								      */</i></td></tr>
+<tr><th id="290">290</th><td><i>/*  No error is possible, and no status can be set.		      */</i></td></tr>
+<tr><th id="291">291</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="292">292</th><td><em>char</em> * <dfn class="decl def fn" id="decimal64ToEngString" title='decimal64ToEngString' data-ref="decimal64ToEngString" data-ref-filename="decimal64ToEngString">decimal64ToEngString</dfn>(<em>const</em> <a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col5 decl" id="25d64" title='d64' data-type='const decimal64 *' data-ref="25d64" data-ref-filename="25d64">d64</dfn>, <em>char</em> *<dfn class="local col6 decl" id="26string" title='string' data-type='char *' data-ref="26string" data-ref-filename="26string">string</dfn>){</td></tr>
+<tr><th id="293">293</th><td>  <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> <dfn class="local col7 decl" id="27dn" title='dn' data-type='decNumber' data-ref="27dn" data-ref-filename="27dn">dn</dfn>; 			<i>/* work */</i></td></tr>
+<tr><th id="294">294</th><td>  <a class="ref fn" href="#decimal64ToNumber" title='decimal64ToNumber' data-ref="decimal64ToNumber" data-ref-filename="decimal64ToNumber">decimal64ToNumber</a>(<a class="local col5 ref" href="#25d64" title='d64' data-ref="25d64" data-ref-filename="25d64">d64</a>, &amp;<a class="local col7 ref" href="#27dn" title='dn' data-ref="27dn" data-ref-filename="27dn">dn</a>);</td></tr>
+<tr><th id="295">295</th><td>  <a class="ref fn" href="../decNumber.h.html#decNumberToEngString" title='decNumberToEngString' data-ref="decNumberToEngString" data-ref-filename="decNumberToEngString">decNumberToEngString</a>(&amp;<a class="local col7 ref" href="#27dn" title='dn' data-ref="27dn" data-ref-filename="27dn">dn</a>, <a class="local col6 ref" href="#26string" title='string' data-ref="26string" data-ref-filename="26string">string</a>);</td></tr>
+<tr><th id="296">296</th><td>  <b>return</b> <a class="local col6 ref" href="#26string" title='string' data-ref="26string" data-ref-filename="26string">string</a>;</td></tr>
+<tr><th id="297">297</th><td>  } <i>/* decimal64ToEngString */</i></td></tr>
+<tr><th id="298">298</th><td></td></tr>
+<tr><th id="299">299</th><td><em>char</em> * <dfn class="decl def fn" id="decimal64ToString" title='decimal64ToString' data-ref="decimal64ToString" data-ref-filename="decimal64ToString">decimal64ToString</dfn>(<em>const</em> <a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col8 decl" id="28d64" title='d64' data-type='const decimal64 *' data-ref="28d64" data-ref-filename="28d64">d64</dfn>, <em>char</em> *<dfn class="local col9 decl" id="29string" title='string' data-type='char *' data-ref="29string" data-ref-filename="29string">string</dfn>){</td></tr>
+<tr><th id="300">300</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col0 decl" id="30msd" title='msd' data-type='uint32_t' data-ref="30msd" data-ref-filename="30msd">msd</dfn>;			   <i>/* coefficient MSD */</i></td></tr>
+<tr><th id="301">301</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col1 decl" id="31exp" title='exp' data-type='int32_t' data-ref="31exp" data-ref-filename="31exp">exp</dfn>;			   <i>/* exponent top two bits or full */</i></td></tr>
+<tr><th id="302">302</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col2 decl" id="32comb" title='comb' data-type='uint32_t' data-ref="32comb" data-ref-filename="32comb">comb</dfn>;			   <i>/* combination field */</i></td></tr>
+<tr><th id="303">303</th><td>  <em>char</em> *<dfn class="local col3 decl" id="33cstart" title='cstart' data-type='char *' data-ref="33cstart" data-ref-filename="33cstart">cstart</dfn>; 		   <i>/* coefficient start */</i></td></tr>
+<tr><th id="304">304</th><td>  <em>char</em> *<dfn class="local col4 decl" id="34c" title='c' data-type='char *' data-ref="34c" data-ref-filename="34c">c</dfn>;			   <i>/* output pointer in string */</i></td></tr>
+<tr><th id="305">305</th><td>  <em>const</em> <a class="macro" href="../decNumberLocal.h.html#88" title="uint8_t" data-ref="_M/uByte">uByte</a> *<dfn class="local col5 decl" id="35u" title='u' data-type='const uint8_t *' data-ref="35u" data-ref-filename="35u">u</dfn>;		   <i>/* work */</i></td></tr>
+<tr><th id="306">306</th><td>  <em>char</em> *<dfn class="local col6 decl" id="36s" title='s' data-type='char *' data-ref="36s" data-ref-filename="36s">s</dfn>, *<dfn class="local col7 decl" id="37t" title='t' data-type='char *' data-ref="37t" data-ref-filename="37t">t</dfn>;			   <i>/* .. (source, target) */</i></td></tr>
+<tr><th id="307">307</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col8 decl" id="38dpd" title='dpd' data-type='int32_t' data-ref="38dpd" data-ref-filename="38dpd">dpd</dfn>;			   <i>/* .. */</i></td></tr>
+<tr><th id="308">308</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col9 decl" id="39pre" title='pre' data-type='int32_t' data-ref="39pre" data-ref-filename="39pre">pre</dfn>, <dfn class="local col0 decl" id="40e" title='e' data-type='int32_t' data-ref="40e" data-ref-filename="40e">e</dfn>;			   <i>/* .. */</i></td></tr>
+<tr><th id="309">309</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col1 decl" id="41uiwork" title='uiwork' data-type='uint32_t' data-ref="41uiwork" data-ref-filename="41uiwork">uiwork</dfn>;			   <i>/* for macros */</i></td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col2 decl" id="42sourar" title='sourar' data-type='uint32_t [2]' data-ref="42sourar" data-ref-filename="42sourar">sourar</dfn>[<var>2</var>];		   <i>/* source 64-bit */</i></td></tr>
+<tr><th id="312">312</th><td>  <u>#define <dfn class="macro" id="_M/sourhi" data-ref="_M/sourhi">sourhi</dfn> <a class="local col2 ref" href="#42sourar" title='sourar' data-ref="42sourar" data-ref-filename="42sourar">sourar</a>[1]	   /* name the word with the sign */</u></td></tr>
+<tr><th id="313">313</th><td>  <u>#define <dfn class="macro" id="_M/sourlo" data-ref="_M/sourlo">sourlo</dfn> <a class="local col2 ref" href="#42sourar" title='sourar' data-ref="42sourar" data-ref-filename="42sourar">sourar</a>[0]	   /* and the lower word */</u></td></tr>
+<tr><th id="314">314</th><td></td></tr>
+<tr><th id="315">315</th><td>  <i>/* load source from storage; this is endian */</i></td></tr>
+<tr><th id="316">316</th><td>  <b>if</b> (<a class="macro" href="../decNumberLocal.h.html#49" title="1" data-ref="_M/DECLITEND">DECLITEND</a>) {</td></tr>
+<tr><th id="317">317</th><td>    <a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col8 ref" href="#28d64" title='d64' data-ref="28d64" data-ref-filename="28d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>  );   <i>/* directly load the low int */</i></td></tr>
+<tr><th id="318">318</th><td>    <a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes+4, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col8 ref" href="#28d64" title='d64' data-ref="28d64" data-ref-filename="28d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>+<var>4</var>);   <i>/* then the high int */</i></td></tr>
+<tr><th id="319">319</th><td>    }</td></tr>
+<tr><th id="320">320</th><td>   <b>else</b> {</td></tr>
+<tr><th id="321">321</th><td>    <a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col8 ref" href="#28d64" title='d64' data-ref="28d64" data-ref-filename="28d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>  );   <i>/* directly load the high int */</i></td></tr>
+<tr><th id="322">322</th><td>    <a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>=<a class="macro" href="../decNumberLocal.h.html#153" title="(memcpy((void *)&amp;uiwork, d64-&gt;bytes+4, 4), uiwork)" data-ref="_M/UBTOUI">UBTOUI</a>(<a class="local col8 ref" href="#28d64" title='d64' data-ref="28d64" data-ref-filename="28d64">d64</a>-&gt;<a class="ref field" href="decimal64.h.html#(anonymous)::bytes" title='(anonymous struct)::bytes' data-ref="(anonymous)::bytes" data-ref-filename="(anonymous)..bytes">bytes</a>+<var>4</var>);   <i>/* then the low int */</i></td></tr>
+<tr><th id="323">323</th><td>    }</td></tr>
+<tr><th id="324">324</th><td></td></tr>
+<tr><th id="325">325</th><td>  <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>=<a class="local col9 ref" href="#29string" title='string' data-ref="29string" data-ref-filename="29string">string</a>;			   <i>/* where result will go */</i></td></tr>
+<tr><th id="326">326</th><td>  <b>if</b> (((<a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>)<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>)&lt;<var>0</var>) *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'-'</kbd>;   <i>/* handle sign */</i></td></tr>
+<tr><th id="327">327</th><td></td></tr>
+<tr><th id="328">328</th><td>  <a class="local col2 ref" href="#32comb" title='comb' data-ref="32comb" data-ref-filename="32comb">comb</a>=(<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&gt;&gt;<var>26</var>)&amp;<var>0x1f</var>;	   <i>/* combination field */</i></td></tr>
+<tr><th id="329">329</th><td>  <a class="local col0 ref" href="#30msd" title='msd' data-ref="30msd" data-ref-filename="30msd">msd</a>=<a class="ref" href="#COMBMSD" title='COMBMSD' data-ref="COMBMSD" data-ref-filename="COMBMSD">COMBMSD</a>[<a class="local col2 ref" href="#32comb" title='comb' data-ref="32comb" data-ref-filename="32comb">comb</a>];		   <i>/* decode the combination field */</i></td></tr>
+<tr><th id="330">330</th><td>  <a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>=<a class="ref" href="#COMBEXP" title='COMBEXP' data-ref="COMBEXP" data-ref-filename="COMBEXP">COMBEXP</a>[<a class="local col2 ref" href="#32comb" title='comb' data-ref="32comb" data-ref-filename="32comb">comb</a>];		   <i>/* .. */</i></td></tr>
+<tr><th id="331">331</th><td></td></tr>
+<tr><th id="332">332</th><td>  <b>if</b> (<a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>==<var>3</var>) {</td></tr>
+<tr><th id="333">333</th><td>    <b>if</b> (<a class="local col0 ref" href="#30msd" title='msd' data-ref="30msd" data-ref-filename="30msd">msd</a>==<var>0</var>) {		   <i>/* infinity */</i></td></tr>
+<tr><th id="334">334</th><td>      <a class="ref fn" href="../../../../../../../include/string.h.html#strcpy" title='strcpy' data-ref="strcpy" data-ref-filename="strcpy">strcpy</a>(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>,   <q>"Inf"</q>);</td></tr>
+<tr><th id="335">335</th><td>      <a class="ref fn" href="../../../../../../../include/string.h.html#strcpy" title='strcpy' data-ref="strcpy" data-ref-filename="strcpy">strcpy</a>(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>+<var>3</var>, <q>"inity"</q>);</td></tr>
+<tr><th id="336">336</th><td>      <b>return</b> <a class="local col9 ref" href="#29string" title='string' data-ref="29string" data-ref-filename="29string">string</a>;		   <i>/* easy */</i></td></tr>
+<tr><th id="337">337</th><td>      }</td></tr>
+<tr><th id="338">338</th><td>    <b>if</b> (<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;<var>0x02000000</var>) *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'s'</kbd>; <i>/* sNaN */</i></td></tr>
+<tr><th id="339">339</th><td>    <a class="ref fn" href="../../../../../../../include/string.h.html#strcpy" title='strcpy' data-ref="strcpy" data-ref-filename="strcpy">strcpy</a>(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>, <q>"NaN"</q>);		   <i>/* complete word */</i></td></tr>
+<tr><th id="340">340</th><td>    <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>+=<var>3</var>;			   <i>/* step past */</i></td></tr>
+<tr><th id="341">341</th><td>    <b>if</b> (<a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>==<var>0</var> &amp;&amp; (<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;<var>0x0003ffff</var>)==<var>0</var>) <b>return</b> <a class="local col9 ref" href="#29string" title='string' data-ref="29string" data-ref-filename="29string">string</a>; <i>/* zero payload */</i></td></tr>
+<tr><th id="342">342</th><td>    <i>/* otherwise drop through to add integer; set correct exp */</i></td></tr>
+<tr><th id="343">343</th><td>    <a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>=<var>0</var>; <a class="local col0 ref" href="#30msd" title='msd' data-ref="30msd" data-ref-filename="30msd">msd</a>=<var>0</var>;		   <i>/* setup for following code */</i></td></tr>
+<tr><th id="344">344</th><td>    }</td></tr>
+<tr><th id="345">345</th><td>   <b>else</b> <a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>=(<a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>&lt;&lt;<var>8</var>)+((<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&gt;&gt;<var>18</var>)&amp;<var>0xff</var>)-<a class="macro" href="decimal64.h.html#42" title="398" data-ref="_M/DECIMAL64_Bias">DECIMAL64_Bias</a>;</td></tr>
+<tr><th id="346">346</th><td></td></tr>
+<tr><th id="347">347</th><td>  <i>/* convert 16 digits of significand to characters */</i></td></tr>
+<tr><th id="348">348</th><td>  <a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>=<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>;			   <i>/* save start of coefficient */</i></td></tr>
+<tr><th id="349">349</th><td>  <b>if</b> (<a class="local col0 ref" href="#30msd" title='msd' data-ref="30msd" data-ref-filename="30msd">msd</a>) *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'0'</kbd>+(<em>char</em>)<a class="local col0 ref" href="#30msd" title='msd' data-ref="30msd" data-ref-filename="30msd">msd</a>;	   <i>/* non-zero most significant digit */</i></td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td>  <i>/* Now decode the declets.  After extracting each one, it is */</i></td></tr>
+<tr><th id="352">352</th><td>  <i>/* decoded to binary and then to a 4-char sequence by table lookup; */</i></td></tr>
+<tr><th id="353">353</th><td>  <i>/* the 4-chars are a 1-char length (significant digits, except 000 */</i></td></tr>
+<tr><th id="354">354</th><td>  <i>/* has length 0).  This allows us to left-align the first declet */</i></td></tr>
+<tr><th id="355">355</th><td>  <i>/* with non-zero content, then remaining ones are full 3-char */</i></td></tr>
+<tr><th id="356">356</th><td>  <i>/* length.  We use fixed-length memcpys because variable-length */</i></td></tr>
+<tr><th id="357">357</th><td>  <i>/* causes a subroutine call in GCC.  (These are length 4 for speed */</i></td></tr>
+<tr><th id="358">358</th><td>  <i>/* and are safe because the array has an extra terminator byte.) */</i></td></tr>
+<tr><th id="359">359</th><td>  <u>#define <dfn class="macro" id="_M/dpd2char" data-ref="_M/dpd2char">dpd2char</dfn> <a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>=&amp;<a class="ref" href="#BIN2CHAR" title='BIN2CHAR' data-ref="BIN2CHAR" data-ref-filename="BIN2CHAR">BIN2CHAR</a>[<a class="ref" href="../decNumberLocal.h.html#DPD2BIN" title='DPD2BIN' data-ref="DPD2BIN" data-ref-filename="DPD2BIN">DPD2BIN</a>[<a class="local col8 ref" href="#38dpd" title='dpd' data-ref="38dpd" data-ref-filename="38dpd">dpd</a>]*4]; 		  \</u></td></tr>
+<tr><th id="360">360</th><td><u>		   if (<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>!=<a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>) {<a class="ref fn" href="../../../../../../../include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>, <a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>+1, 4); <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>+=3;}	  \</u></td></tr>
+<tr><th id="361">361</th><td><u>		    else if (*<a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>)  {<a class="ref fn" href="../../../../../../../include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>, <a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>+4-*<a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>, 4); <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>+=*<a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>;}</u></td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td>  <a class="local col8 ref" href="#38dpd" title='dpd' data-ref="38dpd" data-ref-filename="38dpd">dpd</a>=(<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&gt;&gt;<var>8</var>)&amp;<var>0x3ff</var>;		     <i>/* declet 1 */</i></td></tr>
+<tr><th id="364">364</th><td>  <a class="macro" href="#359" title="u=&amp;BIN2CHAR[DPD2BIN[dpd]*4]; if (c!=cstart) {memcpy(c, u+1, 4); c+=3;} else if (*u) {memcpy(c, u+4-*u, 4); c+=*u;}" data-ref="_M/dpd2char">dpd2char</a>;</td></tr>
+<tr><th id="365">365</th><td>  <a class="local col8 ref" href="#38dpd" title='dpd' data-ref="38dpd" data-ref-filename="38dpd">dpd</a>=((<a class="macro" href="#312" title="sourar[1]" data-ref="_M/sourhi">sourhi</a>&amp;<var>0xff</var>)&lt;&lt;<var>2</var>) | (<a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>&gt;&gt;<var>30</var>);     <i>/* declet 2 */</i></td></tr>
+<tr><th id="366">366</th><td>  <a class="macro" href="#359" title="u=&amp;BIN2CHAR[DPD2BIN[dpd]*4]; if (c!=cstart) {memcpy(c, u+1, 4); c+=3;} else if (*u) {memcpy(c, u+4-*u, 4); c+=*u;}" data-ref="_M/dpd2char">dpd2char</a>;</td></tr>
+<tr><th id="367">367</th><td>  <a class="local col8 ref" href="#38dpd" title='dpd' data-ref="38dpd" data-ref-filename="38dpd">dpd</a>=(<a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>&gt;&gt;<var>20</var>)&amp;<var>0x3ff</var>;		     <i>/* declet 3 */</i></td></tr>
+<tr><th id="368">368</th><td>  <a class="macro" href="#359" title="u=&amp;BIN2CHAR[DPD2BIN[dpd]*4]; if (c!=cstart) {memcpy(c, u+1, 4); c+=3;} else if (*u) {memcpy(c, u+4-*u, 4); c+=*u;}" data-ref="_M/dpd2char">dpd2char</a>;</td></tr>
+<tr><th id="369">369</th><td>  <a class="local col8 ref" href="#38dpd" title='dpd' data-ref="38dpd" data-ref-filename="38dpd">dpd</a>=(<a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>&gt;&gt;<var>10</var>)&amp;<var>0x3ff</var>;		     <i>/* declet 4 */</i></td></tr>
+<tr><th id="370">370</th><td>  <a class="macro" href="#359" title="u=&amp;BIN2CHAR[DPD2BIN[dpd]*4]; if (c!=cstart) {memcpy(c, u+1, 4); c+=3;} else if (*u) {memcpy(c, u+4-*u, 4); c+=*u;}" data-ref="_M/dpd2char">dpd2char</a>;</td></tr>
+<tr><th id="371">371</th><td>  <a class="local col8 ref" href="#38dpd" title='dpd' data-ref="38dpd" data-ref-filename="38dpd">dpd</a>=(<a class="macro" href="#313" title="sourar[0]" data-ref="_M/sourlo">sourlo</a>)&amp;<var>0x3ff</var>;			     <i>/* declet 5 */</i></td></tr>
+<tr><th id="372">372</th><td>  <a class="macro" href="#359" title="u=&amp;BIN2CHAR[DPD2BIN[dpd]*4]; if (c!=cstart) {memcpy(c, u+1, 4); c+=3;} else if (*u) {memcpy(c, u+4-*u, 4); c+=*u;}" data-ref="_M/dpd2char">dpd2char</a>;</td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td>  <b>if</b> (<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>==<a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>) *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'0'</kbd>;	   <i>/* all zeros -- make 0 */</i></td></tr>
+<tr><th id="375">375</th><td></td></tr>
+<tr><th id="376">376</th><td>  <b>if</b> (<a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>==<var>0</var>) { 		   <i>/* integer or NaN case -- easy */</i></td></tr>
+<tr><th id="377">377</th><td>    *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>=<kbd>'\0'</kbd>;			   <i>/* terminate */</i></td></tr>
+<tr><th id="378">378</th><td>    <b>return</b> <a class="local col9 ref" href="#29string" title='string' data-ref="29string" data-ref-filename="29string">string</a>;</td></tr>
+<tr><th id="379">379</th><td>    }</td></tr>
+<tr><th id="380">380</th><td></td></tr>
+<tr><th id="381">381</th><td>  <i>/* non-0 exponent */</i></td></tr>
+<tr><th id="382">382</th><td>  <a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>=<var>0</var>;				   <i>/* assume no E */</i></td></tr>
+<tr><th id="383">383</th><td>  <a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>=<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>-<a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>+<a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>;</td></tr>
+<tr><th id="384">384</th><td>  <i>/* [here, pre-exp is the digits count (==1 for zero)] */</i></td></tr>
+<tr><th id="385">385</th><td>  <b>if</b> (<a class="local col1 ref" href="#31exp" title='exp' data-ref="31exp" data-ref-filename="31exp">exp</a>&gt;<var>0</var> || <a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>&lt;-<var>5</var>) {	   <i>/* need exponential form */</i></td></tr>
+<tr><th id="386">386</th><td>    <a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>=<a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>-<var>1</var>;			   <i>/* calculate E value */</i></td></tr>
+<tr><th id="387">387</th><td>    <a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>=<var>1</var>;			   <i>/* assume one digit before '.' */</i></td></tr>
+<tr><th id="388">388</th><td>    } <i>/* exponential form */</i></td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td>  <i>/* modify the coefficient, adding 0s, '.', and E+nn as needed */</i></td></tr>
+<tr><th id="391">391</th><td>  <a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>=<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>-<var>1</var>;			   <i>/* source (LSD) */</i></td></tr>
+<tr><th id="392">392</th><td>  <b>if</b> (<a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>&gt;<var>0</var>) {			   <i>/* ddd.ddd (plain), perhaps with E */</i></td></tr>
+<tr><th id="393">393</th><td>    <em>char</em> *<dfn class="local col3 decl" id="43dotat" title='dotat' data-type='char *' data-ref="43dotat" data-ref-filename="43dotat">dotat</dfn>=<a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>+<a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>;</td></tr>
+<tr><th id="394">394</th><td>    <b>if</b> (<a class="local col3 ref" href="#43dotat" title='dotat' data-ref="43dotat" data-ref-filename="43dotat">dotat</a>&lt;<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>) {		   <i>/* if embedded dot needed... */</i></td></tr>
+<tr><th id="395">395</th><td>      <a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>=<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>;				<i>/* target */</i></td></tr>
+<tr><th id="396">396</th><td>      <b>for</b> (; <a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>&gt;=<a class="local col3 ref" href="#43dotat" title='dotat' data-ref="43dotat" data-ref-filename="43dotat">dotat</a>; <a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>--, <a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>--) *<a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>=*<a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>; <i>/* open the gap; leave t at gap */</i></td></tr>
+<tr><th id="397">397</th><td>      *<a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>=<kbd>'.'</kbd>;				<i>/* insert the dot */</i></td></tr>
+<tr><th id="398">398</th><td>      <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++;				<i>/* length increased by one */</i></td></tr>
+<tr><th id="399">399</th><td>      }</td></tr>
+<tr><th id="400">400</th><td></td></tr>
+<tr><th id="401">401</th><td>    <i>/* finally add the E-part, if needed; it will never be 0, and has */</i></td></tr>
+<tr><th id="402">402</th><td>    <i>/* a maximum length of 3 digits */</i></td></tr>
+<tr><th id="403">403</th><td>    <b>if</b> (<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>!=<var>0</var>) {</td></tr>
+<tr><th id="404">404</th><td>      *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'E'</kbd>; 		   <i>/* starts with E */</i></td></tr>
+<tr><th id="405">405</th><td>      *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'+'</kbd>; 		   <i>/* assume positive */</i></td></tr>
+<tr><th id="406">406</th><td>      <b>if</b> (<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>&lt;<var>0</var>) {</td></tr>
+<tr><th id="407">407</th><td>	*(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>-<var>1</var>)=<kbd>'-'</kbd>;		   <i>/* oops, need '-' */</i></td></tr>
+<tr><th id="408">408</th><td>	<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>=-<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>;			   <i>/* uInt, please */</i></td></tr>
+<tr><th id="409">409</th><td>	}</td></tr>
+<tr><th id="410">410</th><td>      <a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>=&amp;<a class="ref" href="#BIN2CHAR" title='BIN2CHAR' data-ref="BIN2CHAR" data-ref-filename="BIN2CHAR">BIN2CHAR</a>[<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>*<var>4</var>]; 	   <i>/* -&gt; length byte */</i></td></tr>
+<tr><th id="411">411</th><td>      <a class="ref fn" href="../../../../../../../include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>, <a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>+<var>4</var>-*<a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>, <var>4</var>);	   <i>/* copy fixed 4 characters [is safe] */</i></td></tr>
+<tr><th id="412">412</th><td>      <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>+=*<a class="local col5 ref" href="#35u" title='u' data-ref="35u" data-ref-filename="35u">u</a>;			   <i>/* bump pointer appropriately */</i></td></tr>
+<tr><th id="413">413</th><td>      }</td></tr>
+<tr><th id="414">414</th><td>    *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>=<kbd>'\0'</kbd>;			   <i>/* add terminator */</i></td></tr>
+<tr><th id="415">415</th><td>    <i>/*printf("res %s\n", string); */</i></td></tr>
+<tr><th id="416">416</th><td>    <b>return</b> <a class="local col9 ref" href="#29string" title='string' data-ref="29string" data-ref-filename="29string">string</a>;</td></tr>
+<tr><th id="417">417</th><td>    } <i>/* pre&gt;0 */</i></td></tr>
+<tr><th id="418">418</th><td></td></tr>
+<tr><th id="419">419</th><td>  <i>/* -5&lt;=pre&lt;=0: here for plain 0.ddd or 0.000ddd forms (can never have E) */</i></td></tr>
+<tr><th id="420">420</th><td>  <a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>=<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>+<var>1</var>-<a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>;</td></tr>
+<tr><th id="421">421</th><td>  *(<a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>+<var>1</var>)=<kbd>'\0'</kbd>;				<i>/* can add terminator now */</i></td></tr>
+<tr><th id="422">422</th><td>  <b>for</b> (; <a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>&gt;=<a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>; <a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>--, <a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>--) *<a class="local col7 ref" href="#37t" title='t' data-ref="37t" data-ref-filename="37t">t</a>=*<a class="local col6 ref" href="#36s" title='s' data-ref="36s" data-ref-filename="36s">s</a>;	<i>/* shift whole coefficient right */</i></td></tr>
+<tr><th id="423">423</th><td>  <a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>=<a class="local col3 ref" href="#33cstart" title='cstart' data-ref="33cstart" data-ref-filename="33cstart">cstart</a>;</td></tr>
+<tr><th id="424">424</th><td>  *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'0'</kbd>;				<i>/* always starts with 0. */</i></td></tr>
+<tr><th id="425">425</th><td>  *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'.'</kbd>;</td></tr>
+<tr><th id="426">426</th><td>  <b>for</b> (; <a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>&lt;<var>0</var>; <a class="local col9 ref" href="#39pre" title='pre' data-ref="39pre" data-ref-filename="39pre">pre</a>++) *<a class="local col4 ref" href="#34c" title='c' data-ref="34c" data-ref-filename="34c">c</a>++=<kbd>'0'</kbd>;	<i>/* add any 0's after '.' */</i></td></tr>
+<tr><th id="427">427</th><td>  <i>/*printf("res %s\n", string); */</i></td></tr>
+<tr><th id="428">428</th><td>  <b>return</b> <a class="local col9 ref" href="#29string" title='string' data-ref="29string" data-ref-filename="29string">string</a>;</td></tr>
+<tr><th id="429">429</th><td>  } <i>/* decimal64ToString */</i></td></tr>
+<tr><th id="430">430</th><td></td></tr>
+<tr><th id="431">431</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="432">432</th><td><i>/* to-number -- conversion from numeric string			      */</i></td></tr>
+<tr><th id="433">433</th><td><i>/*								      */</i></td></tr>
+<tr><th id="434">434</th><td><i>/*   decimal64FromString(result, string, set);			      */</i></td></tr>
+<tr><th id="435">435</th><td><i>/*								      */</i></td></tr>
+<tr><th id="436">436</th><td><i>/*  result  is the decimal64 format number which gets the result of   */</i></td></tr>
+<tr><th id="437">437</th><td><i>/*	    the conversion					      */</i></td></tr>
+<tr><th id="438">438</th><td><i>/*  *string is the character string which should contain a valid      */</i></td></tr>
+<tr><th id="439">439</th><td><i>/*	    number (which may be a special value)		      */</i></td></tr>
+<tr><th id="440">440</th><td><i>/*  set     is the context					      */</i></td></tr>
+<tr><th id="441">441</th><td><i>/*								      */</i></td></tr>
+<tr><th id="442">442</th><td><i>/* The context is supplied to this routine is used for error handling */</i></td></tr>
+<tr><th id="443">443</th><td><i>/* (setting of status and traps) and for the rounding mode, only.     */</i></td></tr>
+<tr><th id="444">444</th><td><i>/* If an error occurs, the result will be a valid decimal64 NaN.      */</i></td></tr>
+<tr><th id="445">445</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="446">446</th><td><a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> * <dfn class="decl def fn" id="decimal64FromString" title='decimal64FromString' data-ref="decimal64FromString" data-ref-filename="decimal64FromString">decimal64FromString</dfn>(<a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col4 decl" id="44result" title='result' data-type='decimal64 *' data-ref="44result" data-ref-filename="44result">result</dfn>, <em>const</em> <em>char</em> *<dfn class="local col5 decl" id="45string" title='string' data-type='const char *' data-ref="45string" data-ref-filename="45string">string</dfn>,</td></tr>
+<tr><th id="447">447</th><td>				<a class="typedef" href="../decContext.h.html#decContext" title='decContext' data-type='struct decContext' data-ref="decContext" data-ref-filename="decContext">decContext</a> *<dfn class="local col6 decl" id="46set" title='set' data-type='decContext *' data-ref="46set" data-ref-filename="46set">set</dfn>) {</td></tr>
+<tr><th id="448">448</th><td>  <a class="typedef" href="../decContext.h.html#decContext" title='decContext' data-type='struct decContext' data-ref="decContext" data-ref-filename="decContext">decContext</a> <dfn class="local col7 decl" id="47dc" title='dc' data-type='decContext' data-ref="47dc" data-ref-filename="47dc">dc</dfn>;			     <i>/* work */</i></td></tr>
+<tr><th id="449">449</th><td>  <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> <dfn class="local col8 decl" id="48dn" title='dn' data-type='decNumber' data-ref="48dn" data-ref-filename="48dn">dn</dfn>; 			     <i>/* .. */</i></td></tr>
+<tr><th id="450">450</th><td></td></tr>
+<tr><th id="451">451</th><td>  <a class="ref fn" href="../decContext.h.html#decContextDefault" title='decContextDefault' data-ref="decContextDefault" data-ref-filename="decContextDefault">decContextDefault</a>(&amp;<a class="local col7 ref" href="#47dc" title='dc' data-ref="47dc" data-ref-filename="47dc">dc</a>, <a class="macro" href="../decContext.h.html#237" title="64" data-ref="_M/DEC_INIT_DECIMAL64">DEC_INIT_DECIMAL64</a>); <i>/* no traps, please */</i></td></tr>
+<tr><th id="452">452</th><td>  <a class="local col7 ref" href="#47dc" title='dc' data-ref="47dc" data-ref-filename="47dc">dc</a>.<a class="ref field" href="../decContext.h.html#(anonymous)::round" title='(anonymous struct)::round' data-ref="(anonymous)::round" data-ref-filename="(anonymous)..round">round</a>=<a class="local col6 ref" href="#46set" title='set' data-ref="46set" data-ref-filename="46set">set</a>-&gt;<a class="ref field" href="../decContext.h.html#(anonymous)::round" title='(anonymous struct)::round' data-ref="(anonymous)::round" data-ref-filename="(anonymous)..round">round</a>;			      <i>/* use supplied rounding */</i></td></tr>
+<tr><th id="453">453</th><td></td></tr>
+<tr><th id="454">454</th><td>  <a class="ref fn" href="../decNumber.h.html#decNumberFromString" title='decNumberFromString' data-ref="decNumberFromString" data-ref-filename="decNumberFromString">decNumberFromString</a>(&amp;<a class="local col8 ref" href="#48dn" title='dn' data-ref="48dn" data-ref-filename="48dn">dn</a>, <a class="local col5 ref" href="#45string" title='string' data-ref="45string" data-ref-filename="45string">string</a>, &amp;<a class="local col7 ref" href="#47dc" title='dc' data-ref="47dc" data-ref-filename="47dc">dc</a>);     <i>/* will round if needed */</i></td></tr>
+<tr><th id="455">455</th><td></td></tr>
+<tr><th id="456">456</th><td>  <a class="ref fn" href="#decimal64FromNumber" title='decimal64FromNumber' data-ref="decimal64FromNumber" data-ref-filename="decimal64FromNumber">decimal64FromNumber</a>(<a class="local col4 ref" href="#44result" title='result' data-ref="44result" data-ref-filename="44result">result</a>, &amp;<a class="local col8 ref" href="#48dn" title='dn' data-ref="48dn" data-ref-filename="48dn">dn</a>, &amp;<a class="local col7 ref" href="#47dc" title='dc' data-ref="47dc" data-ref-filename="47dc">dc</a>);</td></tr>
+<tr><th id="457">457</th><td>  <b>if</b> (<a class="local col7 ref" href="#47dc" title='dc' data-ref="47dc" data-ref-filename="47dc">dc</a>.<a class="ref field" href="../decContext.h.html#(anonymous)::status" title='(anonymous struct)::status' data-ref="(anonymous)::status" data-ref-filename="(anonymous)..status">status</a>!=<var>0</var>) {			     <i>/* something happened */</i></td></tr>
+<tr><th id="458">458</th><td>    <a class="ref fn" href="../decContext.h.html#decContextSetStatus" title='decContextSetStatus' data-ref="decContextSetStatus" data-ref-filename="decContextSetStatus">decContextSetStatus</a>(<a class="local col6 ref" href="#46set" title='set' data-ref="46set" data-ref-filename="46set">set</a>, <a class="local col7 ref" href="#47dc" title='dc' data-ref="47dc" data-ref-filename="47dc">dc</a>.<a class="ref field" href="../decContext.h.html#(anonymous)::status" title='(anonymous struct)::status' data-ref="(anonymous)::status" data-ref-filename="(anonymous)..status">status</a>);     <i>/* .. pass it on */</i></td></tr>
+<tr><th id="459">459</th><td>    }</td></tr>
+<tr><th id="460">460</th><td>  <b>return</b> <a class="local col4 ref" href="#44result" title='result' data-ref="44result" data-ref-filename="44result">result</a>;</td></tr>
+<tr><th id="461">461</th><td>  } <i>/* decimal64FromString */</i></td></tr>
+<tr><th id="462">462</th><td></td></tr>
+<tr><th id="463">463</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="464">464</th><td><i>/* decimal64IsCanonical -- test whether encoding is canonical	      */</i></td></tr>
+<tr><th id="465">465</th><td><i>/*   d64 is the source decimal64				      */</i></td></tr>
+<tr><th id="466">466</th><td><i>/*   returns 1 if the encoding of d64 is canonical, 0 otherwise       */</i></td></tr>
+<tr><th id="467">467</th><td><i>/* No error is possible.					      */</i></td></tr>
+<tr><th id="468">468</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="469">469</th><td><a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="decl def fn" id="decimal64IsCanonical" title='decimal64IsCanonical' data-ref="decimal64IsCanonical" data-ref-filename="decimal64IsCanonical">decimal64IsCanonical</dfn>(<em>const</em> <a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col9 decl" id="49d64" title='d64' data-type='const decimal64 *' data-ref="49d64" data-ref-filename="49d64">d64</dfn>) {</td></tr>
+<tr><th id="470">470</th><td>  <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> <dfn class="local col0 decl" id="50dn" title='dn' data-type='decNumber' data-ref="50dn" data-ref-filename="50dn">dn</dfn>; 			<i>/* work */</i></td></tr>
+<tr><th id="471">471</th><td>  <a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> <dfn class="local col1 decl" id="51canon" title='canon' data-type='decimal64' data-ref="51canon" data-ref-filename="51canon">canon</dfn>;			<i>/* .. */</i></td></tr>
+<tr><th id="472">472</th><td>  <a class="typedef" href="../decContext.h.html#decContext" title='decContext' data-type='struct decContext' data-ref="decContext" data-ref-filename="decContext">decContext</a> <dfn class="local col2 decl" id="52dc" title='dc' data-type='decContext' data-ref="52dc" data-ref-filename="52dc">dc</dfn>;			<i>/* .. */</i></td></tr>
+<tr><th id="473">473</th><td>  <a class="ref fn" href="../decContext.h.html#decContextDefault" title='decContextDefault' data-ref="decContextDefault" data-ref-filename="decContextDefault">decContextDefault</a>(&amp;<a class="local col2 ref" href="#52dc" title='dc' data-ref="52dc" data-ref-filename="52dc">dc</a>, <a class="macro" href="../decContext.h.html#237" title="64" data-ref="_M/DEC_INIT_DECIMAL64">DEC_INIT_DECIMAL64</a>);</td></tr>
+<tr><th id="474">474</th><td>  <a class="ref fn" href="#decimal64ToNumber" title='decimal64ToNumber' data-ref="decimal64ToNumber" data-ref-filename="decimal64ToNumber">decimal64ToNumber</a>(<a class="local col9 ref" href="#49d64" title='d64' data-ref="49d64" data-ref-filename="49d64">d64</a>, &amp;<a class="local col0 ref" href="#50dn" title='dn' data-ref="50dn" data-ref-filename="50dn">dn</a>);</td></tr>
+<tr><th id="475">475</th><td>  <a class="ref fn" href="#decimal64FromNumber" title='decimal64FromNumber' data-ref="decimal64FromNumber" data-ref-filename="decimal64FromNumber">decimal64FromNumber</a>(&amp;<a class="local col1 ref" href="#51canon" title='canon' data-ref="51canon" data-ref-filename="51canon">canon</a>, &amp;<a class="local col0 ref" href="#50dn" title='dn' data-ref="50dn" data-ref-filename="50dn">dn</a>, &amp;<a class="local col2 ref" href="#52dc" title='dc' data-ref="52dc" data-ref-filename="52dc">dc</a>);<i>/* canon will now be canonical */</i></td></tr>
+<tr><th id="476">476</th><td>  <b>return</b> <a class="ref fn" href="../../../../../../../include/string.h.html#memcmp" title='memcmp' data-ref="memcmp" data-ref-filename="memcmp">memcmp</a>(<a class="local col9 ref" href="#49d64" title='d64' data-ref="49d64" data-ref-filename="49d64">d64</a>, &amp;<a class="local col1 ref" href="#51canon" title='canon' data-ref="51canon" data-ref-filename="51canon">canon</a>, <a class="macro" href="decimal64.h.html#38" title="8" data-ref="_M/DECIMAL64_Bytes">DECIMAL64_Bytes</a>)==<var>0</var>;</td></tr>
+<tr><th id="477">477</th><td>  } <i>/* decimal64IsCanonical */</i></td></tr>
+<tr><th id="478">478</th><td></td></tr>
+<tr><th id="479">479</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="480">480</th><td><i>/* decimal64Canonical -- copy an encoding, ensuring it is canonical   */</i></td></tr>
+<tr><th id="481">481</th><td><i>/*   d64 is the source decimal64				      */</i></td></tr>
+<tr><th id="482">482</th><td><i>/*   result is the target (may be the same decimal64)		      */</i></td></tr>
+<tr><th id="483">483</th><td><i>/*   returns result						      */</i></td></tr>
+<tr><th id="484">484</th><td><i>/* No error is possible.					      */</i></td></tr>
+<tr><th id="485">485</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="486">486</th><td><a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> * <dfn class="decl def fn" id="decimal64Canonical" title='decimal64Canonical' data-ref="decimal64Canonical" data-ref-filename="decimal64Canonical">decimal64Canonical</dfn>(<a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col3 decl" id="53result" title='result' data-type='decimal64 *' data-ref="53result" data-ref-filename="53result">result</dfn>, <em>const</em> <a class="typedef" href="decimal64.h.html#decimal64" title='decimal64' data-type='struct decimal64' data-ref="decimal64" data-ref-filename="decimal64">decimal64</a> *<dfn class="local col4 decl" id="54d64" title='d64' data-type='const decimal64 *' data-ref="54d64" data-ref-filename="54d64">d64</dfn>) {</td></tr>
+<tr><th id="487">487</th><td>  <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> <dfn class="local col5 decl" id="55dn" title='dn' data-type='decNumber' data-ref="55dn" data-ref-filename="55dn">dn</dfn>; 			<i>/* work */</i></td></tr>
+<tr><th id="488">488</th><td>  <a class="typedef" href="../decContext.h.html#decContext" title='decContext' data-type='struct decContext' data-ref="decContext" data-ref-filename="decContext">decContext</a> <dfn class="local col6 decl" id="56dc" title='dc' data-type='decContext' data-ref="56dc" data-ref-filename="56dc">dc</dfn>;			<i>/* .. */</i></td></tr>
+<tr><th id="489">489</th><td>  <a class="ref fn" href="../decContext.h.html#decContextDefault" title='decContextDefault' data-ref="decContextDefault" data-ref-filename="decContextDefault">decContextDefault</a>(&amp;<a class="local col6 ref" href="#56dc" title='dc' data-ref="56dc" data-ref-filename="56dc">dc</a>, <a class="macro" href="../decContext.h.html#237" title="64" data-ref="_M/DEC_INIT_DECIMAL64">DEC_INIT_DECIMAL64</a>);</td></tr>
+<tr><th id="490">490</th><td>  <a class="ref fn" href="#decimal64ToNumber" title='decimal64ToNumber' data-ref="decimal64ToNumber" data-ref-filename="decimal64ToNumber">decimal64ToNumber</a>(<a class="local col4 ref" href="#54d64" title='d64' data-ref="54d64" data-ref-filename="54d64">d64</a>, &amp;<a class="local col5 ref" href="#55dn" title='dn' data-ref="55dn" data-ref-filename="55dn">dn</a>);</td></tr>
+<tr><th id="491">491</th><td>  <a class="ref fn" href="#decimal64FromNumber" title='decimal64FromNumber' data-ref="decimal64FromNumber" data-ref-filename="decimal64FromNumber">decimal64FromNumber</a>(<a class="local col3 ref" href="#53result" title='result' data-ref="53result" data-ref-filename="53result">result</a>, &amp;<a class="local col5 ref" href="#55dn" title='dn' data-ref="55dn" data-ref-filename="55dn">dn</a>, &amp;<a class="local col6 ref" href="#56dc" title='dc' data-ref="56dc" data-ref-filename="56dc">dc</a>);<i>/* result will now be canonical */</i></td></tr>
+<tr><th id="492">492</th><td>  <b>return</b> <a class="local col3 ref" href="#53result" title='result' data-ref="53result" data-ref-filename="53result">result</a>;</td></tr>
+<tr><th id="493">493</th><td>  } <i>/* decimal64Canonical */</i></td></tr>
+<tr><th id="494">494</th><td></td></tr>
+<tr><th id="495">495</th><td><u>#<span data-ppcond="495">if</span> <a class="macro" href="../decNumberLocal.h.html#69" title="0" data-ref="_M/DECTRACE">DECTRACE</a> || <a class="macro" href="../decNumberLocal.h.html#63" title="0" data-ref="_M/DECCHECK">DECCHECK</a></u></td></tr>
+<tr><th id="496">496</th><td><i>/* Macros for accessing decimal64 fields.  These assume the</i></td></tr>
+<tr><th id="497">497</th><td><i>   argument is a reference (pointer) to the decimal64 structure,</i></td></tr>
+<tr><th id="498">498</th><td><i>   and the decimal64 is in network byte order (big-endian) */</i></td></tr>
+<tr><th id="499">499</th><td><i>/* Get sign */</i></td></tr>
+<tr><th id="500">500</th><td><u>#define decimal64Sign(d)       ((unsigned)(d)-&gt;bytes[0]&gt;&gt;7)</u></td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td><i>/* Get combination field */</i></td></tr>
+<tr><th id="503">503</th><td><u>#define decimal64Comb(d)       (((d)-&gt;bytes[0] &amp; 0x7c)&gt;&gt;2)</u></td></tr>
+<tr><th id="504">504</th><td></td></tr>
+<tr><th id="505">505</th><td><i>/* Get exponent continuation [does not remove bias] */</i></td></tr>
+<tr><th id="506">506</th><td><u>#define decimal64ExpCon(d)     ((((d)-&gt;bytes[0] &amp; 0x03)&lt;&lt;6)	      \</u></td></tr>
+<tr><th id="507">507</th><td><u>			     | ((unsigned)(d)-&gt;bytes[1]&gt;&gt;2))</u></td></tr>
+<tr><th id="508">508</th><td></td></tr>
+<tr><th id="509">509</th><td><i>/* Set sign [this assumes sign previously 0] */</i></td></tr>
+<tr><th id="510">510</th><td><u>#define decimal64SetSign(d, b) {				      \</u></td></tr>
+<tr><th id="511">511</th><td><u>  (d)-&gt;bytes[0]|=((unsigned)(b)&lt;&lt;7);}</u></td></tr>
+<tr><th id="512">512</th><td></td></tr>
+<tr><th id="513">513</th><td><i>/* Set exponent continuation [does not apply bias] */</i></td></tr>
+<tr><th id="514">514</th><td><i>/* This assumes range has been checked and exponent previously 0; */</i></td></tr>
+<tr><th id="515">515</th><td><i>/* type of exponent must be unsigned */</i></td></tr>
+<tr><th id="516">516</th><td><u>#define decimal64SetExpCon(d, e) {				      \</u></td></tr>
+<tr><th id="517">517</th><td><u>  (d)-&gt;bytes[0]|=(uByte)((e)&gt;&gt;6);				      \</u></td></tr>
+<tr><th id="518">518</th><td><u>  (d)-&gt;bytes[1]|=(uByte)(((e)&amp;0x3F)&lt;&lt;2);}</u></td></tr>
+<tr><th id="519">519</th><td></td></tr>
+<tr><th id="520">520</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="521">521</th><td><i>/* decimal64Show -- display a decimal64 in hexadecimal [debug aid]    */</i></td></tr>
+<tr><th id="522">522</th><td><i>/*   d64 -- the number to show					      */</i></td></tr>
+<tr><th id="523">523</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="524">524</th><td><i>/* Also shows sign/cob/expconfields extracted */</i></td></tr>
+<tr><th id="525">525</th><td><em>void</em> decimal64Show(<em>const</em> decimal64 *d64) {</td></tr>
+<tr><th id="526">526</th><td>  <em>char</em> buf[DECIMAL64_Bytes*<var>2</var>+<var>1</var>];</td></tr>
+<tr><th id="527">527</th><td>  Int i, j=<var>0</var>;</td></tr>
+<tr><th id="528">528</th><td></td></tr>
+<tr><th id="529">529</th><td>  <b>if</b> (DECLITEND) {</td></tr>
+<tr><th id="530">530</th><td>    <b>for</b> (i=<var>0</var>; i&lt;DECIMAL64_Bytes; i++, j+=<var>2</var>) {</td></tr>
+<tr><th id="531">531</th><td>      sprintf(&amp;buf[j], <q>"%02x"</q>, d64-&gt;bytes[<var>7</var>-i]);</td></tr>
+<tr><th id="532">532</th><td>      }</td></tr>
+<tr><th id="533">533</th><td>    printf(<q>" D64&gt; %s [S:%d Cb:%02x Ec:%02x] LittleEndian\n"</q>, buf,</td></tr>
+<tr><th id="534">534</th><td>	   d64-&gt;bytes[<var>7</var>]&gt;&gt;<var>7</var>, (d64-&gt;bytes[<var>7</var>]&gt;&gt;<var>2</var>)&amp;<var>0x1f</var>,</td></tr>
+<tr><th id="535">535</th><td>	   ((d64-&gt;bytes[<var>7</var>]&amp;<var>0x3</var>)&lt;&lt;<var>6</var>)| (d64-&gt;bytes[<var>6</var>]&gt;&gt;<var>2</var>));</td></tr>
+<tr><th id="536">536</th><td>    }</td></tr>
+<tr><th id="537">537</th><td>   <b>else</b> { <i>/* big-endian */</i></td></tr>
+<tr><th id="538">538</th><td>    <b>for</b> (i=<var>0</var>; i&lt;DECIMAL64_Bytes; i++, j+=<var>2</var>) {</td></tr>
+<tr><th id="539">539</th><td>      sprintf(&amp;buf[j], <q>"%02x"</q>, d64-&gt;bytes[i]);</td></tr>
+<tr><th id="540">540</th><td>      }</td></tr>
+<tr><th id="541">541</th><td>    printf(<q>" D64&gt; %s [S:%d Cb:%02x Ec:%02x] BigEndian\n"</q>, buf,</td></tr>
+<tr><th id="542">542</th><td>	   decimal64Sign(d64), decimal64Comb(d64), decimal64ExpCon(d64));</td></tr>
+<tr><th id="543">543</th><td>    }</td></tr>
+<tr><th id="544">544</th><td>  } <i>/* decimal64Show */</i></td></tr>
+<tr><th id="545">545</th><td><u>#<span data-ppcond="495">endif</span></u></td></tr>
+<tr><th id="546">546</th><td></td></tr>
+<tr><th id="547">547</th><td><i>/* ================================================================== */</i></td></tr>
+<tr><th id="548">548</th><td><i>/* Shared utility routines and tables				      */</i></td></tr>
+<tr><th id="549">549</th><td><i>/* ================================================================== */</i></td></tr>
+<tr><th id="550">550</th><td><i>/* define and include the conversion tables to use for shared code */</i></td></tr>
+<tr><th id="551">551</th><td><u>#<span data-ppcond="551">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>==3</u></td></tr>
+<tr><th id="552">552</th><td>  <u>#define <dfn class="macro" id="_M/DEC_DPD2BIN" data-ref="_M/DEC_DPD2BIN">DEC_DPD2BIN</dfn> 1</u></td></tr>
+<tr><th id="553">553</th><td><u>#<span data-ppcond="551">else</span></u></td></tr>
+<tr><th id="554">554</th><td>  <u>#define DEC_DPD2BCD 1</u></td></tr>
+<tr><th id="555">555</th><td><u>#<span data-ppcond="551">endif</span></u></td></tr>
+<tr><th id="556">556</th><td><u>#include <a href="../decDPD.h.html">"decDPD.h"</a>	      /* lookup tables */</u></td></tr>
+<tr><th id="557">557</th><td></td></tr>
+<tr><th id="558">558</th><td><i>/* The maximum number of decNumberUnits needed for a working copy of */</i></td></tr>
+<tr><th id="559">559</th><td><i>/* the units array is the ceiling of digits/DECDPUN, where digits is */</i></td></tr>
+<tr><th id="560">560</th><td><i>/* the maximum number of digits in any of the formats for which this */</i></td></tr>
+<tr><th id="561">561</th><td><i>/* is used.  decimal128.h must not be included in this module, so, as */</i></td></tr>
+<tr><th id="562">562</th><td><i>/* a very special case, that number is defined as a literal here. */</i></td></tr>
+<tr><th id="563">563</th><td><u>#define <dfn class="macro" id="_M/DECMAX754" data-ref="_M/DECMAX754">DECMAX754</dfn>   34</u></td></tr>
+<tr><th id="564">564</th><td><u>#define <dfn class="macro" id="_M/DECMAXUNITS" data-ref="_M/DECMAXUNITS">DECMAXUNITS</dfn> ((DECMAX754+DECDPUN-1)/DECDPUN)</u></td></tr>
+<tr><th id="565">565</th><td></td></tr>
+<tr><th id="566">566</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="567">567</th><td><i>/* Combination field lookup tables (uInts to save measurable work)    */</i></td></tr>
+<tr><th id="568">568</th><td><i>/*								      */</i></td></tr>
+<tr><th id="569">569</th><td><i>/*	COMBEXP - 2-bit most-significant-bits of exponent	      */</i></td></tr>
+<tr><th id="570">570</th><td><i>/*		  [11 if an Infinity or NaN]			      */</i></td></tr>
+<tr><th id="571">571</th><td><i>/*	COMBMSD - 4-bit most-significant-digit			      */</i></td></tr>
+<tr><th id="572">572</th><td><i>/*		  [0=Infinity, 1=NaN if COMBEXP=11]		      */</i></td></tr>
+<tr><th id="573">573</th><td><i>/*								      */</i></td></tr>
+<tr><th id="574">574</th><td><i>/* Both are indexed by the 5-bit combination field (0-31)	      */</i></td></tr>
+<tr><th id="575">575</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="576">576</th><td><em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="decl def" id="COMBEXP" title='COMBEXP' data-ref="COMBEXP" data-ref-filename="COMBEXP">COMBEXP</dfn>[<var>32</var>]={<var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>,</td></tr>
+<tr><th id="577">577</th><td>			<var>1</var>, <var>1</var>, <var>1</var>, <var>1</var>, <var>1</var>, <var>1</var>, <var>1</var>, <var>1</var>,</td></tr>
+<tr><th id="578">578</th><td>			<var>2</var>, <var>2</var>, <var>2</var>, <var>2</var>, <var>2</var>, <var>2</var>, <var>2</var>, <var>2</var>,</td></tr>
+<tr><th id="579">579</th><td>			<var>0</var>, <var>0</var>, <var>1</var>, <var>1</var>, <var>2</var>, <var>2</var>, <var>3</var>, <var>3</var>};</td></tr>
+<tr><th id="580">580</th><td><em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="decl def" id="COMBMSD" title='COMBMSD' data-ref="COMBMSD" data-ref-filename="COMBMSD">COMBMSD</dfn>[<var>32</var>]={<var>0</var>, <var>1</var>, <var>2</var>, <var>3</var>, <var>4</var>, <var>5</var>, <var>6</var>, <var>7</var>,</td></tr>
+<tr><th id="581">581</th><td>			<var>0</var>, <var>1</var>, <var>2</var>, <var>3</var>, <var>4</var>, <var>5</var>, <var>6</var>, <var>7</var>,</td></tr>
+<tr><th id="582">582</th><td>			<var>0</var>, <var>1</var>, <var>2</var>, <var>3</var>, <var>4</var>, <var>5</var>, <var>6</var>, <var>7</var>,</td></tr>
+<tr><th id="583">583</th><td>			<var>8</var>, <var>9</var>, <var>8</var>, <var>9</var>, <var>8</var>, <var>9</var>, <var>0</var>, <var>1</var>};</td></tr>
+<tr><th id="584">584</th><td></td></tr>
+<tr><th id="585">585</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="586">586</th><td><i>/* decDigitsToDPD -- pack coefficient into DPD form		      */</i></td></tr>
+<tr><th id="587">587</th><td><i>/*								      */</i></td></tr>
+<tr><th id="588">588</th><td><i>/*   dn   is the source number (assumed valid, max DECMAX754 digits)  */</i></td></tr>
+<tr><th id="589">589</th><td><i>/*   targ is 1, 2, or 4-element uInt array, which the caller must     */</i></td></tr>
+<tr><th id="590">590</th><td><i>/*	  have cleared to zeros 				      */</i></td></tr>
+<tr><th id="591">591</th><td><i>/*   shift is the number of 0 digits to add on the right (normally 0) */</i></td></tr>
+<tr><th id="592">592</th><td><i>/*								      */</i></td></tr>
+<tr><th id="593">593</th><td><i>/* The coefficient must be known small enough to fit.  The full       */</i></td></tr>
+<tr><th id="594">594</th><td><i>/* coefficient is copied, including the leading 'odd' digit.  This    */</i></td></tr>
+<tr><th id="595">595</th><td><i>/* digit is retrieved and packed into the combination field by the    */</i></td></tr>
+<tr><th id="596">596</th><td><i>/* caller.							      */</i></td></tr>
+<tr><th id="597">597</th><td><i>/*								      */</i></td></tr>
+<tr><th id="598">598</th><td><i>/* The target uInts are altered only as necessary to receive the      */</i></td></tr>
+<tr><th id="599">599</th><td><i>/* digits of the decNumber.  When more than one uInt is needed, they  */</i></td></tr>
+<tr><th id="600">600</th><td><i>/* are filled from left to right (that is, the uInt at offset 0 will  */</i></td></tr>
+<tr><th id="601">601</th><td><i>/* end up with the least-significant digits).			      */</i></td></tr>
+<tr><th id="602">602</th><td><i>/*								      */</i></td></tr>
+<tr><th id="603">603</th><td><i>/* shift is used for 'fold-down' padding.			      */</i></td></tr>
+<tr><th id="604">604</th><td><i>/*								      */</i></td></tr>
+<tr><th id="605">605</th><td><i>/* No error is possible.					      */</i></td></tr>
+<tr><th id="606">606</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="607">607</th><td><u>#<span data-ppcond="607">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>&lt;=4</u></td></tr>
+<tr><th id="608">608</th><td><i>/* Constant multipliers for divide-by-power-of five using reciprocal */</i></td></tr>
+<tr><th id="609">609</th><td><i>/* multiply, after removing powers of 2 by shifting, and final shift */</i></td></tr>
+<tr><th id="610">610</th><td><i  data-doc="multies">/* of 17 [we only need up to **4] */</i></td></tr>
+<tr><th id="611">611</th><td><em>static</em> <em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="tu decl def" id="multies" title='multies' data-type='const uint32_t [5]' data-ref="multies" data-ref-filename="multies">multies</dfn>[]={<var>131073</var>, <var>26215</var>, <var>5243</var>, <var>1049</var>, <var>210</var>};</td></tr>
+<tr><th id="612">612</th><td><i>/* QUOT10 -- macro to return the quotient of unit u divided by 10**n */</i></td></tr>
+<tr><th id="613">613</th><td><u>#define <dfn class="macro" id="_M/QUOT10" data-ref="_M/QUOT10">QUOT10</dfn>(u, n) ((((uInt)(u)&gt;&gt;(n))*<a class="tu ref" href="#multies" title='multies' data-use='r' data-ref="multies" data-ref-filename="multies">multies</a>[n])&gt;&gt;17)</u></td></tr>
+<tr><th id="614">614</th><td><u>#<span data-ppcond="607">endif</span></u></td></tr>
+<tr><th id="615">615</th><td><em>void</em> <dfn class="decl def fn" id="decDigitsToDPD" title='decDigitsToDPD' data-ref="decDigitsToDPD" data-ref-filename="decDigitsToDPD">decDigitsToDPD</dfn>(<em>const</em> <a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> *<dfn class="local col7 decl" id="57dn" title='dn' data-type='const decNumber *' data-ref="57dn" data-ref-filename="57dn">dn</dfn>, <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> *<dfn class="local col8 decl" id="58targ" title='targ' data-type='uint32_t *' data-ref="58targ" data-ref-filename="58targ">targ</dfn>, <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a> <dfn class="local col9 decl" id="59shift" title='shift' data-type='int32_t' data-ref="59shift" data-ref-filename="59shift">shift</dfn>) {</td></tr>
+<tr><th id="616">616</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col0 decl" id="60cut" title='cut' data-type='int32_t' data-ref="60cut" data-ref-filename="60cut">cut</dfn>;		      <i>/* work */</i></td></tr>
+<tr><th id="617">617</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col1 decl" id="61n" title='n' data-type='int32_t' data-ref="61n" data-ref-filename="61n">n</dfn>;		      <i>/* output bunch counter */</i></td></tr>
+<tr><th id="618">618</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>  <dfn class="local col2 decl" id="62digits" title='digits' data-type='int32_t' data-ref="62digits" data-ref-filename="62digits">digits</dfn>=<a class="local col7 ref" href="#57dn" title='dn' data-ref="57dn" data-ref-filename="57dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>;     <i>/* digit countdown */</i></td></tr>
+<tr><th id="619">619</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col3 decl" id="63dpd" title='dpd' data-type='uint32_t' data-ref="63dpd" data-ref-filename="63dpd">dpd</dfn>;		      <i>/* densely packed decimal value */</i></td></tr>
+<tr><th id="620">620</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col4 decl" id="64bin" title='bin' data-type='uint32_t' data-ref="64bin" data-ref-filename="64bin">bin</dfn>;		      <i>/* binary value 0-999 */</i></td></tr>
+<tr><th id="621">621</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> *<dfn class="local col5 decl" id="65uout" title='uout' data-type='uint32_t *' data-ref="65uout" data-ref-filename="65uout">uout</dfn>=<a class="local col8 ref" href="#58targ" title='targ' data-ref="58targ" data-ref-filename="58targ">targ</a>;	      <i>/* -&gt; current output uInt */</i></td></tr>
+<tr><th id="622">622</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a>	<dfn class="local col6 decl" id="66uoff" title='uoff' data-type='uint32_t' data-ref="66uoff" data-ref-filename="66uoff">uoff</dfn>=<var>0</var>; 	      <i>/* -&gt; current output offset [from right] */</i></td></tr>
+<tr><th id="623">623</th><td>  <em>const</em> <a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a> *<dfn class="local col7 decl" id="67inu" title='inu' data-type='const uint16_t *' data-ref="67inu" data-ref-filename="67inu">inu</dfn>=<a class="local col7 ref" href="#57dn" title='dn' data-ref="57dn" data-ref-filename="57dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>;    <i>/* -&gt; current input unit */</i></td></tr>
+<tr><th id="624">624</th><td>  <a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a>	<dfn class="local col8 decl" id="68uar" title='uar' data-type='uint16_t [12]' data-ref="68uar" data-ref-filename="68uar">uar</dfn>[<a class="macro" href="#564" title="((34+3-1)/3)" data-ref="_M/DECMAXUNITS">DECMAXUNITS</a>];     <i>/* working copy of units, iff shifted */</i></td></tr>
+<tr><th id="625">625</th><td>  <u>#<span data-ppcond="625">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>!=3	      /* not fast path */</u></td></tr>
+<tr><th id="626">626</th><td>    Unit in;		      <i>/* current unit */</i></td></tr>
+<tr><th id="627">627</th><td>  <u>#<span data-ppcond="625">endif</span></u></td></tr>
+<tr><th id="628">628</th><td></td></tr>
+<tr><th id="629">629</th><td>  <b>if</b> (<a class="local col9 ref" href="#59shift" title='shift' data-ref="59shift" data-ref-filename="59shift">shift</a>!=<var>0</var>) {	      <i>/* shift towards most significant required */</i></td></tr>
+<tr><th id="630">630</th><td>    <i>/* shift the units array to the left by pad digits and copy */</i></td></tr>
+<tr><th id="631">631</th><td>    <i>/* [this code is a special case of decShiftToMost, which could */</i></td></tr>
+<tr><th id="632">632</th><td>    <i>/* be used instead if exposed and the array were copied first] */</i></td></tr>
+<tr><th id="633">633</th><td>    <em>const</em> <a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a> *<dfn class="local col9 decl" id="69source" title='source' data-type='const uint16_t *' data-ref="69source" data-ref-filename="69source">source</dfn>; 		<i>/* .. */</i></td></tr>
+<tr><th id="634">634</th><td>    <a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a>  *<dfn class="local col0 decl" id="70target" title='target' data-type='uint16_t *' data-ref="70target" data-ref-filename="70target">target</dfn>, *<dfn class="local col1 decl" id="71first" title='first' data-type='uint16_t *' data-ref="71first" data-ref-filename="71first">first</dfn>;		<i>/* .. */</i></td></tr>
+<tr><th id="635">635</th><td>    <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a>  <dfn class="local col2 decl" id="72next" title='next' data-type='uint32_t' data-ref="72next" data-ref-filename="72next">next</dfn>=<var>0</var>;			<i>/* work */</i></td></tr>
+<tr><th id="636">636</th><td></td></tr>
+<tr><th id="637">637</th><td>    <a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>=<a class="local col7 ref" href="#57dn" title='dn' data-ref="57dn" data-ref-filename="57dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>+<a class="macro" href="../decNumberLocal.h.html#263" title="((digits)&lt;=49?d2utable[digits]:((digits)+3-1)/3)" data-ref="_M/D2U">D2U</a>(<a class="local col2 ref" href="#62digits" title='digits' data-ref="62digits" data-ref-filename="62digits">digits</a>)-<var>1</var>;	<i>/* where msu comes from */</i></td></tr>
+<tr><th id="638">638</th><td>    <a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>=<a class="local col8 ref" href="#68uar" title='uar' data-ref="68uar" data-ref-filename="68uar">uar</a>+<a class="macro" href="../decNumberLocal.h.html#263" title="((digits)&lt;=49?d2utable[digits]:((digits)+3-1)/3)" data-ref="_M/D2U">D2U</a>(<a class="local col2 ref" href="#62digits" title='digits' data-ref="62digits" data-ref-filename="62digits">digits</a>)-<var>1</var>+<a class="macro" href="../decNumberLocal.h.html#263" title="((shift)&lt;=49?d2utable[shift]:((shift)+3-1)/3)" data-ref="_M/D2U">D2U</a>(<a class="local col9 ref" href="#59shift" title='shift' data-ref="59shift" data-ref-filename="59shift">shift</a>);<i>/* where upper part of first cut goes */</i></td></tr>
+<tr><th id="639">639</th><td>    <a class="local col0 ref" href="#60cut" title='cut' data-ref="60cut" data-ref-filename="60cut">cut</a>=<a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>-<a class="macro" href="../decNumberLocal.h.html#270" title="((shift)-(((shift)&lt;=49?d2utable[shift]:((shift)+3-1)/3)-1)*3)" data-ref="_M/MSUDIGITS">MSUDIGITS</a>(<a class="local col9 ref" href="#59shift" title='shift' data-ref="59shift" data-ref-filename="59shift">shift</a>);	<i>/* where to slice */</i></td></tr>
+<tr><th id="640">640</th><td>    <b>if</b> (<a class="local col0 ref" href="#60cut" title='cut' data-ref="60cut" data-ref-filename="60cut">cut</a>==<var>0</var>) {			<i>/* unit-boundary case */</i></td></tr>
+<tr><th id="641">641</th><td>      <b>for</b> (; <a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>&gt;=<a class="local col7 ref" href="#57dn" title='dn' data-ref="57dn" data-ref-filename="57dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>; <a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>--, <a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>--) *<a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>=*<a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>;</td></tr>
+<tr><th id="642">642</th><td>      }</td></tr>
+<tr><th id="643">643</th><td>     <b>else</b> {</td></tr>
+<tr><th id="644">644</th><td>      <a class="local col1 ref" href="#71first" title='first' data-ref="71first" data-ref-filename="71first">first</a>=<a class="local col8 ref" href="#68uar" title='uar' data-ref="68uar" data-ref-filename="68uar">uar</a>+<a class="macro" href="../decNumberLocal.h.html#263" title="((digits+shift)&lt;=49?d2utable[digits+shift]:((digits+shift)+3-1)/3)" data-ref="_M/D2U">D2U</a>(<a class="local col2 ref" href="#62digits" title='digits' data-ref="62digits" data-ref-filename="62digits">digits</a>+<a class="local col9 ref" href="#59shift" title='shift' data-ref="59shift" data-ref-filename="59shift">shift</a>)-<var>1</var>;	<i>/* where msu will end up */</i></td></tr>
+<tr><th id="645">645</th><td>      <b>for</b> (; <a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>&gt;=<a class="local col7 ref" href="#57dn" title='dn' data-ref="57dn" data-ref-filename="57dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>; <a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>--, <a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>--) {</td></tr>
+<tr><th id="646">646</th><td>	<i>/* split the source Unit and accumulate remainder for next */</i></td></tr>
+<tr><th id="647">647</th><td>	<u>#<span data-ppcond="647">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>&lt;=4</u></td></tr>
+<tr><th id="648">648</th><td>	  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col3 decl" id="73quot" title='quot' data-type='uint32_t' data-ref="73quot" data-ref-filename="73quot">quot</dfn>=<a class="macro" href="#613" title="((((uint32_t)(*source)&gt;&gt;(cut))*multies[cut])&gt;&gt;17)" data-ref="_M/QUOT10">QUOT10</a>(*<a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>, <a class="local col0 ref" href="#60cut" title='cut' data-ref="60cut" data-ref-filename="60cut">cut</a>);</td></tr>
+<tr><th id="649">649</th><td>	  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> <dfn class="local col4 decl" id="74rem" title='rem' data-type='uint32_t' data-ref="74rem" data-ref-filename="74rem">rem</dfn>=*<a class="local col9 ref" href="#69source" title='source' data-ref="69source" data-ref-filename="69source">source</a>-<a class="local col3 ref" href="#73quot" title='quot' data-ref="73quot" data-ref-filename="73quot">quot</a>*<a class="ref" href="../decNumberLocal.h.html#DECPOWERS" title='DECPOWERS' data-ref="DECPOWERS" data-ref-filename="DECPOWERS">DECPOWERS</a>[<a class="local col0 ref" href="#60cut" title='cut' data-ref="60cut" data-ref-filename="60cut">cut</a>];</td></tr>
+<tr><th id="650">650</th><td>	  <a class="local col2 ref" href="#72next" title='next' data-ref="72next" data-ref-filename="72next">next</a>+=<a class="local col3 ref" href="#73quot" title='quot' data-ref="73quot" data-ref-filename="73quot">quot</a>;</td></tr>
+<tr><th id="651">651</th><td>	<u>#<span data-ppcond="647">else</span></u></td></tr>
+<tr><th id="652">652</th><td>	  uInt rem=*source%DECPOWERS[cut];</td></tr>
+<tr><th id="653">653</th><td>	  next+=*source/DECPOWERS[cut];</td></tr>
+<tr><th id="654">654</th><td>	<u>#<span data-ppcond="647">endif</span></u></td></tr>
+<tr><th id="655">655</th><td>	<b>if</b> (<a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>&lt;=<a class="local col1 ref" href="#71first" title='first' data-ref="71first" data-ref-filename="71first">first</a>) *<a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>=(<a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a>)<a class="local col2 ref" href="#72next" title='next' data-ref="72next" data-ref-filename="72next">next</a>; <i>/* write to target iff valid */</i></td></tr>
+<tr><th id="656">656</th><td>	<a class="local col2 ref" href="#72next" title='next' data-ref="72next" data-ref-filename="72next">next</a>=<a class="local col4 ref" href="#74rem" title='rem' data-ref="74rem" data-ref-filename="74rem">rem</a>*<a class="ref" href="../decNumberLocal.h.html#DECPOWERS" title='DECPOWERS' data-ref="DECPOWERS" data-ref-filename="DECPOWERS">DECPOWERS</a>[<a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>-<a class="local col0 ref" href="#60cut" title='cut' data-ref="60cut" data-ref-filename="60cut">cut</a>];       <i>/* save remainder for next Unit */</i></td></tr>
+<tr><th id="657">657</th><td>	}</td></tr>
+<tr><th id="658">658</th><td>      } <i>/* shift-move */</i></td></tr>
+<tr><th id="659">659</th><td>    <i>/* propagate remainder to one below and clear the rest */</i></td></tr>
+<tr><th id="660">660</th><td>    <b>for</b> (; <a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>&gt;=<a class="local col8 ref" href="#68uar" title='uar' data-ref="68uar" data-ref-filename="68uar">uar</a>; <a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>--) {</td></tr>
+<tr><th id="661">661</th><td>      *<a class="local col0 ref" href="#70target" title='target' data-ref="70target" data-ref-filename="70target">target</a>=(<a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a>)<a class="local col2 ref" href="#72next" title='next' data-ref="72next" data-ref-filename="72next">next</a>;</td></tr>
+<tr><th id="662">662</th><td>      <a class="local col2 ref" href="#72next" title='next' data-ref="72next" data-ref-filename="72next">next</a>=<var>0</var>;</td></tr>
+<tr><th id="663">663</th><td>      }</td></tr>
+<tr><th id="664">664</th><td>    <a class="local col2 ref" href="#62digits" title='digits' data-ref="62digits" data-ref-filename="62digits">digits</a>+=<a class="local col9 ref" href="#59shift" title='shift' data-ref="59shift" data-ref-filename="59shift">shift</a>;		   <i>/* add count (shift) of zeros added */</i></td></tr>
+<tr><th id="665">665</th><td>    <a class="local col7 ref" href="#67inu" title='inu' data-ref="67inu" data-ref-filename="67inu">inu</a>=<a class="local col8 ref" href="#68uar" title='uar' data-ref="68uar" data-ref-filename="68uar">uar</a>;			   <i>/* use units in working array */</i></td></tr>
+<tr><th id="666">666</th><td>    }</td></tr>
+<tr><th id="667">667</th><td></td></tr>
+<tr><th id="668">668</th><td>  <i>/* now densely pack the coefficient into DPD declets */</i></td></tr>
+<tr><th id="669">669</th><td></td></tr>
+<tr><th id="670">670</th><td>  <u>#<span data-ppcond="670">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>!=3		   /* not fast path */</u></td></tr>
+<tr><th id="671">671</th><td>    in=*inu;			   <i>/* current unit */</i></td></tr>
+<tr><th id="672">672</th><td>    cut=<var>0</var>;			   <i>/* at lowest digit */</i></td></tr>
+<tr><th id="673">673</th><td>    bin=<var>0</var>;			   <i>/* [keep compiler quiet] */</i></td></tr>
+<tr><th id="674">674</th><td>  <u>#<span data-ppcond="670">endif</span></u></td></tr>
+<tr><th id="675">675</th><td></td></tr>
+<tr><th id="676">676</th><td>  <b>for</b>(<a class="local col1 ref" href="#61n" title='n' data-ref="61n" data-ref-filename="61n">n</a>=<var>0</var>; <a class="local col2 ref" href="#62digits" title='digits' data-ref="62digits" data-ref-filename="62digits">digits</a>&gt;<var>0</var>; <a class="local col1 ref" href="#61n" title='n' data-ref="61n" data-ref-filename="61n">n</a>++) {	   <i>/* each output bunch */</i></td></tr>
+<tr><th id="677">677</th><td>    <u>#<span data-ppcond="677">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>==3		   /* fast path, 3-at-a-time */</u></td></tr>
+<tr><th id="678">678</th><td>      <a class="local col4 ref" href="#64bin" title='bin' data-ref="64bin" data-ref-filename="64bin">bin</a>=*<a class="local col7 ref" href="#67inu" title='inu' data-ref="67inu" data-ref-filename="67inu">inu</a>; 		   <i>/* 3 digits ready for convert */</i></td></tr>
+<tr><th id="679">679</th><td>      <a class="local col2 ref" href="#62digits" title='digits' data-ref="62digits" data-ref-filename="62digits">digits</a>-=<var>3</var>;		   <i>/* [may go negative] */</i></td></tr>
+<tr><th id="680">680</th><td>      <a class="local col7 ref" href="#67inu" title='inu' data-ref="67inu" data-ref-filename="67inu">inu</a>++;			   <i>/* may need another */</i></td></tr>
+<tr><th id="681">681</th><td></td></tr>
+<tr><th id="682">682</th><td>    <u>#<span data-ppcond="677">else</span>			   /* must collect digit-by-digit */</u></td></tr>
+<tr><th id="683">683</th><td>      Unit dig; 		   <i>/* current digit */</i></td></tr>
+<tr><th id="684">684</th><td>      Int j;			   <i>/* digit-in-declet count */</i></td></tr>
+<tr><th id="685">685</th><td>      <b>for</b> (j=<var>0</var>; j&lt;<var>3</var>; j++) {</td></tr>
+<tr><th id="686">686</th><td>	<u>#if DECDPUN&lt;=4</u></td></tr>
+<tr><th id="687">687</th><td>	  Unit temp=(Unit)((uInt)(in*<var>6554</var>)&gt;&gt;<var>16</var>);</td></tr>
+<tr><th id="688">688</th><td>	  dig=(Unit)(in-X10(temp));</td></tr>
+<tr><th id="689">689</th><td>	  in=temp;</td></tr>
+<tr><th id="690">690</th><td>	<u>#else</u></td></tr>
+<tr><th id="691">691</th><td>	  dig=in%<var>10</var>;</td></tr>
+<tr><th id="692">692</th><td>	  in=in/<var>10</var>;</td></tr>
+<tr><th id="693">693</th><td>	<u>#endif</u></td></tr>
+<tr><th id="694">694</th><td>	<b>if</b> (j==<var>0</var>) bin=dig;</td></tr>
+<tr><th id="695">695</th><td>	 <b>else</b> <b>if</b> (j==<var>1</var>)  bin+=X10(dig);</td></tr>
+<tr><th id="696">696</th><td>	 <b>else</b> <i>/* j==2 */</i> bin+=X100(dig);</td></tr>
+<tr><th id="697">697</th><td>	digits--;</td></tr>
+<tr><th id="698">698</th><td>	<b>if</b> (digits==<var>0</var>) <b>break</b>;	   <i>/* [also protects *inu below] */</i></td></tr>
+<tr><th id="699">699</th><td>	cut++;</td></tr>
+<tr><th id="700">700</th><td>	<b>if</b> (cut==DECDPUN) {inu++; in=*inu; cut=<var>0</var>;}</td></tr>
+<tr><th id="701">701</th><td>	}</td></tr>
+<tr><th id="702">702</th><td>    <u>#<span data-ppcond="677">endif</span></u></td></tr>
+<tr><th id="703">703</th><td>    <i>/* here there are 3 digits in bin, or have used all input digits */</i></td></tr>
+<tr><th id="704">704</th><td></td></tr>
+<tr><th id="705">705</th><td>    <a class="local col3 ref" href="#63dpd" title='dpd' data-ref="63dpd" data-ref-filename="63dpd">dpd</a>=<a class="ref" href="../decNumberLocal.h.html#BIN2DPD" title='BIN2DPD' data-ref="BIN2DPD" data-ref-filename="BIN2DPD">BIN2DPD</a>[<a class="local col4 ref" href="#64bin" title='bin' data-ref="64bin" data-ref-filename="64bin">bin</a>];</td></tr>
+<tr><th id="706">706</th><td></td></tr>
+<tr><th id="707">707</th><td>    <i>/* write declet to uInt array */</i></td></tr>
+<tr><th id="708">708</th><td>    *<a class="local col5 ref" href="#65uout" title='uout' data-ref="65uout" data-ref-filename="65uout">uout</a>|=<a class="local col3 ref" href="#63dpd" title='dpd' data-ref="63dpd" data-ref-filename="63dpd">dpd</a>&lt;&lt;<a class="local col6 ref" href="#66uoff" title='uoff' data-ref="66uoff" data-ref-filename="66uoff">uoff</a>;</td></tr>
+<tr><th id="709">709</th><td>    <a class="local col6 ref" href="#66uoff" title='uoff' data-ref="66uoff" data-ref-filename="66uoff">uoff</a>+=<var>10</var>;</td></tr>
+<tr><th id="710">710</th><td>    <b>if</b> (<a class="local col6 ref" href="#66uoff" title='uoff' data-ref="66uoff" data-ref-filename="66uoff">uoff</a>&lt;<var>32</var>) <b>continue</b>;	   <i>/* no uInt boundary cross */</i></td></tr>
+<tr><th id="711">711</th><td>    <a class="local col5 ref" href="#65uout" title='uout' data-ref="65uout" data-ref-filename="65uout">uout</a>++;</td></tr>
+<tr><th id="712">712</th><td>    <a class="local col6 ref" href="#66uoff" title='uoff' data-ref="66uoff" data-ref-filename="66uoff">uoff</a>-=<var>32</var>;</td></tr>
+<tr><th id="713">713</th><td>    *<a class="local col5 ref" href="#65uout" title='uout' data-ref="65uout" data-ref-filename="65uout">uout</a>|=<a class="local col3 ref" href="#63dpd" title='dpd' data-ref="63dpd" data-ref-filename="63dpd">dpd</a>&gt;&gt;(<var>10</var>-<a class="local col6 ref" href="#66uoff" title='uoff' data-ref="66uoff" data-ref-filename="66uoff">uoff</a>);	   <i>/* collect top bits */</i></td></tr>
+<tr><th id="714">714</th><td>    } <i>/* n declets */</i></td></tr>
+<tr><th id="715">715</th><td>  <b>return</b>;</td></tr>
+<tr><th id="716">716</th><td>  } <i>/* decDigitsToDPD */</i></td></tr>
+<tr><th id="717">717</th><td></td></tr>
+<tr><th id="718">718</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="719">719</th><td><i>/* decDigitsFromDPD -- unpack a format's coefficient		      */</i></td></tr>
+<tr><th id="720">720</th><td><i>/*								      */</i></td></tr>
+<tr><th id="721">721</th><td><i>/*   dn is the target number, with 7, 16, or 34-digit space.	      */</i></td></tr>
+<tr><th id="722">722</th><td><i>/*   sour is a 1, 2, or 4-element uInt array containing only declets  */</i></td></tr>
+<tr><th id="723">723</th><td><i>/*   declets is the number of (right-aligned) declets in sour to      */</i></td></tr>
+<tr><th id="724">724</th><td><i>/*     be processed.  This may be 1 more than the obvious number in   */</i></td></tr>
+<tr><th id="725">725</th><td><i>/*     a format, as any top digit is prefixed to the coefficient      */</i></td></tr>
+<tr><th id="726">726</th><td><i>/*     continuation field.  It also may be as small as 1, as the      */</i></td></tr>
+<tr><th id="727">727</th><td><i>/*     caller may pre-process leading zero declets.		      */</i></td></tr>
+<tr><th id="728">728</th><td><i>/*								      */</i></td></tr>
+<tr><th id="729">729</th><td><i>/* When doing the 'extra declet' case care is taken to avoid writing  */</i></td></tr>
+<tr><th id="730">730</th><td><i>/* extra digits when there are leading zeros, as these could overflow */</i></td></tr>
+<tr><th id="731">731</th><td><i>/* the units array when DECDPUN is not 3.			      */</i></td></tr>
+<tr><th id="732">732</th><td><i>/*								      */</i></td></tr>
+<tr><th id="733">733</th><td><i>/* The target uInts are used only as necessary to process declets     */</i></td></tr>
+<tr><th id="734">734</th><td><i>/* declets into the decNumber.	When more than one uInt is needed,    */</i></td></tr>
+<tr><th id="735">735</th><td><i>/* they are used from left to right (that is, the uInt at offset 0    */</i></td></tr>
+<tr><th id="736">736</th><td><i>/* provides the least-significant digits).			      */</i></td></tr>
+<tr><th id="737">737</th><td><i>/*								      */</i></td></tr>
+<tr><th id="738">738</th><td><i>/* dn-&gt;digits is set, but not the sign or exponent.		      */</i></td></tr>
+<tr><th id="739">739</th><td><i>/* No error is possible [the redundant 888 codes are allowed].	      */</i></td></tr>
+<tr><th id="740">740</th><td><i>/* ------------------------------------------------------------------ */</i></td></tr>
+<tr><th id="741">741</th><td><em>void</em> <dfn class="decl def fn" id="decDigitsFromDPD" title='decDigitsFromDPD' data-ref="decDigitsFromDPD" data-ref-filename="decDigitsFromDPD">decDigitsFromDPD</dfn>(<a class="typedef" href="../decNumber.h.html#decNumber" title='decNumber' data-type='struct decNumber' data-ref="decNumber" data-ref-filename="decNumber">decNumber</a> *<dfn class="local col5 decl" id="75dn" title='dn' data-type='decNumber *' data-ref="75dn" data-ref-filename="75dn">dn</dfn>, <em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> *<dfn class="local col6 decl" id="76sour" title='sour' data-type='const uint32_t *' data-ref="76sour" data-ref-filename="76sour">sour</dfn>, <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a> <dfn class="local col7 decl" id="77declets" title='declets' data-type='int32_t' data-ref="77declets" data-ref-filename="77declets">declets</dfn>) {</td></tr>
+<tr><th id="742">742</th><td></td></tr>
+<tr><th id="743">743</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a>	<dfn class="local col8 decl" id="78dpd" title='dpd' data-type='uint32_t' data-ref="78dpd" data-ref-filename="78dpd">dpd</dfn>;			   <i>/* collector for 10 bits */</i></td></tr>
+<tr><th id="744">744</th><td>  <a class="macro" href="../decNumberLocal.h.html#91" title="int32_t" data-ref="_M/Int">Int</a>	<dfn class="local col9 decl" id="79n" title='n' data-type='int32_t' data-ref="79n" data-ref-filename="79n">n</dfn>;			   <i>/* counter */</i></td></tr>
+<tr><th id="745">745</th><td>  <a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a>	*<dfn class="local col0 decl" id="80uout" title='uout' data-type='uint16_t *' data-ref="80uout" data-ref-filename="80uout">uout</dfn>=<a class="local col5 ref" href="#75dn" title='dn' data-ref="75dn" data-ref-filename="75dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>;		   <i>/* -&gt; current output unit */</i></td></tr>
+<tr><th id="746">746</th><td>  <a class="macro" href="../decNumberLocal.h.html#93" title="uint16_t" data-ref="_M/Unit">Unit</a>	*<dfn class="local col1 decl" id="81last" title='last' data-type='uint16_t *' data-ref="81last" data-ref-filename="81last">last</dfn>=<a class="local col0 ref" href="#80uout" title='uout' data-ref="80uout" data-ref-filename="80uout">uout</a>;		   <i>/* will be unit containing msd */</i></td></tr>
+<tr><th id="747">747</th><td>  <em>const</em> <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a> *<dfn class="local col2 decl" id="82uin" title='uin' data-type='const uint32_t *' data-ref="82uin" data-ref-filename="82uin">uin</dfn>=<a class="local col6 ref" href="#76sour" title='sour' data-ref="76sour" data-ref-filename="76sour">sour</a>; 	   <i>/* -&gt; current input uInt */</i></td></tr>
+<tr><th id="748">748</th><td>  <a class="macro" href="../decNumberLocal.h.html#92" title="uint32_t" data-ref="_M/uInt">uInt</a>	<dfn class="local col3 decl" id="83uoff" title='uoff' data-type='uint32_t' data-ref="83uoff" data-ref-filename="83uoff">uoff</dfn>=<var>0</var>; 		   <i>/* -&gt; current input offset [from right] */</i></td></tr>
+<tr><th id="749">749</th><td></td></tr>
+<tr><th id="750">750</th><td>  <u>#<span data-ppcond="750">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>!=3</u></td></tr>
+<tr><th id="751">751</th><td>  uInt	bcd;			   <i>/* BCD result */</i></td></tr>
+<tr><th id="752">752</th><td>  uInt	nibble; 		   <i>/* work */</i></td></tr>
+<tr><th id="753">753</th><td>  Unit	out=<var>0</var>;			   <i>/* accumulator */</i></td></tr>
+<tr><th id="754">754</th><td>  Int	cut=<var>0</var>;			   <i>/* power of ten in current unit */</i></td></tr>
+<tr><th id="755">755</th><td>  <u>#<span data-ppcond="750">endif</span></u></td></tr>
+<tr><th id="756">756</th><td>  <u>#<span data-ppcond="756">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>&gt;4</u></td></tr>
+<tr><th id="757">757</th><td>  uInt <em>const</em> *pow;		   <i>/* work */</i></td></tr>
+<tr><th id="758">758</th><td>  <u>#<span data-ppcond="756">endif</span></u></td></tr>
+<tr><th id="759">759</th><td></td></tr>
+<tr><th id="760">760</th><td>  <i>/* Expand the densely-packed integer, right to left */</i></td></tr>
+<tr><th id="761">761</th><td>  <b>for</b> (<a class="local col9 ref" href="#79n" title='n' data-ref="79n" data-ref-filename="79n">n</a>=<a class="local col7 ref" href="#77declets" title='declets' data-ref="77declets" data-ref-filename="77declets">declets</a>-<var>1</var>; <a class="local col9 ref" href="#79n" title='n' data-ref="79n" data-ref-filename="79n">n</a>&gt;=<var>0</var>; <a class="local col9 ref" href="#79n" title='n' data-ref="79n" data-ref-filename="79n">n</a>--) {   <i>/* count down declets of 10 bits */</i></td></tr>
+<tr><th id="762">762</th><td>    <a class="local col8 ref" href="#78dpd" title='dpd' data-ref="78dpd" data-ref-filename="78dpd">dpd</a>=*<a class="local col2 ref" href="#82uin" title='uin' data-ref="82uin" data-ref-filename="82uin">uin</a>&gt;&gt;<a class="local col3 ref" href="#83uoff" title='uoff' data-ref="83uoff" data-ref-filename="83uoff">uoff</a>;</td></tr>
+<tr><th id="763">763</th><td>    <a class="local col3 ref" href="#83uoff" title='uoff' data-ref="83uoff" data-ref-filename="83uoff">uoff</a>+=<var>10</var>;</td></tr>
+<tr><th id="764">764</th><td>    <b>if</b> (<a class="local col3 ref" href="#83uoff" title='uoff' data-ref="83uoff" data-ref-filename="83uoff">uoff</a>&gt;<var>32</var>) {		   <i>/* crossed uInt boundary */</i></td></tr>
+<tr><th id="765">765</th><td>      <a class="local col2 ref" href="#82uin" title='uin' data-ref="82uin" data-ref-filename="82uin">uin</a>++;</td></tr>
+<tr><th id="766">766</th><td>      <a class="local col3 ref" href="#83uoff" title='uoff' data-ref="83uoff" data-ref-filename="83uoff">uoff</a>-=<var>32</var>;</td></tr>
+<tr><th id="767">767</th><td>      <a class="local col8 ref" href="#78dpd" title='dpd' data-ref="78dpd" data-ref-filename="78dpd">dpd</a>|=*<a class="local col2 ref" href="#82uin" title='uin' data-ref="82uin" data-ref-filename="82uin">uin</a>&lt;&lt;(<var>10</var>-<a class="local col3 ref" href="#83uoff" title='uoff' data-ref="83uoff" data-ref-filename="83uoff">uoff</a>);	   <i>/* get waiting bits */</i></td></tr>
+<tr><th id="768">768</th><td>      }</td></tr>
+<tr><th id="769">769</th><td>    <a class="local col8 ref" href="#78dpd" title='dpd' data-ref="78dpd" data-ref-filename="78dpd">dpd</a>&amp;=<var>0x3ff</var>; 		   <i>/* clear uninteresting bits */</i></td></tr>
+<tr><th id="770">770</th><td></td></tr>
+<tr><th id="771">771</th><td>  <u>#<span data-ppcond="771">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>==3</u></td></tr>
+<tr><th id="772">772</th><td>    <b>if</b> (<a class="local col8 ref" href="#78dpd" title='dpd' data-ref="78dpd" data-ref-filename="78dpd">dpd</a>==<var>0</var>) *<a class="local col0 ref" href="#80uout" title='uout' data-ref="80uout" data-ref-filename="80uout">uout</a>=<var>0</var>;</td></tr>
+<tr><th id="773">773</th><td>     <b>else</b> {</td></tr>
+<tr><th id="774">774</th><td>      *<a class="local col0 ref" href="#80uout" title='uout' data-ref="80uout" data-ref-filename="80uout">uout</a>=<a class="ref" href="../decNumberLocal.h.html#DPD2BIN" title='DPD2BIN' data-ref="DPD2BIN" data-ref-filename="DPD2BIN">DPD2BIN</a>[<a class="local col8 ref" href="#78dpd" title='dpd' data-ref="78dpd" data-ref-filename="78dpd">dpd</a>];	   <i>/* convert 10 bits to binary 0-999 */</i></td></tr>
+<tr><th id="775">775</th><td>      <a class="local col1 ref" href="#81last" title='last' data-ref="81last" data-ref-filename="81last">last</a>=<a class="local col0 ref" href="#80uout" title='uout' data-ref="80uout" data-ref-filename="80uout">uout</a>;		   <i>/* record most significant unit */</i></td></tr>
+<tr><th id="776">776</th><td>      }</td></tr>
+<tr><th id="777">777</th><td>    <a class="local col0 ref" href="#80uout" title='uout' data-ref="80uout" data-ref-filename="80uout">uout</a>++;</td></tr>
+<tr><th id="778">778</th><td>    } <i>/* n */</i></td></tr>
+<tr><th id="779">779</th><td></td></tr>
+<tr><th id="780">780</th><td>  <u>#<span data-ppcond="771">else</span> /* DECDPUN!=3 */</u></td></tr>
+<tr><th id="781">781</th><td>    <b>if</b> (dpd==<var>0</var>) {		   <i>/* fastpath [e.g., leading zeros] */</i></td></tr>
+<tr><th id="782">782</th><td>      <i>/* write out three 0 digits (nibbles); out may have digit(s) */</i></td></tr>
+<tr><th id="783">783</th><td>      cut++;</td></tr>
+<tr><th id="784">784</th><td>      <b>if</b> (cut==DECDPUN) {*uout=out; <b>if</b> (out) {last=uout; out=<var>0</var>;} uout++; cut=<var>0</var>;}</td></tr>
+<tr><th id="785">785</th><td>      <b>if</b> (n==<var>0</var>) <b>break</b>;		   <i>/* [as below, works even if MSD=0] */</i></td></tr>
+<tr><th id="786">786</th><td>      cut++;</td></tr>
+<tr><th id="787">787</th><td>      <b>if</b> (cut==DECDPUN) {*uout=out; <b>if</b> (out) {last=uout; out=<var>0</var>;} uout++; cut=<var>0</var>;}</td></tr>
+<tr><th id="788">788</th><td>      cut++;</td></tr>
+<tr><th id="789">789</th><td>      <b>if</b> (cut==DECDPUN) {*uout=out; <b>if</b> (out) {last=uout; out=<var>0</var>;} uout++; cut=<var>0</var>;}</td></tr>
+<tr><th id="790">790</th><td>      <b>continue</b>;</td></tr>
+<tr><th id="791">791</th><td>      }</td></tr>
+<tr><th id="792">792</th><td></td></tr>
+<tr><th id="793">793</th><td>    bcd=DPD2BCD[dpd];		   <i>/* convert 10 bits to 12 bits BCD */</i></td></tr>
+<tr><th id="794">794</th><td></td></tr>
+<tr><th id="795">795</th><td>    <i>/* now accumulate the 3 BCD nibbles into units */</i></td></tr>
+<tr><th id="796">796</th><td>    nibble=bcd &amp; <var>0x00f</var>;</td></tr>
+<tr><th id="797">797</th><td>    <b>if</b> (nibble) out=(Unit)(out+nibble*DECPOWERS[cut]);</td></tr>
+<tr><th id="798">798</th><td>    cut++;</td></tr>
+<tr><th id="799">799</th><td>    <b>if</b> (cut==DECDPUN) {*uout=out; <b>if</b> (out) {last=uout; out=<var>0</var>;} uout++; cut=<var>0</var>;}</td></tr>
+<tr><th id="800">800</th><td>    bcd&gt;&gt;=<var>4</var>;</td></tr>
+<tr><th id="801">801</th><td></td></tr>
+<tr><th id="802">802</th><td>    <i>/* if this is the last declet and the remaining nibbles in bcd */</i></td></tr>
+<tr><th id="803">803</th><td>    <i>/* are 00 then process no more nibbles, because this could be */</i></td></tr>
+<tr><th id="804">804</th><td>    <i>/* the 'odd' MSD declet and writing any more Units would then */</i></td></tr>
+<tr><th id="805">805</th><td>    <i>/* overflow the unit array */</i></td></tr>
+<tr><th id="806">806</th><td>    <b>if</b> (n==<var>0</var> &amp;&amp; !bcd) <b>break</b>;</td></tr>
+<tr><th id="807">807</th><td></td></tr>
+<tr><th id="808">808</th><td>    nibble=bcd &amp; <var>0x00f</var>;</td></tr>
+<tr><th id="809">809</th><td>    <b>if</b> (nibble) out=(Unit)(out+nibble*DECPOWERS[cut]);</td></tr>
+<tr><th id="810">810</th><td>    cut++;</td></tr>
+<tr><th id="811">811</th><td>    <b>if</b> (cut==DECDPUN) {*uout=out; <b>if</b> (out) {last=uout; out=<var>0</var>;} uout++; cut=<var>0</var>;}</td></tr>
+<tr><th id="812">812</th><td>    bcd&gt;&gt;=<var>4</var>;</td></tr>
+<tr><th id="813">813</th><td></td></tr>
+<tr><th id="814">814</th><td>    nibble=bcd &amp; <var>0x00f</var>;</td></tr>
+<tr><th id="815">815</th><td>    <b>if</b> (nibble) out=(Unit)(out+nibble*DECPOWERS[cut]);</td></tr>
+<tr><th id="816">816</th><td>    cut++;</td></tr>
+<tr><th id="817">817</th><td>    <b>if</b> (cut==DECDPUN) {*uout=out; <b>if</b> (out) {last=uout; out=<var>0</var>;} uout++; cut=<var>0</var>;}</td></tr>
+<tr><th id="818">818</th><td>    } <i>/* n */</i></td></tr>
+<tr><th id="819">819</th><td>  <b>if</b> (cut!=<var>0</var>) { 			<i>/* some more left over */</i></td></tr>
+<tr><th id="820">820</th><td>    *uout=out;				<i>/* write out final unit */</i></td></tr>
+<tr><th id="821">821</th><td>    <b>if</b> (out) last=uout; 		<i>/* and note if non-zero */</i></td></tr>
+<tr><th id="822">822</th><td>    }</td></tr>
+<tr><th id="823">823</th><td>  <u>#<span data-ppcond="771">endif</span></u></td></tr>
+<tr><th id="824">824</th><td></td></tr>
+<tr><th id="825">825</th><td>  <i>/* here, last points to the most significant unit with digits; */</i></td></tr>
+<tr><th id="826">826</th><td>  <i>/* inspect it to get the final digits count -- this is essentially */</i></td></tr>
+<tr><th id="827">827</th><td>  <i>/* the same code as decGetDigits in decNumber.c */</i></td></tr>
+<tr><th id="828">828</th><td>  <a class="local col5 ref" href="#75dn" title='dn' data-ref="75dn" data-ref-filename="75dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>=(<a class="local col1 ref" href="#81last" title='last' data-ref="81last" data-ref-filename="81last">last</a>-<a class="local col5 ref" href="#75dn" title='dn' data-ref="75dn" data-ref-filename="75dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::lsu" title='(anonymous struct)::lsu' data-ref="(anonymous)::lsu" data-ref-filename="(anonymous)..lsu">lsu</a>)*<a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>+<var>1</var>;	<i>/* floor of digits, plus */</i></td></tr>
+<tr><th id="829">829</th><td>					<i>/* must be at least 1 digit */</i></td></tr>
+<tr><th id="830">830</th><td>  <u>#<span data-ppcond="830">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>&gt;1</u></td></tr>
+<tr><th id="831">831</th><td>  <b>if</b> (*<a class="local col1 ref" href="#81last" title='last' data-ref="81last" data-ref-filename="81last">last</a>&lt;<var>10</var>) <b>return</b>; 		<i>/* common odd digit or 0 */</i></td></tr>
+<tr><th id="832">832</th><td>  <a class="local col5 ref" href="#75dn" title='dn' data-ref="75dn" data-ref-filename="75dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>++; 			<i>/* must be 2 at least */</i></td></tr>
+<tr><th id="833">833</th><td>  <u>#<span data-ppcond="833">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>&gt;2</u></td></tr>
+<tr><th id="834">834</th><td>  <b>if</b> (*<a class="local col1 ref" href="#81last" title='last' data-ref="81last" data-ref-filename="81last">last</a>&lt;<var>100</var>) <b>return</b>;		<i>/* 10-99 */</i></td></tr>
+<tr><th id="835">835</th><td>  <a class="local col5 ref" href="#75dn" title='dn' data-ref="75dn" data-ref-filename="75dn">dn</a>-&gt;<a class="ref field" href="../decNumber.h.html#(anonymous)::digits" title='(anonymous struct)::digits' data-ref="(anonymous)::digits" data-ref-filename="(anonymous)..digits">digits</a>++; 			<i>/* must be 3 at least */</i></td></tr>
+<tr><th id="836">836</th><td>  <u>#<span data-ppcond="836">if</span> <a class="macro" href="../decNumber.h.html#53" title="3" data-ref="_M/DECDPUN">DECDPUN</a>&gt;3</u></td></tr>
+<tr><th id="837">837</th><td>  <b>if</b> (*last&lt;<var>1000</var>) <b>return</b>;		<i>/* 100-999 */</i></td></tr>
+<tr><th id="838">838</th><td>  dn-&gt;digits++; 			<i>/* must be 4 at least */</i></td></tr>
+<tr><th id="839">839</th><td>  <u>#if DECDPUN&gt;4</u></td></tr>
+<tr><th id="840">840</th><td>  <b>for</b> (pow=&amp;DECPOWERS[<var>4</var>]; *last&gt;=*pow; pow++) dn-&gt;digits++;</td></tr>
+<tr><th id="841">841</th><td>  <u>#endif</u></td></tr>
+<tr><th id="842">842</th><td>  <u>#<span data-ppcond="836">endif</span></u></td></tr>
+<tr><th id="843">843</th><td>  <u>#<span data-ppcond="833">endif</span></u></td></tr>
+<tr><th id="844">844</th><td>  <u>#<span data-ppcond="830">endif</span></u></td></tr>
+<tr><th id="845">845</th><td>  <b>return</b>;</td></tr>
+<tr><th id="846">846</th><td>  } <i>/*decDigitsFromDPD */</i></td></tr>
+<tr><th id="847">847</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

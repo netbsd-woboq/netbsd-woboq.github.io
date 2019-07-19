@@ -1,0 +1,318 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>priority_queue.c source code [netbsd/external/gpl3/gcc/dist/libgomp/priority_queue.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/libgomp/priority_queue.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>libgomp</a>/<a href='priority_queue.c.html'>priority_queue.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* Copyright (C) 2015-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Contributed by Aldy Hernandez &lt;aldyh@redhat.com&gt;.</i></td></tr>
+<tr><th id="3">3</th><td><i></i></td></tr>
+<tr><th id="4">4</th><td><i>   This file is part of the GNU Offloading and Multi Processing Library</i></td></tr>
+<tr><th id="5">5</th><td><i>   (libgomp).</i></td></tr>
+<tr><th id="6">6</th><td><i></i></td></tr>
+<tr><th id="7">7</th><td><i>   Libgomp is free software; you can redistribute it and/or modify it</i></td></tr>
+<tr><th id="8">8</th><td><i>   under the terms of the GNU General Public License as published by</i></td></tr>
+<tr><th id="9">9</th><td><i>   the Free Software Foundation; either version 3, or (at your option)</i></td></tr>
+<tr><th id="10">10</th><td><i>   any later version.</i></td></tr>
+<tr><th id="11">11</th><td><i></i></td></tr>
+<tr><th id="12">12</th><td><i>   Libgomp is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="13">13</th><td><i>   WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS</i></td></tr>
+<tr><th id="14">14</th><td><i>   FOR A PARTICULAR PURPOSE.  See the GNU General Public License for</i></td></tr>
+<tr><th id="15">15</th><td><i>   more details.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>   Under Section 7 of GPL version 3, you are granted additional</i></td></tr>
+<tr><th id="18">18</th><td><i>   permissions described in the GCC Runtime Library Exception, version</i></td></tr>
+<tr><th id="19">19</th><td><i>   3.1, as published by the Free Software Foundation.</i></td></tr>
+<tr><th id="20">20</th><td><i></i></td></tr>
+<tr><th id="21">21</th><td><i>   You should have received a copy of the GNU General Public License and</i></td></tr>
+<tr><th id="22">22</th><td><i>   a copy of the GCC Runtime Library Exception along with this program;</i></td></tr>
+<tr><th id="23">23</th><td><i>   see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see</i></td></tr>
+<tr><th id="24">24</th><td><i>   &lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="25">25</th><td></td></tr>
+<tr><th id="26">26</th><td><i>/* Priority queue implementation of GOMP tasks.  */</i></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><u>#include <a href="libgomp.h.html">"libgomp.h"</a></u></td></tr>
+<tr><th id="29">29</th><td></td></tr>
+<tr><th id="30">30</th><td><u>#<span data-ppcond="30">if</span> <a class="macro" href="libgomp.h.html#41" title="0" data-ref="_M/_LIBGOMP_CHECKING_">_LIBGOMP_CHECKING_</a></u></td></tr>
+<tr><th id="31">31</th><td><u>#include &lt;stdio.h&gt;</u></td></tr>
+<tr><th id="32">32</th><td></td></tr>
+<tr><th id="33">33</th><td><i>/* Sanity check to verify whether a TASK is in LIST.  Return TRUE if</i></td></tr>
+<tr><th id="34">34</th><td><i>   found, FALSE otherwise.</i></td></tr>
+<tr><th id="35">35</th><td><i></i></td></tr>
+<tr><th id="36">36</th><td><i>   TYPE is the type of priority queue this task resides in.  */</i></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><em>static</em> <b>inline</b> bool</td></tr>
+<tr><th id="39">39</th><td>priority_queue_task_in_list_p (<b>enum</b> priority_queue_type type,</td></tr>
+<tr><th id="40">40</th><td>			       <b>struct</b> priority_list *list,</td></tr>
+<tr><th id="41">41</th><td>			       <b>struct</b> gomp_task *task)</td></tr>
+<tr><th id="42">42</th><td>{</td></tr>
+<tr><th id="43">43</th><td>  <b>struct</b> priority_node *p = list-&gt;tasks;</td></tr>
+<tr><th id="44">44</th><td>  <b>do</b></td></tr>
+<tr><th id="45">45</th><td>    {</td></tr>
+<tr><th id="46">46</th><td>      <b>if</b> (priority_node_to_task (type, p) == task)</td></tr>
+<tr><th id="47">47</th><td>	<b>return</b> true;</td></tr>
+<tr><th id="48">48</th><td>      p = p-&gt;next;</td></tr>
+<tr><th id="49">49</th><td>    }</td></tr>
+<tr><th id="50">50</th><td>  <b>while</b> (p != list-&gt;tasks);</td></tr>
+<tr><th id="51">51</th><td>  <b>return</b> false;</td></tr>
+<tr><th id="52">52</th><td>}</td></tr>
+<tr><th id="53">53</th><td></td></tr>
+<tr><th id="54">54</th><td><i>/* Tree version of priority_queue_task_in_list_p.  */</i></td></tr>
+<tr><th id="55">55</th><td></td></tr>
+<tr><th id="56">56</th><td><em>static</em> <b>inline</b> bool</td></tr>
+<tr><th id="57">57</th><td>priority_queue_task_in_tree_p (<b>enum</b> priority_queue_type type,</td></tr>
+<tr><th id="58">58</th><td>			       <b>struct</b> priority_queue *head,</td></tr>
+<tr><th id="59">59</th><td>			       <b>struct</b> gomp_task *task)</td></tr>
+<tr><th id="60">60</th><td>{</td></tr>
+<tr><th id="61">61</th><td>  <b>struct</b> priority_list *list</td></tr>
+<tr><th id="62">62</th><td>    = priority_queue_lookup_priority (head, task-&gt;priority);</td></tr>
+<tr><th id="63">63</th><td>  <b>if</b> (!list)</td></tr>
+<tr><th id="64">64</th><td>    <b>return</b> false;</td></tr>
+<tr><th id="65">65</th><td>  <b>return</b> priority_queue_task_in_list_p (type, list, task);</td></tr>
+<tr><th id="66">66</th><td>}</td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td><i>/* Generic version of priority_queue_task_in_list_p that works for</i></td></tr>
+<tr><th id="69">69</th><td><i>   trees or lists.  */</i></td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td>bool</td></tr>
+<tr><th id="72">72</th><td>priority_queue_task_in_queue_p (<b>enum</b> priority_queue_type type,</td></tr>
+<tr><th id="73">73</th><td>				<b>struct</b> priority_queue *head,</td></tr>
+<tr><th id="74">74</th><td>				<b>struct</b> gomp_task *task)</td></tr>
+<tr><th id="75">75</th><td>{</td></tr>
+<tr><th id="76">76</th><td>  <b>if</b> (priority_queue_empty_p (head, MEMMODEL_RELAXED))</td></tr>
+<tr><th id="77">77</th><td>    <b>return</b> false;</td></tr>
+<tr><th id="78">78</th><td>  <b>if</b> (priority_queue_multi_p (head))</td></tr>
+<tr><th id="79">79</th><td>    <b>return</b> priority_queue_task_in_tree_p (type, head, task);</td></tr>
+<tr><th id="80">80</th><td>  <b>else</b></td></tr>
+<tr><th id="81">81</th><td>    <b>return</b> priority_queue_task_in_list_p (type, &amp;head-&gt;l, task);</td></tr>
+<tr><th id="82">82</th><td>}</td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td><i>/* Sanity check LIST to make sure the tasks therein are in the right</i></td></tr>
+<tr><th id="85">85</th><td><i>   order.  LIST is a priority list of type TYPE.</i></td></tr>
+<tr><th id="86">86</th><td><i></i></td></tr>
+<tr><th id="87">87</th><td><i>   The expected order is that GOMP_TASK_WAITING tasks come before</i></td></tr>
+<tr><th id="88">88</th><td><i>   GOMP_TASK_TIED/GOMP_TASK_ASYNC_RUNNING ones.</i></td></tr>
+<tr><th id="89">89</th><td><i></i></td></tr>
+<tr><th id="90">90</th><td><i>   If CHECK_DEPS is TRUE, we also check that parent_depends_on WAITING</i></td></tr>
+<tr><th id="91">91</th><td><i>   tasks come before !parent_depends_on WAITING tasks.  This is only</i></td></tr>
+<tr><th id="92">92</th><td><i>   applicable to the children queue, and the caller is expected to</i></td></tr>
+<tr><th id="93">93</th><td><i>   ensure that we are verifying the children queue.  */</i></td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="96">96</th><td>priority_list_verify (<b>enum</b> priority_queue_type type,</td></tr>
+<tr><th id="97">97</th><td>		      <b>struct</b> priority_list *list, bool check_deps)</td></tr>
+<tr><th id="98">98</th><td>{</td></tr>
+<tr><th id="99">99</th><td>  bool seen_tied = false;</td></tr>
+<tr><th id="100">100</th><td>  bool seen_plain_waiting = false;</td></tr>
+<tr><th id="101">101</th><td>  <b>struct</b> priority_node *p = list-&gt;tasks;</td></tr>
+<tr><th id="102">102</th><td>  <b>while</b> (<var>1</var>)</td></tr>
+<tr><th id="103">103</th><td>    {</td></tr>
+<tr><th id="104">104</th><td>      <b>struct</b> gomp_task *t = priority_node_to_task (type, p);</td></tr>
+<tr><th id="105">105</th><td>      <b>if</b> (seen_tied &amp;&amp; t-&gt;kind == GOMP_TASK_WAITING)</td></tr>
+<tr><th id="106">106</th><td>	gomp_fatal (<q>"priority_queue_verify: WAITING task after TIED"</q>);</td></tr>
+<tr><th id="107">107</th><td>      <b>if</b> (t-&gt;kind &gt;= GOMP_TASK_TIED)</td></tr>
+<tr><th id="108">108</th><td>	seen_tied = true;</td></tr>
+<tr><th id="109">109</th><td>      <b>else</b> <b>if</b> (check_deps &amp;&amp; t-&gt;kind == GOMP_TASK_WAITING)</td></tr>
+<tr><th id="110">110</th><td>	{</td></tr>
+<tr><th id="111">111</th><td>	  <b>if</b> (t-&gt;parent_depends_on)</td></tr>
+<tr><th id="112">112</th><td>	    {</td></tr>
+<tr><th id="113">113</th><td>	      <b>if</b> (seen_plain_waiting)</td></tr>
+<tr><th id="114">114</th><td>		gomp_fatal (<q>"priority_queue_verify: "</q></td></tr>
+<tr><th id="115">115</th><td>			    <q>"parent_depends_on after !parent_depends_on"</q>);</td></tr>
+<tr><th id="116">116</th><td>	    }</td></tr>
+<tr><th id="117">117</th><td>	  <b>else</b></td></tr>
+<tr><th id="118">118</th><td>	    seen_plain_waiting = true;</td></tr>
+<tr><th id="119">119</th><td>	}</td></tr>
+<tr><th id="120">120</th><td>      p = p-&gt;next;</td></tr>
+<tr><th id="121">121</th><td>      <b>if</b> (p == list-&gt;tasks)</td></tr>
+<tr><th id="122">122</th><td>	<b>break</b>;</td></tr>
+<tr><th id="123">123</th><td>    }</td></tr>
+<tr><th id="124">124</th><td>}</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td><i>/* Callback type for priority_tree_verify_callback.  */</i></td></tr>
+<tr><th id="127">127</th><td><b>struct</b> cbtype</td></tr>
+<tr><th id="128">128</th><td>{</td></tr>
+<tr><th id="129">129</th><td>  <b>enum</b> priority_queue_type type;</td></tr>
+<tr><th id="130">130</th><td>  bool check_deps;</td></tr>
+<tr><th id="131">131</th><td>};</td></tr>
+<tr><th id="132">132</th><td></td></tr>
+<tr><th id="133">133</th><td><i>/* Verify every task in NODE.</i></td></tr>
+<tr><th id="134">134</th><td><i></i></td></tr>
+<tr><th id="135">135</th><td><i>   Callback for splay_tree_foreach.  */</i></td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="138">138</th><td>priority_tree_verify_callback (prio_splay_tree_key key, <em>void</em> *data)</td></tr>
+<tr><th id="139">139</th><td>{</td></tr>
+<tr><th id="140">140</th><td>  <b>struct</b> cbtype *cb = (<b>struct</b> cbtype *) data;</td></tr>
+<tr><th id="141">141</th><td>  priority_list_verify (cb-&gt;type, &amp;key-&gt;l, cb-&gt;check_deps);</td></tr>
+<tr><th id="142">142</th><td>}</td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><i>/* Generic version of priority_list_verify.</i></td></tr>
+<tr><th id="145">145</th><td><i></i></td></tr>
+<tr><th id="146">146</th><td><i>   Sanity check HEAD to make sure the tasks therein are in the right</i></td></tr>
+<tr><th id="147">147</th><td><i>   order.  The priority_queue holds tasks of type TYPE.</i></td></tr>
+<tr><th id="148">148</th><td><i></i></td></tr>
+<tr><th id="149">149</th><td><i>   If CHECK_DEPS is TRUE, we also check that parent_depends_on WAITING</i></td></tr>
+<tr><th id="150">150</th><td><i>   tasks come before !parent_depends_on WAITING tasks.  This is only</i></td></tr>
+<tr><th id="151">151</th><td><i>   applicable to the children queue, and the caller is expected to</i></td></tr>
+<tr><th id="152">152</th><td><i>   ensure that we are verifying the children queue.  */</i></td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><em>void</em></td></tr>
+<tr><th id="155">155</th><td>priority_queue_verify (<b>enum</b> priority_queue_type type,</td></tr>
+<tr><th id="156">156</th><td>		       <b>struct</b> priority_queue *head, bool check_deps)</td></tr>
+<tr><th id="157">157</th><td>{</td></tr>
+<tr><th id="158">158</th><td>  <b>if</b> (priority_queue_empty_p (head, MEMMODEL_RELAXED))</td></tr>
+<tr><th id="159">159</th><td>    <b>return</b>;</td></tr>
+<tr><th id="160">160</th><td>  <b>if</b> (priority_queue_multi_p (head))</td></tr>
+<tr><th id="161">161</th><td>    {</td></tr>
+<tr><th id="162">162</th><td>      <b>struct</b> cbtype cb = { type, check_deps };</td></tr>
+<tr><th id="163">163</th><td>      prio_splay_tree_foreach (&amp;head-&gt;t,</td></tr>
+<tr><th id="164">164</th><td>			       priority_tree_verify_callback, &amp;cb);</td></tr>
+<tr><th id="165">165</th><td>    }</td></tr>
+<tr><th id="166">166</th><td>  <b>else</b></td></tr>
+<tr><th id="167">167</th><td>    priority_list_verify (type, &amp;head-&gt;l, check_deps);</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td><u>#<span data-ppcond="30">endif</span> /* _LIBGOMP_CHECKING_ */</u></td></tr>
+<tr><th id="170">170</th><td></td></tr>
+<tr><th id="171">171</th><td><i>/* Remove NODE from priority queue HEAD, wherever it may be inside the</i></td></tr>
+<tr><th id="172">172</th><td><i>   tree.  HEAD contains tasks of type TYPE.  */</i></td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td><em>void</em></td></tr>
+<tr><th id="175">175</th><td><dfn class="decl def fn" id="priority_tree_remove" title='priority_tree_remove' data-ref="priority_tree_remove" data-ref-filename="priority_tree_remove">priority_tree_remove</dfn> (<b>enum</b> <a class="type" href="priority_queue.h.html#priority_queue_type" title='priority_queue_type' data-ref="priority_queue_type" data-ref-filename="priority_queue_type">priority_queue_type</a> <dfn class="local col1 decl" id="1type" title='type' data-type='enum priority_queue_type' data-ref="1type" data-ref-filename="1type">type</dfn>,</td></tr>
+<tr><th id="176">176</th><td>		      <b>struct</b> <a class="type" href="priority_queue.h.html#priority_queue" title='priority_queue' data-ref="priority_queue" data-ref-filename="priority_queue">priority_queue</a> *<dfn class="local col2 decl" id="2head" title='head' data-type='struct priority_queue *' data-ref="2head" data-ref-filename="2head">head</dfn>,</td></tr>
+<tr><th id="177">177</th><td>		      <b>struct</b> <a class="type" href="priority_queue.h.html#priority_node" title='priority_node' data-ref="priority_node" data-ref-filename="priority_node">priority_node</a> *<dfn class="local col3 decl" id="3node" title='node' data-type='struct priority_node *' data-ref="3node" data-ref-filename="3node">node</dfn>)</td></tr>
+<tr><th id="178">178</th><td>{</td></tr>
+<tr><th id="179">179</th><td>  <i>/* ?? The only reason this function is not inlined is because we</i></td></tr>
+<tr><th id="180">180</th><td><i>     need to find the priority within gomp_task (which has not been</i></td></tr>
+<tr><th id="181">181</th><td><i>     completely defined in the header file).  If the lack of inlining</i></td></tr>
+<tr><th id="182">182</th><td><i>     is a concern, we could pass the priority number as a</i></td></tr>
+<tr><th id="183">183</th><td><i>     parameter, or we could move this to libgomp.h.  */</i></td></tr>
+<tr><th id="184">184</th><td>  <em>int</em> <dfn class="local col4 decl" id="4priority" title='priority' data-type='int' data-ref="4priority" data-ref-filename="4priority">priority</dfn> = <a class="ref fn" href="priority_queue.h.html#priority_node_to_task" title='priority_node_to_task' data-ref="priority_node_to_task" data-ref-filename="priority_node_to_task">priority_node_to_task</a> (<a class="local col1 ref" href="#1type" title='type' data-ref="1type" data-ref-filename="1type">type</a>, <a class="local col3 ref" href="#3node" title='node' data-ref="3node" data-ref-filename="3node">node</a>)-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::priority" title='gomp_task::priority' data-ref="gomp_task::priority" data-ref-filename="gomp_task..priority">priority</a>;</td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td>  <i>/* ?? We could avoid this lookup by keeping a pointer to the key in</i></td></tr>
+<tr><th id="187">187</th><td><i>     the priority_node.  */</i></td></tr>
+<tr><th id="188">188</th><td>  <b>struct</b> <a class="type" href="priority_queue.h.html#priority_list" title='priority_list' data-ref="priority_list" data-ref-filename="priority_list">priority_list</a> *<dfn class="local col5 decl" id="5list" title='list' data-type='struct priority_list *' data-ref="5list" data-ref-filename="5list">list</dfn></td></tr>
+<tr><th id="189">189</th><td>    = <a class="ref fn" href="priority_queue.h.html#priority_queue_lookup_priority" title='priority_queue_lookup_priority' data-ref="priority_queue_lookup_priority" data-ref-filename="priority_queue_lookup_priority">priority_queue_lookup_priority</a> (<a class="local col2 ref" href="#2head" title='head' data-ref="2head" data-ref-filename="2head">head</a>, <a class="local col4 ref" href="#4priority" title='priority' data-ref="4priority" data-ref-filename="4priority">priority</a>);</td></tr>
+<tr><th id="190">190</th><td><u>#<span data-ppcond="190">if</span> <a class="macro" href="libgomp.h.html#41" title="0" data-ref="_M/_LIBGOMP_CHECKING_">_LIBGOMP_CHECKING_</a></u></td></tr>
+<tr><th id="191">191</th><td>  <b>if</b> (!list)</td></tr>
+<tr><th id="192">192</th><td>    gomp_fatal (<q>"Unable to find priority %d"</q>, priority);</td></tr>
+<tr><th id="193">193</th><td><u>#<span data-ppcond="190">endif</span></u></td></tr>
+<tr><th id="194">194</th><td>  <i>/* If NODE was the last in its priority, clean up the priority.  */</i></td></tr>
+<tr><th id="195">195</th><td>  <b>if</b> (<a class="ref fn" href="priority_queue.h.html#priority_list_remove" title='priority_list_remove' data-ref="priority_list_remove" data-ref-filename="priority_list_remove">priority_list_remove</a> (<a class="local col5 ref" href="#5list" title='list' data-ref="5list" data-ref-filename="5list">list</a>, <a class="local col3 ref" href="#3node" title='node' data-ref="3node" data-ref-filename="3node">node</a>, <a class="enum" href="libgomp.h.html#MEMMODEL_RELAXED" title='MEMMODEL_RELAXED' data-ref="MEMMODEL_RELAXED" data-ref-filename="MEMMODEL_RELAXED">MEMMODEL_RELAXED</a>))</td></tr>
+<tr><th id="196">196</th><td>    {</td></tr>
+<tr><th id="197">197</th><td>      <a class="ref fn" href="splay-tree.c.html#171" title='prio_splay_tree_remove' data-ref="prio_splay_tree_remove" data-ref-filename="prio_splay_tree_remove">prio_splay_tree_remove</a> (&amp;<a class="local col2 ref" href="#2head" title='head' data-ref="2head" data-ref-filename="2head">head</a>-&gt;<a class="ref field" href="priority_queue.h.html#priority_queue::t" title='priority_queue::t' data-ref="priority_queue::t" data-ref-filename="priority_queue..t">t</a>, (<a class="typedef" href="priority_queue.h.html#prio_splay_tree_key" title='prio_splay_tree_key' data-type='struct prio_splay_tree_key_s *' data-ref="prio_splay_tree_key" data-ref-filename="prio_splay_tree_key">prio_splay_tree_key</a>) <a class="local col5 ref" href="#5list" title='list' data-ref="5list" data-ref-filename="5list">list</a>);</td></tr>
+<tr><th id="198">198</th><td>      <a class="local col5 ref" href="#5list" title='list' data-ref="5list" data-ref-filename="5list">list</a>-&gt;<a class="ref field" href="priority_queue.h.html#priority_list::tasks" title='priority_list::tasks' data-ref="priority_list::tasks" data-ref-filename="priority_list..tasks">tasks</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="199">199</th><td><u>#<span data-ppcond="199">if</span> <a class="macro" href="libgomp.h.html#41" title="0" data-ref="_M/_LIBGOMP_CHECKING_">_LIBGOMP_CHECKING_</a></u></td></tr>
+<tr><th id="200">200</th><td>      memset (list, <var>0xaf</var>, <b>sizeof</b> (*list));</td></tr>
+<tr><th id="201">201</th><td><u>#<span data-ppcond="199">endif</span></u></td></tr>
+<tr><th id="202">202</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col5 ref" href="#5list" title='list' data-ref="5list" data-ref-filename="5list">list</a>);</td></tr>
+<tr><th id="203">203</th><td>    }</td></tr>
+<tr><th id="204">204</th><td>}</td></tr>
+<tr><th id="205">205</th><td></td></tr>
+<tr><th id="206">206</th><td><i  data-doc="priority_tree_next_task_1">/* Return the highest priority WAITING task in a splay tree NODE.  If</i></td></tr>
+<tr><th id="207">207</th><td><i  data-doc="priority_tree_next_task_1">   there are no WAITING tasks available, return NULL.</i></td></tr>
+<tr><th id="208">208</th><td><i  data-doc="priority_tree_next_task_1"></i></td></tr>
+<tr><th id="209">209</th><td><i  data-doc="priority_tree_next_task_1">   NODE is a priority list containing tasks of type TYPE.</i></td></tr>
+<tr><th id="210">210</th><td><i  data-doc="priority_tree_next_task_1"></i></td></tr>
+<tr><th id="211">211</th><td><i  data-doc="priority_tree_next_task_1">   The right most node in a tree contains the highest priority.</i></td></tr>
+<tr><th id="212">212</th><td><i  data-doc="priority_tree_next_task_1">   Recurse down to find such a node.  If the task at that max node is</i></td></tr>
+<tr><th id="213">213</th><td><i  data-doc="priority_tree_next_task_1">   not WAITING, bubble back up and look at the remaining tasks</i></td></tr>
+<tr><th id="214">214</th><td><i  data-doc="priority_tree_next_task_1">   in-order.  */</i></td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td><em>static</em> <b>struct</b> <a class="type" href="libgomp.h.html#gomp_task" title='gomp_task' data-ref="gomp_task" data-ref-filename="gomp_task">gomp_task</a> *</td></tr>
+<tr><th id="217">217</th><td><dfn class="tu decl def fn" id="priority_tree_next_task_1" title='priority_tree_next_task_1' data-type='struct gomp_task * priority_tree_next_task_1(enum priority_queue_type type, prio_splay_tree_node node)' data-ref="priority_tree_next_task_1" data-ref-filename="priority_tree_next_task_1">priority_tree_next_task_1</dfn> (<b>enum</b> <a class="type" href="priority_queue.h.html#priority_queue_type" title='priority_queue_type' data-ref="priority_queue_type" data-ref-filename="priority_queue_type">priority_queue_type</a> <dfn class="local col6 decl" id="6type" title='type' data-type='enum priority_queue_type' data-ref="6type" data-ref-filename="6type">type</dfn>,</td></tr>
+<tr><th id="218">218</th><td>			   <a class="typedef" href="priority_queue.h.html#prio_splay_tree_node" title='prio_splay_tree_node' data-type='struct prio_splay_tree_node_s *' data-ref="prio_splay_tree_node" data-ref-filename="prio_splay_tree_node">prio_splay_tree_node</a> <dfn class="local col7 decl" id="7node" title='node' data-type='prio_splay_tree_node' data-ref="7node" data-ref-filename="7node">node</dfn>)</td></tr>
+<tr><th id="219">219</th><td>{</td></tr>
+<tr><th id="220">220</th><td> <dfn class="lbl" id="8again" data-ref="8again" data-ref-filename="8again">again</dfn>:</td></tr>
+<tr><th id="221">221</th><td>  <b>if</b> (!<a class="local col7 ref" href="#7node" title='node' data-ref="7node" data-ref-filename="7node">node</a>)</td></tr>
+<tr><th id="222">222</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="223">223</th><td>  <b>struct</b> <a class="type" href="libgomp.h.html#gomp_task" title='gomp_task' data-ref="gomp_task" data-ref-filename="gomp_task">gomp_task</a> *<dfn class="local col9 decl" id="9ret" title='ret' data-type='struct gomp_task *' data-ref="9ret" data-ref-filename="9ret">ret</dfn> = <a class="tu ref fn" href="#priority_tree_next_task_1" title='priority_tree_next_task_1' data-use='c' data-ref="priority_tree_next_task_1" data-ref-filename="priority_tree_next_task_1">priority_tree_next_task_1</a> (<a class="local col6 ref" href="#6type" title='type' data-ref="6type" data-ref-filename="6type">type</a>, <a class="local col7 ref" href="#7node" title='node' data-ref="7node" data-ref-filename="7node">node</a>-&gt;<a class="ref field" href="splay-tree.h.html#prio_splay_tree_node_s::right" title='prio_splay_tree_node_s::right' data-ref="prio_splay_tree_node_s::right" data-ref-filename="prio_splay_tree_node_s..right">right</a>);</td></tr>
+<tr><th id="224">224</th><td>  <b>if</b> (<a class="local col9 ref" href="#9ret" title='ret' data-ref="9ret" data-ref-filename="9ret">ret</a>)</td></tr>
+<tr><th id="225">225</th><td>    <b>return</b> <a class="local col9 ref" href="#9ret" title='ret' data-ref="9ret" data-ref-filename="9ret">ret</a>;</td></tr>
+<tr><th id="226">226</th><td>  <a class="local col9 ref" href="#9ret" title='ret' data-ref="9ret" data-ref-filename="9ret">ret</a> = <a class="ref fn" href="priority_queue.h.html#priority_node_to_task" title='priority_node_to_task' data-ref="priority_node_to_task" data-ref-filename="priority_node_to_task">priority_node_to_task</a> (<a class="local col6 ref" href="#6type" title='type' data-ref="6type" data-ref-filename="6type">type</a>, <a class="local col7 ref" href="#7node" title='node' data-ref="7node" data-ref-filename="7node">node</a>-&gt;<a class="ref field" href="splay-tree.h.html#prio_splay_tree_node_s::key" title='prio_splay_tree_node_s::key' data-ref="prio_splay_tree_node_s::key" data-ref-filename="prio_splay_tree_node_s..key">key</a>.<a class="ref field" href="priority_queue.h.html#prio_splay_tree_key_s::l" title='prio_splay_tree_key_s::l' data-ref="prio_splay_tree_key_s::l" data-ref-filename="prio_splay_tree_key_s..l">l</a>.<a class="ref field" href="priority_queue.h.html#priority_list::tasks" title='priority_list::tasks' data-ref="priority_list::tasks" data-ref-filename="priority_list..tasks">tasks</a>);</td></tr>
+<tr><th id="227">227</th><td>  <b>if</b> (<a class="local col9 ref" href="#9ret" title='ret' data-ref="9ret" data-ref-filename="9ret">ret</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::kind" title='gomp_task::kind' data-ref="gomp_task::kind" data-ref-filename="gomp_task..kind">kind</a> == <a class="enum" href="libgomp.h.html#GOMP_TASK_WAITING" title='GOMP_TASK_WAITING' data-ref="GOMP_TASK_WAITING" data-ref-filename="GOMP_TASK_WAITING">GOMP_TASK_WAITING</a>)</td></tr>
+<tr><th id="228">228</th><td>    <b>return</b> <a class="local col9 ref" href="#9ret" title='ret' data-ref="9ret" data-ref-filename="9ret">ret</a>;</td></tr>
+<tr><th id="229">229</th><td>  <a class="local col7 ref" href="#7node" title='node' data-ref="7node" data-ref-filename="7node">node</a> = <a class="local col7 ref" href="#7node" title='node' data-ref="7node" data-ref-filename="7node">node</a>-&gt;<a class="ref field" href="splay-tree.h.html#prio_splay_tree_node_s::left" title='prio_splay_tree_node_s::left' data-ref="prio_splay_tree_node_s::left" data-ref-filename="prio_splay_tree_node_s..left">left</a>;</td></tr>
+<tr><th id="230">230</th><td>  <b>goto</b> <a class="lbl" href="#8again" data-ref="8again" data-ref-filename="8again">again</a>;</td></tr>
+<tr><th id="231">231</th><td>}</td></tr>
+<tr><th id="232">232</th><td></td></tr>
+<tr><th id="233">233</th><td><i>/* Return the highest priority WAITING task from within Q1 and Q2,</i></td></tr>
+<tr><th id="234">234</th><td><i>   while giving preference to tasks from Q1.  Q1 is a queue containing</i></td></tr>
+<tr><th id="235">235</th><td><i>   items of type TYPE1.  Q2 is a queue containing items of type TYPE2.</i></td></tr>
+<tr><th id="236">236</th><td><i></i></td></tr>
+<tr><th id="237">237</th><td><i>   Since we are mostly interested in Q1, if there are no WAITING tasks</i></td></tr>
+<tr><th id="238">238</th><td><i>   in Q1, we don't bother checking Q2, and just return NULL.</i></td></tr>
+<tr><th id="239">239</th><td><i></i></td></tr>
+<tr><th id="240">240</th><td><i>   As a special case, Q2 can be NULL, in which case, we just choose</i></td></tr>
+<tr><th id="241">241</th><td><i>   the highest priority WAITING task in Q1.  This is an optimization</i></td></tr>
+<tr><th id="242">242</th><td><i>   to speed up looking through only one queue.</i></td></tr>
+<tr><th id="243">243</th><td><i></i></td></tr>
+<tr><th id="244">244</th><td><i>   If the returned task is chosen from Q1, *Q1_CHOSEN_P is set to</i></td></tr>
+<tr><th id="245">245</th><td><i>   TRUE, otherwise it is set to FALSE.  */</i></td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td><b>struct</b> <a class="type" href="libgomp.h.html#gomp_task" title='gomp_task' data-ref="gomp_task" data-ref-filename="gomp_task">gomp_task</a> *</td></tr>
+<tr><th id="248">248</th><td><dfn class="decl def fn" id="priority_tree_next_task" title='priority_tree_next_task' data-ref="priority_tree_next_task" data-ref-filename="priority_tree_next_task">priority_tree_next_task</dfn> (<b>enum</b> <a class="type" href="priority_queue.h.html#priority_queue_type" title='priority_queue_type' data-ref="priority_queue_type" data-ref-filename="priority_queue_type">priority_queue_type</a> <dfn class="local col0 decl" id="10type1" title='type1' data-type='enum priority_queue_type' data-ref="10type1" data-ref-filename="10type1">type1</dfn>,</td></tr>
+<tr><th id="249">249</th><td>			 <b>struct</b> <a class="type" href="priority_queue.h.html#priority_queue" title='priority_queue' data-ref="priority_queue" data-ref-filename="priority_queue">priority_queue</a> *<dfn class="local col1 decl" id="11q1" title='q1' data-type='struct priority_queue *' data-ref="11q1" data-ref-filename="11q1">q1</dfn>,</td></tr>
+<tr><th id="250">250</th><td>			 <b>enum</b> <a class="type" href="priority_queue.h.html#priority_queue_type" title='priority_queue_type' data-ref="priority_queue_type" data-ref-filename="priority_queue_type">priority_queue_type</a> <dfn class="local col2 decl" id="12type2" title='type2' data-type='enum priority_queue_type' data-ref="12type2" data-ref-filename="12type2">type2</dfn>,</td></tr>
+<tr><th id="251">251</th><td>			 <b>struct</b> <a class="type" href="priority_queue.h.html#priority_queue" title='priority_queue' data-ref="priority_queue" data-ref-filename="priority_queue">priority_queue</a> *<dfn class="local col3 decl" id="13q2" title='q2' data-type='struct priority_queue *' data-ref="13q2" data-ref-filename="13q2">q2</dfn>,</td></tr>
+<tr><th id="252">252</th><td>			 <span class="macro" title="_Bool" data-ref="_M/bool">bool</span> *<dfn class="local col4 decl" id="14q1_chosen_p" title='q1_chosen_p' data-type='_Bool *' data-ref="14q1_chosen_p" data-ref-filename="14q1_chosen_p">q1_chosen_p</dfn>)</td></tr>
+<tr><th id="253">253</th><td>{</td></tr>
+<tr><th id="254">254</th><td>  <b>struct</b> <a class="type" href="libgomp.h.html#gomp_task" title='gomp_task' data-ref="gomp_task" data-ref-filename="gomp_task">gomp_task</a> *<dfn class="local col5 decl" id="15t1" title='t1' data-type='struct gomp_task *' data-ref="15t1" data-ref-filename="15t1">t1</dfn> = <a class="tu ref fn" href="#priority_tree_next_task_1" title='priority_tree_next_task_1' data-use='c' data-ref="priority_tree_next_task_1" data-ref-filename="priority_tree_next_task_1">priority_tree_next_task_1</a> (<a class="local col0 ref" href="#10type1" title='type1' data-ref="10type1" data-ref-filename="10type1">type1</a>, <a class="local col1 ref" href="#11q1" title='q1' data-ref="11q1" data-ref-filename="11q1">q1</a>-&gt;<a class="ref field" href="priority_queue.h.html#priority_queue::t" title='priority_queue::t' data-ref="priority_queue::t" data-ref-filename="priority_queue..t">t</a>.<a class="ref field" href="splay-tree.h.html#prio_splay_tree_s::root" title='prio_splay_tree_s::root' data-ref="prio_splay_tree_s::root" data-ref-filename="prio_splay_tree_s..root">root</a>);</td></tr>
+<tr><th id="255">255</th><td>  <b>if</b> (!<a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a></td></tr>
+<tr><th id="256">256</th><td>      <i>/* Special optimization when only searching through one queue.  */</i></td></tr>
+<tr><th id="257">257</th><td>      || !<a class="local col3 ref" href="#13q2" title='q2' data-ref="13q2" data-ref-filename="13q2">q2</a>)</td></tr>
+<tr><th id="258">258</th><td>    {</td></tr>
+<tr><th id="259">259</th><td>      *<a class="local col4 ref" href="#14q1_chosen_p" title='q1_chosen_p' data-ref="14q1_chosen_p" data-ref-filename="14q1_chosen_p">q1_chosen_p</a> = <span class="macro" title="1" data-ref="_M/true">true</span>;</td></tr>
+<tr><th id="260">260</th><td>      <b>return</b> <a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a>;</td></tr>
+<tr><th id="261">261</th><td>    }</td></tr>
+<tr><th id="262">262</th><td>  <b>struct</b> <a class="type" href="libgomp.h.html#gomp_task" title='gomp_task' data-ref="gomp_task" data-ref-filename="gomp_task">gomp_task</a> *<dfn class="local col6 decl" id="16t2" title='t2' data-type='struct gomp_task *' data-ref="16t2" data-ref-filename="16t2">t2</dfn> = <a class="tu ref fn" href="#priority_tree_next_task_1" title='priority_tree_next_task_1' data-use='c' data-ref="priority_tree_next_task_1" data-ref-filename="priority_tree_next_task_1">priority_tree_next_task_1</a> (<a class="local col2 ref" href="#12type2" title='type2' data-ref="12type2" data-ref-filename="12type2">type2</a>, <a class="local col3 ref" href="#13q2" title='q2' data-ref="13q2" data-ref-filename="13q2">q2</a>-&gt;<a class="ref field" href="priority_queue.h.html#priority_queue::t" title='priority_queue::t' data-ref="priority_queue::t" data-ref-filename="priority_queue..t">t</a>.<a class="ref field" href="splay-tree.h.html#prio_splay_tree_s::root" title='prio_splay_tree_s::root' data-ref="prio_splay_tree_s::root" data-ref-filename="prio_splay_tree_s..root">root</a>);</td></tr>
+<tr><th id="263">263</th><td>  <b>if</b> (!<a class="local col6 ref" href="#16t2" title='t2' data-ref="16t2" data-ref-filename="16t2">t2</a> || <a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::priority" title='gomp_task::priority' data-ref="gomp_task::priority" data-ref-filename="gomp_task..priority">priority</a> &gt; <a class="local col6 ref" href="#16t2" title='t2' data-ref="16t2" data-ref-filename="16t2">t2</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::priority" title='gomp_task::priority' data-ref="gomp_task::priority" data-ref-filename="gomp_task..priority">priority</a>)</td></tr>
+<tr><th id="264">264</th><td>    {</td></tr>
+<tr><th id="265">265</th><td>      *<a class="local col4 ref" href="#14q1_chosen_p" title='q1_chosen_p' data-ref="14q1_chosen_p" data-ref-filename="14q1_chosen_p">q1_chosen_p</a> = <span class="macro" title="1" data-ref="_M/true">true</span>;</td></tr>
+<tr><th id="266">266</th><td>      <b>return</b> <a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a>;</td></tr>
+<tr><th id="267">267</th><td>    }</td></tr>
+<tr><th id="268">268</th><td>  <b>if</b> (<a class="local col6 ref" href="#16t2" title='t2' data-ref="16t2" data-ref-filename="16t2">t2</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::priority" title='gomp_task::priority' data-ref="gomp_task::priority" data-ref-filename="gomp_task..priority">priority</a> &gt; <a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::priority" title='gomp_task::priority' data-ref="gomp_task::priority" data-ref-filename="gomp_task..priority">priority</a>)</td></tr>
+<tr><th id="269">269</th><td>    {</td></tr>
+<tr><th id="270">270</th><td>      *<a class="local col4 ref" href="#14q1_chosen_p" title='q1_chosen_p' data-ref="14q1_chosen_p" data-ref-filename="14q1_chosen_p">q1_chosen_p</a> = <span class="macro" title="0" data-ref="_M/false">false</span>;</td></tr>
+<tr><th id="271">271</th><td>      <b>return</b> <a class="local col6 ref" href="#16t2" title='t2' data-ref="16t2" data-ref-filename="16t2">t2</a>;</td></tr>
+<tr><th id="272">272</th><td>    }</td></tr>
+<tr><th id="273">273</th><td>  <i>/* If we get here, the priorities are the same, so we must look at</i></td></tr>
+<tr><th id="274">274</th><td><i>     parent_depends_on to make our decision.  */</i></td></tr>
+<tr><th id="275">275</th><td><u>#<span data-ppcond="275">if</span> <a class="macro" href="libgomp.h.html#41" title="0" data-ref="_M/_LIBGOMP_CHECKING_">_LIBGOMP_CHECKING_</a></u></td></tr>
+<tr><th id="276">276</th><td>  <b>if</b> (t1 != t2)</td></tr>
+<tr><th id="277">277</th><td>    gomp_fatal (<q>"priority_tree_next_task: t1 != t2"</q>);</td></tr>
+<tr><th id="278">278</th><td><u>#<span data-ppcond="275">endif</span></u></td></tr>
+<tr><th id="279">279</th><td>  <b>if</b> (<a class="local col6 ref" href="#16t2" title='t2' data-ref="16t2" data-ref-filename="16t2">t2</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::parent_depends_on" title='gomp_task::parent_depends_on' data-ref="gomp_task::parent_depends_on" data-ref-filename="gomp_task..parent_depends_on">parent_depends_on</a> &amp;&amp; !<a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a>-&gt;<a class="ref field" href="libgomp.h.html#gomp_task::parent_depends_on" title='gomp_task::parent_depends_on' data-ref="gomp_task::parent_depends_on" data-ref-filename="gomp_task..parent_depends_on">parent_depends_on</a>)</td></tr>
+<tr><th id="280">280</th><td>    {</td></tr>
+<tr><th id="281">281</th><td>      *<a class="local col4 ref" href="#14q1_chosen_p" title='q1_chosen_p' data-ref="14q1_chosen_p" data-ref-filename="14q1_chosen_p">q1_chosen_p</a> = <span class="macro" title="0" data-ref="_M/false">false</span>;</td></tr>
+<tr><th id="282">282</th><td>      <b>return</b> <a class="local col6 ref" href="#16t2" title='t2' data-ref="16t2" data-ref-filename="16t2">t2</a>;</td></tr>
+<tr><th id="283">283</th><td>    }</td></tr>
+<tr><th id="284">284</th><td>  *<a class="local col4 ref" href="#14q1_chosen_p" title='q1_chosen_p' data-ref="14q1_chosen_p" data-ref-filename="14q1_chosen_p">q1_chosen_p</a> = <span class="macro" title="1" data-ref="_M/true">true</span>;</td></tr>
+<tr><th id="285">285</th><td>  <b>return</b> <a class="local col5 ref" href="#15t1" title='t1' data-ref="15t1" data-ref-filename="15t1">t1</a>;</td></tr>
+<tr><th id="286">286</th><td>}</td></tr>
+<tr><th id="287">287</th><td></td></tr>
+<tr><th id="288">288</th><td><i  data-doc="prio_splay_compare">/* Priority splay trees comparison function.  */</i></td></tr>
+<tr><th id="289">289</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="290">290</th><td><dfn class="tu decl def fn" id="prio_splay_compare" title='prio_splay_compare' data-type='int prio_splay_compare(prio_splay_tree_key x, prio_splay_tree_key y)' data-ref="prio_splay_compare" data-ref-filename="prio_splay_compare">prio_splay_compare</dfn> (<a class="typedef" href="priority_queue.h.html#prio_splay_tree_key" title='prio_splay_tree_key' data-type='struct prio_splay_tree_key_s *' data-ref="prio_splay_tree_key" data-ref-filename="prio_splay_tree_key">prio_splay_tree_key</a> <dfn class="local col7 decl" id="17x" title='x' data-type='prio_splay_tree_key' data-ref="17x" data-ref-filename="17x">x</dfn>, <a class="typedef" href="priority_queue.h.html#prio_splay_tree_key" title='prio_splay_tree_key' data-type='struct prio_splay_tree_key_s *' data-ref="prio_splay_tree_key" data-ref-filename="prio_splay_tree_key">prio_splay_tree_key</a> <dfn class="local col8 decl" id="18y" title='y' data-type='prio_splay_tree_key' data-ref="18y" data-ref-filename="18y">y</dfn>)</td></tr>
+<tr><th id="291">291</th><td>{</td></tr>
+<tr><th id="292">292</th><td>  <b>if</b> (<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a>-&gt;<a class="ref field" href="priority_queue.h.html#prio_splay_tree_key_s::l" title='prio_splay_tree_key_s::l' data-ref="prio_splay_tree_key_s::l" data-ref-filename="prio_splay_tree_key_s..l">l</a>.<a class="ref field" href="priority_queue.h.html#priority_list::priority" title='priority_list::priority' data-ref="priority_list::priority" data-ref-filename="priority_list..priority">priority</a> == <a class="local col8 ref" href="#18y" title='y' data-ref="18y" data-ref-filename="18y">y</a>-&gt;<a class="ref field" href="priority_queue.h.html#prio_splay_tree_key_s::l" title='prio_splay_tree_key_s::l' data-ref="prio_splay_tree_key_s::l" data-ref-filename="prio_splay_tree_key_s..l">l</a>.<a class="ref field" href="priority_queue.h.html#priority_list::priority" title='priority_list::priority' data-ref="priority_list::priority" data-ref-filename="priority_list..priority">priority</a>)</td></tr>
+<tr><th id="293">293</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="294">294</th><td>  <b>return</b> <a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a>-&gt;<a class="ref field" href="priority_queue.h.html#prio_splay_tree_key_s::l" title='prio_splay_tree_key_s::l' data-ref="prio_splay_tree_key_s::l" data-ref-filename="prio_splay_tree_key_s..l">l</a>.<a class="ref field" href="priority_queue.h.html#priority_list::priority" title='priority_list::priority' data-ref="priority_list::priority" data-ref-filename="priority_list..priority">priority</a> &lt; <a class="local col8 ref" href="#18y" title='y' data-ref="18y" data-ref-filename="18y">y</a>-&gt;<a class="ref field" href="priority_queue.h.html#prio_splay_tree_key_s::l" title='prio_splay_tree_key_s::l' data-ref="prio_splay_tree_key_s::l" data-ref-filename="prio_splay_tree_key_s..l">l</a>.<a class="ref field" href="priority_queue.h.html#priority_list::priority" title='priority_list::priority' data-ref="priority_list::priority" data-ref-filename="priority_list..priority">priority</a> ? -<var>1</var> : <var>1</var>;</td></tr>
+<tr><th id="295">295</th><td>}</td></tr>
+<tr><th id="296">296</th><td></td></tr>
+<tr><th id="297">297</th><td><i>/* Define another splay tree instantiation, for priority_list's.  */</i></td></tr>
+<tr><th id="298">298</th><td><u>#define <dfn class="macro" id="_M/splay_tree_prefix" data-ref="_M/splay_tree_prefix">splay_tree_prefix</dfn> prio</u></td></tr>
+<tr><th id="299">299</th><td><u>#define <dfn class="macro" id="_M/splay_tree_c" data-ref="_M/splay_tree_c">splay_tree_c</dfn></u></td></tr>
+<tr><th id="300">300</th><td><u>#include <a href="splay-tree.h.html">"splay-tree.h"</a></u></td></tr>
+<tr><th id="301">301</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

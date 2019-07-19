@@ -1,0 +1,409 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>refclock_as2201.c source code [netbsd/external/bsd/ntp/dist/ntpd/refclock_as2201.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="as2201unit "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/refclock_as2201.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='refclock_as2201.c.html'>refclock_as2201.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: refclock_as2201.c,v 1.4 2016/01/08 21:35:39 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * refclock_as2201 - clock driver for the Austron 2201A GPS</i></td></tr>
+<tr><th id="5">5</th><td><i> *	Timing Receiver</i></td></tr>
+<tr><th id="6">6</th><td><i> */</i></td></tr>
+<tr><th id="7">7</th><td><u>#<span data-ppcond="7">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="8">8</th><td><u>#include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="9">9</th><td><u>#<span data-ppcond="7">endif</span></u></td></tr>
+<tr><th id="10">10</th><td></td></tr>
+<tr><th id="11">11</th><td><u>#<span data-ppcond="11">if</span> defined(<a class="macro" href="../../include/config.h.html#1519" data-ref="_M/REFCLOCK">REFCLOCK</a>) &amp;&amp; defined(<a class="macro" href="../../include/config.h.html#26" data-ref="_M/CLOCK_AS2201">CLOCK_AS2201</a>)</u></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#include <a href="../include/ntpd.h.html">"ntpd.h"</a></u></td></tr>
+<tr><th id="14">14</th><td><u>#include <a href="../include/ntp_io.h.html">"ntp_io.h"</a></u></td></tr>
+<tr><th id="15">15</th><td><u>#include <a href="../include/ntp_refclock.h.html">"ntp_refclock.h"</a></u></td></tr>
+<tr><th id="16">16</th><td><u>#include <a href="../include/ntp_unixtime.h.html">"ntp_unixtime.h"</a></u></td></tr>
+<tr><th id="17">17</th><td><u>#include <a href="../include/ntp_stdlib.h.html">"ntp_stdlib.h"</a></u></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="20">20</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/ctype.h.html">&lt;ctype.h&gt;</a></u></td></tr>
+<tr><th id="21">21</th><td></td></tr>
+<tr><th id="22">22</th><td><i>/*</i></td></tr>
+<tr><th id="23">23</th><td><i> * This driver supports the Austron 2200A/2201A GPS Receiver with</i></td></tr>
+<tr><th id="24">24</th><td><i> * Buffered RS-232-C Interface Module. Note that the original 2200/2201</i></td></tr>
+<tr><th id="25">25</th><td><i> * receivers will not work reliably with this driver, since the older</i></td></tr>
+<tr><th id="26">26</th><td><i> * design cannot accept input commands at any reasonable data rate.</i></td></tr>
+<tr><th id="27">27</th><td><i> *</i></td></tr>
+<tr><th id="28">28</th><td><i> * The program sends a "*toc\r" to the radio and expects a response of</i></td></tr>
+<tr><th id="29">29</th><td><i> * the form "yy:ddd:hh:mm:ss.mmm\r" where yy = year of century, ddd =</i></td></tr>
+<tr><th id="30">30</th><td><i> * day of year, hh:mm:ss = second of day and mmm = millisecond of</i></td></tr>
+<tr><th id="31">31</th><td><i> * second. Then, it sends statistics commands to the radio and expects</i></td></tr>
+<tr><th id="32">32</th><td><i> * a multi-line reply showing the corresponding statistics or other</i></td></tr>
+<tr><th id="33">33</th><td><i> * selected data. Statistics commands are sent in order as determined by</i></td></tr>
+<tr><th id="34">34</th><td><i> * a vector of commands; these might have to be changed with different</i></td></tr>
+<tr><th id="35">35</th><td><i> * radio options. If flag4 of the fudge configuration command is set to</i></td></tr>
+<tr><th id="36">36</th><td><i> * 1, the statistics data are written to the clockstats file for later</i></td></tr>
+<tr><th id="37">37</th><td><i> * processing.</i></td></tr>
+<tr><th id="38">38</th><td><i> *</i></td></tr>
+<tr><th id="39">39</th><td><i> * In order for this code to work, the radio must be placed in non-</i></td></tr>
+<tr><th id="40">40</th><td><i> * interactive mode using the "off" command and with a single &lt;cr&gt;</i></td></tr>
+<tr><th id="41">41</th><td><i> * response using the "term cr" command. The setting of the "echo"</i></td></tr>
+<tr><th id="42">42</th><td><i> * and "df" commands does not matter. The radio should select UTC</i></td></tr>
+<tr><th id="43">43</th><td><i> * timescale using the "ts utc" command.</i></td></tr>
+<tr><th id="44">44</th><td><i> *</i></td></tr>
+<tr><th id="45">45</th><td><i> * There are two modes of operation for this driver. The first with</i></td></tr>
+<tr><th id="46">46</th><td><i> * default configuration is used with stock kernels and serial-line</i></td></tr>
+<tr><th id="47">47</th><td><i> * drivers and works with almost any machine. In this mode the driver</i></td></tr>
+<tr><th id="48">48</th><td><i> * assumes the radio captures a timestamp upon receipt of the "*" that</i></td></tr>
+<tr><th id="49">49</th><td><i> * begins the driver query. Accuracies in this mode are in the order of</i></td></tr>
+<tr><th id="50">50</th><td><i> * a millisecond or two and the receiver can be connected to only one</i></td></tr>
+<tr><th id="51">51</th><td><i> * host.</i></td></tr>
+<tr><th id="52">52</th><td><i> *</i></td></tr>
+<tr><th id="53">53</th><td><i> * The second mode of operation can be used for SunOS kernels that have</i></td></tr>
+<tr><th id="54">54</th><td><i> * been modified with the ppsclock streams module included in this</i></td></tr>
+<tr><th id="55">55</th><td><i> * distribution. The mode is enabled if flag3 of the fudge configuration</i></td></tr>
+<tr><th id="56">56</th><td><i> * command has been set to 1. In this mode a precise timestamp is</i></td></tr>
+<tr><th id="57">57</th><td><i> * available using a gadget box and 1-pps signal from the receiver. This</i></td></tr>
+<tr><th id="58">58</th><td><i> * improves the accuracy to the order of a few tens of microseconds. In</i></td></tr>
+<tr><th id="59">59</th><td><i> * addition, the serial output and 1-pps signal can be bussed to more</i></td></tr>
+<tr><th id="60">60</th><td><i> * than one hosts, but only one of them should be connected to the</i></td></tr>
+<tr><th id="61">61</th><td><i> * radio input data line. </i></td></tr>
+<tr><th id="62">62</th><td><i> */</i></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><i>/*</i></td></tr>
+<tr><th id="65">65</th><td><i> * GPS Definitions</i></td></tr>
+<tr><th id="66">66</th><td><i> */</i></td></tr>
+<tr><th id="67">67</th><td><u>#define <dfn class="macro" id="_M/SMAX" data-ref="_M/SMAX">SMAX</dfn>		200	/* statistics buffer length */</u></td></tr>
+<tr><th id="68">68</th><td><u>#define	<dfn class="macro" id="_M/DEVICE" data-ref="_M/DEVICE">DEVICE</dfn>		"/dev/gps%d" /* device name and unit */</u></td></tr>
+<tr><th id="69">69</th><td><u>#define	<dfn class="macro" id="_M/SPEED232" data-ref="_M/SPEED232">SPEED232</dfn>	B9600	/* uart speed (9600 baud) */</u></td></tr>
+<tr><th id="70">70</th><td><u>#define	<dfn class="macro" id="_M/PRECISION" data-ref="_M/PRECISION">PRECISION</dfn>	(-20)	/* precision assumed (about 1 us) */</u></td></tr>
+<tr><th id="71">71</th><td><u>#define	<dfn class="macro" id="_M/REFID" data-ref="_M/REFID">REFID</dfn>		"GPS\0"	/* reference ID */</u></td></tr>
+<tr><th id="72">72</th><td><u>#define	<dfn class="macro" id="_M/DESCRIPTION" data-ref="_M/DESCRIPTION">DESCRIPTION</dfn>	"Austron 2201A GPS Receiver" /* WRU */</u></td></tr>
+<tr><th id="73">73</th><td></td></tr>
+<tr><th id="74">74</th><td><u>#define	<dfn class="macro" id="_M/LENTOC" data-ref="_M/LENTOC">LENTOC</dfn>		19	/* yy:ddd:hh:mm:ss.mmm timecode lngth */</u></td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><i>/*</i></td></tr>
+<tr><th id="77">77</th><td><i> * AS2201 unit control structure.</i></td></tr>
+<tr><th id="78">78</th><td><i> */</i></td></tr>
+<tr><th id="79">79</th><td><b>struct</b> <dfn class="type def" id="as2201unit" title='as2201unit' data-ref="as2201unit" data-ref-filename="as2201unit">as2201unit</dfn> {</td></tr>
+<tr><th id="80">80</th><td>	<em>char</em>	*<dfn class="tu decl field" id="as2201unit::lastptr" title='as2201unit::lastptr' data-type='char *' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</dfn>;	<i  data-doc="as2201unit::lastptr">/* statistics buffer pointer */</i></td></tr>
+<tr><th id="81">81</th><td>	<em>char</em>	<dfn class="tu decl field" id="as2201unit::stats" title='as2201unit::stats' data-type='char [200]' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</dfn>[<a class="macro" href="#67" title="200" data-ref="_M/SMAX">SMAX</a>];	<i  data-doc="as2201unit::stats">/* statistics buffer */</i></td></tr>
+<tr><th id="82">82</th><td>	<em>int</em>	<dfn class="tu decl field" id="as2201unit::linect" title='as2201unit::linect' data-type='int' data-ref="as2201unit::linect" data-ref-filename="as2201unit..linect">linect</dfn>;		<i  data-doc="as2201unit::linect">/* count of lines remaining */</i></td></tr>
+<tr><th id="83">83</th><td>	<em>int</em>	<dfn class="tu decl field" id="as2201unit::index" title='as2201unit::index' data-type='int' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</dfn>;		<i  data-doc="as2201unit::index">/* current statistics command */</i></td></tr>
+<tr><th id="84">84</th><td>};</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><i  data-doc="stat_command">/*</i></td></tr>
+<tr><th id="87">87</th><td><i  data-doc="stat_command"> * Radio commands to extract statitistics</i></td></tr>
+<tr><th id="88">88</th><td><i  data-doc="stat_command"> *</i></td></tr>
+<tr><th id="89">89</th><td><i  data-doc="stat_command"> * A command consists of an ASCII string terminated by a &lt;cr&gt; (\r). The</i></td></tr>
+<tr><th id="90">90</th><td><i  data-doc="stat_command"> * command list consist of a sequence of commands terminated by a null</i></td></tr>
+<tr><th id="91">91</th><td><i  data-doc="stat_command"> * string ("\0"). One command from the list is sent immediately</i></td></tr>
+<tr><th id="92">92</th><td><i  data-doc="stat_command"> * following each received timecode (*toc\r command) and the ASCII</i></td></tr>
+<tr><th id="93">93</th><td><i  data-doc="stat_command"> * strings received from the radio are saved along with the timecode in</i></td></tr>
+<tr><th id="94">94</th><td><i  data-doc="stat_command"> * the clockstats file. Subsequent commands are sent at each timecode,</i></td></tr>
+<tr><th id="95">95</th><td><i  data-doc="stat_command"> * with the last one in the list followed by the first one. The data</i></td></tr>
+<tr><th id="96">96</th><td><i  data-doc="stat_command"> * received from the radio consist of ASCII strings, each terminated by</i></td></tr>
+<tr><th id="97">97</th><td><i  data-doc="stat_command"> * a &lt;cr&gt; (\r) character. The number of strings for each command is</i></td></tr>
+<tr><th id="98">98</th><td><i  data-doc="stat_command"> * specified as the first line of output as an ASCII-encode number. Note</i></td></tr>
+<tr><th id="99">99</th><td><i  data-doc="stat_command"> * that the ETF command requires the Input Buffer Module and the LORAN</i></td></tr>
+<tr><th id="100">100</th><td><i  data-doc="stat_command"> * commands require the LORAN Assist Module. However, if these modules</i></td></tr>
+<tr><th id="101">101</th><td><i  data-doc="stat_command"> * are not installed, the radio and this driver will continue to operate</i></td></tr>
+<tr><th id="102">102</th><td><i  data-doc="stat_command"> * successfuly, but no data will be captured for these commands.</i></td></tr>
+<tr><th id="103">103</th><td><i  data-doc="stat_command"> */</i></td></tr>
+<tr><th id="104">104</th><td><em>static</em> <em>char</em> <dfn class="tu decl def" id="stat_command" title='stat_command' data-type='char [21][30]' data-ref="stat_command" data-ref-filename="stat_command">stat_command</dfn>[][<var>30</var>] = {</td></tr>
+<tr><th id="105">105</th><td>	<q>"ITF\r"</q>,		<i>/* internal time/frequency */</i></td></tr>
+<tr><th id="106">106</th><td>	<q>"ETF\r"</q>,		<i>/* external time/frequency */</i></td></tr>
+<tr><th id="107">107</th><td>	<q>"LORAN ENSEMBLE\r"</q>,	<i>/* GPS/LORAN ensemble statistics */</i></td></tr>
+<tr><th id="108">108</th><td>	<q>"LORAN TDATA\r"</q>,	<i>/* LORAN signal data */</i></td></tr>
+<tr><th id="109">109</th><td>	<q>"ID;OPT;VER\r"</q>,		<i>/* model; options; software version */</i></td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td>	<q>"ITF\r"</q>,		<i>/* internal time/frequency */</i></td></tr>
+<tr><th id="112">112</th><td>	<q>"ETF\r"</q>,		<i>/* external time/frequency */</i></td></tr>
+<tr><th id="113">113</th><td>	<q>"LORAN ENSEMBLE\r"</q>,	<i>/* GPS/LORAN ensemble statistics */</i></td></tr>
+<tr><th id="114">114</th><td>	<q>"TRSTAT\r"</q>,		<i>/* satellite tracking status */</i></td></tr>
+<tr><th id="115">115</th><td>	<q>"POS;PPS;PPSOFF\r"</q>,	<i>/* position, pps source, offsets */</i></td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td>	<q>"ITF\r"</q>,		<i>/* internal time/frequency */</i></td></tr>
+<tr><th id="118">118</th><td>	<q>"ETF\r"</q>,		<i>/* external time/frequency */</i></td></tr>
+<tr><th id="119">119</th><td>	<q>"LORAN ENSEMBLE\r"</q>,	<i>/* GPS/LORAN ensemble statistics */</i></td></tr>
+<tr><th id="120">120</th><td>	<q>"LORAN TDATA\r"</q>,	<i>/* LORAN signal data */</i></td></tr>
+<tr><th id="121">121</th><td>	<q>"UTC\r"</q>,			<i>/* UTC leap info */</i></td></tr>
+<tr><th id="122">122</th><td></td></tr>
+<tr><th id="123">123</th><td>	<q>"ITF\r"</q>,		<i>/* internal time/frequency */</i></td></tr>
+<tr><th id="124">124</th><td>	<q>"ETF\r"</q>,		<i>/* external time/frequency */</i></td></tr>
+<tr><th id="125">125</th><td>	<q>"LORAN ENSEMBLE\r"</q>,	<i>/* GPS/LORAN ensemble statistics */</i></td></tr>
+<tr><th id="126">126</th><td>	<q>"TRSTAT\r"</q>,		<i>/* satellite tracking status */</i></td></tr>
+<tr><th id="127">127</th><td>	<q>"OSC;ET;TEMP\r"</q>,	<i>/* osc type; tune volts; oven temp */</i></td></tr>
+<tr><th id="128">128</th><td>	<q>"\0"</q>			<i>/* end of table */</i></td></tr>
+<tr><th id="129">129</th><td>};</td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td><i  data-doc="as2201_start">/*</i></td></tr>
+<tr><th id="132">132</th><td><i  data-doc="as2201_start"> * Function prototypes</i></td></tr>
+<tr><th id="133">133</th><td><i  data-doc="as2201_start"> */</i></td></tr>
+<tr><th id="134">134</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#as2201_start" title='as2201_start' data-type='int as2201_start(int , struct peer * )' data-ref="as2201_start" data-ref-filename="as2201_start">as2201_start</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="135">135</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#as2201_shutdown" title='as2201_shutdown' data-type='void as2201_shutdown(int , struct peer * )' data-ref="as2201_shutdown" data-ref-filename="as2201_shutdown">as2201_shutdown</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="136">136</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#as2201_receive" title='as2201_receive' data-type='void as2201_receive(struct recvbuf * )' data-ref="as2201_receive" data-ref-filename="as2201_receive">as2201_receive</a>	(<b>struct</b> <a class="type" href="../include/recvbuff.h.html#recvbuf" title='recvbuf' data-ref="recvbuf" data-ref-filename="recvbuf">recvbuf</a> *);</td></tr>
+<tr><th id="137">137</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#as2201_poll" title='as2201_poll' data-type='void as2201_poll(int , struct peer * )' data-ref="as2201_poll" data-ref-filename="as2201_poll">as2201_poll</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td><i>/*</i></td></tr>
+<tr><th id="140">140</th><td><i> * Transfer vector</i></td></tr>
+<tr><th id="141">141</th><td><i> */</i></td></tr>
+<tr><th id="142">142</th><td><b>struct</b>	<a class="type" href="../include/ntp_refclock.h.html#refclock" title='refclock' data-ref="refclock" data-ref-filename="refclock">refclock</a> <dfn class="decl def" id="refclock_as2201" title='refclock_as2201' data-ref="refclock_as2201" data-ref-filename="refclock_as2201">refclock_as2201</dfn> = {</td></tr>
+<tr><th id="143">143</th><td>	<a class="tu ref fn" href="#as2201_start" title='as2201_start' data-ref="as2201_start" data-ref-filename="as2201_start">as2201_start</a>,		<i>/* start up driver */</i></td></tr>
+<tr><th id="144">144</th><td>	<a class="tu ref fn" href="#as2201_shutdown" title='as2201_shutdown' data-ref="as2201_shutdown" data-ref-filename="as2201_shutdown">as2201_shutdown</a>,	<i>/* shut down driver */</i></td></tr>
+<tr><th id="145">145</th><td>	<a class="tu ref fn" href="#as2201_poll" title='as2201_poll' data-ref="as2201_poll" data-ref-filename="as2201_poll">as2201_poll</a>,		<i>/* transmit poll message */</i></td></tr>
+<tr><th id="146">146</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* not used (old as2201_control) */</i></td></tr>
+<tr><th id="147">147</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* initialize driver (not used) */</i></td></tr>
+<tr><th id="148">148</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* not used (old as2201_buginfo) */</i></td></tr>
+<tr><th id="149">149</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#201" title="0" data-ref="_M/NOFLAGS">NOFLAGS</a>			<i>/* not used */</i></td></tr>
+<tr><th id="150">150</th><td>};</td></tr>
+<tr><th id="151">151</th><td></td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td><i  data-doc="as2201_start">/*</i></td></tr>
+<tr><th id="154">154</th><td><i  data-doc="as2201_start"> * as2201_start - open the devices and initialize data for processing</i></td></tr>
+<tr><th id="155">155</th><td><i  data-doc="as2201_start"> */</i></td></tr>
+<tr><th id="156">156</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="157">157</th><td><dfn class="tu decl def fn" id="as2201_start" title='as2201_start' data-type='int as2201_start(int unit, struct peer * peer)' data-ref="as2201_start" data-ref-filename="as2201_start">as2201_start</dfn>(</td></tr>
+<tr><th id="158">158</th><td>	<em>int</em> <dfn class="local col1 decl" id="1unit" title='unit' data-type='int' data-ref="1unit" data-ref-filename="1unit">unit</dfn>,</td></tr>
+<tr><th id="159">159</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col2 decl" id="2peer" title='peer' data-type='struct peer *' data-ref="2peer" data-ref-filename="2peer">peer</dfn></td></tr>
+<tr><th id="160">160</th><td>	)</td></tr>
+<tr><th id="161">161</th><td>{</td></tr>
+<tr><th id="162">162</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#as2201unit" title='as2201unit' data-ref="as2201unit" data-ref-filename="as2201unit">as2201unit</a> *<dfn class="local col3 decl" id="3up" title='up' data-type='struct as2201unit *' data-ref="3up" data-ref-filename="3up">up</dfn>;</td></tr>
+<tr><th id="163">163</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col4 decl" id="4pp" title='pp' data-type='struct refclockproc *' data-ref="4pp" data-ref-filename="4pp">pp</dfn>;</td></tr>
+<tr><th id="164">164</th><td>	<em>int</em> <dfn class="local col5 decl" id="5fd" title='fd' data-type='int' data-ref="5fd" data-ref-filename="5fd">fd</dfn>;</td></tr>
+<tr><th id="165">165</th><td>	<em>char</em> <dfn class="local col6 decl" id="6gpsdev" title='gpsdev' data-type='char [20]' data-ref="6gpsdev" data-ref-filename="6gpsdev">gpsdev</dfn>[<var>20</var>];</td></tr>
+<tr><th id="166">166</th><td></td></tr>
+<tr><th id="167">167</th><td>	<i>/*</i></td></tr>
+<tr><th id="168">168</th><td><i>	 * Open serial port. Use CLK line discipline, if available.</i></td></tr>
+<tr><th id="169">169</th><td><i>	 */</i></td></tr>
+<tr><th id="170">170</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a>(<a class="local col6 ref" href="#6gpsdev" title='gpsdev' data-ref="6gpsdev" data-ref-filename="6gpsdev">gpsdev</a>, <b>sizeof</b>(<a class="local col6 ref" href="#6gpsdev" title='gpsdev' data-ref="6gpsdev" data-ref-filename="6gpsdev">gpsdev</a>), <a class="macro" href="#68" title="&quot;/dev/gps%d&quot;" data-ref="_M/DEVICE">DEVICE</a>, <a class="local col1 ref" href="#1unit" title='unit' data-ref="1unit" data-ref-filename="1unit">unit</a>);</td></tr>
+<tr><th id="171">171</th><td>	<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a> = <a class="ref fn" href="../include/ntp_refclock.h.html#refclock_open" title='refclock_open' data-ref="refclock_open" data-ref-filename="refclock_open">refclock_open</a>(<a class="local col6 ref" href="#6gpsdev" title='gpsdev' data-ref="6gpsdev" data-ref-filename="6gpsdev">gpsdev</a>, <a class="macro" href="#69" title="9600U" data-ref="_M/SPEED232">SPEED232</a>, <a class="macro" href="../include/ntp_tty.h.html#86" title="0x001" data-ref="_M/LDISC_CLK">LDISC_CLK</a>);</td></tr>
+<tr><th id="172">172</th><td>	<b>if</b> (<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a> &lt;= <var>0</var>)</td></tr>
+<tr><th id="173">173</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td>	<i>/*</i></td></tr>
+<tr><th id="176">176</th><td><i>	 * Allocate and initialize unit structure</i></td></tr>
+<tr><th id="177">177</th><td><i>	 */</i></td></tr>
+<tr><th id="178">178</th><td>	<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a> = <a class="macro" href="../include/ntp_stdlib.h.html#115" title="ereallocz(((void*)0), (sizeof(*up)), 0, 1)" data-ref="_M/emalloc_zero">emalloc_zero</a>(<b>sizeof</b>(*<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>));</td></tr>
+<tr><th id="179">179</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="180">180</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::clock_recv" title='refclockio::clock_recv' data-ref="refclockio::clock_recv" data-ref-filename="refclockio..clock_recv">clock_recv</a> = <a class="tu ref fn" href="#as2201_receive" title='as2201_receive' data-use='r' data-ref="as2201_receive" data-ref-filename="as2201_receive">as2201_receive</a>;</td></tr>
+<tr><th id="181">181</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::srcclock" title='refclockio::srcclock' data-ref="refclockio::srcclock" data-ref-filename="refclockio..srcclock">srcclock</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>;</td></tr>
+<tr><th id="182">182</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::datalen" title='refclockio::datalen' data-ref="refclockio::datalen" data-ref-filename="refclockio..datalen">datalen</a> = <var>0</var>;</td></tr>
+<tr><th id="183">183</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a> = <a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a>;</td></tr>
+<tr><th id="184">184</th><td>	<b>if</b> (!<a class="ref fn" href="../include/ntp_refclock.h.html#io_addclock" title='io_addclock' data-ref="io_addclock" data-ref-filename="io_addclock">io_addclock</a>(&amp;<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>)) {</td></tr>
+<tr><th id="185">185</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a>);</td></tr>
+<tr><th id="186">186</th><td>		<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a> = -<var>1</var>;</td></tr>
+<tr><th id="187">187</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>);</td></tr>
+<tr><th id="188">188</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="189">189</th><td>	}</td></tr>
+<tr><th id="190">190</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a> = <a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>;</td></tr>
+<tr><th id="191">191</th><td></td></tr>
+<tr><th id="192">192</th><td>	<i>/*</i></td></tr>
+<tr><th id="193">193</th><td><i>	 * Initialize miscellaneous variables</i></td></tr>
+<tr><th id="194">194</th><td><i>	 */</i></td></tr>
+<tr><th id="195">195</th><td>	<a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::precision" title='peer::precision' data-ref="peer::precision" data-ref-filename="peer..precision">precision</a> = <a class="macro" href="#70" title="(-20)" data-ref="_M/PRECISION">PRECISION</a>;</td></tr>
+<tr><th id="196">196</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::clockdesc" title='refclockproc::clockdesc' data-ref="refclockproc::clockdesc" data-ref-filename="refclockproc..clockdesc">clockdesc</a> = <a class="macro" href="#72" title="&quot;Austron 2201A GPS Receiver&quot;" data-ref="_M/DESCRIPTION">DESCRIPTION</a>;</td></tr>
+<tr><th id="197">197</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>((<em>char</em> *)&amp;<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::refid" title='refclockproc::refid' data-ref="refclockproc::refid" data-ref-filename="refclockproc..refid">refid</a>, <a class="macro" href="#71" title="&quot;GPS\0&quot;" data-ref="_M/REFID">REFID</a>, <var>4</var>);</td></tr>
+<tr><th id="198">198</th><td>	<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> = <a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-use='r' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a>;</td></tr>
+<tr><th id="199">199</th><td>	<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='w' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a> = <var>0</var>;</td></tr>
+<tr><th id="200">200</th><td>	<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="201">201</th><td>}</td></tr>
+<tr><th id="202">202</th><td></td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td><i  data-doc="as2201_shutdown">/*</i></td></tr>
+<tr><th id="205">205</th><td><i  data-doc="as2201_shutdown"> * as2201_shutdown - shut down the clock</i></td></tr>
+<tr><th id="206">206</th><td><i  data-doc="as2201_shutdown"> */</i></td></tr>
+<tr><th id="207">207</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="208">208</th><td><dfn class="tu decl def fn" id="as2201_shutdown" title='as2201_shutdown' data-type='void as2201_shutdown(int unit, struct peer * peer)' data-ref="as2201_shutdown" data-ref-filename="as2201_shutdown">as2201_shutdown</dfn>(</td></tr>
+<tr><th id="209">209</th><td>	<em>int</em> <dfn class="local col7 decl" id="7unit" title='unit' data-type='int' data-ref="7unit" data-ref-filename="7unit">unit</dfn>,</td></tr>
+<tr><th id="210">210</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col8 decl" id="8peer" title='peer' data-type='struct peer *' data-ref="8peer" data-ref-filename="8peer">peer</dfn></td></tr>
+<tr><th id="211">211</th><td>	)</td></tr>
+<tr><th id="212">212</th><td>{</td></tr>
+<tr><th id="213">213</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#as2201unit" title='as2201unit' data-ref="as2201unit" data-ref-filename="as2201unit">as2201unit</a> *<dfn class="local col9 decl" id="9up" title='up' data-type='struct as2201unit *' data-ref="9up" data-ref-filename="9up">up</dfn>;</td></tr>
+<tr><th id="214">214</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col0 decl" id="10pp" title='pp' data-type='struct refclockproc *' data-ref="10pp" data-ref-filename="10pp">pp</dfn>;</td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td>	<a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a> = <a class="local col8 ref" href="#8peer" title='peer' data-ref="8peer" data-ref-filename="8peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="217">217</th><td>	<a class="local col9 ref" href="#9up" title='up' data-ref="9up" data-ref-filename="9up">up</a> = <a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="218">218</th><td>	<b>if</b> (-<var>1</var> != <a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a>)</td></tr>
+<tr><th id="219">219</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#io_closeclock" title='io_closeclock' data-ref="io_closeclock" data-ref-filename="io_closeclock">io_closeclock</a>(&amp;<a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>);</td></tr>
+<tr><th id="220">220</th><td>	<b>if</b> (<span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> != <a class="local col9 ref" href="#9up" title='up' data-ref="9up" data-ref-filename="9up">up</a>)</td></tr>
+<tr><th id="221">221</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col9 ref" href="#9up" title='up' data-ref="9up" data-ref-filename="9up">up</a>);</td></tr>
+<tr><th id="222">222</th><td>}</td></tr>
+<tr><th id="223">223</th><td></td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td><i  data-doc="as2201_receive">/*</i></td></tr>
+<tr><th id="226">226</th><td><i  data-doc="as2201_receive"> * as2201__receive - receive data from the serial interface</i></td></tr>
+<tr><th id="227">227</th><td><i  data-doc="as2201_receive"> */</i></td></tr>
+<tr><th id="228">228</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="229">229</th><td><dfn class="tu decl def fn" id="as2201_receive" title='as2201_receive' data-type='void as2201_receive(struct recvbuf * rbufp)' data-ref="as2201_receive" data-ref-filename="as2201_receive">as2201_receive</dfn>(</td></tr>
+<tr><th id="230">230</th><td>	<b>struct</b> <a class="type" href="../include/recvbuff.h.html#recvbuf" title='recvbuf' data-ref="recvbuf" data-ref-filename="recvbuf">recvbuf</a> *<dfn class="local col1 decl" id="11rbufp" title='rbufp' data-type='struct recvbuf *' data-ref="11rbufp" data-ref-filename="11rbufp">rbufp</dfn></td></tr>
+<tr><th id="231">231</th><td>	)</td></tr>
+<tr><th id="232">232</th><td>{</td></tr>
+<tr><th id="233">233</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#as2201unit" title='as2201unit' data-ref="as2201unit" data-ref-filename="as2201unit">as2201unit</a> *<dfn class="local col2 decl" id="12up" title='up' data-type='struct as2201unit *' data-ref="12up" data-ref-filename="12up">up</dfn>;</td></tr>
+<tr><th id="234">234</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col3 decl" id="13pp" title='pp' data-type='struct refclockproc *' data-ref="13pp" data-ref-filename="13pp">pp</dfn>;</td></tr>
+<tr><th id="235">235</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col4 decl" id="14peer" title='peer' data-type='struct peer *' data-ref="14peer" data-ref-filename="14peer">peer</dfn>;</td></tr>
+<tr><th id="236">236</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a> <dfn class="local col5 decl" id="15trtmp" title='trtmp' data-type='l_fp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</dfn>;</td></tr>
+<tr><th id="237">237</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="16octets" title='octets' data-type='size_t' data-ref="16octets" data-ref-filename="16octets">octets</dfn>;</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<i>/*</i></td></tr>
+<tr><th id="240">240</th><td><i>	 * Initialize pointers and read the timecode and timestamp.</i></td></tr>
+<tr><th id="241">241</th><td><i>	 */</i></td></tr>
+<tr><th id="242">242</th><td>	<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a> = <a class="local col1 ref" href="#11rbufp" title='rbufp' data-ref="11rbufp" data-ref-filename="11rbufp">rbufp</a>-&gt;<a class="macro" href="../include/recvbuff.h.html#61" title="X_from_where.X_recv_peer" data-ref="_M/recv_peer">recv_peer</a>;</td></tr>
+<tr><th id="243">243</th><td>	<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a> = <a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="244">244</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a> = <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="245">245</th><td>	<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a> = <a class="ref fn" href="../include/ntp_refclock.h.html#refclock_gtlin" title='refclock_gtlin' data-ref="refclock_gtlin" data-ref-filename="refclock_gtlin">refclock_gtlin</a>(<a class="local col1 ref" href="#11rbufp" title='rbufp' data-ref="11rbufp" data-ref-filename="11rbufp">rbufp</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>, <a class="macro" href="../include/ntp_refclock.h.html#140" title="128" data-ref="_M/BMAX">BMAX</a>, &amp;<a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>);</td></tr>
+<tr><th id="246">246</th><td><u>#<span data-ppcond="246">ifdef</span> <a class="macro" href="../../include/config.h.html#184" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="247">247</th><td>	<b>if</b> (<a class="ref" href="../include/declcond.h.html#debug" title='debug' data-ref="debug" data-ref-filename="debug">debug</a>)</td></tr>
+<tr><th id="248">248</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"gps: timecode %d %d %s\n"</q>,</td></tr>
+<tr><th id="249">249</th><td>		   <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::linect" title='as2201unit::linect' data-use='r' data-ref="as2201unit::linect" data-ref-filename="as2201unit..linect">linect</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>);</td></tr>
+<tr><th id="250">250</th><td><u>#<span data-ppcond="246">endif</span></u></td></tr>
+<tr><th id="251">251</th><td>	<b>if</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a> == <var>0</var>)</td></tr>
+<tr><th id="252">252</th><td>	    <b>return</b>;</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>	<i>/*</i></td></tr>
+<tr><th id="255">255</th><td><i>	 * If linect is greater than zero, we must be in the middle of a</i></td></tr>
+<tr><th id="256">256</th><td><i>	 * statistics operation, so simply tack the received data at the</i></td></tr>
+<tr><th id="257">257</th><td><i>	 * end of the statistics string. If not, we could either have</i></td></tr>
+<tr><th id="258">258</th><td><i>	 * just received the timecode itself or a decimal number</i></td></tr>
+<tr><th id="259">259</th><td><i>	 * indicating the number of following lines of the statistics</i></td></tr>
+<tr><th id="260">260</th><td><i>	 * reply. In the former case, write the accumulated statistics</i></td></tr>
+<tr><th id="261">261</th><td><i>	 * data to the clockstats file and continue onward to process</i></td></tr>
+<tr><th id="262">262</th><td><i>	 * the timecode; in the later case, save the number of lines and</i></td></tr>
+<tr><th id="263">263</th><td><i>	 * quietly return.</i></td></tr>
+<tr><th id="264">264</th><td><i>	 */</i></td></tr>
+<tr><th id="265">265</th><td>	<b>if</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::sloppyclockflag" title='refclockproc::sloppyclockflag' data-ref="refclockproc::sloppyclockflag" data-ref-filename="refclockproc..sloppyclockflag">sloppyclockflag</a> &amp; <a class="macro" href="../include/ntp_refclock.h.html#51" title="0x2" data-ref="_M/CLK_FLAG2">CLK_FLAG2</a>)</td></tr>
+<tr><th id="266">266</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a> = <a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>;</td></tr>
+<tr><th id="267">267</th><td>	<b>if</b> (<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::linect" title='as2201unit::linect' data-use='r' data-ref="as2201unit::linect" data-ref-filename="as2201unit..linect">linect</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="268">268</th><td>		<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::linect" title='as2201unit::linect' data-use='w' data-ref="as2201unit::linect" data-ref-filename="as2201unit..linect">linect</a>--;</td></tr>
+<tr><th id="269">269</th><td>		<b>if</b> ((<em>int</em>)(<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> - <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-use='r' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a> + <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>) &gt; <a class="macro" href="#67" title="200" data-ref="_M/SMAX">SMAX</a> - <var>2</var>)</td></tr>
+<tr><th id="270">270</th><td>		    <b>return</b>;</td></tr>
+<tr><th id="271">271</th><td>		*<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a>++ = <kbd>' '</kbd>;</td></tr>
+<tr><th id="272">272</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>, <var>1</var> + <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>);</td></tr>
+<tr><th id="273">273</th><td>		<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> += <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>;</td></tr>
+<tr><th id="274">274</th><td>		<b>return</b>;</td></tr>
+<tr><th id="275">275</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="276">276</th><td>		<b>if</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a> == <var>1</var>) {</td></tr>
+<tr><th id="277">277</th><td>			<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::linect" title='as2201unit::linect' data-use='w' data-ref="as2201unit::linect" data-ref-filename="as2201unit..linect">linect</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>);</td></tr>
+<tr><th id="278">278</th><td>			<b>return</b>;</td></tr>
+<tr><th id="279">279</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="280">280</th><td>			<a class="ref fn" href="../include/ntpd.h.html#record_clock_stats" title='record_clock_stats' data-ref="record_clock_stats" data-ref-filename="record_clock_stats">record_clock_stats</a>(&amp;<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::srcadr" title='peer::srcadr' data-ref="peer::srcadr" data-ref-filename="peer..srcadr">srcadr</a>, <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-use='r' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a>);</td></tr>
+<tr><th id="281">281</th><td><u>#<span data-ppcond="281">ifdef</span> <a class="macro" href="../../include/config.h.html#184" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="282">282</th><td>			<b>if</b> (<a class="ref" href="../include/declcond.h.html#debug" title='debug' data-ref="debug" data-ref-filename="debug">debug</a>)</td></tr>
+<tr><th id="283">283</th><td>			    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"gps: stat %s\n"</q>, <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a>);</td></tr>
+<tr><th id="284">284</th><td><u>#<span data-ppcond="281">endif</span></u></td></tr>
+<tr><th id="285">285</th><td>		}</td></tr>
+<tr><th id="286">286</th><td>	}</td></tr>
+<tr><th id="287">287</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> = <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-use='r' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a>;</td></tr>
+<tr><th id="288">288</th><td>	*<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td>	<i>/*</i></td></tr>
+<tr><th id="291">291</th><td><i>	 * We get down to business, check the timecode format and decode</i></td></tr>
+<tr><th id="292">292</th><td><i>	 * its contents. If the timecode has invalid length or is not in</i></td></tr>
+<tr><th id="293">293</th><td><i>	 * proper format, we declare bad format and exit.</i></td></tr>
+<tr><th id="294">294</th><td><i>	 */</i></td></tr>
+<tr><th id="295">295</th><td>	<b>if</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a> &lt; <a class="macro" href="#74" title="19" data-ref="_M/LENTOC">LENTOC</a>) {</td></tr>
+<tr><th id="296">296</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>, <a class="macro" href="../include/ntp.h.html#677" title="2" data-ref="_M/CEVNT_BADREPLY">CEVNT_BADREPLY</a>);</td></tr>
+<tr><th id="297">297</th><td>		<b>return</b>;</td></tr>
+<tr><th id="298">298</th><td>	}</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td>	<i>/*</i></td></tr>
+<tr><th id="301">301</th><td><i>	 * Timecode format: "yy:ddd:hh:mm:ss.mmm"</i></td></tr>
+<tr><th id="302">302</th><td><i>	 */</i></td></tr>
+<tr><th id="303">303</th><td>	<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sscanf" title='sscanf' data-ref="sscanf" data-ref-filename="sscanf">sscanf</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>, <q>"%2d:%3d:%2d:%2d:%2d.%3ld"</q>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::year" title='refclockproc::year' data-ref="refclockproc::year" data-ref-filename="refclockproc..year">year</a>,</td></tr>
+<tr><th id="304">304</th><td>		   &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::day" title='refclockproc::day' data-ref="refclockproc::day" data-ref-filename="refclockproc..day">day</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::hour" title='refclockproc::hour' data-ref="refclockproc::hour" data-ref-filename="refclockproc..hour">hour</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::minute" title='refclockproc::minute' data-ref="refclockproc::minute" data-ref-filename="refclockproc..minute">minute</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::second" title='refclockproc::second' data-ref="refclockproc::second" data-ref-filename="refclockproc..second">second</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::nsec" title='refclockproc::nsec' data-ref="refclockproc::nsec" data-ref-filename="refclockproc..nsec">nsec</a>)</td></tr>
+<tr><th id="305">305</th><td>	    != <var>6</var>) {</td></tr>
+<tr><th id="306">306</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>, <a class="macro" href="../include/ntp.h.html#677" title="2" data-ref="_M/CEVNT_BADREPLY">CEVNT_BADREPLY</a>);</td></tr>
+<tr><th id="307">307</th><td>		<b>return</b>;</td></tr>
+<tr><th id="308">308</th><td>	}</td></tr>
+<tr><th id="309">309</th><td>	<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::nsec" title='refclockproc::nsec' data-ref="refclockproc::nsec" data-ref-filename="refclockproc..nsec">nsec</a> *= <var>1000000</var>;</td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td>	<i>/*</i></td></tr>
+<tr><th id="312">312</th><td><i>	 * Test for synchronization (this is a temporary crock).</i></td></tr>
+<tr><th id="313">313</th><td><i>	 */</i></td></tr>
+<tr><th id="314">314</th><td>	<b>if</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>[<var>2</var>] != <kbd>':'</kbd>)</td></tr>
+<tr><th id="315">315</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#417" title="0x3" data-ref="_M/LEAP_NOTINSYNC">LEAP_NOTINSYNC</a>;</td></tr>
+<tr><th id="316">316</th><td>	<b>else</b></td></tr>
+<tr><th id="317">317</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#414" title="0x0" data-ref="_M/LEAP_NOWARNING">LEAP_NOWARNING</a>;</td></tr>
+<tr><th id="318">318</th><td></td></tr>
+<tr><th id="319">319</th><td>	<i>/*</i></td></tr>
+<tr><th id="320">320</th><td><i>	 * Process the new sample in the median filter and determine the</i></td></tr>
+<tr><th id="321">321</th><td><i>	 * timecode timestamp.</i></td></tr>
+<tr><th id="322">322</th><td><i>	 */</i></td></tr>
+<tr><th id="323">323</th><td>	<b>if</b> (!<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_process" title='refclock_process' data-ref="refclock_process" data-ref-filename="refclock_process">refclock_process</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>)) {</td></tr>
+<tr><th id="324">324</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>, <a class="macro" href="../include/ntp.h.html#681" title="6" data-ref="_M/CEVNT_BADTIME">CEVNT_BADTIME</a>);</td></tr>
+<tr><th id="325">325</th><td>		<b>return</b>;</td></tr>
+<tr><th id="326">326</th><td>	}</td></tr>
+<tr><th id="327">327</th><td></td></tr>
+<tr><th id="328">328</th><td>	<i>/*</i></td></tr>
+<tr><th id="329">329</th><td><i>	 * If CLK_FLAG4 is set, initialize the statistics buffer and</i></td></tr>
+<tr><th id="330">330</th><td><i>	 * send the next command. If not, simply write the timecode to</i></td></tr>
+<tr><th id="331">331</th><td><i>	 * the clockstats file.</i></td></tr>
+<tr><th id="332">332</th><td><i>	 */</i></td></tr>
+<tr><th id="333">333</th><td>	<b>if</b> ((<em>int</em>)(<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> - <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-use='r' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a> + <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>) &gt; <a class="macro" href="#67" title="200" data-ref="_M/SMAX">SMAX</a> - <var>2</var>)</td></tr>
+<tr><th id="334">334</th><td>	    <b>return</b>;</td></tr>
+<tr><th id="335">335</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>);</td></tr>
+<tr><th id="336">336</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> += <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>;</td></tr>
+<tr><th id="337">337</th><td>	<b>if</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::sloppyclockflag" title='refclockproc::sloppyclockflag' data-ref="refclockproc::sloppyclockflag" data-ref-filename="refclockproc..sloppyclockflag">sloppyclockflag</a> &amp; <a class="macro" href="../include/ntp_refclock.h.html#53" title="0x8" data-ref="_M/CLK_FLAG4">CLK_FLAG4</a>) {</td></tr>
+<tr><th id="338">338</th><td>		<a class="local col6 ref" href="#16octets" title='octets' data-ref="16octets" data-ref-filename="16octets">octets</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="tu ref" href="#stat_command" title='stat_command' data-use='r' data-ref="stat_command" data-ref-filename="stat_command">stat_command</a>[<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='r' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a>]);</td></tr>
+<tr><th id="339">339</th><td>		<b>if</b> ((<em>int</em>)(<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> - <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::stats" title='as2201unit::stats' data-use='r' data-ref="as2201unit::stats" data-ref-filename="as2201unit..stats">stats</a> + <var>1</var> + <a class="local col6 ref" href="#16octets" title='octets' data-ref="16octets" data-ref-filename="16octets">octets</a>) &gt; <a class="macro" href="#67" title="200" data-ref="_M/SMAX">SMAX</a> - <var>2</var>)</td></tr>
+<tr><th id="340">340</th><td>		    <b>return</b>;</td></tr>
+<tr><th id="341">341</th><td>		*<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a>++ = <kbd>' '</kbd>;</td></tr>
+<tr><th id="342">342</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a>, <a class="tu ref" href="#stat_command" title='stat_command' data-use='r' data-ref="stat_command" data-ref-filename="stat_command">stat_command</a>[<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='r' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a>], <a class="local col6 ref" href="#16octets" title='octets' data-ref="16octets" data-ref-filename="16octets">octets</a>);</td></tr>
+<tr><th id="343">343</th><td>		<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='w' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> += <a class="local col6 ref" href="#16octets" title='octets' data-ref="16octets" data-ref-filename="16octets">octets</a> - <var>1</var>;</td></tr>
+<tr><th id="344">344</th><td>		*<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::lastptr" title='as2201unit::lastptr' data-use='r' data-ref="as2201unit::lastptr" data-ref-filename="as2201unit..lastptr">lastptr</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="345">345</th><td>		(<em>void</em>)<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a>, <a class="tu ref" href="#stat_command" title='stat_command' data-use='r' data-ref="stat_command" data-ref-filename="stat_command">stat_command</a>[<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='r' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a>],</td></tr>
+<tr><th id="346">346</th><td>		    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="tu ref" href="#stat_command" title='stat_command' data-use='r' data-ref="stat_command" data-ref-filename="stat_command">stat_command</a>[<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='r' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a>]));</td></tr>
+<tr><th id="347">347</th><td>		<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='w' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a>++;</td></tr>
+<tr><th id="348">348</th><td>		<b>if</b> (*<a class="tu ref" href="#stat_command" title='stat_command' data-use='r' data-ref="stat_command" data-ref-filename="stat_command">stat_command</a>[<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='r' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a>] == <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="349">349</th><td>			<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#as2201unit::index" title='as2201unit::index' data-use='w' data-ref="as2201unit::index" data-ref-filename="as2201unit..index">index</a> = <var>0</var>;</td></tr>
+<tr><th id="350">350</th><td>	}</td></tr>
+<tr><th id="351">351</th><td>}</td></tr>
+<tr><th id="352">352</th><td></td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td><i  data-doc="as2201_poll">/*</i></td></tr>
+<tr><th id="355">355</th><td><i  data-doc="as2201_poll"> * as2201_poll - called by the transmit procedure</i></td></tr>
+<tr><th id="356">356</th><td><i  data-doc="as2201_poll"> *</i></td></tr>
+<tr><th id="357">357</th><td><i  data-doc="as2201_poll"> * We go to great pains to avoid changing state here, since there may be</i></td></tr>
+<tr><th id="358">358</th><td><i  data-doc="as2201_poll"> * more than one eavesdropper receiving the same timecode.</i></td></tr>
+<tr><th id="359">359</th><td><i  data-doc="as2201_poll"> */</i></td></tr>
+<tr><th id="360">360</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="361">361</th><td><dfn class="tu decl def fn" id="as2201_poll" title='as2201_poll' data-type='void as2201_poll(int unit, struct peer * peer)' data-ref="as2201_poll" data-ref-filename="as2201_poll">as2201_poll</dfn>(</td></tr>
+<tr><th id="362">362</th><td>	<em>int</em> <dfn class="local col7 decl" id="17unit" title='unit' data-type='int' data-ref="17unit" data-ref-filename="17unit">unit</dfn>,</td></tr>
+<tr><th id="363">363</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col8 decl" id="18peer" title='peer' data-type='struct peer *' data-ref="18peer" data-ref-filename="18peer">peer</dfn></td></tr>
+<tr><th id="364">364</th><td>	)</td></tr>
+<tr><th id="365">365</th><td>{</td></tr>
+<tr><th id="366">366</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col9 decl" id="19pp" title='pp' data-type='struct refclockproc *' data-ref="19pp" data-ref-filename="19pp">pp</dfn>;</td></tr>
+<tr><th id="367">367</th><td></td></tr>
+<tr><th id="368">368</th><td>	<i>/*</i></td></tr>
+<tr><th id="369">369</th><td><i>	 * Send a "\r*toc\r" to get things going. We go to great pains</i></td></tr>
+<tr><th id="370">370</th><td><i>	 * to avoid changing state, since there may be more than one</i></td></tr>
+<tr><th id="371">371</th><td><i>	 * eavesdropper watching the radio.</i></td></tr>
+<tr><th id="372">372</th><td><i>	 */</i></td></tr>
+<tr><th id="373">373</th><td>	<a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a> = <a class="local col8 ref" href="#18peer" title='peer' data-ref="18peer" data-ref-filename="18peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="374">374</th><td>	<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a>, <q>"\r*toc\r"</q>, <var>6</var>) != <var>6</var>) {</td></tr>
+<tr><th id="375">375</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col8 ref" href="#18peer" title='peer' data-ref="18peer" data-ref-filename="18peer">peer</a>, <a class="macro" href="../include/ntp.h.html#678" title="3" data-ref="_M/CEVNT_FAULT">CEVNT_FAULT</a>);</td></tr>
+<tr><th id="376">376</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="377">377</th><td>		<a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::polls" title='refclockproc::polls' data-ref="refclockproc::polls" data-ref-filename="refclockproc..polls">polls</a>++;</td></tr>
+<tr><th id="378">378</th><td>		<b>if</b> (!(<a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::sloppyclockflag" title='refclockproc::sloppyclockflag' data-ref="refclockproc::sloppyclockflag" data-ref-filename="refclockproc..sloppyclockflag">sloppyclockflag</a> &amp; <a class="macro" href="../include/ntp_refclock.h.html#51" title="0x2" data-ref="_M/CLK_FLAG2">CLK_FLAG2</a>))</td></tr>
+<tr><th id="379">379</th><td>			<a class="ref fn" href="../include/ntp_fp.h.html#get_systime" title='get_systime' data-ref="get_systime" data-ref-filename="get_systime">get_systime</a>(&amp;<a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>);</td></tr>
+<tr><th id="380">380</th><td>	}</td></tr>
+<tr><th id="381">381</th><td>        <b>if</b> (<a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::coderecv" title='refclockproc::coderecv' data-ref="refclockproc::coderecv" data-ref-filename="refclockproc..coderecv">coderecv</a> == <a class="local col9 ref" href="#19pp" title='pp' data-ref="19pp" data-ref-filename="19pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::codeproc" title='refclockproc::codeproc' data-ref="refclockproc::codeproc" data-ref-filename="refclockproc..codeproc">codeproc</a>) {</td></tr>
+<tr><th id="382">382</th><td>                <a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col8 ref" href="#18peer" title='peer' data-ref="18peer" data-ref-filename="18peer">peer</a>, <a class="macro" href="../include/ntp.h.html#676" title="1" data-ref="_M/CEVNT_TIMEOUT">CEVNT_TIMEOUT</a>);</td></tr>
+<tr><th id="383">383</th><td>                <b>return</b>;</td></tr>
+<tr><th id="384">384</th><td>        }</td></tr>
+<tr><th id="385">385</th><td>        <a class="ref fn" href="../include/ntpd.h.html#refclock_receive" title='refclock_receive' data-ref="refclock_receive" data-ref-filename="refclock_receive">refclock_receive</a>(<a class="local col8 ref" href="#18peer" title='peer' data-ref="18peer" data-ref-filename="18peer">peer</a>);</td></tr>
+<tr><th id="386">386</th><td>}</td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td><u>#<span data-ppcond="11">else</span></u></td></tr>
+<tr><th id="389">389</th><td><em>int</em> refclock_as2201_bs;</td></tr>
+<tr><th id="390">390</th><td><u>#<span data-ppcond="11">endif</span> /* REFCLOCK */</u></td></tr>
+<tr><th id="391">391</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

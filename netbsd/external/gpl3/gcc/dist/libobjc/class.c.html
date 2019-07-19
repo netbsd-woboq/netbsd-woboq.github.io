@@ -1,0 +1,1024 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>class.c source code [netbsd/external/gpl3/gcc/dist/libobjc/class.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="class_node,class_table_enumerator "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/libobjc/class.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>libobjc</a>/<a href='class.c.html'>class.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* GNU Objective C Runtime class related functions</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 1993-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Contributed by Kresten Krab Thorup and Dennis Glatting.</i></td></tr>
+<tr><th id="4">4</th><td><i></i></td></tr>
+<tr><th id="5">5</th><td><i>   Lock-free class table code designed and written from scratch by</i></td></tr>
+<tr><th id="6">6</th><td><i>   Nicola Pero, 2001.</i></td></tr>
+<tr><th id="7">7</th><td><i></i></td></tr>
+<tr><th id="8">8</th><td><i>This file is part of GCC.</i></td></tr>
+<tr><th id="9">9</th><td><i></i></td></tr>
+<tr><th id="10">10</th><td><i>GCC is free software; you can redistribute it and/or modify it under the</i></td></tr>
+<tr><th id="11">11</th><td><i>terms of the GNU General Public License as published by the Free Software</i></td></tr>
+<tr><th id="12">12</th><td><i>Foundation; either version 3, or (at your option) any later version.</i></td></tr>
+<tr><th id="13">13</th><td><i></i></td></tr>
+<tr><th id="14">14</th><td><i>GCC is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="15">15</th><td><i>WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS</i></td></tr>
+<tr><th id="16">16</th><td><i>FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more</i></td></tr>
+<tr><th id="17">17</th><td><i>details.</i></td></tr>
+<tr><th id="18">18</th><td><i></i></td></tr>
+<tr><th id="19">19</th><td><i>Under Section 7 of GPL version 3, you are granted additional</i></td></tr>
+<tr><th id="20">20</th><td><i>permissions described in the GCC Runtime Library Exception, version</i></td></tr>
+<tr><th id="21">21</th><td><i>3.1, as published by the Free Software Foundation.</i></td></tr>
+<tr><th id="22">22</th><td><i></i></td></tr>
+<tr><th id="23">23</th><td><i>You should have received a copy of the GNU General Public License and</i></td></tr>
+<tr><th id="24">24</th><td><i>a copy of the GCC Runtime Library Exception along with this program;</i></td></tr>
+<tr><th id="25">25</th><td><i>see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see</i></td></tr>
+<tr><th id="26">26</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><i>/* The code in this file critically affects class method invocation</i></td></tr>
+<tr><th id="29">29</th><td><i>  speed.  This long preamble comment explains why, and the issues</i></td></tr>
+<tr><th id="30">30</th><td><i>  involved.</i></td></tr>
+<tr><th id="31">31</th><td><i></i></td></tr>
+<tr><th id="32">32</th><td><i>  One of the traditional weaknesses of the GNU Objective-C runtime is</i></td></tr>
+<tr><th id="33">33</th><td><i>  that class method invocations are slow.  The reason is that when you</i></td></tr>
+<tr><th id="34">34</th><td><i>  write</i></td></tr>
+<tr><th id="35">35</th><td><i>  </i></td></tr>
+<tr><th id="36">36</th><td><i>  array = [NSArray new];</i></td></tr>
+<tr><th id="37">37</th><td><i>  </i></td></tr>
+<tr><th id="38">38</th><td><i>  this gets basically compiled into the equivalent of </i></td></tr>
+<tr><th id="39">39</th><td><i>  </i></td></tr>
+<tr><th id="40">40</th><td><i>  array = [(objc_get_class ("NSArray")) new];</i></td></tr>
+<tr><th id="41">41</th><td><i>  </i></td></tr>
+<tr><th id="42">42</th><td><i>  objc_get_class returns the class pointer corresponding to the string</i></td></tr>
+<tr><th id="43">43</th><td><i>  `NSArray'; and because of the lookup, the operation is more</i></td></tr>
+<tr><th id="44">44</th><td><i>  complicated and slow than a simple instance method invocation.</i></td></tr>
+<tr><th id="45">45</th><td><i>  </i></td></tr>
+<tr><th id="46">46</th><td><i>  Most high performance Objective-C code (using the GNU Objc runtime)</i></td></tr>
+<tr><th id="47">47</th><td><i>  I had the opportunity to read (or write) work around this problem by</i></td></tr>
+<tr><th id="48">48</th><td><i>  caching the class pointer:</i></td></tr>
+<tr><th id="49">49</th><td><i>  </i></td></tr>
+<tr><th id="50">50</th><td><i>  Class arrayClass = [NSArray class];</i></td></tr>
+<tr><th id="51">51</th><td><i>  </i></td></tr>
+<tr><th id="52">52</th><td><i>  ... later on ...</i></td></tr>
+<tr><th id="53">53</th><td><i>  </i></td></tr>
+<tr><th id="54">54</th><td><i>  array = [arrayClass new];</i></td></tr>
+<tr><th id="55">55</th><td><i>  array = [arrayClass new];</i></td></tr>
+<tr><th id="56">56</th><td><i>  array = [arrayClass new];</i></td></tr>
+<tr><th id="57">57</th><td><i>  </i></td></tr>
+<tr><th id="58">58</th><td><i>  In this case, you always perform a class lookup (the first one), but</i></td></tr>
+<tr><th id="59">59</th><td><i>  then all the [arrayClass new] methods run exactly as fast as an</i></td></tr>
+<tr><th id="60">60</th><td><i>  instance method invocation.  It helps if you have many class method</i></td></tr>
+<tr><th id="61">61</th><td><i>  invocations to the same class.</i></td></tr>
+<tr><th id="62">62</th><td><i>  </i></td></tr>
+<tr><th id="63">63</th><td><i>  The long-term solution to this problem would be to modify the</i></td></tr>
+<tr><th id="64">64</th><td><i>  compiler to output tables of class pointers corresponding to all the</i></td></tr>
+<tr><th id="65">65</th><td><i>  class method invocations, and to add code to the runtime to update</i></td></tr>
+<tr><th id="66">66</th><td><i>  these tables - that should in the end allow class method invocations</i></td></tr>
+<tr><th id="67">67</th><td><i>  to perform precisely as fast as instance method invocations, because</i></td></tr>
+<tr><th id="68">68</th><td><i>  no class lookup would be involved.  I think the Apple Objective-C</i></td></tr>
+<tr><th id="69">69</th><td><i>  runtime uses this technique.  Doing this involves synchronized</i></td></tr>
+<tr><th id="70">70</th><td><i>  modifications in the runtime and in the compiler.</i></td></tr>
+<tr><th id="71">71</th><td><i>  </i></td></tr>
+<tr><th id="72">72</th><td><i>  As a first medicine to the problem, I [NP] have redesigned and</i></td></tr>
+<tr><th id="73">73</th><td><i>  rewritten the way the runtime is performing class lookup.  This</i></td></tr>
+<tr><th id="74">74</th><td><i>  doesn't give as much speed as the other (definitive) approach, but</i></td></tr>
+<tr><th id="75">75</th><td><i>  at least a class method invocation now takes approximately 4.5 times</i></td></tr>
+<tr><th id="76">76</th><td><i>  an instance method invocation on my machine (it would take approx 12</i></td></tr>
+<tr><th id="77">77</th><td><i>  times before the rewriting), which is a lot better.</i></td></tr>
+<tr><th id="78">78</th><td><i></i></td></tr>
+<tr><th id="79">79</th><td><i>  One of the main reason the new class lookup is so faster is because</i></td></tr>
+<tr><th id="80">80</th><td><i>  I implemented it in a way that can safely run multithreaded without</i></td></tr>
+<tr><th id="81">81</th><td><i>  using locks - a so-called `lock-free' data structure.  The atomic</i></td></tr>
+<tr><th id="82">82</th><td><i>  operation is pointer assignment.  The reason why in this problem</i></td></tr>
+<tr><th id="83">83</th><td><i>  lock-free data structures work so well is that you never remove</i></td></tr>
+<tr><th id="84">84</th><td><i>  classes from the table - and the difficult thing with lock-free data</i></td></tr>
+<tr><th id="85">85</th><td><i>  structures is freeing data when is removed from the structures.  */</i></td></tr>
+<tr><th id="86">86</th><td></td></tr>
+<tr><th id="87">87</th><td><u>#include <a href="objc-private/common.h.html">"objc-private/common.h"</a></u></td></tr>
+<tr><th id="88">88</th><td><u>#include <a href="objc-private/error.h.html">"objc-private/error.h"</a></u></td></tr>
+<tr><th id="89">89</th><td><u>#include <a href="objc/runtime.h.html">"objc/runtime.h"</a></u></td></tr>
+<tr><th id="90">90</th><td><u>#include <a href="objc/thr.h.html">"objc/thr.h"</a></u></td></tr>
+<tr><th id="91">91</th><td><u>#include <a href="objc-private/module-abi-8.h.html">"objc-private/module-abi-8.h"</a>  /* For CLS_ISCLASS and similar.  */</u></td></tr>
+<tr><th id="92">92</th><td><u>#include <a href="objc-private/runtime.h.html">"objc-private/runtime.h"</a>       /* the kitchen sink */</u></td></tr>
+<tr><th id="93">93</th><td><u>#include <a href="objc-private/sarray.h.html">"objc-private/sarray.h"</a>        /* For sarray_put_at_safe.  */</u></td></tr>
+<tr><th id="94">94</th><td><u>#include <a href="objc-private/selector.h.html">"objc-private/selector.h"</a>      /* For sarray_put_at_safe.  */</u></td></tr>
+<tr><th id="95">95</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a>                     /* For memset */</u></td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><i>/* We use a table which maps a class name to the corresponding class</i></td></tr>
+<tr><th id="98">98</th><td><i>   pointer.  The first part of this file defines this table, and</i></td></tr>
+<tr><th id="99">99</th><td><i>   functions to do basic operations on the table.  The second part of</i></td></tr>
+<tr><th id="100">100</th><td><i>   the file implements some higher level Objective-C functionality for</i></td></tr>
+<tr><th id="101">101</th><td><i>   classes by using the functions provided in the first part to manage</i></td></tr>
+<tr><th id="102">102</th><td><i>   the table. */</i></td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="105">105</th><td><i class="doc"> ** Class Table Internals</i></td></tr>
+<tr><th id="106">106</th><td><i class="doc"> **/</i></td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td><i>/* A node holding a class */</i></td></tr>
+<tr><th id="109">109</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="class_node" title='class_node' data-ref="class_node" data-ref-filename="class_node"><a class="type" href="#class_node" title='class_node' data-ref="class_node" data-ref-filename="class_node">class_node</a></dfn></td></tr>
+<tr><th id="110">110</th><td>{</td></tr>
+<tr><th id="111">111</th><td>  <b>struct</b> <a class="type" href="#class_node" title='class_node' data-ref="class_node" data-ref-filename="class_node">class_node</a> *<dfn class="tu decl field" id="class_node::next" title='class_node::next' data-type='struct class_node *' data-ref="class_node::next" data-ref-filename="class_node..next">next</dfn>;      <i  data-doc="class_node::next">/* Pointer to next entry on the list.</i></td></tr>
+<tr><th id="112">112</th><td><i  data-doc="class_node::next">                                   NULL indicates end of list. */</i></td></tr>
+<tr><th id="113">113</th><td>  </td></tr>
+<tr><th id="114">114</th><td>  <em>const</em> <em>char</em> *<dfn class="tu decl field" id="class_node::name" title='class_node::name' data-type='const char *' data-ref="class_node::name" data-ref-filename="class_node..name">name</dfn>;             <i  data-doc="class_node::name">/* The class name string */</i></td></tr>
+<tr><th id="115">115</th><td>  <em>int</em> <dfn class="tu decl field" id="class_node::length" title='class_node::length' data-type='int' data-ref="class_node::length" data-ref-filename="class_node..length">length</dfn>;                   <i  data-doc="class_node::length">/* The class name string length */</i></td></tr>
+<tr><th id="116">116</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="tu decl field" id="class_node::pointer" title='class_node::pointer' data-type='Class' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</dfn>;                <i  data-doc="class_node::pointer">/* The Class pointer */</i></td></tr>
+<tr><th id="117">117</th><td>  </td></tr>
+<tr><th id="118">118</th><td>} *<dfn class="typedef" id="class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</dfn>;</td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><i>/* A table containing classes is a class_node_ptr (pointing to the</i></td></tr>
+<tr><th id="121">121</th><td><i>   first entry in the table - if it is NULL, then the table is</i></td></tr>
+<tr><th id="122">122</th><td><i>   empty). */</i></td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td><i>/* We have 1024 tables.  Each table contains all class names which</i></td></tr>
+<tr><th id="125">125</th><td><i>   have the same hash (which is a number between 0 and 1023).  To look</i></td></tr>
+<tr><th id="126">126</th><td><i>   up a class_name, we compute its hash, and get the corresponding</i></td></tr>
+<tr><th id="127">127</th><td><i>   table.  Once we have the table, we simply compare strings directly</i></td></tr>
+<tr><th id="128">128</th><td><i>   till we find the one which we want (using the length first).  The</i></td></tr>
+<tr><th id="129">129</th><td><i>   number of tables is quite big on purpose (a normal big application</i></td></tr>
+<tr><th id="130">130</th><td><i>   has less than 1000 classes), so that you shouldn't normally get any</i></td></tr>
+<tr><th id="131">131</th><td><i>   collisions, and get away with a single comparison (which we can't</i></td></tr>
+<tr><th id="132">132</th><td><i>   avoid since we need to know that you have got the right thing).  */</i></td></tr>
+<tr><th id="133">133</th><td><u>#define <dfn class="macro" id="_M/CLASS_TABLE_SIZE" data-ref="_M/CLASS_TABLE_SIZE">CLASS_TABLE_SIZE</dfn> 1024</u></td></tr>
+<tr><th id="134">134</th><td><u>#define <dfn class="macro" id="_M/CLASS_TABLE_MASK" data-ref="_M/CLASS_TABLE_MASK">CLASS_TABLE_MASK</dfn> 1023</u></td></tr>
+<tr><th id="135">135</th><td></td></tr>
+<tr><th id="136">136</th><td><em>static</em> <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="tu decl def" id="class_table_array" title='class_table_array' data-type='class_node_ptr [1024]' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</dfn>[<a class="macro" href="#133" title="1024" data-ref="_M/CLASS_TABLE_SIZE">CLASS_TABLE_SIZE</a>];</td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><i  data-doc="__class_table_lock">/* The table writing mutex - we lock on writing to avoid conflicts</i></td></tr>
+<tr><th id="139">139</th><td><i  data-doc="__class_table_lock">   between different writers, but we read without locks.  That is</i></td></tr>
+<tr><th id="140">140</th><td><i  data-doc="__class_table_lock">   possible because we assume pointer assignment to be an atomic</i></td></tr>
+<tr><th id="141">141</th><td><i  data-doc="__class_table_lock">   operation.  TODO: This is only true under certain circumstances,</i></td></tr>
+<tr><th id="142">142</th><td><i  data-doc="__class_table_lock">   which should be clarified.  */</i></td></tr>
+<tr><th id="143">143</th><td><em>static</em> <a class="typedef" href="objc/thr.h.html#objc_mutex_t" title='objc_mutex_t' data-type='struct objc_mutex *' data-ref="objc_mutex_t" data-ref-filename="objc_mutex_t">objc_mutex_t</a> <dfn class="tu decl def" id="__class_table_lock" title='__class_table_lock' data-type='objc_mutex_t' data-ref="__class_table_lock" data-ref-filename="__class_table_lock">__class_table_lock</dfn> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="144">144</th><td></td></tr>
+<tr><th id="145">145</th><td><i>/* CLASS_TABLE_HASH is how we compute the hash of a class name.  It is</i></td></tr>
+<tr><th id="146">146</th><td><i>   a macro - *not* a function - arguments *are* modified directly.</i></td></tr>
+<tr><th id="147">147</th><td><i></i></td></tr>
+<tr><th id="148">148</th><td><i>   INDEX should be a variable holding an int;</i></td></tr>
+<tr><th id="149">149</th><td><i>   HASH should be a variable holding an int;</i></td></tr>
+<tr><th id="150">150</th><td><i>   CLASS_NAME should be a variable holding a (char *) to the class_name.  </i></td></tr>
+<tr><th id="151">151</th><td><i></i></td></tr>
+<tr><th id="152">152</th><td><i>   After the macro is executed, INDEX contains the length of the</i></td></tr>
+<tr><th id="153">153</th><td><i>   string, and HASH the computed hash of the string; CLASS_NAME is</i></td></tr>
+<tr><th id="154">154</th><td><i>   untouched.  */</i></td></tr>
+<tr><th id="155">155</th><td></td></tr>
+<tr><th id="156">156</th><td><u>#define <dfn class="macro" id="_M/CLASS_TABLE_HASH" data-ref="_M/CLASS_TABLE_HASH">CLASS_TABLE_HASH</dfn>(INDEX, HASH, CLASS_NAME)          \</u></td></tr>
+<tr><th id="157">157</th><td><u>  HASH = 0;                                                  \</u></td></tr>
+<tr><th id="158">158</th><td><u>  for (INDEX = 0; CLASS_NAME[INDEX] != '\0'; INDEX++)        \</u></td></tr>
+<tr><th id="159">159</th><td><u>    {                                                        \</u></td></tr>
+<tr><th id="160">160</th><td><u>      HASH = (HASH &lt;&lt; 4) ^ (HASH &gt;&gt; 28) ^ CLASS_NAME[INDEX]; \</u></td></tr>
+<tr><th id="161">161</th><td><u>    }                                                        \</u></td></tr>
+<tr><th id="162">162</th><td><u>                                                             \</u></td></tr>
+<tr><th id="163">163</th><td><u>  HASH = (HASH ^ (HASH &gt;&gt; 10) ^ (HASH &gt;&gt; 20)) &amp; CLASS_TABLE_MASK;</u></td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td><i  data-doc="class_table_setup">/* Setup the table.  */</i></td></tr>
+<tr><th id="166">166</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="167">167</th><td><dfn class="tu decl def fn" id="class_table_setup" title='class_table_setup' data-type='void class_table_setup()' data-ref="class_table_setup" data-ref-filename="class_table_setup">class_table_setup</dfn> (<em>void</em>)</td></tr>
+<tr><th id="168">168</th><td>{</td></tr>
+<tr><th id="169">169</th><td>  <i>/* Start - nothing in the table.  */</i></td></tr>
+<tr><th id="170">170</th><td>  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memset" title='memset' data-ref="memset" data-ref-filename="memset">memset</a> (<a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>, <var>0</var>, <b>sizeof</b> (<a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a>) * <a class="macro" href="#133" title="1024" data-ref="_M/CLASS_TABLE_SIZE">CLASS_TABLE_SIZE</a>);</td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td>  <i>/* The table writing mutex.  */</i></td></tr>
+<tr><th id="173">173</th><td>  <a class="tu ref" href="#__class_table_lock" title='__class_table_lock' data-use='w' data-ref="__class_table_lock" data-ref-filename="__class_table_lock">__class_table_lock</a> = <a class="ref fn" href="objc/thr.h.html#objc_mutex_allocate" title='objc_mutex_allocate' data-ref="objc_mutex_allocate" data-ref-filename="objc_mutex_allocate">objc_mutex_allocate</a> ();</td></tr>
+<tr><th id="174">174</th><td>}</td></tr>
+<tr><th id="175">175</th><td></td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td><i  data-doc="class_table_insert">/* Insert a class in the table (used when a new class is</i></td></tr>
+<tr><th id="178">178</th><td><i  data-doc="class_table_insert">   registered).  */</i></td></tr>
+<tr><th id="179">179</th><td><em>static</em> <em>void</em> </td></tr>
+<tr><th id="180">180</th><td><dfn class="tu decl def fn" id="class_table_insert" title='class_table_insert' data-type='void class_table_insert(const char * class_name, Class class_pointer)' data-ref="class_table_insert" data-ref-filename="class_table_insert">class_table_insert</dfn> (<em>const</em> <em>char</em> *<dfn class="local col0 decl" id="30class_name" title='class_name' data-type='const char *' data-ref="30class_name" data-ref-filename="30class_name">class_name</dfn>, <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col1 decl" id="31class_pointer" title='class_pointer' data-type='Class' data-ref="31class_pointer" data-ref-filename="31class_pointer">class_pointer</dfn>)</td></tr>
+<tr><th id="181">181</th><td>{</td></tr>
+<tr><th id="182">182</th><td>  <em>int</em> <dfn class="local col2 decl" id="32hash" title='hash' data-type='int' data-ref="32hash" data-ref-filename="32hash">hash</dfn>, <dfn class="local col3 decl" id="33length" title='length' data-type='int' data-ref="33length" data-ref-filename="33length">length</dfn>;</td></tr>
+<tr><th id="183">183</th><td>  <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="local col4 decl" id="34new_node" title='new_node' data-type='class_node_ptr' data-ref="34new_node" data-ref-filename="34new_node">new_node</dfn>;</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>  <i>/* Find out the class name's hash and length.  */</i></td></tr>
+<tr><th id="186">186</th><td>  <a class="macro" href="#156" title="hash = 0; for (length = 0; class_name[length] != &apos;\0&apos;; length++) { hash = (hash &lt;&lt; 4) ^ (hash &gt;&gt; 28) ^ class_name[length]; } hash = (hash ^ (hash &gt;&gt; 10) ^ (hash &gt;&gt; 20)) &amp; 1023;" data-ref="_M/CLASS_TABLE_HASH">CLASS_TABLE_HASH</a> (<a class="local col3 ref" href="#33length" title='length' data-ref="33length" data-ref-filename="33length">length</a>, <a class="local col2 ref" href="#32hash" title='hash' data-ref="32hash" data-ref-filename="32hash">hash</a>, <a class="local col0 ref" href="#30class_name" title='class_name' data-ref="30class_name" data-ref-filename="30class_name">class_name</a>);</td></tr>
+<tr><th id="187">187</th><td>  </td></tr>
+<tr><th id="188">188</th><td>  <i>/* Prepare the new node holding the class.  */</i></td></tr>
+<tr><th id="189">189</th><td>  <a class="local col4 ref" href="#34new_node" title='new_node' data-ref="34new_node" data-ref-filename="34new_node">new_node</a> = <a class="ref fn" href="objc/runtime.h.html#objc_malloc" title='objc_malloc' data-ref="objc_malloc" data-ref-filename="objc_malloc">objc_malloc</a> (<b>sizeof</b> (<b>struct</b> <a class="type" href="#class_node" title='class_node' data-ref="class_node" data-ref-filename="class_node">class_node</a>));</td></tr>
+<tr><th id="190">190</th><td>  <a class="local col4 ref" href="#34new_node" title='new_node' data-ref="34new_node" data-ref-filename="34new_node">new_node</a>-&gt;<a class="tu ref field" href="#class_node::name" title='class_node::name' data-use='w' data-ref="class_node::name" data-ref-filename="class_node..name">name</a> = <a class="local col0 ref" href="#30class_name" title='class_name' data-ref="30class_name" data-ref-filename="30class_name">class_name</a>;</td></tr>
+<tr><th id="191">191</th><td>  <a class="local col4 ref" href="#34new_node" title='new_node' data-ref="34new_node" data-ref-filename="34new_node">new_node</a>-&gt;<a class="tu ref field" href="#class_node::length" title='class_node::length' data-use='w' data-ref="class_node::length" data-ref-filename="class_node..length">length</a> = <a class="local col3 ref" href="#33length" title='length' data-ref="33length" data-ref-filename="33length">length</a>;</td></tr>
+<tr><th id="192">192</th><td>  <a class="local col4 ref" href="#34new_node" title='new_node' data-ref="34new_node" data-ref-filename="34new_node">new_node</a>-&gt;<a class="tu ref field" href="#class_node::pointer" title='class_node::pointer' data-use='w' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</a> = <a class="local col1 ref" href="#31class_pointer" title='class_pointer' data-ref="31class_pointer" data-ref-filename="31class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>  <i>/* Lock the table for modifications.  */</i></td></tr>
+<tr><th id="195">195</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_lock" title='objc_mutex_lock' data-ref="objc_mutex_lock" data-ref-filename="objc_mutex_lock">objc_mutex_lock</a> (<a class="tu ref" href="#__class_table_lock" title='__class_table_lock' data-use='r' data-ref="__class_table_lock" data-ref-filename="__class_table_lock">__class_table_lock</a>);</td></tr>
+<tr><th id="196">196</th><td>  </td></tr>
+<tr><th id="197">197</th><td>  <i>/* Insert the new node in the table at the beginning of the table at</i></td></tr>
+<tr><th id="198">198</th><td><i>     class_table_array[hash].  */</i></td></tr>
+<tr><th id="199">199</th><td>  <a class="local col4 ref" href="#34new_node" title='new_node' data-ref="34new_node" data-ref-filename="34new_node">new_node</a>-&gt;<a class="tu ref field" href="#class_node::next" title='class_node::next' data-use='w' data-ref="class_node::next" data-ref-filename="class_node..next">next</a> = <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col2 ref" href="#32hash" title='hash' data-ref="32hash" data-ref-filename="32hash">hash</a>];</td></tr>
+<tr><th id="200">200</th><td>  <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='w' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col2 ref" href="#32hash" title='hash' data-ref="32hash" data-ref-filename="32hash">hash</a>] = <a class="local col4 ref" href="#34new_node" title='new_node' data-ref="34new_node" data-ref-filename="34new_node">new_node</a>;</td></tr>
+<tr><th id="201">201</th><td>  </td></tr>
+<tr><th id="202">202</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="tu ref" href="#__class_table_lock" title='__class_table_lock' data-use='r' data-ref="__class_table_lock" data-ref-filename="__class_table_lock">__class_table_lock</a>);</td></tr>
+<tr><th id="203">203</th><td>}</td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td><i  data-doc="class_table_get_safe">/* Get a class from the table.  This does not need mutex protection.</i></td></tr>
+<tr><th id="206">206</th><td><i  data-doc="class_table_get_safe">   Currently, this function is called each time you call a static</i></td></tr>
+<tr><th id="207">207</th><td><i  data-doc="class_table_get_safe">   method, this is why it must be very fast.  */</i></td></tr>
+<tr><th id="208">208</th><td><em>static</em> <b>inline</b> <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> </td></tr>
+<tr><th id="209">209</th><td><dfn class="tu decl def fn" id="class_table_get_safe" title='class_table_get_safe' data-type='Class class_table_get_safe(const char * class_name)' data-ref="class_table_get_safe" data-ref-filename="class_table_get_safe">class_table_get_safe</dfn> (<em>const</em> <em>char</em> *<dfn class="local col5 decl" id="35class_name" title='class_name' data-type='const char *' data-ref="35class_name" data-ref-filename="35class_name">class_name</dfn>)</td></tr>
+<tr><th id="210">210</th><td>{</td></tr>
+<tr><th id="211">211</th><td>  <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="local col6 decl" id="36node" title='node' data-type='class_node_ptr' data-ref="36node" data-ref-filename="36node">node</dfn>;  </td></tr>
+<tr><th id="212">212</th><td>  <em>int</em> <dfn class="local col7 decl" id="37length" title='length' data-type='int' data-ref="37length" data-ref-filename="37length">length</dfn>, <dfn class="local col8 decl" id="38hash" title='hash' data-type='int' data-ref="38hash" data-ref-filename="38hash">hash</dfn>;</td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td>  <i>/* Compute length and hash.  */</i></td></tr>
+<tr><th id="215">215</th><td>  <a class="macro" href="#156" title="hash = 0; for (length = 0; class_name[length] != &apos;\0&apos;; length++) { hash = (hash &lt;&lt; 4) ^ (hash &gt;&gt; 28) ^ class_name[length]; } hash = (hash ^ (hash &gt;&gt; 10) ^ (hash &gt;&gt; 20)) &amp; 1023;" data-ref="_M/CLASS_TABLE_HASH">CLASS_TABLE_HASH</a> (<a class="local col7 ref" href="#37length" title='length' data-ref="37length" data-ref-filename="37length">length</a>, <a class="local col8 ref" href="#38hash" title='hash' data-ref="38hash" data-ref-filename="38hash">hash</a>, <a class="local col5 ref" href="#35class_name" title='class_name' data-ref="35class_name" data-ref-filename="35class_name">class_name</a>);</td></tr>
+<tr><th id="216">216</th><td>  </td></tr>
+<tr><th id="217">217</th><td>  <a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a> = <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col8 ref" href="#38hash" title='hash' data-ref="38hash" data-ref-filename="38hash">hash</a>];</td></tr>
+<tr><th id="218">218</th><td>  </td></tr>
+<tr><th id="219">219</th><td>  <b>if</b> (<a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="220">220</th><td>    {</td></tr>
+<tr><th id="221">221</th><td>      <b>do</b></td></tr>
+<tr><th id="222">222</th><td>        {</td></tr>
+<tr><th id="223">223</th><td>          <b>if</b> (<a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a>-&gt;<a class="tu ref field" href="#class_node::length" title='class_node::length' data-use='r' data-ref="class_node::length" data-ref-filename="class_node..length">length</a> == <a class="local col7 ref" href="#37length" title='length' data-ref="37length" data-ref-filename="37length">length</a>)</td></tr>
+<tr><th id="224">224</th><td>            {</td></tr>
+<tr><th id="225">225</th><td>              <i>/* Compare the class names.  */</i></td></tr>
+<tr><th id="226">226</th><td>              <em>int</em> <dfn class="local col9 decl" id="39i" title='i' data-type='int' data-ref="39i" data-ref-filename="39i">i</dfn>;</td></tr>
+<tr><th id="227">227</th><td></td></tr>
+<tr><th id="228">228</th><td>              <b>for</b> (<a class="local col9 ref" href="#39i" title='i' data-ref="39i" data-ref-filename="39i">i</a> = <var>0</var>; <a class="local col9 ref" href="#39i" title='i' data-ref="39i" data-ref-filename="39i">i</a> &lt; <a class="local col7 ref" href="#37length" title='length' data-ref="37length" data-ref-filename="37length">length</a>; <a class="local col9 ref" href="#39i" title='i' data-ref="39i" data-ref-filename="39i">i</a>++)</td></tr>
+<tr><th id="229">229</th><td>                {</td></tr>
+<tr><th id="230">230</th><td>                  <b>if</b> ((<a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a>-&gt;<a class="tu ref field" href="#class_node::name" title='class_node::name' data-use='r' data-ref="class_node::name" data-ref-filename="class_node..name">name</a>)[<a class="local col9 ref" href="#39i" title='i' data-ref="39i" data-ref-filename="39i">i</a>] != <a class="local col5 ref" href="#35class_name" title='class_name' data-ref="35class_name" data-ref-filename="35class_name">class_name</a>[<a class="local col9 ref" href="#39i" title='i' data-ref="39i" data-ref-filename="39i">i</a>]) </td></tr>
+<tr><th id="231">231</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="232">232</th><td>                }</td></tr>
+<tr><th id="233">233</th><td>              </td></tr>
+<tr><th id="234">234</th><td>              <b>if</b> (<a class="local col9 ref" href="#39i" title='i' data-ref="39i" data-ref-filename="39i">i</a> == <a class="local col7 ref" href="#37length" title='length' data-ref="37length" data-ref-filename="37length">length</a>)</td></tr>
+<tr><th id="235">235</th><td>                {</td></tr>
+<tr><th id="236">236</th><td>                  <i>/* They are equal!  */</i></td></tr>
+<tr><th id="237">237</th><td>                  <b>return</b> <a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a>-&gt;<a class="tu ref field" href="#class_node::pointer" title='class_node::pointer' data-use='r' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</a>;</td></tr>
+<tr><th id="238">238</th><td>                }</td></tr>
+<tr><th id="239">239</th><td>            }</td></tr>
+<tr><th id="240">240</th><td>        }</td></tr>
+<tr><th id="241">241</th><td>      <b>while</b> ((<a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a> = <a class="local col6 ref" href="#36node" title='node' data-ref="36node" data-ref-filename="36node">node</a>-&gt;<a class="tu ref field" href="#class_node::next" title='class_node::next' data-use='r' data-ref="class_node::next" data-ref-filename="class_node..next">next</a>) != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="242">242</th><td>    }</td></tr>
+<tr><th id="243">243</th><td></td></tr>
+<tr><th id="244">244</th><td>  <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="245">245</th><td>}</td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td><i>/* Enumerate over the class table.  */</i></td></tr>
+<tr><th id="248">248</th><td><b>struct</b> <dfn class="type def" id="class_table_enumerator" title='class_table_enumerator' data-ref="class_table_enumerator" data-ref-filename="class_table_enumerator">class_table_enumerator</dfn></td></tr>
+<tr><th id="249">249</th><td>{</td></tr>
+<tr><th id="250">250</th><td>  <em>int</em> <dfn class="tu decl field" id="class_table_enumerator::hash" title='class_table_enumerator::hash' data-type='int' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</dfn>;</td></tr>
+<tr><th id="251">251</th><td>  <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="tu decl field" id="class_table_enumerator::node" title='class_table_enumerator::node' data-type='class_node_ptr' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</dfn>;</td></tr>
+<tr><th id="252">252</th><td>};</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td></td></tr>
+<tr><th id="255">255</th><td><em>static</em> <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="256">256</th><td><dfn class="tu decl def fn" id="class_table_next" title='class_table_next' data-type='Class class_table_next(struct class_table_enumerator ** e)' data-ref="class_table_next" data-ref-filename="class_table_next">class_table_next</dfn> (<b>struct</b> <a class="type" href="#class_table_enumerator" title='class_table_enumerator' data-ref="class_table_enumerator" data-ref-filename="class_table_enumerator">class_table_enumerator</a> **<dfn class="local col0 decl" id="40e" title='e' data-type='struct class_table_enumerator **' data-ref="40e" data-ref-filename="40e">e</dfn>)</td></tr>
+<tr><th id="257">257</th><td>{</td></tr>
+<tr><th id="258">258</th><td>  <b>struct</b> <a class="type" href="#class_table_enumerator" title='class_table_enumerator' data-ref="class_table_enumerator" data-ref-filename="class_table_enumerator">class_table_enumerator</a> *<dfn class="local col1 decl" id="41enumerator" title='enumerator' data-type='struct class_table_enumerator *' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</dfn> = *<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>;</td></tr>
+<tr><th id="259">259</th><td>  <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="local col2 decl" id="42next" title='next' data-type='class_node_ptr' data-ref="42next" data-ref-filename="42next">next</dfn>;</td></tr>
+<tr><th id="260">260</th><td>  </td></tr>
+<tr><th id="261">261</th><td>  <b>if</b> (<a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="262">262</th><td>    {</td></tr>
+<tr><th id="263">263</th><td>       *<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a> = <a class="ref fn" href="objc/runtime.h.html#objc_malloc" title='objc_malloc' data-ref="objc_malloc" data-ref-filename="objc_malloc">objc_malloc</a> (<b>sizeof</b> (<b>struct</b> <a class="type" href="#class_table_enumerator" title='class_table_enumerator' data-ref="class_table_enumerator" data-ref-filename="class_table_enumerator">class_table_enumerator</a>));</td></tr>
+<tr><th id="264">264</th><td>      <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a> = *<a class="local col0 ref" href="#40e" title='e' data-ref="40e" data-ref-filename="40e">e</a>;</td></tr>
+<tr><th id="265">265</th><td>      <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::hash" title='class_table_enumerator::hash' data-use='w' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</a> = <var>0</var>;</td></tr>
+<tr><th id="266">266</th><td>      <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::node" title='class_table_enumerator::node' data-use='w' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="267">267</th><td></td></tr>
+<tr><th id="268">268</th><td>      <a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a> = <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::hash" title='class_table_enumerator::hash' data-use='r' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</a>];</td></tr>
+<tr><th id="269">269</th><td>    }</td></tr>
+<tr><th id="270">270</th><td>  <b>else</b></td></tr>
+<tr><th id="271">271</th><td>    <a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a> = <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::node" title='class_table_enumerator::node' data-use='r' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</a>-&gt;<a class="tu ref field" href="#class_node::next" title='class_node::next' data-use='r' data-ref="class_node::next" data-ref-filename="class_node..next">next</a>;</td></tr>
+<tr><th id="272">272</th><td>  </td></tr>
+<tr><th id="273">273</th><td>  <b>if</b> (<a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="274">274</th><td>    {</td></tr>
+<tr><th id="275">275</th><td>      <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::node" title='class_table_enumerator::node' data-use='w' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</a> = <a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a>;</td></tr>
+<tr><th id="276">276</th><td>      <b>return</b> <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::node" title='class_table_enumerator::node' data-use='r' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</a>-&gt;<a class="tu ref field" href="#class_node::pointer" title='class_node::pointer' data-use='r' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</a>;</td></tr>
+<tr><th id="277">277</th><td>    }</td></tr>
+<tr><th id="278">278</th><td>  <b>else</b> </td></tr>
+<tr><th id="279">279</th><td>    {</td></tr>
+<tr><th id="280">280</th><td>      <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::hash" title='class_table_enumerator::hash' data-use='w' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</a>++;</td></tr>
+<tr><th id="281">281</th><td>     </td></tr>
+<tr><th id="282">282</th><td>      <b>while</b> (<a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::hash" title='class_table_enumerator::hash' data-use='r' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</a> &lt; <a class="macro" href="#133" title="1024" data-ref="_M/CLASS_TABLE_SIZE">CLASS_TABLE_SIZE</a>)</td></tr>
+<tr><th id="283">283</th><td>        {</td></tr>
+<tr><th id="284">284</th><td>          <a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a> = <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::hash" title='class_table_enumerator::hash' data-use='r' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</a>];</td></tr>
+<tr><th id="285">285</th><td>          <b>if</b> (<a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="286">286</th><td>            {</td></tr>
+<tr><th id="287">287</th><td>              <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::node" title='class_table_enumerator::node' data-use='w' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</a> = <a class="local col2 ref" href="#42next" title='next' data-ref="42next" data-ref-filename="42next">next</a>;</td></tr>
+<tr><th id="288">288</th><td>              <b>return</b> <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::node" title='class_table_enumerator::node' data-use='r' data-ref="class_table_enumerator::node" data-ref-filename="class_table_enumerator..node">node</a>-&gt;<a class="tu ref field" href="#class_node::pointer" title='class_node::pointer' data-use='r' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</a>;</td></tr>
+<tr><th id="289">289</th><td>            }</td></tr>
+<tr><th id="290">290</th><td>          <a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>-&gt;<a class="tu ref field" href="#class_table_enumerator::hash" title='class_table_enumerator::hash' data-use='w' data-ref="class_table_enumerator::hash" data-ref-filename="class_table_enumerator..hash">hash</a>++;</td></tr>
+<tr><th id="291">291</th><td>        }</td></tr>
+<tr><th id="292">292</th><td>      </td></tr>
+<tr><th id="293">293</th><td>      <i>/* Ok - table finished - done.  */</i></td></tr>
+<tr><th id="294">294</th><td>      <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col1 ref" href="#41enumerator" title='enumerator' data-ref="41enumerator" data-ref-filename="41enumerator">enumerator</a>);</td></tr>
+<tr><th id="295">295</th><td>      <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="296">296</th><td>    }</td></tr>
+<tr><th id="297">297</th><td>}</td></tr>
+<tr><th id="298">298</th><td></td></tr>
+<tr><th id="299">299</th><td><u>#<span data-ppcond="299">if</span> 0 /* DEBUGGING FUNCTIONS */</u></td></tr>
+<tr><th id="300">300</th><td><i>/* Debugging function - print the class table.  */</i></td></tr>
+<tr><th id="301">301</th><td><em>void</em></td></tr>
+<tr><th id="302">302</th><td>class_table_print (<em>void</em>)</td></tr>
+<tr><th id="303">303</th><td>{</td></tr>
+<tr><th id="304">304</th><td>  <em>int</em> i;</td></tr>
+<tr><th id="305">305</th><td>  </td></tr>
+<tr><th id="306">306</th><td>  <b>for</b> (i = <var>0</var>; i &lt; CLASS_TABLE_SIZE; i++)</td></tr>
+<tr><th id="307">307</th><td>    {</td></tr>
+<tr><th id="308">308</th><td>      class_node_ptr node;</td></tr>
+<tr><th id="309">309</th><td>      </td></tr>
+<tr><th id="310">310</th><td>      printf (<q>"%d:\n"</q>, i);</td></tr>
+<tr><th id="311">311</th><td>      node = class_table_array[i];</td></tr>
+<tr><th id="312">312</th><td>      </td></tr>
+<tr><th id="313">313</th><td>      <b>while</b> (node != NULL)</td></tr>
+<tr><th id="314">314</th><td>        {</td></tr>
+<tr><th id="315">315</th><td>          printf (<q>"\t%s\n"</q>, node-&gt;name);</td></tr>
+<tr><th id="316">316</th><td>          node = node-&gt;next;</td></tr>
+<tr><th id="317">317</th><td>        }</td></tr>
+<tr><th id="318">318</th><td>    }</td></tr>
+<tr><th id="319">319</th><td>}</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td><i>/* Debugging function - print an histogram of number of classes in</i></td></tr>
+<tr><th id="322">322</th><td><i>   function of hash key values.  Useful to evaluate the hash function</i></td></tr>
+<tr><th id="323">323</th><td><i>   in real cases.  */</i></td></tr>
+<tr><th id="324">324</th><td><em>void</em></td></tr>
+<tr><th id="325">325</th><td>class_table_print_histogram (<em>void</em>)</td></tr>
+<tr><th id="326">326</th><td>{</td></tr>
+<tr><th id="327">327</th><td>  <em>int</em> i, j;</td></tr>
+<tr><th id="328">328</th><td>  <em>int</em> counter = <var>0</var>;</td></tr>
+<tr><th id="329">329</th><td>  </td></tr>
+<tr><th id="330">330</th><td>  <b>for</b> (i = <var>0</var>; i &lt; CLASS_TABLE_SIZE; i++)</td></tr>
+<tr><th id="331">331</th><td>    {</td></tr>
+<tr><th id="332">332</th><td>      class_node_ptr node;</td></tr>
+<tr><th id="333">333</th><td>      </td></tr>
+<tr><th id="334">334</th><td>      node = class_table_array[i];</td></tr>
+<tr><th id="335">335</th><td>      </td></tr>
+<tr><th id="336">336</th><td>      <b>while</b> (node != NULL)</td></tr>
+<tr><th id="337">337</th><td>        {</td></tr>
+<tr><th id="338">338</th><td>          counter++;</td></tr>
+<tr><th id="339">339</th><td>          node = node-&gt;next;</td></tr>
+<tr><th id="340">340</th><td>        }</td></tr>
+<tr><th id="341">341</th><td>      <b>if</b> (((i + <var>1</var>) % <var>50</var>) == <var>0</var>)</td></tr>
+<tr><th id="342">342</th><td>        {</td></tr>
+<tr><th id="343">343</th><td>          printf (<q>"%4d:"</q>, i + <var>1</var>);</td></tr>
+<tr><th id="344">344</th><td>          <b>for</b> (j = <var>0</var>; j &lt; counter; j++)</td></tr>
+<tr><th id="345">345</th><td>	    printf (<q>"X"</q>);</td></tr>
+<tr><th id="346">346</th><td></td></tr>
+<tr><th id="347">347</th><td>          printf (<q>"\n"</q>);</td></tr>
+<tr><th id="348">348</th><td>          counter = <var>0</var>;</td></tr>
+<tr><th id="349">349</th><td>        }</td></tr>
+<tr><th id="350">350</th><td>    }</td></tr>
+<tr><th id="351">351</th><td>  printf (<q>"%4d:"</q>, i + <var>1</var>);</td></tr>
+<tr><th id="352">352</th><td>  <b>for</b> (j = <var>0</var>; j &lt; counter; j++)</td></tr>
+<tr><th id="353">353</th><td>    printf (<q>"X"</q>);</td></tr>
+<tr><th id="354">354</th><td></td></tr>
+<tr><th id="355">355</th><td>  printf (<q>"\n"</q>);</td></tr>
+<tr><th id="356">356</th><td>}</td></tr>
+<tr><th id="357">357</th><td><u>#<span data-ppcond="299">endif</span> /* DEBUGGING FUNCTIONS */</u></td></tr>
+<tr><th id="358">358</th><td></td></tr>
+<tr><th id="359">359</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="360">360</th><td><i class="doc"> ** Objective-C runtime functions</i></td></tr>
+<tr><th id="361">361</th><td><i class="doc"> **/</i></td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td><i>/* From now on, the only access to the class table data structure</i></td></tr>
+<tr><th id="364">364</th><td><i>   should be via the class_table_* functions.  */</i></td></tr>
+<tr><th id="365">365</th><td></td></tr>
+<tr><th id="366">366</th><td><i>/* This is a hook which is called by objc_get_class and</i></td></tr>
+<tr><th id="367">367</th><td><i>   objc_lookup_class if the runtime is not able to find the class.</i></td></tr>
+<tr><th id="368">368</th><td><i>   This may e.g. try to load in the class using dynamic loading.</i></td></tr>
+<tr><th id="369">369</th><td><i></i></td></tr>
+<tr><th id="370">370</th><td><i>   This hook was a public, global variable in the Traditional GNU</i></td></tr>
+<tr><th id="371">371</th><td><i>   Objective-C Runtime API (objc/objc-api.h).  The modern GNU</i></td></tr>
+<tr><th id="372">372</th><td><i>   Objective-C Runtime API (objc/runtime.h) provides the</i></td></tr>
+<tr><th id="373">373</th><td><i>   objc_setGetUnknownClassHandler() function instead.</i></td></tr>
+<tr><th id="374">374</th><td><i>*/</i></td></tr>
+<tr><th id="375">375</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> (*<dfn class="decl def" id="_objc_lookup_class" title='_objc_lookup_class' data-ref="_objc_lookup_class" data-ref-filename="_objc_lookup_class">_objc_lookup_class</dfn>) (<em>const</em> <em>char</em> *<dfn class="local col3 decl" id="43name" title='name' data-type='const char *' data-ref="43name" data-ref-filename="43name">name</dfn>) = <var>0</var>;      <i>/* !T:SAFE */</i></td></tr>
+<tr><th id="376">376</th><td></td></tr>
+<tr><th id="377">377</th><td><i  data-doc="__objc_get_unknown_class_handler">/* The handler currently in use.  PS: if both</i></td></tr>
+<tr><th id="378">378</th><td><i  data-doc="__objc_get_unknown_class_handler">   __obj_get_unknown_class_handler and _objc_lookup_class are defined,</i></td></tr>
+<tr><th id="379">379</th><td><i  data-doc="__objc_get_unknown_class_handler">   __objc_get_unknown_class_handler is called first.  */</i></td></tr>
+<tr><th id="380">380</th><td><em>static</em> <a class="typedef" href="objc/runtime.h.html#objc_get_unknown_class_handler" title='objc_get_unknown_class_handler' data-type='Class (*)(const char *)' data-ref="objc_get_unknown_class_handler" data-ref-filename="objc_get_unknown_class_handler">objc_get_unknown_class_handler</a></td></tr>
+<tr><th id="381">381</th><td><dfn class="tu decl def" id="__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-type='objc_get_unknown_class_handler' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</dfn> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="382">382</th><td></td></tr>
+<tr><th id="383">383</th><td><a class="typedef" href="objc/runtime.h.html#objc_get_unknown_class_handler" title='objc_get_unknown_class_handler' data-type='Class (*)(const char *)' data-ref="objc_get_unknown_class_handler" data-ref-filename="objc_get_unknown_class_handler">objc_get_unknown_class_handler</a></td></tr>
+<tr><th id="384">384</th><td><dfn class="decl def fn" id="objc_setGetUnknownClassHandler" title='objc_setGetUnknownClassHandler' data-ref="objc_setGetUnknownClassHandler" data-ref-filename="objc_setGetUnknownClassHandler">objc_setGetUnknownClassHandler</dfn> (<a class="typedef" href="objc/runtime.h.html#objc_get_unknown_class_handler" title='objc_get_unknown_class_handler' data-type='Class (*)(const char *)' data-ref="objc_get_unknown_class_handler" data-ref-filename="objc_get_unknown_class_handler">objc_get_unknown_class_handler</a> </td></tr>
+<tr><th id="385">385</th><td>				<dfn class="local col4 decl" id="44new_handler" title='new_handler' data-type='objc_get_unknown_class_handler' data-ref="44new_handler" data-ref-filename="44new_handler">new_handler</dfn>)</td></tr>
+<tr><th id="386">386</th><td>{</td></tr>
+<tr><th id="387">387</th><td>  <a class="typedef" href="objc/runtime.h.html#objc_get_unknown_class_handler" title='objc_get_unknown_class_handler' data-type='Class (*)(const char *)' data-ref="objc_get_unknown_class_handler" data-ref-filename="objc_get_unknown_class_handler">objc_get_unknown_class_handler</a> <dfn class="local col5 decl" id="45old_handler" title='old_handler' data-type='objc_get_unknown_class_handler' data-ref="45old_handler" data-ref-filename="45old_handler">old_handler</dfn> </td></tr>
+<tr><th id="388">388</th><td>    = <a class="tu ref" href="#__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-use='r' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</a>;</td></tr>
+<tr><th id="389">389</th><td>  <a class="tu ref" href="#__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-use='w' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</a> = <a class="local col4 ref" href="#44new_handler" title='new_handler' data-ref="44new_handler" data-ref-filename="44new_handler">new_handler</a>;</td></tr>
+<tr><th id="390">390</th><td>  <b>return</b> <a class="local col5 ref" href="#45old_handler" title='old_handler' data-ref="45old_handler" data-ref-filename="45old_handler">old_handler</a>;</td></tr>
+<tr><th id="391">391</th><td>}</td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td></td></tr>
+<tr><th id="394">394</th><td><i>/* True when class links has been resolved.  */</i>     </td></tr>
+<tr><th id="395">395</th><td><a class="typedef" href="objc/objc.h.html#BOOL" title='BOOL' data-type='unsigned char' data-ref="BOOL" data-ref-filename="BOOL">BOOL</a> <dfn class="decl def" id="__objc_class_links_resolved" title='__objc_class_links_resolved' data-ref="__objc_class_links_resolved" data-ref-filename="__objc_class_links_resolved">__objc_class_links_resolved</dfn> = <a class="macro" href="objc/objc.h.html#58" title="(BOOL)0" data-ref="_M/NO">NO</a>;                  <i>/* !T:UNUSED */</i></td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td></td></tr>
+<tr><th id="398">398</th><td><em>void</em></td></tr>
+<tr><th id="399">399</th><td><dfn class="decl def fn" id="__objc_init_class_tables" title='__objc_init_class_tables' data-ref="__objc_init_class_tables" data-ref-filename="__objc_init_class_tables">__objc_init_class_tables</dfn> (<em>void</em>)</td></tr>
+<tr><th id="400">400</th><td>{</td></tr>
+<tr><th id="401">401</th><td>  <i>/* Allocate the class hash table.  */</i></td></tr>
+<tr><th id="402">402</th><td>  </td></tr>
+<tr><th id="403">403</th><td>  <b>if</b> (<a class="tu ref" href="#__class_table_lock" title='__class_table_lock' data-use='r' data-ref="__class_table_lock" data-ref-filename="__class_table_lock">__class_table_lock</a>)</td></tr>
+<tr><th id="404">404</th><td>    <b>return</b>;</td></tr>
+<tr><th id="405">405</th><td>  </td></tr>
+<tr><th id="406">406</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_lock" title='objc_mutex_lock' data-ref="objc_mutex_lock" data-ref-filename="objc_mutex_lock">objc_mutex_lock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="407">407</th><td>  </td></tr>
+<tr><th id="408">408</th><td>  <a class="tu ref fn" href="#class_table_setup" title='class_table_setup' data-use='c' data-ref="class_table_setup" data-ref-filename="class_table_setup">class_table_setup</a> ();</td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="411">411</th><td>}  </td></tr>
+<tr><th id="412">412</th><td></td></tr>
+<tr><th id="413">413</th><td><i>/* This function adds a class to the class hash table, and assigns the</i></td></tr>
+<tr><th id="414">414</th><td><i>   class a number, unless it's already known.  Return 'YES' if the</i></td></tr>
+<tr><th id="415">415</th><td><i>   class was added.  Return 'NO' if the class was already known.  */</i></td></tr>
+<tr><th id="416">416</th><td><a class="typedef" href="objc/objc.h.html#BOOL" title='BOOL' data-type='unsigned char' data-ref="BOOL" data-ref-filename="BOOL">BOOL</a></td></tr>
+<tr><th id="417">417</th><td><dfn class="decl def fn" id="__objc_add_class_to_hash" title='__objc_add_class_to_hash' data-ref="__objc_add_class_to_hash" data-ref-filename="__objc_add_class_to_hash">__objc_add_class_to_hash</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col6 decl" id="46class" title='class' data-type='Class' data-ref="46class" data-ref-filename="46class">class</dfn>)</td></tr>
+<tr><th id="418">418</th><td>{</td></tr>
+<tr><th id="419">419</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col7 decl" id="47existing_class" title='existing_class' data-type='Class' data-ref="47existing_class" data-ref-filename="47existing_class">existing_class</dfn>;</td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_lock" title='objc_mutex_lock' data-ref="objc_mutex_lock" data-ref-filename="objc_mutex_lock">objc_mutex_lock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="422">422</th><td></td></tr>
+<tr><th id="423">423</th><td>  <i>/* Make sure the table is there.  */</i></td></tr>
+<tr><th id="424">424</th><td>  <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#58" title="((__class_table_lock) ? (void)0 : __assert13(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/gcc/lib/libobjc/../../../../../../../../../external/gpl3/gcc/dist/libobjc/class.c&quot;, 424, __func__, &quot;__class_table_lock&quot;))" data-ref="_M/assert">assert</a> (<a class="tu ref" href="#__class_table_lock" title='__class_table_lock' data-use='r' data-ref="__class_table_lock" data-ref-filename="__class_table_lock">__class_table_lock</a>);</td></tr>
+<tr><th id="425">425</th><td></td></tr>
+<tr><th id="426">426</th><td>  <i>/* Make sure it's not a meta class.  */</i></td></tr>
+<tr><th id="427">427</th><td>  <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#58" title="((((class)&amp;&amp;((((class)-&gt;info)&amp;0x1L)==0x1L))) ? (void)0 : __assert13(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/gcc/lib/libobjc/../../../../../../../../../external/gpl3/gcc/dist/libobjc/class.c&quot;, 427, __func__, &quot;CLS_ISCLASS (class)&quot;))" data-ref="_M/assert">assert</a> (<a class="macro" href="objc-private/module-abi-8.h.html#247" title="((class)&amp;&amp;((((class)-&gt;info)&amp;0x1L)==0x1L))" data-ref="_M/CLS_ISCLASS">CLS_ISCLASS</a> (<a class="local col6 ref" href="#46class" title='class' data-ref="46class" data-ref-filename="46class">class</a>));</td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td>  <i>/* Check to see if the class is already in the hash table.  */</i></td></tr>
+<tr><th id="430">430</th><td>  <a class="local col7 ref" href="#47existing_class" title='existing_class' data-ref="47existing_class" data-ref-filename="47existing_class">existing_class</a> = <a class="tu ref fn" href="#class_table_get_safe" title='class_table_get_safe' data-use='c' data-ref="class_table_get_safe" data-ref-filename="class_table_get_safe">class_table_get_safe</a> (<a class="local col6 ref" href="#46class" title='class' data-ref="46class" data-ref-filename="46class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>);</td></tr>
+<tr><th id="431">431</th><td></td></tr>
+<tr><th id="432">432</th><td>  <b>if</b> (<a class="local col7 ref" href="#47existing_class" title='existing_class' data-ref="47existing_class" data-ref-filename="47existing_class">existing_class</a>)</td></tr>
+<tr><th id="433">433</th><td>    {</td></tr>
+<tr><th id="434">434</th><td>      <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="435">435</th><td>      <b>return</b> <a class="macro" href="objc/objc.h.html#58" title="(BOOL)0" data-ref="_M/NO">NO</a>;      </td></tr>
+<tr><th id="436">436</th><td>    }</td></tr>
+<tr><th id="437">437</th><td>  <b>else</b></td></tr>
+<tr><th id="438">438</th><td>    {</td></tr>
+<tr><th id="439">439</th><td>      <i>/* The class isn't in the hash table.  Add the class and assign</i></td></tr>
+<tr><th id="440">440</th><td><i>         a class number.  */</i></td></tr>
+<tr><th id="441">441</th><td>      <em>static</em> <em>unsigned</em> <em>int</em> <dfn class="local col8 decl" id="48class_number" title='class_number' data-type='unsigned int' data-ref="48class_number" data-ref-filename="48class_number">class_number</dfn> = <var>1</var>;</td></tr>
+<tr><th id="442">442</th><td>      </td></tr>
+<tr><th id="443">443</th><td>      <a class="macro" href="objc-private/module-abi-8.h.html#274" title="({ (class)-&gt;info &lt;&lt;= ((sizeof(long)*8)/2); (class)-&gt;info &gt;&gt;= ((sizeof(long)*8)/2); (((class)-&gt;info) |= (((unsigned long)class_number) &lt;&lt; ((sizeof(long)*8)/2))); })" data-ref="_M/CLS_SETNUMBER">CLS_SETNUMBER</a> (<a class="local col6 ref" href="#46class" title='class' data-ref="46class" data-ref-filename="46class">class</a>, <a class="local col8 ref" href="#48class_number" title='class_number' data-ref="48class_number" data-ref-filename="48class_number">class_number</a>);</td></tr>
+<tr><th id="444">444</th><td>      <a class="macro" href="objc-private/module-abi-8.h.html#274" title="({ (class-&gt;class_pointer)-&gt;info &lt;&lt;= ((sizeof(long)*8)/2); (class-&gt;class_pointer)-&gt;info &gt;&gt;= ((sizeof(long)*8)/2); (((class-&gt;class_pointer)-&gt;info) |= (((unsigned long)class_number) &lt;&lt; ((sizeof(long)*8)/2))); })" data-ref="_M/CLS_SETNUMBER">CLS_SETNUMBER</a> (<a class="local col6 ref" href="#46class" title='class' data-ref="46class" data-ref-filename="46class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>, <a class="local col8 ref" href="#48class_number" title='class_number' data-ref="48class_number" data-ref-filename="48class_number">class_number</a>);</td></tr>
+<tr><th id="445">445</th><td></td></tr>
+<tr><th id="446">446</th><td>      ++<a class="local col8 ref" href="#48class_number" title='class_number' data-ref="48class_number" data-ref-filename="48class_number">class_number</a>;</td></tr>
+<tr><th id="447">447</th><td>      <a class="tu ref fn" href="#class_table_insert" title='class_table_insert' data-use='c' data-ref="class_table_insert" data-ref-filename="class_table_insert">class_table_insert</a> (<a class="local col6 ref" href="#46class" title='class' data-ref="46class" data-ref-filename="46class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>, <a class="local col6 ref" href="#46class" title='class' data-ref="46class" data-ref-filename="46class">class</a>);</td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td>      <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="450">450</th><td>      <b>return</b> <a class="macro" href="objc/objc.h.html#57" title="(BOOL)1" data-ref="_M/YES">YES</a>;</td></tr>
+<tr><th id="451">451</th><td>    }</td></tr>
+<tr><th id="452">452</th><td>}</td></tr>
+<tr><th id="453">453</th><td></td></tr>
+<tr><th id="454">454</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="455">455</th><td><dfn class="decl def fn" id="objc_getClass" title='objc_getClass' data-ref="objc_getClass" data-ref-filename="objc_getClass">objc_getClass</dfn> (<em>const</em> <em>char</em> *<dfn class="local col9 decl" id="49name" title='name' data-type='const char *' data-ref="49name" data-ref-filename="49name">name</dfn>)</td></tr>
+<tr><th id="456">456</th><td>{</td></tr>
+<tr><th id="457">457</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col0 decl" id="50class" title='class' data-type='Class' data-ref="50class" data-ref-filename="50class">class</dfn>;</td></tr>
+<tr><th id="458">458</th><td></td></tr>
+<tr><th id="459">459</th><td>  <b>if</b> (<a class="local col9 ref" href="#49name" title='name' data-ref="49name" data-ref-filename="49name">name</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="460">460</th><td>    <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="461">461</th><td></td></tr>
+<tr><th id="462">462</th><td>  <a class="local col0 ref" href="#50class" title='class' data-ref="50class" data-ref-filename="50class">class</a> = <a class="tu ref fn" href="#class_table_get_safe" title='class_table_get_safe' data-use='c' data-ref="class_table_get_safe" data-ref-filename="class_table_get_safe">class_table_get_safe</a> (<a class="local col9 ref" href="#49name" title='name' data-ref="49name" data-ref-filename="49name">name</a>);</td></tr>
+<tr><th id="463">463</th><td>  </td></tr>
+<tr><th id="464">464</th><td>  <b>if</b> (<a class="local col0 ref" href="#50class" title='class' data-ref="50class" data-ref-filename="50class">class</a>)</td></tr>
+<tr><th id="465">465</th><td>    <b>return</b> <a class="local col0 ref" href="#50class" title='class' data-ref="50class" data-ref-filename="50class">class</a>;</td></tr>
+<tr><th id="466">466</th><td></td></tr>
+<tr><th id="467">467</th><td>  <b>if</b> (<a class="tu ref" href="#__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-use='r' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</a>)</td></tr>
+<tr><th id="468">468</th><td>    <b>return</b> (*<a class="tu ref" href="#__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-use='r' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</a>) (<a class="local col9 ref" href="#49name" title='name' data-ref="49name" data-ref-filename="49name">name</a>);</td></tr>
+<tr><th id="469">469</th><td></td></tr>
+<tr><th id="470">470</th><td>  <b>if</b> (<a class="ref" href="#_objc_lookup_class" title='_objc_lookup_class' data-ref="_objc_lookup_class" data-ref-filename="_objc_lookup_class">_objc_lookup_class</a>)</td></tr>
+<tr><th id="471">471</th><td>    <b>return</b> (*<a class="ref" href="#_objc_lookup_class" title='_objc_lookup_class' data-ref="_objc_lookup_class" data-ref-filename="_objc_lookup_class">_objc_lookup_class</a>) (<a class="local col9 ref" href="#49name" title='name' data-ref="49name" data-ref-filename="49name">name</a>);</td></tr>
+<tr><th id="472">472</th><td></td></tr>
+<tr><th id="473">473</th><td>  <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="474">474</th><td>}</td></tr>
+<tr><th id="475">475</th><td></td></tr>
+<tr><th id="476">476</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="477">477</th><td><dfn class="decl def fn" id="objc_lookUpClass" title='objc_lookUpClass' data-ref="objc_lookUpClass" data-ref-filename="objc_lookUpClass">objc_lookUpClass</dfn> (<em>const</em> <em>char</em> *<dfn class="local col1 decl" id="51name" title='name' data-type='const char *' data-ref="51name" data-ref-filename="51name">name</dfn>)</td></tr>
+<tr><th id="478">478</th><td>{</td></tr>
+<tr><th id="479">479</th><td>  <b>if</b> (<a class="local col1 ref" href="#51name" title='name' data-ref="51name" data-ref-filename="51name">name</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="480">480</th><td>    <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="481">481</th><td>  <b>else</b></td></tr>
+<tr><th id="482">482</th><td>    <b>return</b> <a class="tu ref fn" href="#class_table_get_safe" title='class_table_get_safe' data-use='c' data-ref="class_table_get_safe" data-ref-filename="class_table_get_safe">class_table_get_safe</a> (<a class="local col1 ref" href="#51name" title='name' data-ref="51name" data-ref-filename="51name">name</a>);</td></tr>
+<tr><th id="483">483</th><td>}</td></tr>
+<tr><th id="484">484</th><td></td></tr>
+<tr><th id="485">485</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="486">486</th><td><dfn class="decl def fn" id="objc_getMetaClass" title='objc_getMetaClass' data-ref="objc_getMetaClass" data-ref-filename="objc_getMetaClass">objc_getMetaClass</dfn> (<em>const</em> <em>char</em> *<dfn class="local col2 decl" id="52name" title='name' data-type='const char *' data-ref="52name" data-ref-filename="52name">name</dfn>)</td></tr>
+<tr><th id="487">487</th><td>{</td></tr>
+<tr><th id="488">488</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col3 decl" id="53class" title='class' data-type='Class' data-ref="53class" data-ref-filename="53class">class</dfn> = <a class="ref fn" href="#objc_getClass" title='objc_getClass' data-ref="objc_getClass" data-ref-filename="objc_getClass">objc_getClass</a> (<a class="local col2 ref" href="#52name" title='name' data-ref="52name" data-ref-filename="52name">name</a>);</td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td>  <b>if</b> (<a class="local col3 ref" href="#53class" title='class' data-ref="53class" data-ref-filename="53class">class</a>)</td></tr>
+<tr><th id="491">491</th><td>    <b>return</b> <a class="local col3 ref" href="#53class" title='class' data-ref="53class" data-ref-filename="53class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="492">492</th><td>  <b>else</b></td></tr>
+<tr><th id="493">493</th><td>    <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="494">494</th><td>}</td></tr>
+<tr><th id="495">495</th><td></td></tr>
+<tr><th id="496">496</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="497">497</th><td><dfn class="decl def fn" id="objc_getRequiredClass" title='objc_getRequiredClass' data-ref="objc_getRequiredClass" data-ref-filename="objc_getRequiredClass">objc_getRequiredClass</dfn> (<em>const</em> <em>char</em> *<dfn class="local col4 decl" id="54name" title='name' data-type='const char *' data-ref="54name" data-ref-filename="54name">name</dfn>)</td></tr>
+<tr><th id="498">498</th><td>{</td></tr>
+<tr><th id="499">499</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col5 decl" id="55class" title='class' data-type='Class' data-ref="55class" data-ref-filename="55class">class</dfn> = <a class="ref fn" href="#objc_getClass" title='objc_getClass' data-ref="objc_getClass" data-ref-filename="objc_getClass">objc_getClass</a> (<a class="local col4 ref" href="#54name" title='name' data-ref="54name" data-ref-filename="54name">name</a>);</td></tr>
+<tr><th id="500">500</th><td></td></tr>
+<tr><th id="501">501</th><td>  <b>if</b> (<a class="local col5 ref" href="#55class" title='class' data-ref="55class" data-ref-filename="55class">class</a>)</td></tr>
+<tr><th id="502">502</th><td>    <b>return</b> <a class="local col5 ref" href="#55class" title='class' data-ref="55class" data-ref-filename="55class">class</a>;</td></tr>
+<tr><th id="503">503</th><td>  <b>else</b></td></tr>
+<tr><th id="504">504</th><td>    <a class="ref fn" href="objc-private/error.h.html#_objc_abort" title='_objc_abort' data-ref="_objc_abort" data-ref-filename="_objc_abort">_objc_abort</a> (<q>"objc_getRequiredClass ('%s') failed: class not found\n"</q>, <a class="local col4 ref" href="#54name" title='name' data-ref="54name" data-ref-filename="54name">name</a>);</td></tr>
+<tr><th id="505">505</th><td>}</td></tr>
+<tr><th id="506">506</th><td></td></tr>
+<tr><th id="507">507</th><td><em>int</em></td></tr>
+<tr><th id="508">508</th><td><dfn class="decl def fn" id="objc_getClassList" title='objc_getClassList' data-ref="objc_getClassList" data-ref-filename="objc_getClassList">objc_getClassList</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> *<dfn class="local col6 decl" id="56returnValue" title='returnValue' data-type='Class *' data-ref="56returnValue" data-ref-filename="56returnValue">returnValue</dfn>, <em>int</em> <dfn class="local col7 decl" id="57maxNumberOfClassesToReturn" title='maxNumberOfClassesToReturn' data-type='int' data-ref="57maxNumberOfClassesToReturn" data-ref-filename="57maxNumberOfClassesToReturn">maxNumberOfClassesToReturn</dfn>)</td></tr>
+<tr><th id="509">509</th><td>{</td></tr>
+<tr><th id="510">510</th><td>  <i>/* Iterate over all entries in the table.  */</i></td></tr>
+<tr><th id="511">511</th><td>  <em>int</em> <dfn class="local col8 decl" id="58hash" title='hash' data-type='int' data-ref="58hash" data-ref-filename="58hash">hash</dfn>, <dfn class="local col9 decl" id="59count" title='count' data-type='int' data-ref="59count" data-ref-filename="59count">count</dfn> = <var>0</var>;</td></tr>
+<tr><th id="512">512</th><td></td></tr>
+<tr><th id="513">513</th><td>  <b>for</b> (<a class="local col8 ref" href="#58hash" title='hash' data-ref="58hash" data-ref-filename="58hash">hash</a> = <var>0</var>; <a class="local col8 ref" href="#58hash" title='hash' data-ref="58hash" data-ref-filename="58hash">hash</a> &lt; <a class="macro" href="#133" title="1024" data-ref="_M/CLASS_TABLE_SIZE">CLASS_TABLE_SIZE</a>; <a class="local col8 ref" href="#58hash" title='hash' data-ref="58hash" data-ref-filename="58hash">hash</a>++)</td></tr>
+<tr><th id="514">514</th><td>    {</td></tr>
+<tr><th id="515">515</th><td>      <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="local col0 decl" id="60node" title='node' data-type='class_node_ptr' data-ref="60node" data-ref-filename="60node">node</dfn> = <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col8 ref" href="#58hash" title='hash' data-ref="58hash" data-ref-filename="58hash">hash</a>];</td></tr>
+<tr><th id="516">516</th><td>      </td></tr>
+<tr><th id="517">517</th><td>      <b>while</b> (<a class="local col0 ref" href="#60node" title='node' data-ref="60node" data-ref-filename="60node">node</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="518">518</th><td>	{</td></tr>
+<tr><th id="519">519</th><td>	  <b>if</b> (<a class="local col6 ref" href="#56returnValue" title='returnValue' data-ref="56returnValue" data-ref-filename="56returnValue">returnValue</a>)</td></tr>
+<tr><th id="520">520</th><td>	    {</td></tr>
+<tr><th id="521">521</th><td>	      <b>if</b> (<a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a> &lt; <a class="local col7 ref" href="#57maxNumberOfClassesToReturn" title='maxNumberOfClassesToReturn' data-ref="57maxNumberOfClassesToReturn" data-ref-filename="57maxNumberOfClassesToReturn">maxNumberOfClassesToReturn</a>)</td></tr>
+<tr><th id="522">522</th><td>		<a class="local col6 ref" href="#56returnValue" title='returnValue' data-ref="56returnValue" data-ref-filename="56returnValue">returnValue</a>[<a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a>] = <a class="local col0 ref" href="#60node" title='node' data-ref="60node" data-ref-filename="60node">node</a>-&gt;<a class="tu ref field" href="#class_node::pointer" title='class_node::pointer' data-use='r' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</a>;</td></tr>
+<tr><th id="523">523</th><td>	      <b>else</b></td></tr>
+<tr><th id="524">524</th><td>		<b>return</b> <a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a>;</td></tr>
+<tr><th id="525">525</th><td>	    }</td></tr>
+<tr><th id="526">526</th><td>	  <a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a>++;</td></tr>
+<tr><th id="527">527</th><td>	  <a class="local col0 ref" href="#60node" title='node' data-ref="60node" data-ref-filename="60node">node</a> = <a class="local col0 ref" href="#60node" title='node' data-ref="60node" data-ref-filename="60node">node</a>-&gt;<a class="tu ref field" href="#class_node::next" title='class_node::next' data-use='r' data-ref="class_node::next" data-ref-filename="class_node..next">next</a>;</td></tr>
+<tr><th id="528">528</th><td>	}</td></tr>
+<tr><th id="529">529</th><td>    }</td></tr>
+<tr><th id="530">530</th><td>  </td></tr>
+<tr><th id="531">531</th><td>  <b>return</b> <a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a>;</td></tr>
+<tr><th id="532">532</th><td>}</td></tr>
+<tr><th id="533">533</th><td></td></tr>
+<tr><th id="534">534</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="535">535</th><td><dfn class="decl def fn" id="objc_allocateClassPair" title='objc_allocateClassPair' data-ref="objc_allocateClassPair" data-ref-filename="objc_allocateClassPair">objc_allocateClassPair</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col1 decl" id="61super_class" title='super_class' data-type='Class' data-ref="61super_class" data-ref-filename="61super_class">super_class</dfn>, <em>const</em> <em>char</em> *<dfn class="local col2 decl" id="62class_name" title='class_name' data-type='const char *' data-ref="62class_name" data-ref-filename="62class_name">class_name</dfn>, <span class='typedef' title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</span> <dfn class="local col3 decl" id="63extraBytes" title='extraBytes' data-type='size_t' data-ref="63extraBytes" data-ref-filename="63extraBytes">extraBytes</dfn>)</td></tr>
+<tr><th id="536">536</th><td>{</td></tr>
+<tr><th id="537">537</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col4 decl" id="64new_class" title='new_class' data-type='Class' data-ref="64new_class" data-ref-filename="64new_class">new_class</dfn>;</td></tr>
+<tr><th id="538">538</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col5 decl" id="65new_meta_class" title='new_meta_class' data-type='Class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</dfn>;</td></tr>
+<tr><th id="539">539</th><td></td></tr>
+<tr><th id="540">540</th><td>  <b>if</b> (<a class="local col2 ref" href="#62class_name" title='class_name' data-ref="62class_name" data-ref-filename="62class_name">class_name</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="541">541</th><td>    <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="542">542</th><td></td></tr>
+<tr><th id="543">543</th><td>  <b>if</b> (<a class="ref fn" href="#objc_getClass" title='objc_getClass' data-ref="objc_getClass" data-ref-filename="objc_getClass">objc_getClass</a> (<a class="local col2 ref" href="#62class_name" title='class_name' data-ref="62class_name" data-ref-filename="62class_name">class_name</a>))</td></tr>
+<tr><th id="544">544</th><td>    <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="545">545</th><td></td></tr>
+<tr><th id="546">546</th><td>  <b>if</b> (<a class="local col1 ref" href="#61super_class" title='super_class' data-ref="61super_class" data-ref-filename="61super_class">super_class</a>)</td></tr>
+<tr><th id="547">547</th><td>    {</td></tr>
+<tr><th id="548">548</th><td>      <i>/* If you want to build a hierarchy of classes, you need to</i></td></tr>
+<tr><th id="549">549</th><td><i>	 build and register them one at a time.  The risk is that you</i></td></tr>
+<tr><th id="550">550</th><td><i>	 are able to cause confusion by registering a subclass before</i></td></tr>
+<tr><th id="551">551</th><td><i>	 the superclass or similar.  */</i></td></tr>
+<tr><th id="552">552</th><td>      <b>if</b> (<a class="macro" href="objc-private/module-abi-8.h.html#267" title="((((super_class)-&gt;info)&amp;0x10L)==0x10L)" data-ref="_M/CLS_IS_IN_CONSTRUCTION">CLS_IS_IN_CONSTRUCTION</a> (<a class="local col1 ref" href="#61super_class" title='super_class' data-ref="61super_class" data-ref-filename="61super_class">super_class</a>))</td></tr>
+<tr><th id="553">553</th><td>	<b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="554">554</th><td>    }</td></tr>
+<tr><th id="555">555</th><td></td></tr>
+<tr><th id="556">556</th><td>  <i>/* Technically, we should create the metaclass first, then use</i></td></tr>
+<tr><th id="557">557</th><td><i>     class_createInstance() to create the class.  That complication</i></td></tr>
+<tr><th id="558">558</th><td><i>     would be relevant if we had class variables, but we don't, so we</i></td></tr>
+<tr><th id="559">559</th><td><i>     just ignore it and create everything directly and assume all</i></td></tr>
+<tr><th id="560">560</th><td><i>     classes have the same size.  */</i></td></tr>
+<tr><th id="561">561</th><td>  <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a> = <a class="ref fn" href="objc/runtime.h.html#objc_calloc" title='objc_calloc' data-ref="objc_calloc" data-ref-filename="objc_calloc">objc_calloc</a> (<var>1</var>, <b>sizeof</b> (<b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_class" title='objc_class' data-ref="objc_class" data-ref-filename="objc_class">objc_class</a>) + <a class="local col3 ref" href="#63extraBytes" title='extraBytes' data-ref="63extraBytes" data-ref-filename="63extraBytes">extraBytes</a>);</td></tr>
+<tr><th id="562">562</th><td>  <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a> = <a class="ref fn" href="objc/runtime.h.html#objc_calloc" title='objc_calloc' data-ref="objc_calloc" data-ref-filename="objc_calloc">objc_calloc</a> (<var>1</var>, <b>sizeof</b> (<b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_class" title='objc_class' data-ref="objc_class" data-ref-filename="objc_class">objc_class</a>) + <a class="local col3 ref" href="#63extraBytes" title='extraBytes' data-ref="63extraBytes" data-ref-filename="63extraBytes">extraBytes</a>);</td></tr>
+<tr><th id="563">563</th><td></td></tr>
+<tr><th id="564">564</th><td>  <i>/* We create an unresolved class, similar to one generated by the</i></td></tr>
+<tr><th id="565">565</th><td><i>     compiler.  It will be resolved later when we register it.</i></td></tr>
+<tr><th id="566">566</th><td><i></i></td></tr>
+<tr><th id="567">567</th><td><i>     Note how the metaclass details are not that important; when the</i></td></tr>
+<tr><th id="568">568</th><td><i>     class is resolved, the ones that matter will be fixed up.  */</i></td></tr>
+<tr><th id="569">569</th><td>  <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a> = <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>;</td></tr>
+<tr><th id="570">570</th><td>  <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a> = <var>0</var>;</td></tr>
+<tr><th id="571">571</th><td></td></tr>
+<tr><th id="572">572</th><td>  <b>if</b> (<a class="local col1 ref" href="#61super_class" title='super_class' data-ref="61super_class" data-ref-filename="61super_class">super_class</a>)</td></tr>
+<tr><th id="573">573</th><td>    {</td></tr>
+<tr><th id="574">574</th><td>      <i>/* Force the name of the superclass in place of the link to the</i></td></tr>
+<tr><th id="575">575</th><td><i>	 actual superclass, which will be put there when the class is</i></td></tr>
+<tr><th id="576">576</th><td><i>	 resolved.  */</i></td></tr>
+<tr><th id="577">577</th><td>      <em>const</em> <em>char</em> *<dfn class="local col6 decl" id="66super_class_name" title='super_class_name' data-type='const char *' data-ref="66super_class_name" data-ref-filename="66super_class_name">super_class_name</dfn> = <a class="ref fn" href="#class_getName" title='class_getName' data-ref="class_getName" data-ref-filename="class_getName">class_getName</a> (<a class="local col1 ref" href="#61super_class" title='super_class' data-ref="61super_class" data-ref-filename="61super_class">super_class</a>);</td></tr>
+<tr><th id="578">578</th><td>      <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a> = (<em>void</em> *)<a class="local col6 ref" href="#66super_class_name" title='super_class_name' data-ref="66super_class_name" data-ref-filename="66super_class_name">super_class_name</a>;</td></tr>
+<tr><th id="579">579</th><td>      <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a> = (<em>void</em> *)<a class="local col6 ref" href="#66super_class_name" title='super_class_name' data-ref="66super_class_name" data-ref-filename="66super_class_name">super_class_name</a>;</td></tr>
+<tr><th id="580">580</th><td>    }</td></tr>
+<tr><th id="581">581</th><td>  <b>else</b></td></tr>
+<tr><th id="582">582</th><td>    {</td></tr>
+<tr><th id="583">583</th><td>      <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a> = (<em>void</em> *)<var>0</var>;</td></tr>
+<tr><th id="584">584</th><td>      <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a> = (<em>void</em> *)<var>0</var>;</td></tr>
+<tr><th id="585">585</th><td>    }</td></tr>
+<tr><th id="586">586</th><td></td></tr>
+<tr><th id="587">587</th><td>  <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a> = <a class="ref fn" href="objc/runtime.h.html#objc_malloc" title='objc_malloc' data-ref="objc_malloc" data-ref-filename="objc_malloc">objc_malloc</a> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a> (<a class="local col2 ref" href="#62class_name" title='class_name' data-ref="62class_name" data-ref-filename="62class_name">class_name</a>) + <var>1</var>);</td></tr>
+<tr><th id="588">588</th><td>  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcpy" title='strcpy' data-ref="strcpy" data-ref-filename="strcpy">strcpy</a> ((<em>char</em>*)<a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>, <a class="local col2 ref" href="#62class_name" title='class_name' data-ref="62class_name" data-ref-filename="62class_name">class_name</a>);</td></tr>
+<tr><th id="589">589</th><td>  <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a> = <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>;</td></tr>
+<tr><th id="590">590</th><td></td></tr>
+<tr><th id="591">591</th><td>  <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::version" title='objc_class::version' data-ref="objc_class::version" data-ref-filename="objc_class..version">version</a> = <var>0</var>;</td></tr>
+<tr><th id="592">592</th><td>  <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::version" title='objc_class::version' data-ref="objc_class::version" data-ref-filename="objc_class..version">version</a> = <var>0</var>;</td></tr>
+<tr><th id="593">593</th><td></td></tr>
+<tr><th id="594">594</th><td>  <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::info" title='objc_class::info' data-ref="objc_class::info" data-ref-filename="objc_class..info">info</a> = <a class="macro" href="objc-private/module-abi-8.h.html#246" title="0x1L" data-ref="_M/_CLS_CLASS">_CLS_CLASS</a> | <a class="macro" href="objc-private/module-abi-8.h.html#266" title="0x10L" data-ref="_M/_CLS_IN_CONSTRUCTION">_CLS_IN_CONSTRUCTION</a>;</td></tr>
+<tr><th id="595">595</th><td>  <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::info" title='objc_class::info' data-ref="objc_class::info" data-ref-filename="objc_class..info">info</a> = <a class="macro" href="objc-private/module-abi-8.h.html#242" title="0x2L" data-ref="_M/_CLS_META">_CLS_META</a> | <a class="macro" href="objc-private/module-abi-8.h.html#266" title="0x10L" data-ref="_M/_CLS_IN_CONSTRUCTION">_CLS_IN_CONSTRUCTION</a>;</td></tr>
+<tr><th id="596">596</th><td></td></tr>
+<tr><th id="597">597</th><td>  <b>if</b> (<a class="local col1 ref" href="#61super_class" title='super_class' data-ref="61super_class" data-ref-filename="61super_class">super_class</a>)</td></tr>
+<tr><th id="598">598</th><td>    <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::instance_size" title='objc_class::instance_size' data-ref="objc_class::instance_size" data-ref-filename="objc_class..instance_size">instance_size</a> = <a class="local col1 ref" href="#61super_class" title='super_class' data-ref="61super_class" data-ref-filename="61super_class">super_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::instance_size" title='objc_class::instance_size' data-ref="objc_class::instance_size" data-ref-filename="objc_class..instance_size">instance_size</a>;</td></tr>
+<tr><th id="599">599</th><td>  <b>else</b></td></tr>
+<tr><th id="600">600</th><td>    <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::instance_size" title='objc_class::instance_size' data-ref="objc_class::instance_size" data-ref-filename="objc_class..instance_size">instance_size</a> = <var>0</var>;</td></tr>
+<tr><th id="601">601</th><td>  <a class="local col5 ref" href="#65new_meta_class" title='new_meta_class' data-ref="65new_meta_class" data-ref-filename="65new_meta_class">new_meta_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::instance_size" title='objc_class::instance_size' data-ref="objc_class::instance_size" data-ref-filename="objc_class..instance_size">instance_size</a> = <b>sizeof</b> (<b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_class" title='objc_class' data-ref="objc_class" data-ref-filename="objc_class">objc_class</a>);</td></tr>
+<tr><th id="602">602</th><td></td></tr>
+<tr><th id="603">603</th><td>  <b>return</b> <a class="local col4 ref" href="#64new_class" title='new_class' data-ref="64new_class" data-ref-filename="64new_class">new_class</a>;</td></tr>
+<tr><th id="604">604</th><td>}</td></tr>
+<tr><th id="605">605</th><td></td></tr>
+<tr><th id="606">606</th><td><em>void</em></td></tr>
+<tr><th id="607">607</th><td><dfn class="decl def fn" id="objc_registerClassPair" title='objc_registerClassPair' data-ref="objc_registerClassPair" data-ref-filename="objc_registerClassPair">objc_registerClassPair</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col7 decl" id="67class_" title='class_' data-type='Class' data-ref="67class_" data-ref-filename="67class_">class_</dfn>)</td></tr>
+<tr><th id="608">608</th><td>{</td></tr>
+<tr><th id="609">609</th><td>  <b>if</b> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="610">610</th><td>    <b>return</b>;</td></tr>
+<tr><th id="611">611</th><td></td></tr>
+<tr><th id="612">612</th><td>  <b>if</b> ((! <a class="macro" href="objc-private/module-abi-8.h.html#247" title="((class_)&amp;&amp;((((class_)-&gt;info)&amp;0x1L)==0x1L))" data-ref="_M/CLS_ISCLASS">CLS_ISCLASS</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>)) || (! <a class="macro" href="objc-private/module-abi-8.h.html#267" title="((((class_)-&gt;info)&amp;0x10L)==0x10L)" data-ref="_M/CLS_IS_IN_CONSTRUCTION">CLS_IS_IN_CONSTRUCTION</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>)))</td></tr>
+<tr><th id="613">613</th><td>    <b>return</b>;</td></tr>
+<tr><th id="614">614</th><td></td></tr>
+<tr><th id="615">615</th><td>  <b>if</b> ((! <a class="macro" href="objc-private/module-abi-8.h.html#243" title="((class_-&gt;class_pointer)&amp;&amp;((((class_-&gt;class_pointer)-&gt;info)&amp;0x2L)==0x2L))" data-ref="_M/CLS_ISMETA">CLS_ISMETA</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>)) || (! <a class="macro" href="objc-private/module-abi-8.h.html#267" title="((((class_-&gt;class_pointer)-&gt;info)&amp;0x10L)==0x10L)" data-ref="_M/CLS_IS_IN_CONSTRUCTION">CLS_IS_IN_CONSTRUCTION</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>)))</td></tr>
+<tr><th id="616">616</th><td>    <b>return</b>;</td></tr>
+<tr><th id="617">617</th><td></td></tr>
+<tr><th id="618">618</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_lock" title='objc_mutex_lock' data-ref="objc_mutex_lock" data-ref-filename="objc_mutex_lock">objc_mutex_lock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="619">619</th><td></td></tr>
+<tr><th id="620">620</th><td>  <b>if</b> (<a class="ref fn" href="#objc_getClass" title='objc_getClass' data-ref="objc_getClass" data-ref-filename="objc_getClass">objc_getClass</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>))</td></tr>
+<tr><th id="621">621</th><td>    {</td></tr>
+<tr><th id="622">622</th><td>      <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="623">623</th><td>      <b>return</b>;</td></tr>
+<tr><th id="624">624</th><td>    }</td></tr>
+<tr><th id="625">625</th><td></td></tr>
+<tr><th id="626">626</th><td>  <a class="macro" href="objc-private/module-abi-8.h.html#269" title="(((class_)-&gt;info) &amp;= ~0x10L)" data-ref="_M/CLS_SET_NOT_IN_CONSTRUCTION">CLS_SET_NOT_IN_CONSTRUCTION</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>);</td></tr>
+<tr><th id="627">627</th><td>  <a class="macro" href="objc-private/module-abi-8.h.html#269" title="(((class_-&gt;class_pointer)-&gt;info) &amp;= ~0x10L)" data-ref="_M/CLS_SET_NOT_IN_CONSTRUCTION">CLS_SET_NOT_IN_CONSTRUCTION</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>);</td></tr>
+<tr><th id="628">628</th><td></td></tr>
+<tr><th id="629">629</th><td>  <a class="ref fn" href="objc-private/runtime.h.html#__objc_init_class" title='__objc_init_class' data-ref="__objc_init_class" data-ref-filename="__objc_init_class">__objc_init_class</a> (<a class="local col7 ref" href="#67class_" title='class_' data-ref="67class_" data-ref-filename="67class_">class_</a>);</td></tr>
+<tr><th id="630">630</th><td></td></tr>
+<tr><th id="631">631</th><td>  <i>/* Resolve class links immediately.  No point in waiting.  */</i></td></tr>
+<tr><th id="632">632</th><td>  <a class="ref fn" href="#__objc_resolve_class_links" title='__objc_resolve_class_links' data-ref="__objc_resolve_class_links" data-ref-filename="__objc_resolve_class_links">__objc_resolve_class_links</a> ();</td></tr>
+<tr><th id="633">633</th><td></td></tr>
+<tr><th id="634">634</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="635">635</th><td>}</td></tr>
+<tr><th id="636">636</th><td></td></tr>
+<tr><th id="637">637</th><td><em>void</em></td></tr>
+<tr><th id="638">638</th><td><dfn class="decl def fn" id="objc_disposeClassPair" title='objc_disposeClassPair' data-ref="objc_disposeClassPair" data-ref-filename="objc_disposeClassPair">objc_disposeClassPair</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col8 decl" id="68class_" title='class_' data-type='Class' data-ref="68class_" data-ref-filename="68class_">class_</dfn>)</td></tr>
+<tr><th id="639">639</th><td>{</td></tr>
+<tr><th id="640">640</th><td>  <b>if</b> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="641">641</th><td>    <b>return</b>;</td></tr>
+<tr><th id="642">642</th><td></td></tr>
+<tr><th id="643">643</th><td>  <b>if</b> ((! <a class="macro" href="objc-private/module-abi-8.h.html#247" title="((class_)&amp;&amp;((((class_)-&gt;info)&amp;0x1L)==0x1L))" data-ref="_M/CLS_ISCLASS">CLS_ISCLASS</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>)) || (! <a class="macro" href="objc-private/module-abi-8.h.html#267" title="((((class_)-&gt;info)&amp;0x10L)==0x10L)" data-ref="_M/CLS_IS_IN_CONSTRUCTION">CLS_IS_IN_CONSTRUCTION</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>)))</td></tr>
+<tr><th id="644">644</th><td>    <b>return</b>;</td></tr>
+<tr><th id="645">645</th><td></td></tr>
+<tr><th id="646">646</th><td>  <b>if</b> ((! <a class="macro" href="objc-private/module-abi-8.h.html#243" title="((class_-&gt;class_pointer)&amp;&amp;((((class_-&gt;class_pointer)-&gt;info)&amp;0x2L)==0x2L))" data-ref="_M/CLS_ISMETA">CLS_ISMETA</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>)) || (! <a class="macro" href="objc-private/module-abi-8.h.html#267" title="((((class_-&gt;class_pointer)-&gt;info)&amp;0x10L)==0x10L)" data-ref="_M/CLS_IS_IN_CONSTRUCTION">CLS_IS_IN_CONSTRUCTION</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>)))</td></tr>
+<tr><th id="647">647</th><td>    <b>return</b>;</td></tr>
+<tr><th id="648">648</th><td></td></tr>
+<tr><th id="649">649</th><td>  <i>/* Undo any class_addIvar().  */</i></td></tr>
+<tr><th id="650">650</th><td>  <b>if</b> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::ivars" title='objc_class::ivars' data-ref="objc_class::ivars" data-ref-filename="objc_class..ivars">ivars</a>)</td></tr>
+<tr><th id="651">651</th><td>    {</td></tr>
+<tr><th id="652">652</th><td>      <em>int</em> <dfn class="local col9 decl" id="69i" title='i' data-type='int' data-ref="69i" data-ref-filename="69i">i</dfn>;</td></tr>
+<tr><th id="653">653</th><td>      <b>for</b> (<a class="local col9 ref" href="#69i" title='i' data-ref="69i" data-ref-filename="69i">i</a> = <var>0</var>; <a class="local col9 ref" href="#69i" title='i' data-ref="69i" data-ref-filename="69i">i</a> &lt; <a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::ivars" title='objc_class::ivars' data-ref="objc_class::ivars" data-ref-filename="objc_class..ivars">ivars</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_ivar_list::ivar_count" title='objc_ivar_list::ivar_count' data-ref="objc_ivar_list::ivar_count" data-ref-filename="objc_ivar_list..ivar_count">ivar_count</a>; <a class="local col9 ref" href="#69i" title='i' data-ref="69i" data-ref-filename="69i">i</a>++)</td></tr>
+<tr><th id="654">654</th><td>	{</td></tr>
+<tr><th id="655">655</th><td>	  <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_ivar" title='objc_ivar' data-ref="objc_ivar" data-ref-filename="objc_ivar">objc_ivar</a> *<dfn class="local col0 decl" id="70ivar" title='ivar' data-type='struct objc_ivar *' data-ref="70ivar" data-ref-filename="70ivar">ivar</dfn> = &amp;(<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::ivars" title='objc_class::ivars' data-ref="objc_class::ivars" data-ref-filename="objc_class..ivars">ivars</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_ivar_list::ivar_list" title='objc_ivar_list::ivar_list' data-ref="objc_ivar_list::ivar_list" data-ref-filename="objc_ivar_list..ivar_list">ivar_list</a>[<a class="local col9 ref" href="#69i" title='i' data-ref="69i" data-ref-filename="69i">i</a>]);</td></tr>
+<tr><th id="656">656</th><td></td></tr>
+<tr><th id="657">657</th><td>	  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)<a class="local col0 ref" href="#70ivar" title='ivar' data-ref="70ivar" data-ref-filename="70ivar">ivar</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_ivar::ivar_name" title='objc_ivar::ivar_name' data-ref="objc_ivar::ivar_name" data-ref-filename="objc_ivar..ivar_name">ivar_name</a>);</td></tr>
+<tr><th id="658">658</th><td>	  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)<a class="local col0 ref" href="#70ivar" title='ivar' data-ref="70ivar" data-ref-filename="70ivar">ivar</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_ivar::ivar_type" title='objc_ivar::ivar_type' data-ref="objc_ivar::ivar_type" data-ref-filename="objc_ivar..ivar_type">ivar_type</a>);</td></tr>
+<tr><th id="659">659</th><td>	}</td></tr>
+<tr><th id="660">660</th><td>      </td></tr>
+<tr><th id="661">661</th><td>      <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::ivars" title='objc_class::ivars' data-ref="objc_class::ivars" data-ref-filename="objc_class..ivars">ivars</a>);</td></tr>
+<tr><th id="662">662</th><td>    }</td></tr>
+<tr><th id="663">663</th><td></td></tr>
+<tr><th id="664">664</th><td>  <i>/* Undo any class_addMethod().  */</i></td></tr>
+<tr><th id="665">665</th><td>  <b>if</b> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::methods" title='objc_class::methods' data-ref="objc_class::methods" data-ref-filename="objc_class..methods">methods</a>)</td></tr>
+<tr><th id="666">666</th><td>    {</td></tr>
+<tr><th id="667">667</th><td>      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method_list" title='objc_method_list' data-ref="objc_method_list" data-ref-filename="objc_method_list">objc_method_list</a> *<dfn class="local col1 decl" id="71list" title='list' data-type='struct objc_method_list *' data-ref="71list" data-ref-filename="71list">list</dfn> = <a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::methods" title='objc_class::methods' data-ref="objc_class::methods" data-ref-filename="objc_class..methods">methods</a>;</td></tr>
+<tr><th id="668">668</th><td>      <b>while</b> (<a class="local col1 ref" href="#71list" title='list' data-ref="71list" data-ref-filename="71list">list</a>)</td></tr>
+<tr><th id="669">669</th><td>	{</td></tr>
+<tr><th id="670">670</th><td>	  <em>int</em> <dfn class="local col2 decl" id="72i" title='i' data-type='int' data-ref="72i" data-ref-filename="72i">i</dfn>;</td></tr>
+<tr><th id="671">671</th><td>	  <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method_list" title='objc_method_list' data-ref="objc_method_list" data-ref-filename="objc_method_list">objc_method_list</a> *<dfn class="local col3 decl" id="73next" title='next' data-type='struct objc_method_list *' data-ref="73next" data-ref-filename="73next">next</dfn> = <a class="local col1 ref" href="#71list" title='list' data-ref="71list" data-ref-filename="71list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_next" title='objc_method_list::method_next' data-ref="objc_method_list::method_next" data-ref-filename="objc_method_list..method_next">method_next</a>;</td></tr>
+<tr><th id="672">672</th><td></td></tr>
+<tr><th id="673">673</th><td>	  <b>for</b> (<a class="local col2 ref" href="#72i" title='i' data-ref="72i" data-ref-filename="72i">i</a> = <var>0</var>; <a class="local col2 ref" href="#72i" title='i' data-ref="72i" data-ref-filename="72i">i</a> &lt; <a class="local col1 ref" href="#71list" title='list' data-ref="71list" data-ref-filename="71list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_count" title='objc_method_list::method_count' data-ref="objc_method_list::method_count" data-ref-filename="objc_method_list..method_count">method_count</a>; <a class="local col2 ref" href="#72i" title='i' data-ref="72i" data-ref-filename="72i">i</a>++)</td></tr>
+<tr><th id="674">674</th><td>	    {</td></tr>
+<tr><th id="675">675</th><td>	      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method" title='objc_method' data-ref="objc_method" data-ref-filename="objc_method">objc_method</a> *<dfn class="local col4 decl" id="74method" title='method' data-type='struct objc_method *' data-ref="74method" data-ref-filename="74method">method</dfn> = &amp;(<a class="local col1 ref" href="#71list" title='list' data-ref="71list" data-ref-filename="71list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_list" title='objc_method_list::method_list' data-ref="objc_method_list::method_list" data-ref-filename="objc_method_list..method_list">method_list</a>[<a class="local col2 ref" href="#72i" title='i' data-ref="72i" data-ref-filename="72i">i</a>]);</td></tr>
+<tr><th id="676">676</th><td></td></tr>
+<tr><th id="677">677</th><td>	      <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)<a class="local col4 ref" href="#74method" title='method' data-ref="74method" data-ref-filename="74method">method</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_name" title='objc_method::method_name' data-ref="objc_method::method_name" data-ref-filename="objc_method..method_name">method_name</a>);</td></tr>
+<tr><th id="678">678</th><td>	      <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)<a class="local col4 ref" href="#74method" title='method' data-ref="74method" data-ref-filename="74method">method</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_types" title='objc_method::method_types' data-ref="objc_method::method_types" data-ref-filename="objc_method..method_types">method_types</a>);</td></tr>
+<tr><th id="679">679</th><td>	    }</td></tr>
+<tr><th id="680">680</th><td></td></tr>
+<tr><th id="681">681</th><td>	  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col1 ref" href="#71list" title='list' data-ref="71list" data-ref-filename="71list">list</a>);</td></tr>
+<tr><th id="682">682</th><td>	  <a class="local col1 ref" href="#71list" title='list' data-ref="71list" data-ref-filename="71list">list</a> = <a class="local col3 ref" href="#73next" title='next' data-ref="73next" data-ref-filename="73next">next</a>;</td></tr>
+<tr><th id="683">683</th><td>	}</td></tr>
+<tr><th id="684">684</th><td>    }</td></tr>
+<tr><th id="685">685</th><td></td></tr>
+<tr><th id="686">686</th><td>  <i>/* Undo any class_addProtocol().  */</i></td></tr>
+<tr><th id="687">687</th><td>  <b>if</b> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::protocols" title='objc_class::protocols' data-ref="objc_class::protocols" data-ref-filename="objc_class..protocols">protocols</a>)</td></tr>
+<tr><th id="688">688</th><td>    {</td></tr>
+<tr><th id="689">689</th><td>      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_protocol_list" title='objc_protocol_list' data-ref="objc_protocol_list" data-ref-filename="objc_protocol_list">objc_protocol_list</a> *<dfn class="local col5 decl" id="75list" title='list' data-type='struct objc_protocol_list *' data-ref="75list" data-ref-filename="75list">list</dfn> = <a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::protocols" title='objc_class::protocols' data-ref="objc_class::protocols" data-ref-filename="objc_class..protocols">protocols</a>;</td></tr>
+<tr><th id="690">690</th><td>      <b>while</b> (<a class="local col5 ref" href="#75list" title='list' data-ref="75list" data-ref-filename="75list">list</a>)</td></tr>
+<tr><th id="691">691</th><td>	{</td></tr>
+<tr><th id="692">692</th><td>	  <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_protocol_list" title='objc_protocol_list' data-ref="objc_protocol_list" data-ref-filename="objc_protocol_list">objc_protocol_list</a> *<dfn class="local col6 decl" id="76next" title='next' data-type='struct objc_protocol_list *' data-ref="76next" data-ref-filename="76next">next</dfn> = <a class="local col5 ref" href="#75list" title='list' data-ref="75list" data-ref-filename="75list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_protocol_list::next" title='objc_protocol_list::next' data-ref="objc_protocol_list::next" data-ref-filename="objc_protocol_list..next">next</a>;</td></tr>
+<tr><th id="693">693</th><td></td></tr>
+<tr><th id="694">694</th><td>	  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col5 ref" href="#75list" title='list' data-ref="75list" data-ref-filename="75list">list</a>);</td></tr>
+<tr><th id="695">695</th><td>	  <a class="local col5 ref" href="#75list" title='list' data-ref="75list" data-ref-filename="75list">list</a> = <a class="local col6 ref" href="#76next" title='next' data-ref="76next" data-ref-filename="76next">next</a>;</td></tr>
+<tr><th id="696">696</th><td>	}</td></tr>
+<tr><th id="697">697</th><td>    }</td></tr>
+<tr><th id="698">698</th><td>  </td></tr>
+<tr><th id="699">699</th><td>  <i>/* Undo any class_addMethod() on the meta-class.  */</i></td></tr>
+<tr><th id="700">700</th><td>  <b>if</b> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::methods" title='objc_class::methods' data-ref="objc_class::methods" data-ref-filename="objc_class..methods">methods</a>)</td></tr>
+<tr><th id="701">701</th><td>    {</td></tr>
+<tr><th id="702">702</th><td>      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method_list" title='objc_method_list' data-ref="objc_method_list" data-ref-filename="objc_method_list">objc_method_list</a> *<dfn class="local col7 decl" id="77list" title='list' data-type='struct objc_method_list *' data-ref="77list" data-ref-filename="77list">list</dfn> = <a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::methods" title='objc_class::methods' data-ref="objc_class::methods" data-ref-filename="objc_class..methods">methods</a>;</td></tr>
+<tr><th id="703">703</th><td>      <b>while</b> (<a class="local col7 ref" href="#77list" title='list' data-ref="77list" data-ref-filename="77list">list</a>)</td></tr>
+<tr><th id="704">704</th><td>	{</td></tr>
+<tr><th id="705">705</th><td>	  <em>int</em> <dfn class="local col8 decl" id="78i" title='i' data-type='int' data-ref="78i" data-ref-filename="78i">i</dfn>;</td></tr>
+<tr><th id="706">706</th><td>	  <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method_list" title='objc_method_list' data-ref="objc_method_list" data-ref-filename="objc_method_list">objc_method_list</a> *<dfn class="local col9 decl" id="79next" title='next' data-type='struct objc_method_list *' data-ref="79next" data-ref-filename="79next">next</dfn> = <a class="local col7 ref" href="#77list" title='list' data-ref="77list" data-ref-filename="77list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_next" title='objc_method_list::method_next' data-ref="objc_method_list::method_next" data-ref-filename="objc_method_list..method_next">method_next</a>;</td></tr>
+<tr><th id="707">707</th><td></td></tr>
+<tr><th id="708">708</th><td>	  <b>for</b> (<a class="local col8 ref" href="#78i" title='i' data-ref="78i" data-ref-filename="78i">i</a> = <var>0</var>; <a class="local col8 ref" href="#78i" title='i' data-ref="78i" data-ref-filename="78i">i</a> &lt; <a class="local col7 ref" href="#77list" title='list' data-ref="77list" data-ref-filename="77list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_count" title='objc_method_list::method_count' data-ref="objc_method_list::method_count" data-ref-filename="objc_method_list..method_count">method_count</a>; <a class="local col8 ref" href="#78i" title='i' data-ref="78i" data-ref-filename="78i">i</a>++)</td></tr>
+<tr><th id="709">709</th><td>	    {</td></tr>
+<tr><th id="710">710</th><td>	      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method" title='objc_method' data-ref="objc_method" data-ref-filename="objc_method">objc_method</a> *<dfn class="local col0 decl" id="80method" title='method' data-type='struct objc_method *' data-ref="80method" data-ref-filename="80method">method</dfn> = &amp;(<a class="local col7 ref" href="#77list" title='list' data-ref="77list" data-ref-filename="77list">list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_list" title='objc_method_list::method_list' data-ref="objc_method_list::method_list" data-ref-filename="objc_method_list..method_list">method_list</a>[<a class="local col8 ref" href="#78i" title='i' data-ref="78i" data-ref-filename="78i">i</a>]);</td></tr>
+<tr><th id="711">711</th><td></td></tr>
+<tr><th id="712">712</th><td>	      <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)<a class="local col0 ref" href="#80method" title='method' data-ref="80method" data-ref-filename="80method">method</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_name" title='objc_method::method_name' data-ref="objc_method::method_name" data-ref-filename="objc_method..method_name">method_name</a>);</td></tr>
+<tr><th id="713">713</th><td>	      <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)<a class="local col0 ref" href="#80method" title='method' data-ref="80method" data-ref-filename="80method">method</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_types" title='objc_method::method_types' data-ref="objc_method::method_types" data-ref-filename="objc_method..method_types">method_types</a>);</td></tr>
+<tr><th id="714">714</th><td>	    }</td></tr>
+<tr><th id="715">715</th><td></td></tr>
+<tr><th id="716">716</th><td>	  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col7 ref" href="#77list" title='list' data-ref="77list" data-ref-filename="77list">list</a>);</td></tr>
+<tr><th id="717">717</th><td>	  <a class="local col7 ref" href="#77list" title='list' data-ref="77list" data-ref-filename="77list">list</a> = <a class="local col9 ref" href="#79next" title='next' data-ref="79next" data-ref-filename="79next">next</a>;</td></tr>
+<tr><th id="718">718</th><td>	}</td></tr>
+<tr><th id="719">719</th><td>    }</td></tr>
+<tr><th id="720">720</th><td></td></tr>
+<tr><th id="721">721</th><td>  <i>/* Undo objc_allocateClassPair().  */</i></td></tr>
+<tr><th id="722">722</th><td>  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> ((<em>char</em> *)(<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>));</td></tr>
+<tr><th id="723">723</th><td>  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>);</td></tr>
+<tr><th id="724">724</th><td>  <a class="ref fn" href="objc/runtime.h.html#objc_free" title='objc_free' data-ref="objc_free" data-ref-filename="objc_free">objc_free</a> (<a class="local col8 ref" href="#68class_" title='class_' data-ref="68class_" data-ref-filename="68class_">class_</a>);</td></tr>
+<tr><th id="725">725</th><td>}</td></tr>
+<tr><th id="726">726</th><td></td></tr>
+<tr><th id="727">727</th><td><i>/* Traditional GNU Objective-C Runtime API.  Important: this method is</i></td></tr>
+<tr><th id="728">728</th><td><i>   called automatically by the compiler while messaging (if using the</i></td></tr>
+<tr><th id="729">729</th><td><i>   traditional ABI), so it is worth keeping it fast; don't make it</i></td></tr>
+<tr><th id="730">730</th><td><i>   just a wrapper around objc_getClass().  */</i></td></tr>
+<tr><th id="731">731</th><td><i>/* Note that this is roughly equivalent to objc_getRequiredClass().  */</i></td></tr>
+<tr><th id="732">732</th><td><i>/* Get the class object for the class named NAME.  If NAME does not</i></td></tr>
+<tr><th id="733">733</th><td><i>   identify a known class, the hook _objc_lookup_class is called.  If</i></td></tr>
+<tr><th id="734">734</th><td><i>   this fails, an error message is issued and the system aborts.  */</i></td></tr>
+<tr><th id="735">735</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="736">736</th><td><dfn class="decl def fn" id="objc_get_class" title='objc_get_class' data-ref="objc_get_class" data-ref-filename="objc_get_class">objc_get_class</dfn> (<em>const</em> <em>char</em> *<dfn class="local col1 decl" id="81name" title='name' data-type='const char *' data-ref="81name" data-ref-filename="81name">name</dfn>)</td></tr>
+<tr><th id="737">737</th><td>{</td></tr>
+<tr><th id="738">738</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col2 decl" id="82class" title='class' data-type='Class' data-ref="82class" data-ref-filename="82class">class</dfn>;</td></tr>
+<tr><th id="739">739</th><td></td></tr>
+<tr><th id="740">740</th><td>  <a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a> = <a class="tu ref fn" href="#class_table_get_safe" title='class_table_get_safe' data-use='c' data-ref="class_table_get_safe" data-ref-filename="class_table_get_safe">class_table_get_safe</a> (<a class="local col1 ref" href="#81name" title='name' data-ref="81name" data-ref-filename="81name">name</a>);</td></tr>
+<tr><th id="741">741</th><td></td></tr>
+<tr><th id="742">742</th><td>  <b>if</b> (<a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a>)</td></tr>
+<tr><th id="743">743</th><td>    <b>return</b> <a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a>;</td></tr>
+<tr><th id="744">744</th><td></td></tr>
+<tr><th id="745">745</th><td>  <b>if</b> (<a class="tu ref" href="#__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-use='r' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</a>)</td></tr>
+<tr><th id="746">746</th><td>    <a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a> = (*<a class="tu ref" href="#__objc_get_unknown_class_handler" title='__objc_get_unknown_class_handler' data-use='r' data-ref="__objc_get_unknown_class_handler" data-ref-filename="__objc_get_unknown_class_handler">__objc_get_unknown_class_handler</a>) (<a class="local col1 ref" href="#81name" title='name' data-ref="81name" data-ref-filename="81name">name</a>);</td></tr>
+<tr><th id="747">747</th><td></td></tr>
+<tr><th id="748">748</th><td>  <b>if</b> ((!<a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a>)  &amp;&amp;  <a class="ref" href="#_objc_lookup_class" title='_objc_lookup_class' data-ref="_objc_lookup_class" data-ref-filename="_objc_lookup_class">_objc_lookup_class</a>)</td></tr>
+<tr><th id="749">749</th><td>    <a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a> = (*<a class="ref" href="#_objc_lookup_class" title='_objc_lookup_class' data-ref="_objc_lookup_class" data-ref-filename="_objc_lookup_class">_objc_lookup_class</a>) (<a class="local col1 ref" href="#81name" title='name' data-ref="81name" data-ref-filename="81name">name</a>);</td></tr>
+<tr><th id="750">750</th><td></td></tr>
+<tr><th id="751">751</th><td>  <b>if</b> (<a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a>)</td></tr>
+<tr><th id="752">752</th><td>    <b>return</b> <a class="local col2 ref" href="#82class" title='class' data-ref="82class" data-ref-filename="82class">class</a>;</td></tr>
+<tr><th id="753">753</th><td>  </td></tr>
+<tr><th id="754">754</th><td>  <a class="ref fn" href="objc-private/error.h.html#_objc_abort" title='_objc_abort' data-ref="_objc_abort" data-ref-filename="_objc_abort">_objc_abort</a> (<q>"objc runtime: cannot find class %s\n"</q>, <a class="local col1 ref" href="#81name" title='name' data-ref="81name" data-ref-filename="81name">name</a>);</td></tr>
+<tr><th id="755">755</th><td></td></tr>
+<tr><th id="756">756</th><td>  <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="757">757</th><td>}</td></tr>
+<tr><th id="758">758</th><td></td></tr>
+<tr><th id="759">759</th><td><i>/* This is used by the compiler too.  */</i></td></tr>
+<tr><th id="760">760</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="761">761</th><td><dfn class="decl def fn" id="objc_get_meta_class" title='objc_get_meta_class' data-ref="objc_get_meta_class" data-ref-filename="objc_get_meta_class">objc_get_meta_class</dfn> (<em>const</em> <em>char</em> *<dfn class="local col3 decl" id="83name" title='name' data-type='const char *' data-ref="83name" data-ref-filename="83name">name</dfn>)</td></tr>
+<tr><th id="762">762</th><td>{</td></tr>
+<tr><th id="763">763</th><td>  <b>return</b> <a class="ref fn" href="#objc_get_class" title='objc_get_class' data-ref="objc_get_class" data-ref-filename="objc_get_class">objc_get_class</a> (<a class="local col3 ref" href="#83name" title='name' data-ref="83name" data-ref-filename="83name">name</a>)-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="764">764</th><td>}</td></tr>
+<tr><th id="765">765</th><td></td></tr>
+<tr><th id="766">766</th><td><i>/* This is not used by GCC, but the clang compiler seems to use it</i></td></tr>
+<tr><th id="767">767</th><td><i>   when targeting the GNU runtime.  That's wrong, but we have it to</i></td></tr>
+<tr><th id="768">768</th><td><i>   be compatible.  */</i></td></tr>
+<tr><th id="769">769</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="770">770</th><td><dfn class="decl def fn" id="objc_lookup_class" title='objc_lookup_class' data-ref="objc_lookup_class" data-ref-filename="objc_lookup_class">objc_lookup_class</dfn> (<em>const</em> <em>char</em> *<dfn class="local col4 decl" id="84name" title='name' data-type='const char *' data-ref="84name" data-ref-filename="84name">name</dfn>)</td></tr>
+<tr><th id="771">771</th><td>{</td></tr>
+<tr><th id="772">772</th><td>  <b>return</b> <a class="ref fn" href="#objc_getClass" title='objc_getClass' data-ref="objc_getClass" data-ref-filename="objc_getClass">objc_getClass</a> (<a class="local col4 ref" href="#84name" title='name' data-ref="84name" data-ref-filename="84name">name</a>);</td></tr>
+<tr><th id="773">773</th><td>}</td></tr>
+<tr><th id="774">774</th><td></td></tr>
+<tr><th id="775">775</th><td><i>/* This is used when the implementation of a method changes.  It goes</i></td></tr>
+<tr><th id="776">776</th><td><i>   through all classes, looking for the ones that have these methods</i></td></tr>
+<tr><th id="777">777</th><td><i>   (either method_a or method_b; method_b can be NULL), and reloads</i></td></tr>
+<tr><th id="778">778</th><td><i>   the implementation for these.  You should call this with the</i></td></tr>
+<tr><th id="779">779</th><td><i>   runtime mutex already locked.  */</i></td></tr>
+<tr><th id="780">780</th><td><em>void</em></td></tr>
+<tr><th id="781">781</th><td><dfn class="decl def fn" id="__objc_update_classes_with_methods" title='__objc_update_classes_with_methods' data-ref="__objc_update_classes_with_methods" data-ref-filename="__objc_update_classes_with_methods">__objc_update_classes_with_methods</dfn> (<b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method" title='objc_method' data-ref="objc_method" data-ref-filename="objc_method">objc_method</a> *<dfn class="local col5 decl" id="85method_a" title='method_a' data-type='struct objc_method *' data-ref="85method_a" data-ref-filename="85method_a">method_a</dfn>, <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method" title='objc_method' data-ref="objc_method" data-ref-filename="objc_method">objc_method</a> *<dfn class="local col6 decl" id="86method_b" title='method_b' data-type='struct objc_method *' data-ref="86method_b" data-ref-filename="86method_b">method_b</dfn>)</td></tr>
+<tr><th id="782">782</th><td>{</td></tr>
+<tr><th id="783">783</th><td>  <em>int</em> <dfn class="local col7 decl" id="87hash" title='hash' data-type='int' data-ref="87hash" data-ref-filename="87hash">hash</dfn>;</td></tr>
+<tr><th id="784">784</th><td></td></tr>
+<tr><th id="785">785</th><td>  <i>/* Iterate over all classes.  */</i></td></tr>
+<tr><th id="786">786</th><td>  <b>for</b> (<a class="local col7 ref" href="#87hash" title='hash' data-ref="87hash" data-ref-filename="87hash">hash</a> = <var>0</var>; <a class="local col7 ref" href="#87hash" title='hash' data-ref="87hash" data-ref-filename="87hash">hash</a> &lt; <a class="macro" href="#133" title="1024" data-ref="_M/CLASS_TABLE_SIZE">CLASS_TABLE_SIZE</a>; <a class="local col7 ref" href="#87hash" title='hash' data-ref="87hash" data-ref-filename="87hash">hash</a>++)</td></tr>
+<tr><th id="787">787</th><td>    {</td></tr>
+<tr><th id="788">788</th><td>      <a class="typedef" href="#class_node_ptr" title='class_node_ptr' data-type='struct class_node *' data-ref="class_node_ptr" data-ref-filename="class_node_ptr">class_node_ptr</a> <dfn class="local col8 decl" id="88node" title='node' data-type='class_node_ptr' data-ref="88node" data-ref-filename="88node">node</dfn> = <a class="tu ref" href="#class_table_array" title='class_table_array' data-use='r' data-ref="class_table_array" data-ref-filename="class_table_array">class_table_array</a>[<a class="local col7 ref" href="#87hash" title='hash' data-ref="87hash" data-ref-filename="87hash">hash</a>];</td></tr>
+<tr><th id="789">789</th><td>      </td></tr>
+<tr><th id="790">790</th><td>      <b>while</b> (<a class="local col8 ref" href="#88node" title='node' data-ref="88node" data-ref-filename="88node">node</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="791">791</th><td>	{</td></tr>
+<tr><th id="792">792</th><td>	  <i>/* We execute this loop twice: the first time, we iterate</i></td></tr>
+<tr><th id="793">793</th><td><i>	     over all methods in the class (instance methods), while</i></td></tr>
+<tr><th id="794">794</th><td><i>	     the second time we iterate over all methods in the meta</i></td></tr>
+<tr><th id="795">795</th><td><i>	     class (class methods).  */</i></td></tr>
+<tr><th id="796">796</th><td>	  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col9 decl" id="89class" title='class' data-type='Class' data-ref="89class" data-ref-filename="89class">class</dfn> = <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="797">797</th><td>	  <a class="typedef" href="objc/objc.h.html#BOOL" title='BOOL' data-type='unsigned char' data-ref="BOOL" data-ref-filename="BOOL">BOOL</a> <dfn class="local col0 decl" id="90done" title='done' data-type='BOOL' data-ref="90done" data-ref-filename="90done">done</dfn> = <a class="macro" href="objc/objc.h.html#58" title="(BOOL)0" data-ref="_M/NO">NO</a>;</td></tr>
+<tr><th id="798">798</th><td></td></tr>
+<tr><th id="799">799</th><td>	  <b>while</b> (<a class="local col0 ref" href="#90done" title='done' data-ref="90done" data-ref-filename="90done">done</a> == <a class="macro" href="objc/objc.h.html#58" title="(BOOL)0" data-ref="_M/NO">NO</a>)</td></tr>
+<tr><th id="800">800</th><td>	    {</td></tr>
+<tr><th id="801">801</th><td>	      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method_list" title='objc_method_list' data-ref="objc_method_list" data-ref-filename="objc_method_list">objc_method_list</a> * <dfn class="local col1 decl" id="91method_list" title='method_list' data-type='struct objc_method_list *' data-ref="91method_list" data-ref-filename="91method_list">method_list</dfn>;</td></tr>
+<tr><th id="802">802</th><td></td></tr>
+<tr><th id="803">803</th><td>	      <b>if</b> (<a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="804">804</th><td>		{</td></tr>
+<tr><th id="805">805</th><td>		  <i>/* The first time, we work on the class.  */</i></td></tr>
+<tr><th id="806">806</th><td>		  <a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a> = <a class="local col8 ref" href="#88node" title='node' data-ref="88node" data-ref-filename="88node">node</a>-&gt;<a class="tu ref field" href="#class_node::pointer" title='class_node::pointer' data-use='r' data-ref="class_node::pointer" data-ref-filename="class_node..pointer">pointer</a>;</td></tr>
+<tr><th id="807">807</th><td>		}</td></tr>
+<tr><th id="808">808</th><td>	      <b>else</b></td></tr>
+<tr><th id="809">809</th><td>		{</td></tr>
+<tr><th id="810">810</th><td>		  <i>/* The second time, we work on the meta class.  */</i></td></tr>
+<tr><th id="811">811</th><td>		  <a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a> = <a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="812">812</th><td>		  <a class="local col0 ref" href="#90done" title='done' data-ref="90done" data-ref-filename="90done">done</a> = <a class="macro" href="objc/objc.h.html#57" title="(BOOL)1" data-ref="_M/YES">YES</a>;</td></tr>
+<tr><th id="813">813</th><td>		}</td></tr>
+<tr><th id="814">814</th><td></td></tr>
+<tr><th id="815">815</th><td>	      <a class="local col1 ref" href="#91method_list" title='method_list' data-ref="91method_list" data-ref-filename="91method_list">method_list</a> = <a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::methods" title='objc_class::methods' data-ref="objc_class::methods" data-ref-filename="objc_class..methods">methods</a>;</td></tr>
+<tr><th id="816">816</th><td></td></tr>
+<tr><th id="817">817</th><td>	      <b>while</b> (<a class="local col1 ref" href="#91method_list" title='method_list' data-ref="91method_list" data-ref-filename="91method_list">method_list</a>)</td></tr>
+<tr><th id="818">818</th><td>		{</td></tr>
+<tr><th id="819">819</th><td>		  <em>int</em> <dfn class="local col2 decl" id="92i" title='i' data-type='int' data-ref="92i" data-ref-filename="92i">i</dfn>;</td></tr>
+<tr><th id="820">820</th><td>		  </td></tr>
+<tr><th id="821">821</th><td>		  <b>for</b> (<a class="local col2 ref" href="#92i" title='i' data-ref="92i" data-ref-filename="92i">i</a> = <var>0</var>; <a class="local col2 ref" href="#92i" title='i' data-ref="92i" data-ref-filename="92i">i</a> &lt; <a class="local col1 ref" href="#91method_list" title='method_list' data-ref="91method_list" data-ref-filename="91method_list">method_list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_count" title='objc_method_list::method_count' data-ref="objc_method_list::method_count" data-ref-filename="objc_method_list..method_count">method_count</a>; ++<a class="local col2 ref" href="#92i" title='i' data-ref="92i" data-ref-filename="92i">i</a>)</td></tr>
+<tr><th id="822">822</th><td>		    {</td></tr>
+<tr><th id="823">823</th><td>		      <b>struct</b> <a class="type" href="objc-private/module-abi-8.h.html#objc_method" title='objc_method' data-ref="objc_method" data-ref-filename="objc_method">objc_method</a> *<dfn class="local col3 decl" id="93method" title='method' data-type='struct objc_method *' data-ref="93method" data-ref-filename="93method">method</dfn> = &amp;<a class="local col1 ref" href="#91method_list" title='method_list' data-ref="91method_list" data-ref-filename="91method_list">method_list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_list" title='objc_method_list::method_list' data-ref="objc_method_list::method_list" data-ref-filename="objc_method_list..method_list">method_list</a>[<a class="local col2 ref" href="#92i" title='i' data-ref="92i" data-ref-filename="92i">i</a>];</td></tr>
+<tr><th id="824">824</th><td>		      </td></tr>
+<tr><th id="825">825</th><td>		      <i>/* If the method is one of the ones we are</i></td></tr>
+<tr><th id="826">826</th><td><i>			 looking for, update the implementation.  */</i></td></tr>
+<tr><th id="827">827</th><td>		      <b>if</b> (<a class="local col3 ref" href="#93method" title='method' data-ref="93method" data-ref-filename="93method">method</a> == <a class="local col5 ref" href="#85method_a" title='method_a' data-ref="85method_a" data-ref-filename="85method_a">method_a</a>)</td></tr>
+<tr><th id="828">828</th><td>			<a class="ref fn" href="objc-private/sarray.h.html#sarray_at_put_safe" title='sarray_at_put_safe' data-ref="sarray_at_put_safe" data-ref-filename="sarray_at_put_safe">sarray_at_put_safe</a> (<a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::dtable" title='objc_class::dtable' data-ref="objc_class::dtable" data-ref-filename="objc_class..dtable">dtable</a>,</td></tr>
+<tr><th id="829">829</th><td>					    (<a class="typedef" href="objc-private/sarray.h.html#sidx" title='sidx' data-type='size_t' data-ref="sidx" data-ref-filename="sidx">sidx</a>) <a class="local col5 ref" href="#85method_a" title='method_a' data-ref="85method_a" data-ref-filename="85method_a">method_a</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_name" title='objc_method::method_name' data-ref="objc_method::method_name" data-ref-filename="objc_method..method_name">method_name</a>-&gt;<a class="ref field" href="objc-private/selector.h.html#objc_selector::sel_id" title='objc_selector::sel_id' data-ref="objc_selector::sel_id" data-ref-filename="objc_selector..sel_id">sel_id</a>,</td></tr>
+<tr><th id="830">830</th><td>					    <a class="local col5 ref" href="#85method_a" title='method_a' data-ref="85method_a" data-ref-filename="85method_a">method_a</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_imp" title='objc_method::method_imp' data-ref="objc_method::method_imp" data-ref-filename="objc_method..method_imp">method_imp</a>);</td></tr>
+<tr><th id="831">831</th><td>		      </td></tr>
+<tr><th id="832">832</th><td>		      <b>if</b> (<a class="local col3 ref" href="#93method" title='method' data-ref="93method" data-ref-filename="93method">method</a> == <a class="local col6 ref" href="#86method_b" title='method_b' data-ref="86method_b" data-ref-filename="86method_b">method_b</a>)</td></tr>
+<tr><th id="833">833</th><td>			{</td></tr>
+<tr><th id="834">834</th><td>			  <b>if</b> (<a class="local col6 ref" href="#86method_b" title='method_b' data-ref="86method_b" data-ref-filename="86method_b">method_b</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="835">835</th><td>			    <a class="ref fn" href="objc-private/sarray.h.html#sarray_at_put_safe" title='sarray_at_put_safe' data-ref="sarray_at_put_safe" data-ref-filename="sarray_at_put_safe">sarray_at_put_safe</a> (<a class="local col9 ref" href="#89class" title='class' data-ref="89class" data-ref-filename="89class">class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::dtable" title='objc_class::dtable' data-ref="objc_class::dtable" data-ref-filename="objc_class..dtable">dtable</a>,</td></tr>
+<tr><th id="836">836</th><td>						(<a class="typedef" href="objc-private/sarray.h.html#sidx" title='sidx' data-type='size_t' data-ref="sidx" data-ref-filename="sidx">sidx</a>) <a class="local col6 ref" href="#86method_b" title='method_b' data-ref="86method_b" data-ref-filename="86method_b">method_b</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_name" title='objc_method::method_name' data-ref="objc_method::method_name" data-ref-filename="objc_method..method_name">method_name</a>-&gt;<a class="ref field" href="objc-private/selector.h.html#objc_selector::sel_id" title='objc_selector::sel_id' data-ref="objc_selector::sel_id" data-ref-filename="objc_selector..sel_id">sel_id</a>,</td></tr>
+<tr><th id="837">837</th><td>						<a class="local col6 ref" href="#86method_b" title='method_b' data-ref="86method_b" data-ref-filename="86method_b">method_b</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method::method_imp" title='objc_method::method_imp' data-ref="objc_method::method_imp" data-ref-filename="objc_method..method_imp">method_imp</a>);</td></tr>
+<tr><th id="838">838</th><td>			}</td></tr>
+<tr><th id="839">839</th><td>		    }</td></tr>
+<tr><th id="840">840</th><td>		  </td></tr>
+<tr><th id="841">841</th><td>		  <a class="local col1 ref" href="#91method_list" title='method_list' data-ref="91method_list" data-ref-filename="91method_list">method_list</a> = <a class="local col1 ref" href="#91method_list" title='method_list' data-ref="91method_list" data-ref-filename="91method_list">method_list</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_method_list::method_next" title='objc_method_list::method_next' data-ref="objc_method_list::method_next" data-ref-filename="objc_method_list..method_next">method_next</a>;</td></tr>
+<tr><th id="842">842</th><td>		}</td></tr>
+<tr><th id="843">843</th><td>	    }</td></tr>
+<tr><th id="844">844</th><td>	  <a class="local col8 ref" href="#88node" title='node' data-ref="88node" data-ref-filename="88node">node</a> = <a class="local col8 ref" href="#88node" title='node' data-ref="88node" data-ref-filename="88node">node</a>-&gt;<a class="tu ref field" href="#class_node::next" title='class_node::next' data-use='r' data-ref="class_node::next" data-ref-filename="class_node..next">next</a>;</td></tr>
+<tr><th id="845">845</th><td>	}</td></tr>
+<tr><th id="846">846</th><td>    }</td></tr>
+<tr><th id="847">847</th><td>}</td></tr>
+<tr><th id="848">848</th><td></td></tr>
+<tr><th id="849">849</th><td><i>/* Resolve super/subclass links for all classes.  The only thing we</i></td></tr>
+<tr><th id="850">850</th><td><i>   can be sure of is that the class_pointer for class objects point to</i></td></tr>
+<tr><th id="851">851</th><td><i>   the right meta class objects.  */</i></td></tr>
+<tr><th id="852">852</th><td><em>void</em></td></tr>
+<tr><th id="853">853</th><td><dfn class="decl def fn" id="__objc_resolve_class_links" title='__objc_resolve_class_links' data-ref="__objc_resolve_class_links" data-ref-filename="__objc_resolve_class_links">__objc_resolve_class_links</dfn> (<em>void</em>)</td></tr>
+<tr><th id="854">854</th><td>{</td></tr>
+<tr><th id="855">855</th><td>  <b>struct</b> <a class="type" href="#class_table_enumerator" title='class_table_enumerator' data-ref="class_table_enumerator" data-ref-filename="class_table_enumerator">class_table_enumerator</a> *<dfn class="local col4 decl" id="94es" title='es' data-type='struct class_table_enumerator *' data-ref="94es" data-ref-filename="94es">es</dfn> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="856">856</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col5 decl" id="95object_class" title='object_class' data-type='Class' data-ref="95object_class" data-ref-filename="95object_class">object_class</dfn> = <a class="ref fn" href="#objc_get_class" title='objc_get_class' data-ref="objc_get_class" data-ref-filename="objc_get_class">objc_get_class</a> (<q>"Object"</q>);</td></tr>
+<tr><th id="857">857</th><td>  <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col6 decl" id="96class1" title='class1' data-type='Class' data-ref="96class1" data-ref-filename="96class1">class1</dfn>;</td></tr>
+<tr><th id="858">858</th><td></td></tr>
+<tr><th id="859">859</th><td>  <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#58" title="((object_class) ? (void)0 : __assert13(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/gcc/lib/libobjc/../../../../../../../../../external/gpl3/gcc/dist/libobjc/class.c&quot;, 859, __func__, &quot;object_class&quot;))" data-ref="_M/assert">assert</a> (<a class="local col5 ref" href="#95object_class" title='object_class' data-ref="95object_class" data-ref-filename="95object_class">object_class</a>);</td></tr>
+<tr><th id="860">860</th><td></td></tr>
+<tr><th id="861">861</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_lock" title='objc_mutex_lock' data-ref="objc_mutex_lock" data-ref-filename="objc_mutex_lock">objc_mutex_lock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="862">862</th><td></td></tr>
+<tr><th id="863">863</th><td>  <i>/* Assign subclass links.  */</i></td></tr>
+<tr><th id="864">864</th><td>  <b>while</b> ((<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a> = <a class="tu ref fn" href="#class_table_next" title='class_table_next' data-use='c' data-ref="class_table_next" data-ref-filename="class_table_next">class_table_next</a> (&amp;<a class="local col4 ref" href="#94es" title='es' data-ref="94es" data-ref-filename="94es">es</a>)))</td></tr>
+<tr><th id="865">865</th><td>    {</td></tr>
+<tr><th id="866">866</th><td>      <i>/* Make sure we have what we think we have.  */</i></td></tr>
+<tr><th id="867">867</th><td>      <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#58" title="((((class1)&amp;&amp;((((class1)-&gt;info)&amp;0x1L)==0x1L))) ? (void)0 : __assert13(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/gcc/lib/libobjc/../../../../../../../../../external/gpl3/gcc/dist/libobjc/class.c&quot;, 867, __func__, &quot;CLS_ISCLASS (class1)&quot;))" data-ref="_M/assert">assert</a> (<a class="macro" href="objc-private/module-abi-8.h.html#247" title="((class1)&amp;&amp;((((class1)-&gt;info)&amp;0x1L)==0x1L))" data-ref="_M/CLS_ISCLASS">CLS_ISCLASS</a> (<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>));</td></tr>
+<tr><th id="868">868</th><td>      <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#58" title="((((class1-&gt;class_pointer)&amp;&amp;((((class1-&gt;class_pointer)-&gt;info)&amp;0x2L)==0x2L))) ? (void)0 : __assert13(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/gcc/lib/libobjc/../../../../../../../../../external/gpl3/gcc/dist/libobjc/class.c&quot;, 868, __func__, &quot;CLS_ISMETA (class1-&gt;class_pointer)&quot;))" data-ref="_M/assert">assert</a> (<a class="macro" href="objc-private/module-abi-8.h.html#243" title="((class1-&gt;class_pointer)&amp;&amp;((((class1-&gt;class_pointer)-&gt;info)&amp;0x2L)==0x2L))" data-ref="_M/CLS_ISMETA">CLS_ISMETA</a> (<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>));</td></tr>
+<tr><th id="869">869</th><td></td></tr>
+<tr><th id="870">870</th><td>      <i>/* The class_pointer of all meta classes point to Object's meta</i></td></tr>
+<tr><th id="871">871</th><td><i>         class.  */</i></td></tr>
+<tr><th id="872">872</th><td>      <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a> = <a class="local col5 ref" href="#95object_class" title='object_class' data-ref="95object_class" data-ref-filename="95object_class">object_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="873">873</th><td></td></tr>
+<tr><th id="874">874</th><td>      <b>if</b> (! <a class="macro" href="objc-private/module-abi-8.h.html#252" title="((((class1)-&gt;info)&amp;0x8L)==0x8L)" data-ref="_M/CLS_ISRESOLV">CLS_ISRESOLV</a> (<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>))</td></tr>
+<tr><th id="875">875</th><td>        {</td></tr>
+<tr><th id="876">876</th><td>          <a class="macro" href="objc-private/module-abi-8.h.html#253" title="(((class1)-&gt;info) |= 0x8L)" data-ref="_M/CLS_SETRESOLV">CLS_SETRESOLV</a> (<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>);</td></tr>
+<tr><th id="877">877</th><td>          <a class="macro" href="objc-private/module-abi-8.h.html#253" title="(((class1-&gt;class_pointer)-&gt;info) |= 0x8L)" data-ref="_M/CLS_SETRESOLV">CLS_SETRESOLV</a> (<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>);</td></tr>
+<tr><th id="878">878</th><td>              </td></tr>
+<tr><th id="879">879</th><td>          <b>if</b> (<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a>)</td></tr>
+<tr><th id="880">880</th><td>            {   </td></tr>
+<tr><th id="881">881</th><td>              <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col7 decl" id="97a_super_class" title='a_super_class' data-type='Class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</dfn> </td></tr>
+<tr><th id="882">882</th><td>                = <a class="ref fn" href="#objc_get_class" title='objc_get_class' data-ref="objc_get_class" data-ref-filename="objc_get_class">objc_get_class</a> ((<em>char</em> *) <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a>);</td></tr>
+<tr><th id="883">883</th><td>              </td></tr>
+<tr><th id="884">884</th><td>              <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#58" title="((a_super_class) ? (void)0 : __assert13(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/gcc/lib/libobjc/../../../../../../../../../external/gpl3/gcc/dist/libobjc/class.c&quot;, 884, __func__, &quot;a_super_class&quot;))" data-ref="_M/assert">assert</a> (<a class="local col7 ref" href="#97a_super_class" title='a_super_class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</a>);</td></tr>
+<tr><th id="885">885</th><td>              </td></tr>
+<tr><th id="886">886</th><td>              <a class="macro" href="objc-private/common.h.html#41" title="" data-ref="_M/DEBUG_PRINTF">DEBUG_PRINTF</a> (<q>"making class connections for: %s\n"</q>,</td></tr>
+<tr><th id="887">887</th><td>                            class1-&gt;name);</td></tr>
+<tr><th id="888">888</th><td>              </td></tr>
+<tr><th id="889">889</th><td>              <i>/* Assign subclass links for superclass.  */</i></td></tr>
+<tr><th id="890">890</th><td>              <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::sibling_class" title='objc_class::sibling_class' data-ref="objc_class::sibling_class" data-ref-filename="objc_class..sibling_class">sibling_class</a> = <a class="local col7 ref" href="#97a_super_class" title='a_super_class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a>;</td></tr>
+<tr><th id="891">891</th><td>              <a class="local col7 ref" href="#97a_super_class" title='a_super_class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a> = <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>;</td></tr>
+<tr><th id="892">892</th><td>              </td></tr>
+<tr><th id="893">893</th><td>              <i>/* Assign subclass links for meta class of superclass.  */</i></td></tr>
+<tr><th id="894">894</th><td>              <b>if</b> (<a class="local col7 ref" href="#97a_super_class" title='a_super_class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>)</td></tr>
+<tr><th id="895">895</th><td>                {</td></tr>
+<tr><th id="896">896</th><td>                  <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::sibling_class" title='objc_class::sibling_class' data-ref="objc_class::sibling_class" data-ref-filename="objc_class..sibling_class">sibling_class</a></td></tr>
+<tr><th id="897">897</th><td>                    = <a class="local col7 ref" href="#97a_super_class" title='a_super_class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a>;</td></tr>
+<tr><th id="898">898</th><td>                  <a class="local col7 ref" href="#97a_super_class" title='a_super_class' data-ref="97a_super_class" data-ref-filename="97a_super_class">a_super_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a> </td></tr>
+<tr><th id="899">899</th><td>                    = <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="900">900</th><td>                }</td></tr>
+<tr><th id="901">901</th><td>            }</td></tr>
+<tr><th id="902">902</th><td>          <b>else</b> <i>/* A root class, make its meta object be a subclass of</i></td></tr>
+<tr><th id="903">903</th><td><i>                  Object.  */</i></td></tr>
+<tr><th id="904">904</th><td>            {</td></tr>
+<tr><th id="905">905</th><td>              <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::sibling_class" title='objc_class::sibling_class' data-ref="objc_class::sibling_class" data-ref-filename="objc_class..sibling_class">sibling_class</a> </td></tr>
+<tr><th id="906">906</th><td>                = <a class="local col5 ref" href="#95object_class" title='object_class' data-ref="95object_class" data-ref-filename="95object_class">object_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a>;</td></tr>
+<tr><th id="907">907</th><td>              <a class="local col5 ref" href="#95object_class" title='object_class' data-ref="95object_class" data-ref-filename="95object_class">object_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a> = <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="908">908</th><td>            }</td></tr>
+<tr><th id="909">909</th><td>        }</td></tr>
+<tr><th id="910">910</th><td>    }</td></tr>
+<tr><th id="911">911</th><td></td></tr>
+<tr><th id="912">912</th><td>  <i>/* Assign superclass links.  */</i></td></tr>
+<tr><th id="913">913</th><td>   <a class="local col4 ref" href="#94es" title='es' data-ref="94es" data-ref-filename="94es">es</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="914">914</th><td>   <b>while</b> ((<a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a> = <a class="tu ref fn" href="#class_table_next" title='class_table_next' data-use='c' data-ref="class_table_next" data-ref-filename="class_table_next">class_table_next</a> (&amp;<a class="local col4 ref" href="#94es" title='es' data-ref="94es" data-ref-filename="94es">es</a>)))</td></tr>
+<tr><th id="915">915</th><td>    {</td></tr>
+<tr><th id="916">916</th><td>      <a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col8 decl" id="98sub_class" title='sub_class' data-type='Class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</dfn>;</td></tr>
+<tr><th id="917">917</th><td>      <b>for</b> (<a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a> = <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::subclass_list" title='objc_class::subclass_list' data-ref="objc_class::subclass_list" data-ref-filename="objc_class..subclass_list">subclass_list</a>; <a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a>;</td></tr>
+<tr><th id="918">918</th><td>           <a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a> = <a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::sibling_class" title='objc_class::sibling_class' data-ref="objc_class::sibling_class" data-ref-filename="objc_class..sibling_class">sibling_class</a>)</td></tr>
+<tr><th id="919">919</th><td>        {</td></tr>
+<tr><th id="920">920</th><td>          <a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a> = <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>;</td></tr>
+<tr><th id="921">921</th><td>          <b>if</b> (<a class="macro" href="objc-private/module-abi-8.h.html#247" title="((sub_class)&amp;&amp;((((sub_class)-&gt;info)&amp;0x1L)==0x1L))" data-ref="_M/CLS_ISCLASS">CLS_ISCLASS</a> (<a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a>))</td></tr>
+<tr><th id="922">922</th><td>            <a class="local col8 ref" href="#98sub_class" title='sub_class' data-ref="98sub_class" data-ref-filename="98sub_class">sub_class</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a> = <a class="local col6 ref" href="#96class1" title='class1' data-ref="96class1" data-ref-filename="96class1">class1</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::class_pointer" title='objc_class::class_pointer' data-ref="objc_class::class_pointer" data-ref-filename="objc_class..class_pointer">class_pointer</a>;</td></tr>
+<tr><th id="923">923</th><td>        }</td></tr>
+<tr><th id="924">924</th><td>    }</td></tr>
+<tr><th id="925">925</th><td></td></tr>
+<tr><th id="926">926</th><td>  <a class="ref fn" href="objc/thr.h.html#objc_mutex_unlock" title='objc_mutex_unlock' data-ref="objc_mutex_unlock" data-ref-filename="objc_mutex_unlock">objc_mutex_unlock</a> (<a class="ref" href="objc-private/runtime.h.html#__objc_runtime_mutex" title='__objc_runtime_mutex' data-ref="__objc_runtime_mutex" data-ref-filename="__objc_runtime_mutex">__objc_runtime_mutex</a>);</td></tr>
+<tr><th id="927">927</th><td>}</td></tr>
+<tr><th id="928">928</th><td></td></tr>
+<tr><th id="929">929</th><td><em>const</em> <em>char</em> *</td></tr>
+<tr><th id="930">930</th><td><dfn class="decl def fn" id="class_getName" title='class_getName' data-ref="class_getName" data-ref-filename="class_getName">class_getName</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col9 decl" id="99class_" title='class_' data-type='Class' data-ref="99class_" data-ref-filename="99class_">class_</dfn>)</td></tr>
+<tr><th id="931">931</th><td>{</td></tr>
+<tr><th id="932">932</th><td>  <b>if</b> (<a class="local col9 ref" href="#99class_" title='class_' data-ref="99class_" data-ref-filename="99class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="933">933</th><td>    <b>return</b> <q>"nil"</q>;</td></tr>
+<tr><th id="934">934</th><td></td></tr>
+<tr><th id="935">935</th><td>  <b>return</b> <a class="local col9 ref" href="#99class_" title='class_' data-ref="99class_" data-ref-filename="99class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::name" title='objc_class::name' data-ref="objc_class::name" data-ref-filename="objc_class..name">name</a>;</td></tr>
+<tr><th id="936">936</th><td>}</td></tr>
+<tr><th id="937">937</th><td></td></tr>
+<tr><th id="938">938</th><td><a class="typedef" href="objc/objc.h.html#BOOL" title='BOOL' data-type='unsigned char' data-ref="BOOL" data-ref-filename="BOOL">BOOL</a></td></tr>
+<tr><th id="939">939</th><td><dfn class="decl def fn" id="class_isMetaClass" title='class_isMetaClass' data-ref="class_isMetaClass" data-ref-filename="class_isMetaClass">class_isMetaClass</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col0 decl" id="100class_" title='class_' data-type='Class' data-ref="100class_" data-ref-filename="100class_">class_</dfn>)</td></tr>
+<tr><th id="940">940</th><td>{</td></tr>
+<tr><th id="941">941</th><td>  <i>/* CLS_ISMETA includes the check for Nil class_.  */</i></td></tr>
+<tr><th id="942">942</th><td>  <b>return</b> <a class="macro" href="objc-private/module-abi-8.h.html#243" title="((class_)&amp;&amp;((((class_)-&gt;info)&amp;0x2L)==0x2L))" data-ref="_M/CLS_ISMETA">CLS_ISMETA</a> (<a class="local col0 ref" href="#100class_" title='class_' data-ref="100class_" data-ref-filename="100class_">class_</a>);</td></tr>
+<tr><th id="943">943</th><td>}</td></tr>
+<tr><th id="944">944</th><td></td></tr>
+<tr><th id="945">945</th><td><i>/* Even inside libobjc it may be worth using class_getSuperclass</i></td></tr>
+<tr><th id="946">946</th><td><i>   instead of accessing class_-&gt;super_class directly because it</i></td></tr>
+<tr><th id="947">947</th><td><i>   resolves the class links if needed.  If you access</i></td></tr>
+<tr><th id="948">948</th><td><i>   class_-&gt;super_class directly, make sure to deal with the situation</i></td></tr>
+<tr><th id="949">949</th><td><i>   where the class is not resolved yet!  */</i></td></tr>
+<tr><th id="950">950</th><td><a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a></td></tr>
+<tr><th id="951">951</th><td><dfn class="decl def fn" id="class_getSuperclass" title='class_getSuperclass' data-ref="class_getSuperclass" data-ref-filename="class_getSuperclass">class_getSuperclass</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col1 decl" id="101class_" title='class_' data-type='Class' data-ref="101class_" data-ref-filename="101class_">class_</dfn>)</td></tr>
+<tr><th id="952">952</th><td>{</td></tr>
+<tr><th id="953">953</th><td>  <b>if</b> (<a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="954">954</th><td>    <b>return</b> <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>;</td></tr>
+<tr><th id="955">955</th><td></td></tr>
+<tr><th id="956">956</th><td>  <i>/* Classes that are in construction are not resolved, and still have</i></td></tr>
+<tr><th id="957">957</th><td><i>     the class name (instead of a class pointer) in the</i></td></tr>
+<tr><th id="958">958</th><td><i>     class_-&gt;super_class field.  In that case we need to lookup the</i></td></tr>
+<tr><th id="959">959</th><td><i>     superclass name to return the superclass.  We can not resolve the</i></td></tr>
+<tr><th id="960">960</th><td><i>     class until it is registered.  */</i></td></tr>
+<tr><th id="961">961</th><td>  <b>if</b> (<a class="macro" href="objc-private/module-abi-8.h.html#267" title="((((class_)-&gt;info)&amp;0x10L)==0x10L)" data-ref="_M/CLS_IS_IN_CONSTRUCTION">CLS_IS_IN_CONSTRUCTION</a> (<a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a>))</td></tr>
+<tr><th id="962">962</th><td>    {</td></tr>
+<tr><th id="963">963</th><td>      <b>if</b> (<a class="macro" href="objc-private/module-abi-8.h.html#243" title="((class_)&amp;&amp;((((class_)-&gt;info)&amp;0x2L)==0x2L))" data-ref="_M/CLS_ISMETA">CLS_ISMETA</a> (<a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a>))</td></tr>
+<tr><th id="964">964</th><td>	<b>return</b> <a class="ref fn" href="objc/runtime.h.html#object_getClass" title='object_getClass' data-ref="object_getClass" data-ref-filename="object_getClass">object_getClass</a> ((<a class="typedef" href="objc/objc.h.html#id" title='id' data-type='struct objc_object *' data-ref="id" data-ref-filename="id">id</a>)<a class="ref fn" href="#objc_lookUpClass" title='objc_lookUpClass' data-ref="objc_lookUpClass" data-ref-filename="objc_lookUpClass">objc_lookUpClass</a> ((<em>const</em> <em>char</em> *)(<a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a>)));</td></tr>
+<tr><th id="965">965</th><td>      <b>else</b></td></tr>
+<tr><th id="966">966</th><td>	<b>return</b> <a class="ref fn" href="#objc_lookUpClass" title='objc_lookUpClass' data-ref="objc_lookUpClass" data-ref-filename="objc_lookUpClass">objc_lookUpClass</a> ((<em>const</em> <em>char</em> *)(<a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a>));</td></tr>
+<tr><th id="967">967</th><td>    }</td></tr>
+<tr><th id="968">968</th><td></td></tr>
+<tr><th id="969">969</th><td>  <i>/* If the class is not resolved yet, super_class would point to a</i></td></tr>
+<tr><th id="970">970</th><td><i>     string (the name of the super class) as opposed to the actual</i></td></tr>
+<tr><th id="971">971</th><td><i>     super class.  In that case, we need to resolve the class links</i></td></tr>
+<tr><th id="972">972</th><td><i>     before we can return super_class.  */</i></td></tr>
+<tr><th id="973">973</th><td>  <b>if</b> (! <a class="macro" href="objc-private/module-abi-8.h.html#252" title="((((class_)-&gt;info)&amp;0x8L)==0x8L)" data-ref="_M/CLS_ISRESOLV">CLS_ISRESOLV</a> (<a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a>))</td></tr>
+<tr><th id="974">974</th><td>    <a class="ref fn" href="#__objc_resolve_class_links" title='__objc_resolve_class_links' data-ref="__objc_resolve_class_links" data-ref-filename="__objc_resolve_class_links">__objc_resolve_class_links</a> ();</td></tr>
+<tr><th id="975">975</th><td>  </td></tr>
+<tr><th id="976">976</th><td>  <b>return</b> <a class="local col1 ref" href="#101class_" title='class_' data-ref="101class_" data-ref-filename="101class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::super_class" title='objc_class::super_class' data-ref="objc_class::super_class" data-ref-filename="objc_class..super_class">super_class</a>;</td></tr>
+<tr><th id="977">977</th><td>}</td></tr>
+<tr><th id="978">978</th><td></td></tr>
+<tr><th id="979">979</th><td><em>int</em></td></tr>
+<tr><th id="980">980</th><td><dfn class="decl def fn" id="class_getVersion" title='class_getVersion' data-ref="class_getVersion" data-ref-filename="class_getVersion">class_getVersion</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col2 decl" id="102class_" title='class_' data-type='Class' data-ref="102class_" data-ref-filename="102class_">class_</dfn>)</td></tr>
+<tr><th id="981">981</th><td>{</td></tr>
+<tr><th id="982">982</th><td>  <b>if</b> (<a class="local col2 ref" href="#102class_" title='class_' data-ref="102class_" data-ref-filename="102class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="983">983</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="984">984</th><td></td></tr>
+<tr><th id="985">985</th><td>  <b>return</b> (<em>int</em>)(<a class="local col2 ref" href="#102class_" title='class_' data-ref="102class_" data-ref-filename="102class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::version" title='objc_class::version' data-ref="objc_class::version" data-ref-filename="objc_class..version">version</a>);</td></tr>
+<tr><th id="986">986</th><td>}</td></tr>
+<tr><th id="987">987</th><td></td></tr>
+<tr><th id="988">988</th><td><em>void</em></td></tr>
+<tr><th id="989">989</th><td><dfn class="decl def fn" id="class_setVersion" title='class_setVersion' data-ref="class_setVersion" data-ref-filename="class_setVersion">class_setVersion</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col3 decl" id="103class_" title='class_' data-type='Class' data-ref="103class_" data-ref-filename="103class_">class_</dfn>, <em>int</em> <dfn class="local col4 decl" id="104version" title='version' data-type='int' data-ref="104version" data-ref-filename="104version">version</dfn>)</td></tr>
+<tr><th id="990">990</th><td>{</td></tr>
+<tr><th id="991">991</th><td>  <b>if</b> (<a class="local col3 ref" href="#103class_" title='class_' data-ref="103class_" data-ref-filename="103class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="992">992</th><td>    <b>return</b>;</td></tr>
+<tr><th id="993">993</th><td></td></tr>
+<tr><th id="994">994</th><td>  <a class="local col3 ref" href="#103class_" title='class_' data-ref="103class_" data-ref-filename="103class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::version" title='objc_class::version' data-ref="objc_class::version" data-ref-filename="objc_class..version">version</a> = <a class="local col4 ref" href="#104version" title='version' data-ref="104version" data-ref-filename="104version">version</a>;</td></tr>
+<tr><th id="995">995</th><td>}</td></tr>
+<tr><th id="996">996</th><td></td></tr>
+<tr><th id="997">997</th><td><span class='typedef' title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</span></td></tr>
+<tr><th id="998">998</th><td><dfn class="decl def fn" id="class_getInstanceSize" title='class_getInstanceSize' data-ref="class_getInstanceSize" data-ref-filename="class_getInstanceSize">class_getInstanceSize</dfn> (<a class="typedef" href="objc/objc.h.html#Class" title='Class' data-type='struct objc_class *' data-ref="Class" data-ref-filename="Class">Class</a> <dfn class="local col5 decl" id="105class_" title='class_' data-type='Class' data-ref="105class_" data-ref-filename="105class_">class_</dfn>)</td></tr>
+<tr><th id="999">999</th><td>{</td></tr>
+<tr><th id="1000">1000</th><td>  <b>if</b> (<a class="local col5 ref" href="#105class_" title='class_' data-ref="105class_" data-ref-filename="105class_">class_</a> == <a class="macro" href="objc/objc.h.html#117" title="(Class)0" data-ref="_M/Nil">Nil</a>)</td></tr>
+<tr><th id="1001">1001</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="1002">1002</th><td></td></tr>
+<tr><th id="1003">1003</th><td>  <b>return</b> <a class="local col5 ref" href="#105class_" title='class_' data-ref="105class_" data-ref-filename="105class_">class_</a>-&gt;<a class="ref field" href="objc-private/module-abi-8.h.html#objc_class::instance_size" title='objc_class::instance_size' data-ref="objc_class::instance_size" data-ref-filename="objc_class..instance_size">instance_size</a>;</td></tr>
+<tr><th id="1004">1004</th><td>}</td></tr>
+<tr><th id="1005">1005</th><td></td></tr>
+<tr><th id="1006">1006</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

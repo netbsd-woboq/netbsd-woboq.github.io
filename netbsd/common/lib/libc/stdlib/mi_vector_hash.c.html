@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mi_vector_hash.c source code [netbsd/common/lib/libc/stdlib/mi_vector_hash.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/common/lib/libc/stdlib/mi_vector_hash.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>common</a>/<a href='../..'>lib</a>/<a href='..'>libc</a>/<a href='./'>stdlib</a>/<a href='mi_vector_hash.c.html'>mi_vector_hash.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: mi_vector_hash.c,v 1.1 2013/12/11 01:24:08 joerg Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td><i>/*-</i></td></tr>
+<tr><th id="3">3</th><td><i> * Copyright (c) 2009 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="4">4</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="7">7</th><td><i> * by Joerg Sonnenberger.</i></td></tr>
+<tr><th id="8">8</th><td><i> *</i></td></tr>
+<tr><th id="9">9</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="10">10</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="11">11</th><td><i> * are met:</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in</i></td></tr>
+<tr><th id="17">17</th><td><i> *    the documentation and/or other materials provided with the</i></td></tr>
+<tr><th id="18">18</th><td><i> *    distribution.</i></td></tr>
+<tr><th id="19">19</th><td><i> *</i></td></tr>
+<tr><th id="20">20</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="21">21</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="22">22</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS</i></td></tr>
+<tr><th id="23">23</th><td><i> * FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE</i></td></tr>
+<tr><th id="24">24</th><td><i> * COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,</i></td></tr>
+<tr><th id="25">25</th><td><i> * INCIDENTAL, SPECIAL, EXEMPLARY OR CONSEQUENTIAL DAMAGES (INCLUDING,</i></td></tr>
+<tr><th id="26">26</th><td><i> * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;</i></td></tr>
+<tr><th id="27">27</th><td><i> * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED</i></td></tr>
+<tr><th id="28">28</th><td><i> * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,</i></td></tr>
+<tr><th id="29">29</th><td><i> * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT</i></td></tr>
+<tr><th id="30">30</th><td><i> * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="31">31</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="32">32</th><td><i> */</i></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/*</i></td></tr>
+<tr><th id="35">35</th><td><i> * See <a href="http://burtleburtle.net/bob/hash/doobs.html">http://burtleburtle.net/bob/hash/doobs.html</a> for the full description</i></td></tr>
+<tr><th id="36">36</th><td><i> * and the original version of the code.  This version differs by exposing</i></td></tr>
+<tr><th id="37">37</th><td><i> * the full internal state and avoiding byte operations in the inner loop</i></td></tr>
+<tr><th id="38">38</th><td><i> * if the key is aligned correctly.</i></td></tr>
+<tr><th id="39">39</th><td><i> */</i></td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td><u>#<span data-ppcond="41">if</span> HAVE_NBTOOL_CONFIG_H</u></td></tr>
+<tr><th id="42">42</th><td><u>#include "nbtool_config.h"</u></td></tr>
+<tr><th id="43">43</th><td><u>#<span data-ppcond="41">endif</span></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../../../../sys/sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><a class="macro" href="../../../../sys/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: mi_vector_hash.c,v 1.1 2013/12/11 01:24:08 joerg Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: mi_vector_hash.c,v 1.1 2013/12/11 01:24:08 joerg Exp $"</q>);</td></tr>
+<tr><th id="47">47</th><td></td></tr>
+<tr><th id="48">48</th><td><u>#<span data-ppcond="48">if</span> !HAVE_NBTOOL_CONFIG_H || HAVE_SYS_ENDIAN_H</u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../../../../sys/sys/endian.h.html">&lt;sys/endian.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#<span data-ppcond="48">endif</span></u></td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td><u>#<span data-ppcond="52">if</span> defined(<span class="macro" data-ref="_M/_KERNEL">_KERNEL</span>) || defined(<span class="macro" data-ref="_M/_STANDALONE">_STANDALONE</span>)</u></td></tr>
+<tr><th id="53">53</th><td><u>#include &lt;sys/types.h&gt;</u></td></tr>
+<tr><th id="54">54</th><td><u>#include &lt;sys/systm.h&gt;</u></td></tr>
+<tr><th id="55">55</th><td><u>#include &lt;lib/libkern/libkern.h&gt;</u></td></tr>
+<tr><th id="56">56</th><td><u>#<span data-ppcond="52">else</span></u></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="../../../../lib/libc/include/namespace.h.html">"namespace.h"</a></u></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><u>#include &lt;stdint.h&gt;</u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="61">61</th><td><u>#<span data-ppcond="52">endif</span></u></td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td><u>#define <dfn class="macro" id="_M/mix" data-ref="_M/mix">mix</dfn>(a, b, c) do {		\</u></td></tr>
+<tr><th id="64">64</th><td><u>	a -= b; a -= c; a ^= (c &gt;&gt; 13);	\</u></td></tr>
+<tr><th id="65">65</th><td><u>	b -= c; b -= a; b ^= (a &lt;&lt; 8);	\</u></td></tr>
+<tr><th id="66">66</th><td><u>	c -= a; c -= b; c ^= (b &gt;&gt; 13);	\</u></td></tr>
+<tr><th id="67">67</th><td><u>	a -= b; a -= c; a ^= (c &gt;&gt; 12);	\</u></td></tr>
+<tr><th id="68">68</th><td><u>	b -= c; b -= a; b ^= (a &lt;&lt; 16);	\</u></td></tr>
+<tr><th id="69">69</th><td><u>	c -= a; c -= b; c ^= (b &gt;&gt; 5);	\</u></td></tr>
+<tr><th id="70">70</th><td><u>	a -= b; a -= c; a ^= (c &gt;&gt; 3);	\</u></td></tr>
+<tr><th id="71">71</th><td><u>	b -= c; b -= a; b ^= (a &lt;&lt; 10);	\</u></td></tr>
+<tr><th id="72">72</th><td><u>	c -= a; c -= b; c ^= (b &gt;&gt; 15);	\</u></td></tr>
+<tr><th id="73">73</th><td><u>} while (/* CONSTCOND */0)</u></td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td><u>#define <dfn class="macro" id="_M/FIXED_SEED" data-ref="_M/FIXED_SEED">FIXED_SEED</dfn>	0x9e3779b9	/* Golden ratio, arbitrary constant */</u></td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td><u>#<span data-ppcond="77">if</span> !defined(<span class="macro" data-ref="_M/_KERNEL">_KERNEL</span>) &amp;&amp; !defined(<span class="macro" data-ref="_M/_STANDALONE">_STANDALONE</span>)</u></td></tr>
+<tr><th id="78">78</th><td><u>#<span data-ppcond="78">ifdef</span> <a class="macro" href="../../../../sys/sys/cdefs_elf.h.html#59" data-ref="_M/__weak_alias">__weak_alias</a></u></td></tr>
+<tr><th id="79">79</th><td><a class="macro" href="../../../../sys/sys/cdefs_elf.h.html#59" title="__asm(&quot;.weak &quot; &quot;mi_vector_hash&quot; &quot;\n&quot; &quot;mi_vector_hash&quot; &quot; = &quot; &quot;_mi_vector_hash&quot;);" data-ref="_M/__weak_alias">__weak_alias</a>(mi_vector_hash, _mi_vector_hash)</td></tr>
+<tr><th id="80">80</th><td><u>#<span data-ppcond="78">endif</span></u></td></tr>
+<tr><th id="81">81</th><td><u>#<span data-ppcond="77">endif</span></u></td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td><em>void</em></td></tr>
+<tr><th id="84">84</th><td><a class="macro" href="../../../../lib/libc/include/namespace.h.html#518" title="_mi_vector_hash" data-ref="_M/mi_vector_hash">mi_vector_hash</a>(<em>const</em> <em>void</em> * <a class="macro" href="../../../../sys/sys/cdefs.h.html#409" title="restrict" data-ref="_M/__restrict"><b>__restrict</b></a> <dfn class="local col1 decl" id="1key" title='key' data-type='const void *restrict' data-ref="1key" data-ref-filename="1key">key</dfn>, <a class="typedef" href="../../../../sys/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col2 decl" id="2len" title='len' data-type='size_t' data-ref="2len" data-ref-filename="2len">len</dfn>, <a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col3 decl" id="3seed" title='seed' data-type='uint32_t' data-ref="3seed" data-ref-filename="3seed">seed</dfn>,</td></tr>
+<tr><th id="85">85</th><td>    <a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col4 decl" id="4hashes" title='hashes' data-type='uint32_t *' data-ref="4hashes" data-ref-filename="4hashes">hashes</dfn>[<var>3</var>])</td></tr>
+<tr><th id="86">86</th><td>{</td></tr>
+<tr><th id="87">87</th><td>	<em>static</em> <em>const</em> <a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col5 decl" id="5mask" title='mask' data-type='const uint32_t [4]' data-ref="5mask" data-ref-filename="5mask">mask</dfn>[<var>4</var>] = {</td></tr>
+<tr><th id="88">88</th><td>		<var>0x000000ff</var>, <var>0x0000ffff</var>, <var>0x00ffffff</var>, <var>0xffffffff</var></td></tr>
+<tr><th id="89">89</th><td>	};</td></tr>
+<tr><th id="90">90</th><td>	<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col6 decl" id="6orig_len" title='orig_len' data-type='uint32_t' data-ref="6orig_len" data-ref-filename="6orig_len">orig_len</dfn>, <dfn class="local col7 decl" id="7a" title='a' data-type='uint32_t' data-ref="7a" data-ref-filename="7a">a</dfn>, <dfn class="local col8 decl" id="8b" title='b' data-type='uint32_t' data-ref="8b" data-ref-filename="8b">b</dfn>, <dfn class="local col9 decl" id="9c" title='c' data-type='uint32_t' data-ref="9c" data-ref-filename="9c">c</dfn>;</td></tr>
+<tr><th id="91">91</th><td>	<em>const</em> <a class="typedef" href="../../../../sys/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> *<dfn class="local col0 decl" id="10k" title='k' data-type='const uint8_t *' data-ref="10k" data-ref-filename="10k">k</dfn>;</td></tr>
+<tr><th id="92">92</th><td></td></tr>
+<tr><th id="93">93</th><td>	<a class="local col6 ref" href="#6orig_len" title='orig_len' data-ref="6orig_len" data-ref-filename="6orig_len">orig_len</a> = (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>;</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td>	<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> = <a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> = <a class="macro" href="#75" title="0x9e3779b9" data-ref="_M/FIXED_SEED">FIXED_SEED</a>;</td></tr>
+<tr><th id="96">96</th><td>	<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> = <a class="local col3 ref" href="#3seed" title='seed' data-ref="3seed" data-ref-filename="3seed">seed</a>;</td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td>	<b>if</b> ((<a class="typedef" href="../../../../sys/sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="local col1 ref" href="#1key" title='key' data-ref="1key" data-ref-filename="1key">key</a> &amp; <var>3</var>) {</td></tr>
+<tr><th id="99">99</th><td>		<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a> = <a class="local col1 ref" href="#1key" title='key' data-ref="1key" data-ref-filename="1key">key</a>;</td></tr>
+<tr><th id="100">100</th><td>		<b>while</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> &gt;= <var>12</var>) {</td></tr>
+<tr><th id="101">101</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="ref fn" href="../../../../sys/sys/endian.h.html#224" title='le32dec' data-ref="le32dec" data-ref-filename="le32dec">le32dec</a>(<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>);</td></tr>
+<tr><th id="102">102</th><td>			<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += <a class="ref fn" href="../../../../sys/sys/endian.h.html#224" title='le32dec' data-ref="le32dec" data-ref-filename="le32dec">le32dec</a>(<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a> + <var>4</var>);</td></tr>
+<tr><th id="103">103</th><td>			<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += <a class="ref fn" href="../../../../sys/sys/endian.h.html#224" title='le32dec' data-ref="le32dec" data-ref-filename="le32dec">le32dec</a>(<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a> + <var>8</var>);</td></tr>
+<tr><th id="104">104</th><td>			<a class="macro" href="#63" title="do { a -= b; a -= c; a ^= (c &gt;&gt; 13); b -= c; b -= a; b ^= (a &lt;&lt; 8); c -= a; c -= b; c ^= (b &gt;&gt; 13); a -= b; a -= c; a ^= (c &gt;&gt; 12); b -= c; b -= a; b ^= (a &lt;&lt; 16); c -= a; c -= b; c ^= (b &gt;&gt; 5); a -= b; a -= c; a ^= (c &gt;&gt; 3); b -= c; b -= a; b ^= (a &lt;&lt; 10); c -= a; c -= b; c ^= (b &gt;&gt; 15); } while ( 0)" data-ref="_M/mix">mix</a>(<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a>, <a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a>, <a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a>);</td></tr>
+<tr><th id="105">105</th><td>			<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a> += <var>12</var>;</td></tr>
+<tr><th id="106">106</th><td>			<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> -= <var>12</var>;</td></tr>
+<tr><th id="107">107</th><td>		}</td></tr>
+<tr><th id="108">108</th><td>		<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += <a class="local col6 ref" href="#6orig_len" title='orig_len' data-ref="6orig_len" data-ref-filename="6orig_len">orig_len</a>;</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td>		<b>if</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> &gt; <var>8</var>) {</td></tr>
+<tr><th id="111">111</th><td>			<b>switch</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>) {</td></tr>
+<tr><th id="112">112</th><td>			<b>case</b> <var>11</var>:</td></tr>
+<tr><th id="113">113</th><td>				<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>10</var>] &lt;&lt; <var>24</var>;</td></tr>
+<tr><th id="114">114</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="115">115</th><td>			<b>case</b> <var>10</var>:</td></tr>
+<tr><th id="116">116</th><td>				<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>9</var>] &lt;&lt; <var>16</var>;</td></tr>
+<tr><th id="117">117</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="118">118</th><td>			<b>case</b> <var>9</var>:</td></tr>
+<tr><th id="119">119</th><td>				<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>8</var>] &lt;&lt; <var>8</var>;</td></tr>
+<tr><th id="120">120</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="121">121</th><td>			}</td></tr>
+<tr><th id="122">122</th><td>			<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += <a class="ref fn" href="../../../../sys/sys/endian.h.html#224" title='le32dec' data-ref="le32dec" data-ref-filename="le32dec">le32dec</a>(<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a> + <var>4</var>);</td></tr>
+<tr><th id="123">123</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="ref fn" href="../../../../sys/sys/endian.h.html#224" title='le32dec' data-ref="le32dec" data-ref-filename="le32dec">le32dec</a>(<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>);</td></tr>
+<tr><th id="124">124</th><td>		} <b>else</b> <b>if</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> &gt; <var>4</var>) {</td></tr>
+<tr><th id="125">125</th><td>			<b>switch</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>) {</td></tr>
+<tr><th id="126">126</th><td>			<b>case</b> <var>8</var>:</td></tr>
+<tr><th id="127">127</th><td>				<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>7</var>] &lt;&lt; <var>24</var>;</td></tr>
+<tr><th id="128">128</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="129">129</th><td>			<b>case</b> <var>7</var>:</td></tr>
+<tr><th id="130">130</th><td>				<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>6</var>] &lt;&lt; <var>16</var>;</td></tr>
+<tr><th id="131">131</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="132">132</th><td>			<b>case</b> <var>6</var>:</td></tr>
+<tr><th id="133">133</th><td>				<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>5</var>] &lt;&lt; <var>8</var>;</td></tr>
+<tr><th id="134">134</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="135">135</th><td>			<b>case</b> <var>5</var>:</td></tr>
+<tr><th id="136">136</th><td>				<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += <a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>4</var>];</td></tr>
+<tr><th id="137">137</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="138">138</th><td>			}</td></tr>
+<tr><th id="139">139</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="ref fn" href="../../../../sys/sys/endian.h.html#224" title='le32dec' data-ref="le32dec" data-ref-filename="le32dec">le32dec</a>(<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>);</td></tr>
+<tr><th id="140">140</th><td>		} <b>else</b> <b>if</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>) {</td></tr>
+<tr><th id="141">141</th><td>			<b>switch</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>) {</td></tr>
+<tr><th id="142">142</th><td>			<b>case</b> <var>4</var>:</td></tr>
+<tr><th id="143">143</th><td>				<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>3</var>] &lt;&lt; <var>24</var>;</td></tr>
+<tr><th id="144">144</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="145">145</th><td>			<b>case</b> <var>3</var>:</td></tr>
+<tr><th id="146">146</th><td>				<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>2</var>] &lt;&lt; <var>16</var>;</td></tr>
+<tr><th id="147">147</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="148">148</th><td>			<b>case</b> <var>2</var>:</td></tr>
+<tr><th id="149">149</th><td>				<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += (<a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)<a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>1</var>] &lt;&lt; <var>8</var>;</td></tr>
+<tr><th id="150">150</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="151">151</th><td>			<b>case</b> <var>1</var>:</td></tr>
+<tr><th id="152">152</th><td>				<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="local col0 ref" href="#10k" title='k' data-ref="10k" data-ref-filename="10k">k</a>[<var>0</var>];</td></tr>
+<tr><th id="153">153</th><td>				<i>/* FALLTHROUGH */</i></td></tr>
+<tr><th id="154">154</th><td>			}</td></tr>
+<tr><th id="155">155</th><td>		}</td></tr>
+<tr><th id="156">156</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="157">157</th><td>		<em>const</em> <a class="typedef" href="../../../../sys/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> *<dfn class="local col1 decl" id="11key32" title='key32' data-type='const uint32_t *' data-ref="11key32" data-ref-filename="11key32">key32</dfn> = <a class="local col1 ref" href="#1key" title='key' data-ref="1key" data-ref-filename="1key">key</a>;</td></tr>
+<tr><th id="158">158</th><td>		<b>while</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> &gt;= <var>12</var>) {</td></tr>
+<tr><th id="159">159</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[0])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>0</var>]);</td></tr>
+<tr><th id="160">160</th><td>			<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[1])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>1</var>]);</td></tr>
+<tr><th id="161">161</th><td>			<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[2])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>2</var>]);</td></tr>
+<tr><th id="162">162</th><td>			<a class="macro" href="#63" title="do { a -= b; a -= c; a ^= (c &gt;&gt; 13); b -= c; b -= a; b ^= (a &lt;&lt; 8); c -= a; c -= b; c ^= (b &gt;&gt; 13); a -= b; a -= c; a ^= (c &gt;&gt; 12); b -= c; b -= a; b ^= (a &lt;&lt; 16); c -= a; c -= b; c ^= (b &gt;&gt; 5); a -= b; a -= c; a ^= (c &gt;&gt; 3); b -= c; b -= a; b ^= (a &lt;&lt; 10); c -= a; c -= b; c ^= (b &gt;&gt; 15); } while ( 0)" data-ref="_M/mix">mix</a>(<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a>, <a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a>, <a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a>);</td></tr>
+<tr><th id="163">163</th><td>			<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a> += <var>3</var>;</td></tr>
+<tr><th id="164">164</th><td>			<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> -= <var>12</var>;</td></tr>
+<tr><th id="165">165</th><td>		}</td></tr>
+<tr><th id="166">166</th><td>		<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += <a class="local col6 ref" href="#6orig_len" title='orig_len' data-ref="6orig_len" data-ref-filename="6orig_len">orig_len</a>;</td></tr>
+<tr><th id="167">167</th><td></td></tr>
+<tr><th id="168">168</th><td>		<b>if</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> &gt; <var>8</var>) {</td></tr>
+<tr><th id="169">169</th><td>			<a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a> += (<a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[2])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>2</var>]) &amp; <a class="local col5 ref" href="#5mask" title='mask' data-ref="5mask" data-ref-filename="5mask">mask</a>[<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> - <var>9</var>]) &lt;&lt; <var>8</var>;</td></tr>
+<tr><th id="170">170</th><td>			<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[1])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>1</var>]);</td></tr>
+<tr><th id="171">171</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[0])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>0</var>]);</td></tr>
+<tr><th id="172">172</th><td>		} <b>else</b> <b>if</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> &gt; <var>4</var>) {</td></tr>
+<tr><th id="173">173</th><td>			<a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[1])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>1</var>]) &amp; <a class="local col5 ref" href="#5mask" title='mask' data-ref="5mask" data-ref-filename="5mask">mask</a>[<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> - <var>5</var>];</td></tr>
+<tr><th id="174">174</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[0])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>0</var>]);</td></tr>
+<tr><th id="175">175</th><td>		} <b>else</b> <b>if</b> (<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>)</td></tr>
+<tr><th id="176">176</th><td>			<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a> += <a class="macro" href="../../../../sys/sys/endian.h.html#178" title="(key32[0])" data-ref="_M/le32toh">le32toh</a>(<a class="local col1 ref" href="#11key32" title='key32' data-ref="11key32" data-ref-filename="11key32">key32</a>[<var>0</var>]) &amp; <a class="local col5 ref" href="#5mask" title='mask' data-ref="5mask" data-ref-filename="5mask">mask</a>[<a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a> - <var>1</var>];</td></tr>
+<tr><th id="177">177</th><td>	}</td></tr>
+<tr><th id="178">178</th><td>	<a class="macro" href="#63" title="do { a -= b; a -= c; a ^= (c &gt;&gt; 13); b -= c; b -= a; b ^= (a &lt;&lt; 8); c -= a; c -= b; c ^= (b &gt;&gt; 13); a -= b; a -= c; a ^= (c &gt;&gt; 12); b -= c; b -= a; b ^= (a &lt;&lt; 16); c -= a; c -= b; c ^= (b &gt;&gt; 5); a -= b; a -= c; a ^= (c &gt;&gt; 3); b -= c; b -= a; b ^= (a &lt;&lt; 10); c -= a; c -= b; c ^= (b &gt;&gt; 15); } while ( 0)" data-ref="_M/mix">mix</a>(<a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a>, <a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a>, <a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a>);</td></tr>
+<tr><th id="179">179</th><td>	<a class="local col4 ref" href="#4hashes" title='hashes' data-ref="4hashes" data-ref-filename="4hashes">hashes</a>[<var>0</var>] = <a class="local col7 ref" href="#7a" title='a' data-ref="7a" data-ref-filename="7a">a</a>;</td></tr>
+<tr><th id="180">180</th><td>	<a class="local col4 ref" href="#4hashes" title='hashes' data-ref="4hashes" data-ref-filename="4hashes">hashes</a>[<var>1</var>] = <a class="local col8 ref" href="#8b" title='b' data-ref="8b" data-ref-filename="8b">b</a>;</td></tr>
+<tr><th id="181">181</th><td>	<a class="local col4 ref" href="#4hashes" title='hashes' data-ref="4hashes" data-ref-filename="4hashes">hashes</a>[<var>2</var>] = <a class="local col9 ref" href="#9c" title='c' data-ref="9c" data-ref-filename="9c">c</a>;</td></tr>
+<tr><th id="182">182</th><td>}</td></tr>
+<tr><th id="183">183</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

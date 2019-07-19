@@ -1,0 +1,1058 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>lz4.c source code [netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/lz4.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="_U16_S,_U32_S,_U64_S,refTables "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/lz4.c'; var root_path = '../../../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../../../..'>netbsd</a>/<a href='../../../../../../..'>external</a>/<a href='../../../../../..'>cddl</a>/<a href='../../../../..'>osnet</a>/<a href='../../../..'>dist</a>/<a href='../../..'>uts</a>/<a href='../..'>common</a>/<a href='..'>fs</a>/<a href='./'>zfs</a>/<a href='lz4.c.html'>lz4.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * LZ4 - Fast LZ compression algorithm</i></td></tr>
+<tr><th id="3">3</th><td><i> * Header File</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (C) 2011-2013, Yann Collet.</i></td></tr>
+<tr><th id="5">5</th><td><i> * BSD 2-Clause License (<a href="http://www.opensource.org/licenses/bsd-license.php">http://www.opensource.org/licenses/bsd-license.php</a>)</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="8">8</th><td><i> * modification, are permitted provided that the following conditions are</i></td></tr>
+<tr><th id="9">9</th><td><i> * met:</i></td></tr>
+<tr><th id="10">10</th><td><i> *</i></td></tr>
+<tr><th id="11">11</th><td><i> *     * Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="12">12</th><td><i> * notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="13">13</th><td><i> *     * Redistributions in binary form must reproduce the above</i></td></tr>
+<tr><th id="14">14</th><td><i> * copyright notice, this list of conditions and the following disclaimer</i></td></tr>
+<tr><th id="15">15</th><td><i> * in the documentation and/or other materials provided with the</i></td></tr>
+<tr><th id="16">16</th><td><i> * distribution.</i></td></tr>
+<tr><th id="17">17</th><td><i> *</i></td></tr>
+<tr><th id="18">18</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="19">19</th><td><i> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="20">20</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="21">21</th><td><i> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="22">22</th><td><i> * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="23">23</th><td><i> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="24">24</th><td><i> * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,</i></td></tr>
+<tr><th id="25">25</th><td><i> * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY</i></td></tr>
+<tr><th id="26">26</th><td><i> * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT</i></td></tr>
+<tr><th id="27">27</th><td><i> * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE</i></td></tr>
+<tr><th id="28">28</th><td><i> * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="29">29</th><td><i> *</i></td></tr>
+<tr><th id="30">30</th><td><i> * You can contact the author at :</i></td></tr>
+<tr><th id="31">31</th><td><i> * - LZ4 homepage : <a href="http://fastcompression.blogspot.com/p/lz4.html">http://fastcompression.blogspot.com/p/lz4.html</a></i></td></tr>
+<tr><th id="32">32</th><td><i> * - LZ4 source repository : <a href="http://code.google.com/p/lz4/">http://code.google.com/p/lz4/</a></i></td></tr>
+<tr><th id="33">33</th><td><i> */</i></td></tr>
+<tr><th id="34">34</th><td></td></tr>
+<tr><th id="35">35</th><td><u>#include <a href="../../../../lib/libzpool/common/sys/zfs_context.h.html">&lt;sys/zfs_context.h&gt;</a></u></td></tr>
+<tr><th id="36">36</th><td></td></tr>
+<tr><th id="37">37</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#real_LZ4_compress" title='real_LZ4_compress' data-type='int real_LZ4_compress(const char * source, char * dest, int isize, int osize)' data-ref="real_LZ4_compress" data-ref-filename="real_LZ4_compress">real_LZ4_compress</a>(<em>const</em> <em>char</em> *<dfn class="local col1 decl" id="1source" title='source' data-type='const char *' data-ref="1source" data-ref-filename="1source">source</dfn>, <em>char</em> *<dfn class="local col2 decl" id="2dest" title='dest' data-type='char *' data-ref="2dest" data-ref-filename="2dest">dest</dfn>, <em>int</em> <dfn class="local col3 decl" id="3isize" title='isize' data-type='int' data-ref="3isize" data-ref-filename="3isize">isize</dfn>,</td></tr>
+<tr><th id="38">38</th><td>    <em>int</em> <dfn class="local col4 decl" id="4osize" title='osize' data-type='int' data-ref="4osize" data-ref-filename="4osize">osize</dfn>);</td></tr>
+<tr><th id="39">39</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#LZ4_compressBound" title='LZ4_compressBound' data-type='int LZ4_compressBound(int isize)' data-ref="LZ4_compressBound" data-ref-filename="LZ4_compressBound">LZ4_compressBound</a>(<em>int</em> <dfn class="local col5 decl" id="5isize" title='isize' data-type='int' data-ref="5isize" data-ref-filename="5isize">isize</dfn>);</td></tr>
+<tr><th id="40">40</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#LZ4_uncompress_unknownOutputSize" title='LZ4_uncompress_unknownOutputSize' data-type='int LZ4_uncompress_unknownOutputSize(const char * source, char * dest, int isize, int maxOutputSize)' data-ref="LZ4_uncompress_unknownOutputSize" data-ref-filename="LZ4_uncompress_unknownOutputSize">LZ4_uncompress_unknownOutputSize</a>(<em>const</em> <em>char</em> *<dfn class="local col6 decl" id="6source" title='source' data-type='const char *' data-ref="6source" data-ref-filename="6source">source</dfn>, <em>char</em> *<dfn class="local col7 decl" id="7dest" title='dest' data-type='char *' data-ref="7dest" data-ref-filename="7dest">dest</dfn>,</td></tr>
+<tr><th id="41">41</th><td>    <em>int</em> <dfn class="local col8 decl" id="8isize" title='isize' data-type='int' data-ref="8isize" data-ref-filename="8isize">isize</dfn>, <em>int</em> <dfn class="local col9 decl" id="9maxOutputSize" title='maxOutputSize' data-type='int' data-ref="9maxOutputSize" data-ref-filename="9maxOutputSize">maxOutputSize</dfn>);</td></tr>
+<tr><th id="42">42</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#LZ4_compressCtx" title='LZ4_compressCtx' data-type='int LZ4_compressCtx(void * ctx, const char * source, char * dest, int isize, int osize)' data-ref="LZ4_compressCtx" data-ref-filename="LZ4_compressCtx">LZ4_compressCtx</a>(<em>void</em> *<dfn class="local col0 decl" id="10ctx" title='ctx' data-type='void *' data-ref="10ctx" data-ref-filename="10ctx">ctx</dfn>, <em>const</em> <em>char</em> *<dfn class="local col1 decl" id="11source" title='source' data-type='const char *' data-ref="11source" data-ref-filename="11source">source</dfn>, <em>char</em> *<dfn class="local col2 decl" id="12dest" title='dest' data-type='char *' data-ref="12dest" data-ref-filename="12dest">dest</dfn>,</td></tr>
+<tr><th id="43">43</th><td>    <em>int</em> <dfn class="local col3 decl" id="13isize" title='isize' data-type='int' data-ref="13isize" data-ref-filename="13isize">isize</dfn>, <em>int</em> <dfn class="local col4 decl" id="14osize" title='osize' data-type='int' data-ref="14osize" data-ref-filename="14osize">osize</dfn>);</td></tr>
+<tr><th id="44">44</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#LZ4_compress64kCtx" title='LZ4_compress64kCtx' data-type='int LZ4_compress64kCtx(void * ctx, const char * source, char * dest, int isize, int osize)' data-ref="LZ4_compress64kCtx" data-ref-filename="LZ4_compress64kCtx">LZ4_compress64kCtx</a>(<em>void</em> *<dfn class="local col5 decl" id="15ctx" title='ctx' data-type='void *' data-ref="15ctx" data-ref-filename="15ctx">ctx</dfn>, <em>const</em> <em>char</em> *<dfn class="local col6 decl" id="16source" title='source' data-type='const char *' data-ref="16source" data-ref-filename="16source">source</dfn>, <em>char</em> *<dfn class="local col7 decl" id="17dest" title='dest' data-type='char *' data-ref="17dest" data-ref-filename="17dest">dest</dfn>,</td></tr>
+<tr><th id="45">45</th><td>    <em>int</em> <dfn class="local col8 decl" id="18isize" title='isize' data-type='int' data-ref="18isize" data-ref-filename="18isize">isize</dfn>, <em>int</em> <dfn class="local col9 decl" id="19osize" title='osize' data-type='int' data-ref="19osize" data-ref-filename="19osize">osize</dfn>);</td></tr>
+<tr><th id="46">46</th><td></td></tr>
+<tr><th id="47">47</th><td><u>#<span data-ppcond="47">ifdef</span> <span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span></u></td></tr>
+<tr><th id="48">48</th><td><em>static</em> kmem_cache_t *lz4_ctx_cache;</td></tr>
+<tr><th id="49">49</th><td><u>#<span data-ppcond="47">endif</span></u></td></tr>
+<tr><th id="50">50</th><td></td></tr>
+<tr><th id="51">51</th><td><i>/*ARGSUSED*/</i></td></tr>
+<tr><th id="52">52</th><td><a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a></td></tr>
+<tr><th id="53">53</th><td><dfn class="decl def fn" id="lz4_compress" title='lz4_compress' data-ref="lz4_compress" data-ref-filename="lz4_compress">lz4_compress</dfn>(<em>void</em> *<dfn class="local col0 decl" id="20s_start" title='s_start' data-type='void *' data-ref="20s_start" data-ref-filename="20s_start">s_start</dfn>, <em>void</em> *<dfn class="local col1 decl" id="21d_start" title='d_start' data-type='void *' data-ref="21d_start" data-ref-filename="21d_start">d_start</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col2 decl" id="22s_len" title='s_len' data-type='size_t' data-ref="22s_len" data-ref-filename="22s_len">s_len</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="23d_len" title='d_len' data-type='size_t' data-ref="23d_len" data-ref-filename="23d_len">d_len</dfn>, <em>int</em> <dfn class="local col4 decl" id="24n" title='n' data-type='int' data-ref="24n" data-ref-filename="24n">n</dfn>)</td></tr>
+<tr><th id="54">54</th><td>{</td></tr>
+<tr><th id="55">55</th><td>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col5 decl" id="25bufsiz" title='bufsiz' data-type='uint32_t' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</dfn>;</td></tr>
+<tr><th id="56">56</th><td>	<em>char</em> *<dfn class="local col6 decl" id="26dest" title='dest' data-type='char *' data-ref="26dest" data-ref-filename="26dest">dest</dfn> = <a class="local col1 ref" href="#21d_start" title='d_start' data-ref="21d_start" data-ref-filename="21d_start">d_start</a>;</td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td>	<a class="macro" href="../../sys/debug.h.html#58" title="((void)0)" data-ref="_M/ASSERT">ASSERT</a>(d_len &gt;= <b>sizeof</b> (bufsiz));</td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td>	<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a> = <a class="tu ref fn" href="#real_LZ4_compress" title='real_LZ4_compress' data-use='c' data-ref="real_LZ4_compress" data-ref-filename="real_LZ4_compress">real_LZ4_compress</a>(<a class="local col0 ref" href="#20s_start" title='s_start' data-ref="20s_start" data-ref-filename="20s_start">s_start</a>, &amp;<a class="local col6 ref" href="#26dest" title='dest' data-ref="26dest" data-ref-filename="26dest">dest</a>[<b>sizeof</b> (<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a>)], <a class="local col2 ref" href="#22s_len" title='s_len' data-ref="22s_len" data-ref-filename="22s_len">s_len</a>,</td></tr>
+<tr><th id="61">61</th><td>	    <a class="local col3 ref" href="#23d_len" title='d_len' data-ref="23d_len" data-ref-filename="23d_len">d_len</a> - <b>sizeof</b> (<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a>));</td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td>	<i>/* Signal an error if the compression routine returned zero. */</i></td></tr>
+<tr><th id="64">64</th><td>	<b>if</b> (<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a> == <var>0</var>)</td></tr>
+<tr><th id="65">65</th><td>		<b>return</b> (<a class="local col2 ref" href="#22s_len" title='s_len' data-ref="22s_len" data-ref-filename="22s_len">s_len</a>);</td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td>	<i>/*</i></td></tr>
+<tr><th id="68">68</th><td><i>	 * Encode the compresed buffer size at the start. We'll need this in</i></td></tr>
+<tr><th id="69">69</th><td><i>	 * decompression to counter the effects of padding which might be</i></td></tr>
+<tr><th id="70">70</th><td><i>	 * added to the compressed buffer and which, if unhandled, would</i></td></tr>
+<tr><th id="71">71</th><td><i>	 * confuse the hell out of our decompression function.</i></td></tr>
+<tr><th id="72">72</th><td><i>	 */</i></td></tr>
+<tr><th id="73">73</th><td>	*(<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> *)<a class="local col6 ref" href="#26dest" title='dest' data-ref="26dest" data-ref-filename="26dest">dest</a> = <a class="macro" href="../../../../../sys/sys/byteorder.h.html#79" title="((((((bufsiz) &amp; 0xff) &lt;&lt; 8) | (((bufsiz) &gt;&gt; 8) &amp; 0xff)) &lt;&lt; 16) | (((((bufsiz) &gt;&gt; 16) &amp; 0xff) &lt;&lt; 8) | ((((bufsiz) &gt;&gt; 16) &gt;&gt; 8) &amp; 0xff)))" data-ref="_M/BE_32">BE_32</a>(<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a>);</td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td>	<b>return</b> (<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a> + <b>sizeof</b> (<a class="local col5 ref" href="#25bufsiz" title='bufsiz' data-ref="25bufsiz" data-ref-filename="25bufsiz">bufsiz</a>));</td></tr>
+<tr><th id="76">76</th><td>}</td></tr>
+<tr><th id="77">77</th><td></td></tr>
+<tr><th id="78">78</th><td><i>/*ARGSUSED*/</i></td></tr>
+<tr><th id="79">79</th><td><em>int</em></td></tr>
+<tr><th id="80">80</th><td><dfn class="decl def fn" id="lz4_decompress" title='lz4_decompress' data-ref="lz4_decompress" data-ref-filename="lz4_decompress">lz4_decompress</dfn>(<em>void</em> *<dfn class="local col7 decl" id="27s_start" title='s_start' data-type='void *' data-ref="27s_start" data-ref-filename="27s_start">s_start</dfn>, <em>void</em> *<dfn class="local col8 decl" id="28d_start" title='d_start' data-type='void *' data-ref="28d_start" data-ref-filename="28d_start">d_start</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col9 decl" id="29s_len" title='s_len' data-type='size_t' data-ref="29s_len" data-ref-filename="29s_len">s_len</dfn>, <a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="30d_len" title='d_len' data-type='size_t' data-ref="30d_len" data-ref-filename="30d_len">d_len</dfn>, <em>int</em> <dfn class="local col1 decl" id="31n" title='n' data-type='int' data-ref="31n" data-ref-filename="31n">n</dfn>)</td></tr>
+<tr><th id="81">81</th><td>{</td></tr>
+<tr><th id="82">82</th><td>	<em>const</em> <em>char</em> *<dfn class="local col2 decl" id="32src" title='src' data-type='const char *' data-ref="32src" data-ref-filename="32src">src</dfn> = <a class="local col7 ref" href="#27s_start" title='s_start' data-ref="27s_start" data-ref-filename="27s_start">s_start</a>;</td></tr>
+<tr><th id="83">83</th><td>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col3 decl" id="33bufsiz" title='bufsiz' data-type='uint32_t' data-ref="33bufsiz" data-ref-filename="33bufsiz">bufsiz</dfn> = <a class="macro" href="../../../../../sys/sys/byteorder.h.html#91" title="((uint32_t)(__builtin_constant_p((((uint32_t)((*((uint32_t *)(void *)(src))))))) ? (((uint32_t)(((((((uint32_t)((*((uint32_t *)(void *)(src)))))) &amp; 0xff000000) &gt;&gt; 24) | (((((uint32_t)((*((uint32_t *)(void *)(src)))))) &amp; 0x00ff0000) &gt;&gt; 8) | (((((uint32_t)((*((uint32_t *)(void *)(src)))))) &amp; 0x0000ff00) &lt;&lt; 8) | (((((uint32_t)((*((uint32_t *)(void *)(src)))))) &amp; 0x000000ff) &lt;&lt; 24))))) : __byte_swap_u32_variable(((uint32_t)((*((uint32_t *)(void *)(src))))))))" data-ref="_M/BE_IN32">BE_IN32</a>(<a class="local col2 ref" href="#32src" title='src' data-ref="32src" data-ref-filename="32src">src</a>);</td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td>	<i>/* invalid compressed buffer size encoded at start */</i></td></tr>
+<tr><th id="86">86</th><td>	<b>if</b> (<a class="local col3 ref" href="#33bufsiz" title='bufsiz' data-ref="33bufsiz" data-ref-filename="33bufsiz">bufsiz</a> + <b>sizeof</b> (<a class="local col3 ref" href="#33bufsiz" title='bufsiz' data-ref="33bufsiz" data-ref-filename="33bufsiz">bufsiz</a>) &gt; <a class="local col9 ref" href="#29s_len" title='s_len' data-ref="29s_len" data-ref-filename="29s_len">s_len</a>)</td></tr>
+<tr><th id="87">87</th><td>		<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td>	<i>/*</i></td></tr>
+<tr><th id="90">90</th><td><i>	 * Returns 0 on success (decompression function returned non-negative)</i></td></tr>
+<tr><th id="91">91</th><td><i>	 * and non-zero on failure (decompression function returned negative.</i></td></tr>
+<tr><th id="92">92</th><td><i>	 */</i></td></tr>
+<tr><th id="93">93</th><td>	<b>return</b> (<a class="tu ref fn" href="#LZ4_uncompress_unknownOutputSize" title='LZ4_uncompress_unknownOutputSize' data-use='c' data-ref="LZ4_uncompress_unknownOutputSize" data-ref-filename="LZ4_uncompress_unknownOutputSize">LZ4_uncompress_unknownOutputSize</a>(&amp;<a class="local col2 ref" href="#32src" title='src' data-ref="32src" data-ref-filename="32src">src</a>[<b>sizeof</b> (<a class="local col3 ref" href="#33bufsiz" title='bufsiz' data-ref="33bufsiz" data-ref-filename="33bufsiz">bufsiz</a>)],</td></tr>
+<tr><th id="94">94</th><td>	    <a class="local col8 ref" href="#28d_start" title='d_start' data-ref="28d_start" data-ref-filename="28d_start">d_start</a>, <a class="local col3 ref" href="#33bufsiz" title='bufsiz' data-ref="33bufsiz" data-ref-filename="33bufsiz">bufsiz</a>, <a class="local col0 ref" href="#30d_len" title='d_len' data-ref="30d_len" data-ref-filename="30d_len">d_len</a>) &lt; <var>0</var>);</td></tr>
+<tr><th id="95">95</th><td>}</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><i>/*</i></td></tr>
+<tr><th id="98">98</th><td><i> * LZ4 API Description:</i></td></tr>
+<tr><th id="99">99</th><td><i> *</i></td></tr>
+<tr><th id="100">100</th><td><i> * Simple Functions:</i></td></tr>
+<tr><th id="101">101</th><td><i> * real_LZ4_compress() :</i></td></tr>
+<tr><th id="102">102</th><td><i> * 	isize  : is the input size. Max supported value is ~1.9GB</i></td></tr>
+<tr><th id="103">103</th><td><i> * 	return : the number of bytes written in buffer dest</i></td></tr>
+<tr><th id="104">104</th><td><i> *		 or 0 if the compression fails (if LZ4_COMPRESSMIN is set).</i></td></tr>
+<tr><th id="105">105</th><td><i> * 	note : destination buffer must be already allocated.</i></td></tr>
+<tr><th id="106">106</th><td><i> * 		destination buffer must be sized to handle worst cases</i></td></tr>
+<tr><th id="107">107</th><td><i> * 		situations (input data not compressible) worst case size</i></td></tr>
+<tr><th id="108">108</th><td><i> * 		evaluation is provided by function LZ4_compressBound().</i></td></tr>
+<tr><th id="109">109</th><td><i> *</i></td></tr>
+<tr><th id="110">110</th><td><i> * Advanced Functions</i></td></tr>
+<tr><th id="111">111</th><td><i> *</i></td></tr>
+<tr><th id="112">112</th><td><i> * LZ4_compressBound() :</i></td></tr>
+<tr><th id="113">113</th><td><i> * 	Provides the maximum size that LZ4 may output in a "worst case"</i></td></tr>
+<tr><th id="114">114</th><td><i> * 	scenario (input data not compressible) primarily useful for memory</i></td></tr>
+<tr><th id="115">115</th><td><i> * 	allocation of output buffer.</i></td></tr>
+<tr><th id="116">116</th><td><i> *</i></td></tr>
+<tr><th id="117">117</th><td><i> * 	isize  : is the input size. Max supported value is ~1.9GB</i></td></tr>
+<tr><th id="118">118</th><td><i> * 	return : maximum output size in a "worst case" scenario</i></td></tr>
+<tr><th id="119">119</th><td><i> * 	note : this function is limited by "int" range (2^31-1)</i></td></tr>
+<tr><th id="120">120</th><td><i> *</i></td></tr>
+<tr><th id="121">121</th><td><i> * LZ4_uncompress_unknownOutputSize() :</i></td></tr>
+<tr><th id="122">122</th><td><i> * 	isize  : is the input size, therefore the compressed size</i></td></tr>
+<tr><th id="123">123</th><td><i> * 	maxOutputSize : is the size of the destination buffer (which must be</i></td></tr>
+<tr><th id="124">124</th><td><i> * 		already allocated)</i></td></tr>
+<tr><th id="125">125</th><td><i> * 	return : the number of bytes decoded in the destination buffer</i></td></tr>
+<tr><th id="126">126</th><td><i> * 		(necessarily &lt;= maxOutputSize). If the source stream is</i></td></tr>
+<tr><th id="127">127</th><td><i> * 		malformed, the function will stop decoding and return a</i></td></tr>
+<tr><th id="128">128</th><td><i> * 		negative result, indicating the byte position of the faulty</i></td></tr>
+<tr><th id="129">129</th><td><i> * 		instruction. This function never writes beyond dest +</i></td></tr>
+<tr><th id="130">130</th><td><i> * 		maxOutputSize, and is therefore protected against malicious</i></td></tr>
+<tr><th id="131">131</th><td><i> * 		data packets.</i></td></tr>
+<tr><th id="132">132</th><td><i> * 	note   : Destination buffer must be already allocated.</i></td></tr>
+<tr><th id="133">133</th><td><i> *</i></td></tr>
+<tr><th id="134">134</th><td><i> * LZ4_compressCtx() :</i></td></tr>
+<tr><th id="135">135</th><td><i> * 	This function explicitly handles the CTX memory structure.</i></td></tr>
+<tr><th id="136">136</th><td><i> *</i></td></tr>
+<tr><th id="137">137</th><td><i> * 	ILLUMOS CHANGES: the CTX memory structure must be explicitly allocated</i></td></tr>
+<tr><th id="138">138</th><td><i> * 	by the caller (either on the stack or using kmem_zalloc). Passing NULL</i></td></tr>
+<tr><th id="139">139</th><td><i> * 	isn't valid.</i></td></tr>
+<tr><th id="140">140</th><td><i> *</i></td></tr>
+<tr><th id="141">141</th><td><i> * LZ4_compress64kCtx() :</i></td></tr>
+<tr><th id="142">142</th><td><i> * 	Same as LZ4_compressCtx(), but specific to small inputs (&lt;64KB).</i></td></tr>
+<tr><th id="143">143</th><td><i> * 	isize *Must* be &lt;64KB, otherwise the output will be corrupted.</i></td></tr>
+<tr><th id="144">144</th><td><i> *</i></td></tr>
+<tr><th id="145">145</th><td><i> * 	ILLUMOS CHANGES: the CTX memory structure must be explicitly allocated</i></td></tr>
+<tr><th id="146">146</th><td><i> * 	by the caller (either on the stack or using kmem_zalloc). Passing NULL</i></td></tr>
+<tr><th id="147">147</th><td><i> * 	isn't valid.</i></td></tr>
+<tr><th id="148">148</th><td><i> */</i></td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td><i>/*</i></td></tr>
+<tr><th id="151">151</th><td><i> * Tuning parameters</i></td></tr>
+<tr><th id="152">152</th><td><i> */</i></td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><i>/*</i></td></tr>
+<tr><th id="155">155</th><td><i> * COMPRESSIONLEVEL: Increasing this value improves compression ratio</i></td></tr>
+<tr><th id="156">156</th><td><i> *	 Lowering this value reduces memory usage. Reduced memory usage</i></td></tr>
+<tr><th id="157">157</th><td><i> *	typically improves speed, due to cache effect (ex: L1 32KB for Intel,</i></td></tr>
+<tr><th id="158">158</th><td><i> *	L1 64KB for AMD). Memory usage formula : N-&gt;2^(N+2) Bytes</i></td></tr>
+<tr><th id="159">159</th><td><i> *	(examples : 12 -&gt; 16KB ; 17 -&gt; 512KB)</i></td></tr>
+<tr><th id="160">160</th><td><i> */</i></td></tr>
+<tr><th id="161">161</th><td><u>#define	<dfn class="macro" id="_M/COMPRESSIONLEVEL" data-ref="_M/COMPRESSIONLEVEL">COMPRESSIONLEVEL</dfn> 12</u></td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td><i>/*</i></td></tr>
+<tr><th id="164">164</th><td><i> * NOTCOMPRESSIBLE_CONFIRMATION: Decreasing this value will make the</i></td></tr>
+<tr><th id="165">165</th><td><i> *	algorithm skip faster data segments considered "incompressible".</i></td></tr>
+<tr><th id="166">166</th><td><i> *	This may decrease compression ratio dramatically, but will be</i></td></tr>
+<tr><th id="167">167</th><td><i> *	faster on incompressible data. Increasing this value will make</i></td></tr>
+<tr><th id="168">168</th><td><i> *	the algorithm search more before declaring a segment "incompressible".</i></td></tr>
+<tr><th id="169">169</th><td><i> *	This could improve compression a bit, but will be slower on</i></td></tr>
+<tr><th id="170">170</th><td><i> *	incompressible data. The default value (6) is recommended.</i></td></tr>
+<tr><th id="171">171</th><td><i> */</i></td></tr>
+<tr><th id="172">172</th><td><u>#define	<dfn class="macro" id="_M/NOTCOMPRESSIBLE_CONFIRMATION" data-ref="_M/NOTCOMPRESSIBLE_CONFIRMATION">NOTCOMPRESSIBLE_CONFIRMATION</dfn> 6</u></td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td><i>/*</i></td></tr>
+<tr><th id="175">175</th><td><i> * BIG_ENDIAN_NATIVE_BUT_INCOMPATIBLE: This will provide a boost to</i></td></tr>
+<tr><th id="176">176</th><td><i> * performance for big endian cpu, but the resulting compressed stream</i></td></tr>
+<tr><th id="177">177</th><td><i> * will be incompatible with little-endian CPU. You can set this option</i></td></tr>
+<tr><th id="178">178</th><td><i> * to 1 in situations where data will stay within closed environment.</i></td></tr>
+<tr><th id="179">179</th><td><i> * This option is useless on Little_Endian CPU (such as x86).</i></td></tr>
+<tr><th id="180">180</th><td><i> */</i></td></tr>
+<tr><th id="181">181</th><td><i>/* #define	BIG_ENDIAN_NATIVE_BUT_INCOMPATIBLE 1 */</i></td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td><i>/*</i></td></tr>
+<tr><th id="184">184</th><td><i> * CPU Feature Detection</i></td></tr>
+<tr><th id="185">185</th><td><i> */</i></td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td><i>/* 32 or 64 bits ? */</i></td></tr>
+<tr><th id="188">188</th><td><u>#<span data-ppcond="188">if</span> (defined(<span class="macro" data-ref="_M/__x86_64__">__x86_64__</span>) || defined(<span class="macro" data-ref="_M/__x86_64">__x86_64</span>) || defined(<span class="macro" data-ref="_M/__amd64__">__amd64__</span>) || \</u></td></tr>
+<tr><th id="189">189</th><td><u>    defined(<span class="macro" data-ref="_M/__amd64">__amd64</span>) || defined(<span class="macro" data-ref="_M/__ppc64__">__ppc64__</span>) || defined(<span class="macro" data-ref="_M/_WIN64">_WIN64</span>) || \</u></td></tr>
+<tr><th id="190">190</th><td><u>    defined(<span class="macro" data-ref="_M/__LP64__">__LP64__</span>) || defined(<span class="macro" data-ref="_M/_LP64">_LP64</span>))</u></td></tr>
+<tr><th id="191">191</th><td><u>#define	LZ4_ARCH64 1</u></td></tr>
+<tr><th id="192">192</th><td><u>#<span data-ppcond="188">else</span></u></td></tr>
+<tr><th id="193">193</th><td><u>#define	<dfn class="macro" id="_M/LZ4_ARCH64" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</dfn> 0</u></td></tr>
+<tr><th id="194">194</th><td><u>#<span data-ppcond="188">endif</span></u></td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td><i>/*</i></td></tr>
+<tr><th id="197">197</th><td><i> * Limits the amount of stack space that the algorithm may consume to hold</i></td></tr>
+<tr><th id="198">198</th><td><i> * the compression lookup table. The value `9' here means we'll never use</i></td></tr>
+<tr><th id="199">199</th><td><i> * more than 2k of stack (see above for a description of COMPRESSIONLEVEL).</i></td></tr>
+<tr><th id="200">200</th><td><i> * If more memory is needed, it is allocated from the heap.</i></td></tr>
+<tr><th id="201">201</th><td><i> */</i></td></tr>
+<tr><th id="202">202</th><td><i>/* FreeBSD: Use heap for all platforms for now */</i></td></tr>
+<tr><th id="203">203</th><td><u>#define	<dfn class="macro" id="_M/STACKLIMIT" data-ref="_M/STACKLIMIT">STACKLIMIT</dfn> 0</u></td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td><i>/*</i></td></tr>
+<tr><th id="206">206</th><td><i> * Little Endian or Big Endian?</i></td></tr>
+<tr><th id="207">207</th><td><i> * Note: overwrite the below #define if you know your architecture endianess.</i></td></tr>
+<tr><th id="208">208</th><td><i> */</i></td></tr>
+<tr><th id="209">209</th><td><u>#<span data-ppcond="209">if</span> <a class="macro" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/endian.h.html#103" title="1234" data-ref="_M/BYTE_ORDER">BYTE_ORDER</a> == <a class="macro" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/endian.h.html#101" title="4321" data-ref="_M/BIG_ENDIAN">BIG_ENDIAN</a></u></td></tr>
+<tr><th id="210">210</th><td><u>#define	LZ4_BIG_ENDIAN 1</u></td></tr>
+<tr><th id="211">211</th><td><u>#<span data-ppcond="209">else</span></u></td></tr>
+<tr><th id="212">212</th><td><i>/*</i></td></tr>
+<tr><th id="213">213</th><td><i> * Little Endian assumed. PDP Endian and other very rare endian format</i></td></tr>
+<tr><th id="214">214</th><td><i> * are unsupported.</i></td></tr>
+<tr><th id="215">215</th><td><i> */</i></td></tr>
+<tr><th id="216">216</th><td><u>#<span data-ppcond="209">endif</span></u></td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td><i>/*</i></td></tr>
+<tr><th id="219">219</th><td><i> * Unaligned memory access is automatically enabled for "common" CPU,</i></td></tr>
+<tr><th id="220">220</th><td><i> * such as x86. For others CPU, the compiler will be more cautious, and</i></td></tr>
+<tr><th id="221">221</th><td><i> * insert extra code to ensure aligned access is respected. If you know</i></td></tr>
+<tr><th id="222">222</th><td><i> * your target CPU supports unaligned memory access, you may want to</i></td></tr>
+<tr><th id="223">223</th><td><i> * force this option manually to improve performance</i></td></tr>
+<tr><th id="224">224</th><td><i> */</i></td></tr>
+<tr><th id="225">225</th><td><u>#<span data-ppcond="225">if</span> defined(<span class="macro" data-ref="_M/__ARM_FEATURE_UNALIGNED">__ARM_FEATURE_UNALIGNED</span>)</u></td></tr>
+<tr><th id="226">226</th><td><u>#define	LZ4_FORCE_UNALIGNED_ACCESS 1</u></td></tr>
+<tr><th id="227">227</th><td><u>#<span data-ppcond="225">endif</span></u></td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td><i>/*</i></td></tr>
+<tr><th id="230">230</th><td><i> * FreeBSD: can't use GCC's __builtin_ctz when using sparc64 because</i></td></tr>
+<tr><th id="231">231</th><td><i> * gcc currently rely on libcompiler_rt.</i></td></tr>
+<tr><th id="232">232</th><td><i> *</i></td></tr>
+<tr><th id="233">233</th><td><i> * TODO: revisit this when situation changes.</i></td></tr>
+<tr><th id="234">234</th><td><i> */</i></td></tr>
+<tr><th id="235">235</th><td><u>#<span data-ppcond="235">if</span> defined(<span class="macro" data-ref="_M/__sparc64__">__sparc64__</span>)</u></td></tr>
+<tr><th id="236">236</th><td><u>#define	LZ4_FORCE_SW_BITCOUNT</u></td></tr>
+<tr><th id="237">237</th><td><u>#<span data-ppcond="235">endif</span></u></td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td><i>/*</i></td></tr>
+<tr><th id="240">240</th><td><i> * Compiler Options</i></td></tr>
+<tr><th id="241">241</th><td><i> */</i></td></tr>
+<tr><th id="242">242</th><td><u>#<span data-ppcond="242">if</span> <span class="macro" title="199901L" data-ref="_M/__STDC_VERSION__">__STDC_VERSION__</span> &gt;= 199901L	/* C99 */</u></td></tr>
+<tr><th id="243">243</th><td><i>/* "restrict" is a known keyword */</i></td></tr>
+<tr><th id="244">244</th><td><u>#<span data-ppcond="242">else</span></u></td></tr>
+<tr><th id="245">245</th><td><i>/* Disable restrict */</i></td></tr>
+<tr><th id="246">246</th><td><u>#define	restrict</u></td></tr>
+<tr><th id="247">247</th><td><u>#<span data-ppcond="242">endif</span></u></td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><u>#define	<dfn class="macro" id="_M/lz4_bswap16" data-ref="_M/lz4_bswap16">lz4_bswap16</dfn>(x) ((unsigned short int) ((((x) &gt;&gt; 8) &amp; 0xffu) | \</u></td></tr>
+<tr><th id="250">250</th><td><u>	(((x) &amp; 0xffu) &lt;&lt; 8)))</u></td></tr>
+<tr><th id="251">251</th><td></td></tr>
+<tr><th id="252">252</th><td><u>#define	<dfn class="macro" id="_M/expect" data-ref="_M/expect">expect</dfn>(expr, value)    (<a class="ref fn" href="#513" title='__builtin_expect' data-ref="__builtin_expect" data-ref-filename="__builtin_expect">__builtin_expect</a>((expr), (value)))</u></td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td><u>#<span data-ppcond="254">if</span> defined(<span class="macro" data-ref="_M/likely">likely</span>)</u></td></tr>
+<tr><th id="255">255</th><td><u>#undef likely</u></td></tr>
+<tr><th id="256">256</th><td><u>#<span data-ppcond="254">endif</span></u></td></tr>
+<tr><th id="257">257</th><td><u>#<span data-ppcond="257">if</span> defined(<span class="macro" data-ref="_M/unlikely">unlikely</span>)</u></td></tr>
+<tr><th id="258">258</th><td><u>#undef unlikely</u></td></tr>
+<tr><th id="259">259</th><td><u>#<span data-ppcond="257">endif</span></u></td></tr>
+<tr><th id="260">260</th><td></td></tr>
+<tr><th id="261">261</th><td><u>#define	<dfn class="macro" id="_M/likely" data-ref="_M/likely">likely</dfn>(expr)	expect((expr) != 0, 1)</u></td></tr>
+<tr><th id="262">262</th><td><u>#define	<dfn class="macro" id="_M/unlikely" data-ref="_M/unlikely">unlikely</dfn>(expr)	expect((expr) != 0, 0)</u></td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td><i>/* Basic types */</i></td></tr>
+<tr><th id="265">265</th><td><u>#define	<dfn class="macro" id="_M/BYTE" data-ref="_M/BYTE">BYTE</dfn>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a></u></td></tr>
+<tr><th id="266">266</th><td><u>#define	<dfn class="macro" id="_M/U16" data-ref="_M/U16">U16</dfn>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a></u></td></tr>
+<tr><th id="267">267</th><td><u>#define	<dfn class="macro" id="_M/U32" data-ref="_M/U32">U32</dfn>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></u></td></tr>
+<tr><th id="268">268</th><td><u>#define	<dfn class="macro" id="_M/S32" data-ref="_M/S32">S32</dfn>	int32_t</u></td></tr>
+<tr><th id="269">269</th><td><u>#define	<dfn class="macro" id="_M/U64" data-ref="_M/U64">U64</dfn>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a></u></td></tr>
+<tr><th id="270">270</th><td></td></tr>
+<tr><th id="271">271</th><td><u>#<span data-ppcond="271">ifndef</span> <span class="macro" data-ref="_M/LZ4_FORCE_UNALIGNED_ACCESS">LZ4_FORCE_UNALIGNED_ACCESS</span></u></td></tr>
+<tr><th id="272">272</th><td><u>#pragma pack(1)</u></td></tr>
+<tr><th id="273">273</th><td><u>#<span data-ppcond="271">endif</span></u></td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="_U16_S" title='_U16_S' data-ref="_U16_S" data-ref-filename="_U16_S"><a class="type" href="#_U16_S" title='_U16_S' data-ref="_U16_S" data-ref-filename="_U16_S">_U16_S</a></dfn> {</td></tr>
+<tr><th id="276">276</th><td>	<a class="macro" href="#266" title="uint16_t" data-ref="_M/U16">U16</a> <dfn class="tu decl field" id="_U16_S::v" title='_U16_S::v' data-type='uint16_t' data-ref="_U16_S::v" data-ref-filename="_U16_S..v">v</dfn>;</td></tr>
+<tr><th id="277">277</th><td>} <dfn class="typedef" id="U16_S" title='U16_S' data-type='struct _U16_S' data-ref="U16_S" data-ref-filename="U16_S">U16_S</dfn>;</td></tr>
+<tr><th id="278">278</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="_U32_S" title='_U32_S' data-ref="_U32_S" data-ref-filename="_U32_S"><a class="type" href="#_U32_S" title='_U32_S' data-ref="_U32_S" data-ref-filename="_U32_S">_U32_S</a></dfn> {</td></tr>
+<tr><th id="279">279</th><td>	<a class="macro" href="#267" title="uint32_t" data-ref="_M/U32">U32</a> <dfn class="tu decl field" id="_U32_S::v" title='_U32_S::v' data-type='uint32_t' data-ref="_U32_S::v" data-ref-filename="_U32_S..v">v</dfn>;</td></tr>
+<tr><th id="280">280</th><td>} <dfn class="typedef" id="U32_S" title='U32_S' data-type='struct _U32_S' data-ref="U32_S" data-ref-filename="U32_S">U32_S</dfn>;</td></tr>
+<tr><th id="281">281</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="_U64_S" title='_U64_S' data-ref="_U64_S" data-ref-filename="_U64_S"><a class="type" href="#_U64_S" title='_U64_S' data-ref="_U64_S" data-ref-filename="_U64_S">_U64_S</a></dfn> {</td></tr>
+<tr><th id="282">282</th><td>	<a class="macro" href="#269" title="uint64_t" data-ref="_M/U64">U64</a> <dfn class="tu decl field" id="_U64_S::v" title='_U64_S::v' data-type='uint64_t' data-ref="_U64_S::v" data-ref-filename="_U64_S..v">v</dfn>;</td></tr>
+<tr><th id="283">283</th><td>} <dfn class="typedef" id="U64_S" title='U64_S' data-type='struct _U64_S' data-ref="U64_S" data-ref-filename="U64_S">U64_S</dfn>;</td></tr>
+<tr><th id="284">284</th><td></td></tr>
+<tr><th id="285">285</th><td><u>#<span data-ppcond="285">ifndef</span> <span class="macro" data-ref="_M/LZ4_FORCE_UNALIGNED_ACCESS">LZ4_FORCE_UNALIGNED_ACCESS</span></u></td></tr>
+<tr><th id="286">286</th><td><u>#pragma pack()</u></td></tr>
+<tr><th id="287">287</th><td><u>#<span data-ppcond="285">endif</span></u></td></tr>
+<tr><th id="288">288</th><td></td></tr>
+<tr><th id="289">289</th><td><u>#define	<dfn class="macro" id="_M/A64" data-ref="_M/A64">A64</dfn>(x) (((U64_S *)(x))-&gt;v)</u></td></tr>
+<tr><th id="290">290</th><td><u>#define	<dfn class="macro" id="_M/A32" data-ref="_M/A32">A32</dfn>(x) (((<a class="typedef" href="#U32_S" title='U32_S' data-type='struct _U32_S' data-ref="U32_S" data-ref-filename="U32_S">U32_S</a> *)(x))-&gt;<a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='r' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v"><a class="tu ref field" href="#_U32_S::v" title='_U32_S::v' data-use='w' data-ref="_U32_S::v" data-ref-filename="_U32_S..v">v</a></a></a></a></a></a></a></a></a></a></a></a></a>)</u></td></tr>
+<tr><th id="291">291</th><td><u>#define	<dfn class="macro" id="_M/A16" data-ref="_M/A16">A16</dfn>(x) (((<a class="typedef" href="#U16_S" title='U16_S' data-type='struct _U16_S' data-ref="U16_S" data-ref-filename="U16_S">U16_S</a> *)(x))-&gt;<a class="tu ref field" href="#_U16_S::v" title='_U16_S::v' data-use='w' data-ref="_U16_S::v" data-ref-filename="_U16_S..v"><a class="tu ref field" href="#_U16_S::v" title='_U16_S::v' data-use='r' data-ref="_U16_S::v" data-ref-filename="_U16_S..v"><a class="tu ref field" href="#_U16_S::v" title='_U16_S::v' data-use='r' data-ref="_U16_S::v" data-ref-filename="_U16_S..v"><a class="tu ref field" href="#_U16_S::v" title='_U16_S::v' data-use='r' data-ref="_U16_S::v" data-ref-filename="_U16_S..v"><a class="tu ref field" href="#_U16_S::v" title='_U16_S::v' data-use='r' data-ref="_U16_S::v" data-ref-filename="_U16_S..v"><a class="tu ref field" href="#_U16_S::v" title='_U16_S::v' data-use='r' data-ref="_U16_S::v" data-ref-filename="_U16_S..v">v</a></a></a></a></a></a>)</u></td></tr>
+<tr><th id="292">292</th><td></td></tr>
+<tr><th id="293">293</th><td><i>/*</i></td></tr>
+<tr><th id="294">294</th><td><i> * Constants</i></td></tr>
+<tr><th id="295">295</th><td><i> */</i></td></tr>
+<tr><th id="296">296</th><td><u>#define	<dfn class="macro" id="_M/MINMATCH" data-ref="_M/MINMATCH">MINMATCH</dfn> 4</u></td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td><u>#define	<dfn class="macro" id="_M/HASH_LOG" data-ref="_M/HASH_LOG">HASH_LOG</dfn> COMPRESSIONLEVEL</u></td></tr>
+<tr><th id="299">299</th><td><u>#define	<dfn class="macro" id="_M/HASHTABLESIZE" data-ref="_M/HASHTABLESIZE">HASHTABLESIZE</dfn> (1 &lt;&lt; HASH_LOG)</u></td></tr>
+<tr><th id="300">300</th><td><u>#define	<dfn class="macro" id="_M/HASH_MASK" data-ref="_M/HASH_MASK">HASH_MASK</dfn> (HASHTABLESIZE - 1)</u></td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td><u>#define	<dfn class="macro" id="_M/SKIPSTRENGTH" data-ref="_M/SKIPSTRENGTH">SKIPSTRENGTH</dfn> (NOTCOMPRESSIBLE_CONFIRMATION &gt; 2 ? \</u></td></tr>
+<tr><th id="303">303</th><td><u>	NOTCOMPRESSIBLE_CONFIRMATION : 2)</u></td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td><i>/*</i></td></tr>
+<tr><th id="306">306</th><td><i> * Defines if memory is allocated into the stack (local variable),</i></td></tr>
+<tr><th id="307">307</th><td><i> * or into the heap (kmem_alloc()).</i></td></tr>
+<tr><th id="308">308</th><td><i> */</i></td></tr>
+<tr><th id="309">309</th><td><u>#define	<dfn class="macro" id="_M/HEAPMODE" data-ref="_M/HEAPMODE">HEAPMODE</dfn> (HASH_LOG &gt; STACKLIMIT)</u></td></tr>
+<tr><th id="310">310</th><td><u>#define	<dfn class="macro" id="_M/COPYLENGTH" data-ref="_M/COPYLENGTH">COPYLENGTH</dfn> 8</u></td></tr>
+<tr><th id="311">311</th><td><u>#define	<dfn class="macro" id="_M/LASTLITERALS" data-ref="_M/LASTLITERALS">LASTLITERALS</dfn> 5</u></td></tr>
+<tr><th id="312">312</th><td><u>#define	<dfn class="macro" id="_M/MFLIMIT" data-ref="_M/MFLIMIT">MFLIMIT</dfn> (COPYLENGTH + MINMATCH)</u></td></tr>
+<tr><th id="313">313</th><td><u>#define	<dfn class="macro" id="_M/MINLENGTH" data-ref="_M/MINLENGTH">MINLENGTH</dfn> (MFLIMIT + 1)</u></td></tr>
+<tr><th id="314">314</th><td></td></tr>
+<tr><th id="315">315</th><td><u>#define	<dfn class="macro" id="_M/MAXD_LOG" data-ref="_M/MAXD_LOG">MAXD_LOG</dfn> 16</u></td></tr>
+<tr><th id="316">316</th><td><u>#define	<dfn class="macro" id="_M/MAX_DISTANCE" data-ref="_M/MAX_DISTANCE">MAX_DISTANCE</dfn> ((1 &lt;&lt; MAXD_LOG) - 1)</u></td></tr>
+<tr><th id="317">317</th><td></td></tr>
+<tr><th id="318">318</th><td><u>#define	<dfn class="macro" id="_M/ML_BITS" data-ref="_M/ML_BITS">ML_BITS</dfn> 4</u></td></tr>
+<tr><th id="319">319</th><td><u>#define	<dfn class="macro" id="_M/ML_MASK" data-ref="_M/ML_MASK">ML_MASK</dfn> ((1U&lt;&lt;ML_BITS)-1)</u></td></tr>
+<tr><th id="320">320</th><td><u>#define	<dfn class="macro" id="_M/RUN_BITS" data-ref="_M/RUN_BITS">RUN_BITS</dfn> (8-ML_BITS)</u></td></tr>
+<tr><th id="321">321</th><td><u>#define	<dfn class="macro" id="_M/RUN_MASK" data-ref="_M/RUN_MASK">RUN_MASK</dfn> ((1U&lt;&lt;RUN_BITS)-1)</u></td></tr>
+<tr><th id="322">322</th><td></td></tr>
+<tr><th id="323">323</th><td></td></tr>
+<tr><th id="324">324</th><td><i>/*</i></td></tr>
+<tr><th id="325">325</th><td><i> * Architecture-specific macros</i></td></tr>
+<tr><th id="326">326</th><td><i> */</i></td></tr>
+<tr><th id="327">327</th><td><u>#<span data-ppcond="327">if</span> <a class="macro" href="#193" title="0" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</a></u></td></tr>
+<tr><th id="328">328</th><td><u>#define	STEPSIZE 8</u></td></tr>
+<tr><th id="329">329</th><td><u>#define	UARCH U64</u></td></tr>
+<tr><th id="330">330</th><td><u>#define	AARCH A64</u></td></tr>
+<tr><th id="331">331</th><td><u>#define	LZ4_COPYSTEP(s, d)	A64(d) = A64(s); d += 8; s += 8;</u></td></tr>
+<tr><th id="332">332</th><td><u>#define	LZ4_COPYPACKET(s, d)	LZ4_COPYSTEP(s, d)</u></td></tr>
+<tr><th id="333">333</th><td><u>#define	LZ4_SECURECOPY(s, d, e)	if (d &lt; e) LZ4_WILDCOPY(s, d, e)</u></td></tr>
+<tr><th id="334">334</th><td><u>#define	HTYPE U32</u></td></tr>
+<tr><th id="335">335</th><td><u>#define	INITBASE(base)		const BYTE* const base = ip</u></td></tr>
+<tr><th id="336">336</th><td><u>#<span data-ppcond="327">else</span> /* !LZ4_ARCH64 */</u></td></tr>
+<tr><th id="337">337</th><td><u>#define	<dfn class="macro" id="_M/STEPSIZE" data-ref="_M/STEPSIZE">STEPSIZE</dfn> 4</u></td></tr>
+<tr><th id="338">338</th><td><u>#define	<dfn class="macro" id="_M/UARCH" data-ref="_M/UARCH">UARCH</dfn> U32</u></td></tr>
+<tr><th id="339">339</th><td><u>#define	<dfn class="macro" id="_M/AARCH" data-ref="_M/AARCH">AARCH</dfn> A32</u></td></tr>
+<tr><th id="340">340</th><td><u>#define	<dfn class="macro" id="_M/LZ4_COPYSTEP" data-ref="_M/LZ4_COPYSTEP">LZ4_COPYSTEP</dfn>(s, d)	A32(d) = A32(s); d += 4; s += 4;</u></td></tr>
+<tr><th id="341">341</th><td><u>#define	<dfn class="macro" id="_M/LZ4_COPYPACKET" data-ref="_M/LZ4_COPYPACKET">LZ4_COPYPACKET</dfn>(s, d)	LZ4_COPYSTEP(s, d); LZ4_COPYSTEP(s, d);</u></td></tr>
+<tr><th id="342">342</th><td><u>#define	<dfn class="macro" id="_M/LZ4_SECURECOPY" data-ref="_M/LZ4_SECURECOPY">LZ4_SECURECOPY</dfn>		LZ4_WILDCOPY</u></td></tr>
+<tr><th id="343">343</th><td><u>#define	<dfn class="macro" id="_M/HTYPE" data-ref="_M/HTYPE">HTYPE</dfn> const BYTE *</u></td></tr>
+<tr><th id="344">344</th><td><u>#define	<dfn class="macro" id="_M/INITBASE" data-ref="_M/INITBASE">INITBASE</dfn>(base)		const int base = 0</u></td></tr>
+<tr><th id="345">345</th><td><u>#<span data-ppcond="327">endif</span> /* !LZ4_ARCH64 */</u></td></tr>
+<tr><th id="346">346</th><td></td></tr>
+<tr><th id="347">347</th><td><u>#<span data-ppcond="347">if</span> (defined(<span class="macro" data-ref="_M/LZ4_BIG_ENDIAN">LZ4_BIG_ENDIAN</span>) &amp;&amp; !defined(<span class="macro" data-ref="_M/BIG_ENDIAN_NATIVE_BUT_INCOMPATIBLE">BIG_ENDIAN_NATIVE_BUT_INCOMPATIBLE</span>))</u></td></tr>
+<tr><th id="348">348</th><td><u>#define	LZ4_READ_LITTLEENDIAN_16(d, s, p) \</u></td></tr>
+<tr><th id="349">349</th><td><u>	{ U16 v = A16(p); v = lz4_bswap16(v); d = (s) - v; }</u></td></tr>
+<tr><th id="350">350</th><td><u>#define	LZ4_WRITE_LITTLEENDIAN_16(p, i) \</u></td></tr>
+<tr><th id="351">351</th><td><u>	{ U16 v = (U16)(i); v = lz4_bswap16(v); A16(p) = v; p += 2; }</u></td></tr>
+<tr><th id="352">352</th><td><u>#<span data-ppcond="347">else</span></u></td></tr>
+<tr><th id="353">353</th><td><u>#define	<dfn class="macro" id="_M/LZ4_READ_LITTLEENDIAN_16" data-ref="_M/LZ4_READ_LITTLEENDIAN_16">LZ4_READ_LITTLEENDIAN_16</dfn>(d, s, p) { d = (s) - A16(p); }</u></td></tr>
+<tr><th id="354">354</th><td><u>#define	<dfn class="macro" id="_M/LZ4_WRITE_LITTLEENDIAN_16" data-ref="_M/LZ4_WRITE_LITTLEENDIAN_16">LZ4_WRITE_LITTLEENDIAN_16</dfn>(p, v)  { A16(p) = v; p += 2; }</u></td></tr>
+<tr><th id="355">355</th><td><u>#<span data-ppcond="347">endif</span></u></td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td></td></tr>
+<tr><th id="358">358</th><td><i>/* Local structures */</i></td></tr>
+<tr><th id="359">359</th><td><b>struct</b> <dfn class="type def" id="refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</dfn> {</td></tr>
+<tr><th id="360">360</th><td>	<a class="macro" href="#343" title="const uint8_t *" data-ref="_M/HTYPE">HTYPE</a> <dfn class="tu decl field" id="refTables::hashTable" title='refTables::hashTable' data-type='const uint8_t *[4096]' data-ref="refTables::hashTable" data-ref-filename="refTables..hashTable">hashTable</dfn>[<a class="macro" href="#299" title="(1 &lt;&lt; 12)" data-ref="_M/HASHTABLESIZE">HASHTABLESIZE</a>];</td></tr>
+<tr><th id="361">361</th><td>};</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td></td></tr>
+<tr><th id="364">364</th><td><i>/* Macros */</i></td></tr>
+<tr><th id="365">365</th><td><u>#define	<dfn class="macro" id="_M/LZ4_HASH_FUNCTION" data-ref="_M/LZ4_HASH_FUNCTION">LZ4_HASH_FUNCTION</dfn>(i) (((i) * 2654435761U) &gt;&gt; ((MINMATCH * 8) - \</u></td></tr>
+<tr><th id="366">366</th><td><u>	HASH_LOG))</u></td></tr>
+<tr><th id="367">367</th><td><u>#define	<dfn class="macro" id="_M/LZ4_HASH_VALUE" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</dfn>(p) LZ4_HASH_FUNCTION(A32(p))</u></td></tr>
+<tr><th id="368">368</th><td><u>#define	<dfn class="macro" id="_M/LZ4_WILDCOPY" data-ref="_M/LZ4_WILDCOPY">LZ4_WILDCOPY</dfn>(s, d, e) do { LZ4_COPYPACKET(s, d) } while (d &lt; e);</u></td></tr>
+<tr><th id="369">369</th><td><u>#define	<dfn class="macro" id="_M/LZ4_BLINDCOPY" data-ref="_M/LZ4_BLINDCOPY">LZ4_BLINDCOPY</dfn>(s, d, l) { BYTE* <dfn class="local col1 decl" id="61e" title='e' data-type='uint8_t *' data-ref="61e" data-ref-filename="61e"><dfn class="local col1 decl" id="91e" title='e' data-type='uint8_t *' data-ref="91e" data-ref-filename="91e">e</dfn></dfn> = (d) + l; LZ4_WILDCOPY(s, d, <a class="local col1 ref" href="#549" title='e' data-ref="61e" data-ref-filename="61e"><a class="local col1 ref" href="#742" title='e' data-ref="91e" data-ref-filename="91e">e</a></a>); \</u></td></tr>
+<tr><th id="370">370</th><td><u>	d = <a class="local col1 ref" href="#549" title='e' data-ref="61e" data-ref-filename="61e"><a class="local col1 ref" href="#742" title='e' data-ref="91e" data-ref-filename="91e">e</a></a>; }</u></td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td><i>/* Private functions */</i></td></tr>
+<tr><th id="374">374</th><td><u>#<span data-ppcond="374">if</span> <a class="macro" href="#193" title="0" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</a></u></td></tr>
+<tr><th id="375">375</th><td></td></tr>
+<tr><th id="376">376</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="377">377</th><td>LZ4_NbCommonBytes(<em>register</em> U64 val)</td></tr>
+<tr><th id="378">378</th><td>{</td></tr>
+<tr><th id="379">379</th><td><u>#if defined(LZ4_BIG_ENDIAN)</u></td></tr>
+<tr><th id="380">380</th><td><u>#if !defined(LZ4_FORCE_SW_BITCOUNT)</u></td></tr>
+<tr><th id="381">381</th><td>	<b>return</b> (__builtin_clzll(val) &gt;&gt; <var>3</var>);</td></tr>
+<tr><th id="382">382</th><td><u>#else</u></td></tr>
+<tr><th id="383">383</th><td>	<em>int</em> r;</td></tr>
+<tr><th id="384">384</th><td>	<b>if</b> (!(val &gt;&gt; <var>32</var>)) {</td></tr>
+<tr><th id="385">385</th><td>		r = <var>4</var>;</td></tr>
+<tr><th id="386">386</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="387">387</th><td>		r = <var>0</var>;</td></tr>
+<tr><th id="388">388</th><td>		val &gt;&gt;= <var>32</var>;</td></tr>
+<tr><th id="389">389</th><td>	}</td></tr>
+<tr><th id="390">390</th><td>	<b>if</b> (!(val &gt;&gt; <var>16</var>)) {</td></tr>
+<tr><th id="391">391</th><td>		r += <var>2</var>;</td></tr>
+<tr><th id="392">392</th><td>		val &gt;&gt;= <var>8</var>;</td></tr>
+<tr><th id="393">393</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="394">394</th><td>		val &gt;&gt;= <var>24</var>;</td></tr>
+<tr><th id="395">395</th><td>	}</td></tr>
+<tr><th id="396">396</th><td>	r += (!val);</td></tr>
+<tr><th id="397">397</th><td>	<b>return</b> (r);</td></tr>
+<tr><th id="398">398</th><td><u>#endif</u></td></tr>
+<tr><th id="399">399</th><td><u>#else</u></td></tr>
+<tr><th id="400">400</th><td><u>#if !defined(LZ4_FORCE_SW_BITCOUNT)</u></td></tr>
+<tr><th id="401">401</th><td>	<b>return</b> (__builtin_ctzll(val) &gt;&gt; <var>3</var>);</td></tr>
+<tr><th id="402">402</th><td><u>#else</u></td></tr>
+<tr><th id="403">403</th><td>	<em>static</em> <em>const</em> <em>int</em> DeBruijnBytePos[<var>64</var>] =</td></tr>
+<tr><th id="404">404</th><td>	    { <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>1</var>, <var>1</var>, <var>2</var>, <var>0</var>, <var>3</var>, <var>1</var>, <var>3</var>, <var>1</var>, <var>4</var>, <var>2</var>, <var>7</var>, <var>0</var>, <var>2</var>, <var>3</var>, <var>6</var>, <var>1</var>, <var>5</var>,</td></tr>
+<tr><th id="405">405</th><td>		<var>3</var>, <var>5</var>, <var>1</var>, <var>3</var>, <var>4</var>, <var>4</var>, <var>2</var>, <var>5</var>, <var>6</var>, <var>7</var>, <var>7</var>, <var>0</var>, <var>1</var>, <var>2</var>, <var>3</var>, <var>3</var>, <var>4</var>, <var>6</var>, <var>2</var>, <var>6</var>, <var>5</var>,</td></tr>
+<tr><th id="406">406</th><td>		<var>5</var>, <var>3</var>, <var>4</var>, <var>5</var>, <var>6</var>, <var>7</var>, <var>1</var>, <var>2</var>, <var>4</var>, <var>6</var>, <var>4</var>,</td></tr>
+<tr><th id="407">407</th><td>		<var>4</var>, <var>5</var>, <var>7</var>, <var>2</var>, <var>6</var>, <var>5</var>, <var>7</var>, <var>6</var>, <var>7</var>, <var>7</var></td></tr>
+<tr><th id="408">408</th><td>	};</td></tr>
+<tr><th id="409">409</th><td>	<b>return</b> DeBruijnBytePos[((U64) ((val &amp; -val) * <var>0x0218A392CDABBD3F</var>)) &gt;&gt;</td></tr>
+<tr><th id="410">410</th><td>	    <var>58</var>];</td></tr>
+<tr><th id="411">411</th><td><u>#endif</u></td></tr>
+<tr><th id="412">412</th><td><u>#endif</u></td></tr>
+<tr><th id="413">413</th><td>}</td></tr>
+<tr><th id="414">414</th><td></td></tr>
+<tr><th id="415">415</th><td><u>#<span data-ppcond="374">else</span></u></td></tr>
+<tr><th id="416">416</th><td></td></tr>
+<tr><th id="417">417</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="418">418</th><td><dfn class="tu decl def fn" id="LZ4_NbCommonBytes" title='LZ4_NbCommonBytes' data-type='int LZ4_NbCommonBytes(uint32_t val)' data-ref="LZ4_NbCommonBytes" data-ref-filename="LZ4_NbCommonBytes">LZ4_NbCommonBytes</dfn>(<em>register</em> <a class="macro" href="#267" title="uint32_t" data-ref="_M/U32">U32</a> <dfn class="local col4 decl" id="34val" title='val' data-type='uint32_t' data-ref="34val" data-ref-filename="34val">val</dfn>)</td></tr>
+<tr><th id="419">419</th><td>{</td></tr>
+<tr><th id="420">420</th><td><u>#<span data-ppcond="420">if</span> defined(<span class="macro" data-ref="_M/LZ4_BIG_ENDIAN">LZ4_BIG_ENDIAN</span>)</u></td></tr>
+<tr><th id="421">421</th><td><u>#if !defined(LZ4_FORCE_SW_BITCOUNT)</u></td></tr>
+<tr><th id="422">422</th><td>	<b>return</b> (__builtin_clz(val) &gt;&gt; <var>3</var>);</td></tr>
+<tr><th id="423">423</th><td><u>#else</u></td></tr>
+<tr><th id="424">424</th><td>	<em>int</em> r;</td></tr>
+<tr><th id="425">425</th><td>	<b>if</b> (!(val &gt;&gt; <var>16</var>)) {</td></tr>
+<tr><th id="426">426</th><td>		r = <var>2</var>;</td></tr>
+<tr><th id="427">427</th><td>		val &gt;&gt;= <var>8</var>;</td></tr>
+<tr><th id="428">428</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="429">429</th><td>		r = <var>0</var>;</td></tr>
+<tr><th id="430">430</th><td>		val &gt;&gt;= <var>24</var>;</td></tr>
+<tr><th id="431">431</th><td>	}</td></tr>
+<tr><th id="432">432</th><td>	r += (!val);</td></tr>
+<tr><th id="433">433</th><td>	<b>return</b> (r);</td></tr>
+<tr><th id="434">434</th><td><u>#endif</u></td></tr>
+<tr><th id="435">435</th><td><u>#<span data-ppcond="420">else</span></u></td></tr>
+<tr><th id="436">436</th><td><u>#<span data-ppcond="436">if</span> !defined(<span class="macro" data-ref="_M/LZ4_FORCE_SW_BITCOUNT">LZ4_FORCE_SW_BITCOUNT</span>)</u></td></tr>
+<tr><th id="437">437</th><td>	<b>return</b> (<a class="ref fn" href="#437" title='__builtin_ctz' data-ref="__builtin_ctz" data-ref-filename="__builtin_ctz">__builtin_ctz</a>(<a class="local col4 ref" href="#34val" title='val' data-ref="34val" data-ref-filename="34val">val</a>) &gt;&gt; <var>3</var>);</td></tr>
+<tr><th id="438">438</th><td><u>#<span data-ppcond="436">else</span></u></td></tr>
+<tr><th id="439">439</th><td>	<em>static</em> <em>const</em> <em>int</em> DeBruijnBytePos[<var>32</var>] = {</td></tr>
+<tr><th id="440">440</th><td>		<var>0</var>, <var>0</var>, <var>3</var>, <var>0</var>, <var>3</var>, <var>1</var>, <var>3</var>, <var>0</var>,</td></tr>
+<tr><th id="441">441</th><td>		<var>3</var>, <var>2</var>, <var>2</var>, <var>1</var>, <var>3</var>, <var>2</var>, <var>0</var>, <var>1</var>,</td></tr>
+<tr><th id="442">442</th><td>		<var>3</var>, <var>3</var>, <var>1</var>, <var>2</var>, <var>2</var>, <var>2</var>, <var>2</var>, <var>0</var>,</td></tr>
+<tr><th id="443">443</th><td>		<var>3</var>, <var>1</var>, <var>2</var>, <var>0</var>, <var>1</var>, <var>0</var>, <var>1</var>, <var>1</var></td></tr>
+<tr><th id="444">444</th><td>	};</td></tr>
+<tr><th id="445">445</th><td>	<b>return</b> DeBruijnBytePos[((U32) ((val &amp; -(S32) val) * <var>0x077CB531U</var>)) &gt;&gt;</td></tr>
+<tr><th id="446">446</th><td>	    <var>27</var>];</td></tr>
+<tr><th id="447">447</th><td><u>#<span data-ppcond="436">endif</span></u></td></tr>
+<tr><th id="448">448</th><td><u>#<span data-ppcond="420">endif</span></u></td></tr>
+<tr><th id="449">449</th><td>}</td></tr>
+<tr><th id="450">450</th><td></td></tr>
+<tr><th id="451">451</th><td><u>#<span data-ppcond="374">endif</span></u></td></tr>
+<tr><th id="452">452</th><td></td></tr>
+<tr><th id="453">453</th><td><i  data-doc="LZ4_compressBound">/* Public functions */</i></td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="456">456</th><td><dfn class="tu decl def fn" id="LZ4_compressBound" title='LZ4_compressBound' data-type='int LZ4_compressBound(int isize)' data-ref="LZ4_compressBound" data-ref-filename="LZ4_compressBound">LZ4_compressBound</dfn>(<em>int</em> <dfn class="local col5 decl" id="35isize" title='isize' data-type='int' data-ref="35isize" data-ref-filename="35isize">isize</dfn>)</td></tr>
+<tr><th id="457">457</th><td>{</td></tr>
+<tr><th id="458">458</th><td>	<b>return</b> (<a class="local col5 ref" href="#35isize" title='isize' data-ref="35isize" data-ref-filename="35isize">isize</a> + (<a class="local col5 ref" href="#35isize" title='isize' data-ref="35isize" data-ref-filename="35isize">isize</a> / <var>255</var>) + <var>16</var>);</td></tr>
+<tr><th id="459">459</th><td>}</td></tr>
+<tr><th id="460">460</th><td></td></tr>
+<tr><th id="461">461</th><td><i>/* Compression functions */</i></td></tr>
+<tr><th id="462">462</th><td></td></tr>
+<tr><th id="463">463</th><td><i  data-doc="LZ4_compressCtx">/*ARGSUSED*/</i></td></tr>
+<tr><th id="464">464</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="465">465</th><td><dfn class="tu decl def fn" id="LZ4_compressCtx" title='LZ4_compressCtx' data-type='int LZ4_compressCtx(void * ctx, const char * source, char * dest, int isize, int osize)' data-ref="LZ4_compressCtx" data-ref-filename="LZ4_compressCtx">LZ4_compressCtx</dfn>(<em>void</em> *<dfn class="local col6 decl" id="36ctx" title='ctx' data-type='void *' data-ref="36ctx" data-ref-filename="36ctx">ctx</dfn>, <em>const</em> <em>char</em> *<dfn class="local col7 decl" id="37source" title='source' data-type='const char *' data-ref="37source" data-ref-filename="37source">source</dfn>, <em>char</em> *<dfn class="local col8 decl" id="38dest" title='dest' data-type='char *' data-ref="38dest" data-ref-filename="38dest">dest</dfn>, <em>int</em> <dfn class="local col9 decl" id="39isize" title='isize' data-type='int' data-ref="39isize" data-ref-filename="39isize">isize</dfn>,</td></tr>
+<tr><th id="466">466</th><td>    <em>int</em> <dfn class="local col0 decl" id="40osize" title='osize' data-type='int' data-ref="40osize" data-ref-filename="40osize">osize</dfn>)</td></tr>
+<tr><th id="467">467</th><td>{</td></tr>
+<tr><th id="468">468</th><td><u>#<span data-ppcond="468">if</span> <a class="macro" href="#309" title="(12 &gt; 0)" data-ref="_M/HEAPMODE">HEAPMODE</a></u></td></tr>
+<tr><th id="469">469</th><td>	<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a> *<dfn class="local col1 decl" id="41srt" title='srt' data-type='struct refTables *' data-ref="41srt" data-ref-filename="41srt">srt</dfn> = (<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a> *)<a class="local col6 ref" href="#36ctx" title='ctx' data-ref="36ctx" data-ref-filename="36ctx">ctx</a>;</td></tr>
+<tr><th id="470">470</th><td>	<a class="macro" href="#343" title="const uint8_t *" data-ref="_M/HTYPE">HTYPE</a> *<dfn class="local col2 decl" id="42HashTable" title='HashTable' data-type='const uint8_t **' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</dfn> = (<a class="macro" href="#343" title="const uint8_t *" data-ref="_M/HTYPE">HTYPE</a> *) (<a class="local col1 ref" href="#41srt" title='srt' data-ref="41srt" data-ref-filename="41srt">srt</a>-&gt;<a class="tu ref field" href="#refTables::hashTable" title='refTables::hashTable' data-use='r' data-ref="refTables::hashTable" data-ref-filename="refTables..hashTable">hashTable</a>);</td></tr>
+<tr><th id="471">471</th><td><u>#<span data-ppcond="468">else</span></u></td></tr>
+<tr><th id="472">472</th><td>	HTYPE HashTable[HASHTABLESIZE] = { <var>0</var> };</td></tr>
+<tr><th id="473">473</th><td><u>#<span data-ppcond="468">endif</span></u></td></tr>
+<tr><th id="474">474</th><td></td></tr>
+<tr><th id="475">475</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col3 decl" id="43ip" title='ip' data-type='const uint8_t *' data-ref="43ip" data-ref-filename="43ip">ip</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col7 ref" href="#37source" title='source' data-ref="37source" data-ref-filename="37source">source</a>;</td></tr>
+<tr><th id="476">476</th><td>	<a class="macro" href="#344" title="const int base = 0" data-ref="_M/INITBASE">INITBASE</a>(<dfn class="local col4 decl" id="44base" title='base' data-type='const int' data-ref="44base" data-ref-filename="44base">base</dfn>);</td></tr>
+<tr><th id="477">477</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col5 decl" id="45anchor" title='anchor' data-type='const uint8_t *' data-ref="45anchor" data-ref-filename="45anchor">anchor</dfn> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>;</td></tr>
+<tr><th id="478">478</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col6 decl" id="46iend" title='iend' data-type='const uint8_t *const' data-ref="46iend" data-ref-filename="46iend">iend</dfn> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> + <a class="local col9 ref" href="#39isize" title='isize' data-ref="39isize" data-ref-filename="39isize">isize</a>;</td></tr>
+<tr><th id="479">479</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col7 decl" id="47oend" title='oend' data-type='const uint8_t *const' data-ref="47oend" data-ref-filename="47oend">oend</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col8 ref" href="#38dest" title='dest' data-ref="38dest" data-ref-filename="38dest">dest</a> + <a class="local col0 ref" href="#40osize" title='osize' data-ref="40osize" data-ref-filename="40osize">osize</a>;</td></tr>
+<tr><th id="480">480</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col8 decl" id="48mflimit" title='mflimit' data-type='const uint8_t *const' data-ref="48mflimit" data-ref-filename="48mflimit">mflimit</dfn> = <a class="local col6 ref" href="#46iend" title='iend' data-ref="46iend" data-ref-filename="46iend">iend</a> - <a class="macro" href="#312" title="(8 + 4)" data-ref="_M/MFLIMIT">MFLIMIT</a>;</td></tr>
+<tr><th id="481">481</th><td><u>#define	<dfn class="macro" id="_M/matchlimit" data-ref="_M/matchlimit">matchlimit</dfn> (<a class="local col6 ref" href="#46iend" title='iend' data-ref="46iend" data-ref-filename="46iend">iend</a> - LASTLITERALS)</u></td></tr>
+<tr><th id="482">482</th><td></td></tr>
+<tr><th id="483">483</th><td>	<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col9 decl" id="49op" title='op' data-type='uint8_t *' data-ref="49op" data-ref-filename="49op">op</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col8 ref" href="#38dest" title='dest' data-ref="38dest" data-ref-filename="38dest">dest</a>;</td></tr>
+<tr><th id="484">484</th><td></td></tr>
+<tr><th id="485">485</th><td>	<em>int</em> <dfn class="local col0 decl" id="50len" title='len' data-type='int' data-ref="50len" data-ref-filename="50len">len</dfn>, <dfn class="local col1 decl" id="51length" title='length' data-type='int' data-ref="51length" data-ref-filename="51length">length</dfn>;</td></tr>
+<tr><th id="486">486</th><td>	<em>const</em> <em>int</em> <dfn class="local col2 decl" id="52skipStrength" title='skipStrength' data-type='const int' data-ref="52skipStrength" data-ref-filename="52skipStrength">skipStrength</dfn> = <a class="macro" href="#302" title="(6 &gt; 2 ? 6 : 2)" data-ref="_M/SKIPSTRENGTH">SKIPSTRENGTH</a>;</td></tr>
+<tr><th id="487">487</th><td>	<a class="macro" href="#267" title="uint32_t" data-ref="_M/U32">U32</a> <dfn class="local col3 decl" id="53forwardH" title='forwardH' data-type='uint32_t' data-ref="53forwardH" data-ref-filename="53forwardH">forwardH</dfn>;</td></tr>
+<tr><th id="488">488</th><td></td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td>	<i>/* Init */</i></td></tr>
+<tr><th id="491">491</th><td>	<b>if</b> (<a class="local col9 ref" href="#39isize" title='isize' data-ref="39isize" data-ref-filename="39isize">isize</a> &lt; <a class="macro" href="#313" title="((8 + 4) + 1)" data-ref="_M/MINLENGTH">MINLENGTH</a>)</td></tr>
+<tr><th id="492">492</th><td>		<b>goto</b> <a class="lbl" href="#54_last_literals" data-ref="54_last_literals" data-ref-filename="54_last_literals">_last_literals</a>;</td></tr>
+<tr><th id="493">493</th><td></td></tr>
+<tr><th id="494">494</th><td>	<i>/* First Byte */</i></td></tr>
+<tr><th id="495">495</th><td>	<a class="local col2 ref" href="#42HashTable" title='HashTable' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</a>[<a class="macro" href="#367" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>)] = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="local col4 ref" href="#476" title='base' data-ref="44base" data-ref-filename="44base">base</a>;</td></tr>
+<tr><th id="496">496</th><td>	<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>++;</td></tr>
+<tr><th id="497">497</th><td>	<a class="local col3 ref" href="#53forwardH" title='forwardH' data-ref="53forwardH" data-ref-filename="53forwardH">forwardH</a> = <a class="macro" href="#367" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>);</td></tr>
+<tr><th id="498">498</th><td></td></tr>
+<tr><th id="499">499</th><td>	<i>/* Main Loop */</i></td></tr>
+<tr><th id="500">500</th><td>	<b>for</b> (;;) {</td></tr>
+<tr><th id="501">501</th><td>		<em>int</em> <dfn class="local col5 decl" id="55findMatchAttempts" title='findMatchAttempts' data-type='int' data-ref="55findMatchAttempts" data-ref-filename="55findMatchAttempts">findMatchAttempts</dfn> = (<var>1U</var> &lt;&lt; <a class="local col2 ref" href="#52skipStrength" title='skipStrength' data-ref="52skipStrength" data-ref-filename="52skipStrength">skipStrength</a>) + <var>3</var>;</td></tr>
+<tr><th id="502">502</th><td>		<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col6 decl" id="56forwardIp" title='forwardIp' data-type='const uint8_t *' data-ref="56forwardIp" data-ref-filename="56forwardIp">forwardIp</dfn> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>;</td></tr>
+<tr><th id="503">503</th><td>		<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col7 decl" id="57ref" title='ref' data-type='const uint8_t *' data-ref="57ref" data-ref-filename="57ref">ref</dfn>;</td></tr>
+<tr><th id="504">504</th><td>		<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col8 decl" id="58token" title='token' data-type='uint8_t *' data-ref="58token" data-ref-filename="58token">token</dfn>;</td></tr>
+<tr><th id="505">505</th><td></td></tr>
+<tr><th id="506">506</th><td>		<i>/* Find a match */</i></td></tr>
+<tr><th id="507">507</th><td>		<b>do</b> {</td></tr>
+<tr><th id="508">508</th><td>			<a class="macro" href="#267" title="uint32_t" data-ref="_M/U32">U32</a> <dfn class="local col9 decl" id="59h" title='h' data-type='uint32_t' data-ref="59h" data-ref-filename="59h">h</dfn> = <a class="local col3 ref" href="#53forwardH" title='forwardH' data-ref="53forwardH" data-ref-filename="53forwardH">forwardH</a>;</td></tr>
+<tr><th id="509">509</th><td>			<em>int</em> <dfn class="local col0 decl" id="60step" title='step' data-type='int' data-ref="60step" data-ref-filename="60step">step</dfn> = <a class="local col5 ref" href="#55findMatchAttempts" title='findMatchAttempts' data-ref="55findMatchAttempts" data-ref-filename="55findMatchAttempts">findMatchAttempts</a>++ &gt;&gt; <a class="local col2 ref" href="#52skipStrength" title='skipStrength' data-ref="52skipStrength" data-ref-filename="52skipStrength">skipStrength</a>;</td></tr>
+<tr><th id="510">510</th><td>			<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> = <a class="local col6 ref" href="#56forwardIp" title='forwardIp' data-ref="56forwardIp" data-ref-filename="56forwardIp">forwardIp</a>;</td></tr>
+<tr><th id="511">511</th><td>			<a class="local col6 ref" href="#56forwardIp" title='forwardIp' data-ref="56forwardIp" data-ref-filename="56forwardIp">forwardIp</a> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> + <a class="local col0 ref" href="#60step" title='step' data-ref="60step" data-ref-filename="60step">step</a>;</td></tr>
+<tr><th id="512">512</th><td></td></tr>
+<tr><th id="513">513</th><td>			<b>if</b> <a class="macro" href="#262" title="(__builtin_expect(((forwardIp &gt; mflimit) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col6 ref" href="#56forwardIp" title='forwardIp' data-ref="56forwardIp" data-ref-filename="56forwardIp">forwardIp</a> &gt; <a class="local col8 ref" href="#48mflimit" title='mflimit' data-ref="48mflimit" data-ref-filename="48mflimit">mflimit</a>) {</td></tr>
+<tr><th id="514">514</th><td>				<b>goto</b> <a class="lbl" href="#54_last_literals" data-ref="54_last_literals" data-ref-filename="54_last_literals">_last_literals</a>;</td></tr>
+<tr><th id="515">515</th><td>			}</td></tr>
+<tr><th id="516">516</th><td></td></tr>
+<tr><th id="517">517</th><td>			<a class="local col3 ref" href="#53forwardH" title='forwardH' data-ref="53forwardH" data-ref-filename="53forwardH">forwardH</a> = <a class="macro" href="#367" title="((((((U32_S *)(forwardIp))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col6 ref" href="#56forwardIp" title='forwardIp' data-ref="56forwardIp" data-ref-filename="56forwardIp">forwardIp</a>);</td></tr>
+<tr><th id="518">518</th><td>			<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> = <a class="local col4 ref" href="#476" title='base' data-ref="44base" data-ref-filename="44base">base</a> + <a class="local col2 ref" href="#42HashTable" title='HashTable' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</a>[<a class="local col9 ref" href="#59h" title='h' data-ref="59h" data-ref-filename="59h">h</a>];</td></tr>
+<tr><th id="519">519</th><td>			<a class="local col2 ref" href="#42HashTable" title='HashTable' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</a>[<a class="local col9 ref" href="#59h" title='h' data-ref="59h" data-ref-filename="59h">h</a>] = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="local col4 ref" href="#476" title='base' data-ref="44base" data-ref-filename="44base">base</a>;</td></tr>
+<tr><th id="520">520</th><td></td></tr>
+<tr><th id="521">521</th><td>		} <b>while</b> ((<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> &lt; <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="macro" href="#316" title="((1 &lt;&lt; 16) - 1)" data-ref="_M/MAX_DISTANCE">MAX_DISTANCE</a>) || (<a class="macro" href="#290" title="(((U32_S *)(ref))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>) != <a class="macro" href="#290" title="(((U32_S *)(ip))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>)));</td></tr>
+<tr><th id="522">522</th><td></td></tr>
+<tr><th id="523">523</th><td>		<i>/* Catch up */</i></td></tr>
+<tr><th id="524">524</th><td>		<b>while</b> ((<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> &gt; <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>) &amp;&amp; (<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> &gt; (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col7 ref" href="#37source" title='source' data-ref="37source" data-ref-filename="37source">source</a>) &amp;&amp;</td></tr>
+<tr><th id="525">525</th><td>		    <a class="macro" href="#262" title="(__builtin_expect(((ip[-1] == ref[-1]) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>[-<var>1</var>] == <a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>[-<var>1</var>])) {</td></tr>
+<tr><th id="526">526</th><td>			<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>--;</td></tr>
+<tr><th id="527">527</th><td>			<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>--;</td></tr>
+<tr><th id="528">528</th><td>		}</td></tr>
+<tr><th id="529">529</th><td></td></tr>
+<tr><th id="530">530</th><td>		<i>/* Encode Literal length */</i></td></tr>
+<tr><th id="531">531</th><td>		<a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>;</td></tr>
+<tr><th id="532">532</th><td>		<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> = <a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++;</td></tr>
+<tr><th id="533">533</th><td></td></tr>
+<tr><th id="534">534</th><td>		<i>/* Check output limit */</i></td></tr>
+<tr><th id="535">535</th><td>		<b>if</b> <a class="macro" href="#262" title="(__builtin_expect(((op + length + (2 + 1 + 5) + (length &gt;&gt; 8) &gt; oend) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a> + <a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a> + (<var>2</var> + <var>1</var> + <a class="macro" href="#311" title="5" data-ref="_M/LASTLITERALS">LASTLITERALS</a>) +</td></tr>
+<tr><th id="536">536</th><td>		    (<a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a> &gt;&gt; <var>8</var>) &gt; <a class="local col7 ref" href="#47oend" title='oend' data-ref="47oend" data-ref-filename="47oend">oend</a>)</td></tr>
+<tr><th id="537">537</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="538">538</th><td></td></tr>
+<tr><th id="539">539</th><td>		<b>if</b> (<a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a> &gt;= (<em>int</em>)<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) {</td></tr>
+<tr><th id="540">540</th><td>			*<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> = (<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="541">541</th><td>			<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> = <a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a> - <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>;</td></tr>
+<tr><th id="542">542</th><td>			<b>for</b> (; <a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> &gt; <var>254</var>; <a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> -= <var>255</var>)</td></tr>
+<tr><th id="543">543</th><td>				*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="544">544</th><td>			*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a>)<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a>;</td></tr>
+<tr><th id="545">545</th><td>		} <b>else</b></td></tr>
+<tr><th id="546">546</th><td>			*<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> = (<a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="547">547</th><td></td></tr>
+<tr><th id="548">548</th><td>		<i>/* Copy Literals */</i></td></tr>
+<tr><th id="549">549</th><td>		<a class="macro" href="#369" title="{ uint8_t* e = (op) + length; do { (((U32_S *)(op))-&gt;v) = (((U32_S *)(anchor))-&gt;v); op += 4; anchor += 4;; (((U32_S *)(op))-&gt;v) = (((U32_S *)(anchor))-&gt;v); op += 4; anchor += 4;; } while (op &lt; e);; op = e; }" data-ref="_M/LZ4_BLINDCOPY">LZ4_BLINDCOPY</a>(<a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>, <a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>, <a class="local col1 ref" href="#51length" title='length' data-ref="51length" data-ref-filename="51length">length</a>);</td></tr>
+<tr><th id="550">550</th><td></td></tr>
+<tr><th id="551">551</th><td>		<dfn class="lbl" id="62_next_match" data-ref="62_next_match" data-ref-filename="62_next_match">_next_match</dfn>:</td></tr>
+<tr><th id="552">552</th><td>		<i>/* Encode Offset */</i></td></tr>
+<tr><th id="553">553</th><td>		<a class="macro" href="#354" title="{ (((U16_S *)(op))-&gt;v) = ip - ref; op += 2; }" data-ref="_M/LZ4_WRITE_LITTLEENDIAN_16">LZ4_WRITE_LITTLEENDIAN_16</a>(<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>, <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>);</td></tr>
+<tr><th id="554">554</th><td></td></tr>
+<tr><th id="555">555</th><td>		<i>/* Start Counting */</i></td></tr>
+<tr><th id="556">556</th><td>		<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> += <a class="macro" href="#296" title="4" data-ref="_M/MINMATCH">MINMATCH</a>;</td></tr>
+<tr><th id="557">557</th><td>		<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> += <a class="macro" href="#296" title="4" data-ref="_M/MINMATCH">MINMATCH</a>;	<i>/* MinMatch verified */</i></td></tr>
+<tr><th id="558">558</th><td>		<a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>;</td></tr>
+<tr><th id="559">559</th><td>		<b>while</b> <a class="macro" href="#261" title="(__builtin_expect(((ip &lt; (iend - 5) - (4 - 1)) != 0), (1)))" data-ref="_M/likely">likely</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> &lt; <a class="macro" href="#481" title="(iend - 5)" data-ref="_M/matchlimit">matchlimit</a> - (<a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a> - <var>1</var>)) {</td></tr>
+<tr><th id="560">560</th><td>			<a class="macro" href="#338" title="uint32_t" data-ref="_M/UARCH">UARCH</a> <dfn class="local col3 decl" id="63diff" title='diff' data-type='uint32_t' data-ref="63diff" data-ref-filename="63diff">diff</dfn> = <a class="macro" href="#339" title="A32" data-ref="_M/AARCH">AARCH</a>(<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>) ^ <a class="macro" href="#339" title="A32" data-ref="_M/AARCH">AARCH</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>);</td></tr>
+<tr><th id="561">561</th><td>			<b>if</b> (!<a class="local col3 ref" href="#63diff" title='diff' data-ref="63diff" data-ref-filename="63diff">diff</a>) {</td></tr>
+<tr><th id="562">562</th><td>				<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> += <a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a>;</td></tr>
+<tr><th id="563">563</th><td>				<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> += <a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a>;</td></tr>
+<tr><th id="564">564</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="565">565</th><td>			}</td></tr>
+<tr><th id="566">566</th><td>			<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> += <a class="tu ref fn" href="#LZ4_NbCommonBytes" title='LZ4_NbCommonBytes' data-use='c' data-ref="LZ4_NbCommonBytes" data-ref-filename="LZ4_NbCommonBytes">LZ4_NbCommonBytes</a>(<a class="local col3 ref" href="#63diff" title='diff' data-ref="63diff" data-ref-filename="63diff">diff</a>);</td></tr>
+<tr><th id="567">567</th><td>			<b>goto</b> <a class="lbl" href="#64_endCount" data-ref="64_endCount" data-ref-filename="64_endCount">_endCount</a>;</td></tr>
+<tr><th id="568">568</th><td>		}</td></tr>
+<tr><th id="569">569</th><td><u>#<span data-ppcond="569">if</span> <a class="macro" href="#193" title="0" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</a></u></td></tr>
+<tr><th id="570">570</th><td>		<b>if</b> ((ip &lt; (matchlimit - <var>3</var>)) &amp;&amp; (A32(ref) == A32(ip))) {</td></tr>
+<tr><th id="571">571</th><td>			ip += <var>4</var>;</td></tr>
+<tr><th id="572">572</th><td>			ref += <var>4</var>;</td></tr>
+<tr><th id="573">573</th><td>		}</td></tr>
+<tr><th id="574">574</th><td><u>#<span data-ppcond="569">endif</span></u></td></tr>
+<tr><th id="575">575</th><td>		<b>if</b> ((<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> &lt; (<a class="macro" href="#481" title="(iend - 5)" data-ref="_M/matchlimit">matchlimit</a> - <var>1</var>)) &amp;&amp; (<a class="macro" href="#291" title="(((U16_S *)(ref))-&gt;v)" data-ref="_M/A16">A16</a>(<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>) == <a class="macro" href="#291" title="(((U16_S *)(ip))-&gt;v)" data-ref="_M/A16">A16</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>))) {</td></tr>
+<tr><th id="576">576</th><td>			<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> += <var>2</var>;</td></tr>
+<tr><th id="577">577</th><td>			<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> += <var>2</var>;</td></tr>
+<tr><th id="578">578</th><td>		}</td></tr>
+<tr><th id="579">579</th><td>		<b>if</b> ((<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> &lt; <a class="macro" href="#481" title="(iend - 5)" data-ref="_M/matchlimit">matchlimit</a>) &amp;&amp; (*<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> == *<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>))</td></tr>
+<tr><th id="580">580</th><td>			<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>++;</td></tr>
+<tr><th id="581">581</th><td>		<dfn class="lbl" id="64_endCount" data-ref="64_endCount" data-ref-filename="64_endCount">_endCount</dfn>:</td></tr>
+<tr><th id="582">582</th><td></td></tr>
+<tr><th id="583">583</th><td>		<i>/* Encode MatchLength */</i></td></tr>
+<tr><th id="584">584</th><td>		<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> = (<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>);</td></tr>
+<tr><th id="585">585</th><td>		<i>/* Check output limit */</i></td></tr>
+<tr><th id="586">586</th><td>		<b>if</b> <a class="macro" href="#262" title="(__builtin_expect(((op + (1 + 5) + (len &gt;&gt; 8) &gt; oend) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a> + (<var>1</var> + <a class="macro" href="#311" title="5" data-ref="_M/LASTLITERALS">LASTLITERALS</a>) + (<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> &gt;&gt; <var>8</var>) &gt; <a class="local col7 ref" href="#47oend" title='oend' data-ref="47oend" data-ref-filename="47oend">oend</a>)</td></tr>
+<tr><th id="587">587</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="588">588</th><td>		<b>if</b> (<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> &gt;= (<em>int</em>)<a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>) {</td></tr>
+<tr><th id="589">589</th><td>			*<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> += <a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>;</td></tr>
+<tr><th id="590">590</th><td>			<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> -= <a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>;</td></tr>
+<tr><th id="591">591</th><td>			<b>for</b> (; <a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> &gt; <var>509</var>; <a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> -= <var>510</var>) {</td></tr>
+<tr><th id="592">592</th><td>				*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="593">593</th><td>				*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="594">594</th><td>			}</td></tr>
+<tr><th id="595">595</th><td>			<b>if</b> (<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> &gt; <var>254</var>) {</td></tr>
+<tr><th id="596">596</th><td>				<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a> -= <var>255</var>;</td></tr>
+<tr><th id="597">597</th><td>				*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="598">598</th><td>			}</td></tr>
+<tr><th id="599">599</th><td>			*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a>)<a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a>;</td></tr>
+<tr><th id="600">600</th><td>		} <b>else</b></td></tr>
+<tr><th id="601">601</th><td>			*<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> += <a class="local col0 ref" href="#50len" title='len' data-ref="50len" data-ref-filename="50len">len</a>;</td></tr>
+<tr><th id="602">602</th><td></td></tr>
+<tr><th id="603">603</th><td>		<i>/* Test end of chunk */</i></td></tr>
+<tr><th id="604">604</th><td>		<b>if</b> (<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> &gt; <a class="local col8 ref" href="#48mflimit" title='mflimit' data-ref="48mflimit" data-ref-filename="48mflimit">mflimit</a>) {</td></tr>
+<tr><th id="605">605</th><td>			<a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>;</td></tr>
+<tr><th id="606">606</th><td>			<b>break</b>;</td></tr>
+<tr><th id="607">607</th><td>		}</td></tr>
+<tr><th id="608">608</th><td>		<i>/* Fill table */</i></td></tr>
+<tr><th id="609">609</th><td>		<a class="local col2 ref" href="#42HashTable" title='HashTable' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</a>[<a class="macro" href="#367" title="((((((U32_S *)(ip - 2))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <var>2</var>)] = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <var>2</var> - <a class="local col4 ref" href="#476" title='base' data-ref="44base" data-ref-filename="44base">base</a>;</td></tr>
+<tr><th id="610">610</th><td></td></tr>
+<tr><th id="611">611</th><td>		<i>/* Test next position */</i></td></tr>
+<tr><th id="612">612</th><td>		<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> = <a class="local col4 ref" href="#476" title='base' data-ref="44base" data-ref-filename="44base">base</a> + <a class="local col2 ref" href="#42HashTable" title='HashTable' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</a>[<a class="macro" href="#367" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>)];</td></tr>
+<tr><th id="613">613</th><td>		<a class="local col2 ref" href="#42HashTable" title='HashTable' data-ref="42HashTable" data-ref-filename="42HashTable">HashTable</a>[<a class="macro" href="#367" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>)] = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - <a class="local col4 ref" href="#476" title='base' data-ref="44base" data-ref-filename="44base">base</a>;</td></tr>
+<tr><th id="614">614</th><td>		<b>if</b> ((<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a> &gt; <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a> - (<a class="macro" href="#316" title="((1 &lt;&lt; 16) - 1)" data-ref="_M/MAX_DISTANCE">MAX_DISTANCE</a> + <var>1</var>)) &amp;&amp; (<a class="macro" href="#290" title="(((U32_S *)(ref))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col7 ref" href="#57ref" title='ref' data-ref="57ref" data-ref-filename="57ref">ref</a>) == <a class="macro" href="#290" title="(((U32_S *)(ip))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>))) {</td></tr>
+<tr><th id="615">615</th><td>			<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> = <a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++;</td></tr>
+<tr><th id="616">616</th><td>			*<a class="local col8 ref" href="#58token" title='token' data-ref="58token" data-ref-filename="58token">token</a> = <var>0</var>;</td></tr>
+<tr><th id="617">617</th><td>			<b>goto</b> <a class="lbl" href="#62_next_match" data-ref="62_next_match" data-ref-filename="62_next_match">_next_match</a>;</td></tr>
+<tr><th id="618">618</th><td>		}</td></tr>
+<tr><th id="619">619</th><td>		<i>/* Prepare next loop */</i></td></tr>
+<tr><th id="620">620</th><td>		<a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a> = <a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>++;</td></tr>
+<tr><th id="621">621</th><td>		<a class="local col3 ref" href="#53forwardH" title='forwardH' data-ref="53forwardH" data-ref-filename="53forwardH">forwardH</a> = <a class="macro" href="#367" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4 * 8) - 12))" data-ref="_M/LZ4_HASH_VALUE">LZ4_HASH_VALUE</a>(<a class="local col3 ref" href="#43ip" title='ip' data-ref="43ip" data-ref-filename="43ip">ip</a>);</td></tr>
+<tr><th id="622">622</th><td>	}</td></tr>
+<tr><th id="623">623</th><td></td></tr>
+<tr><th id="624">624</th><td>	<dfn class="lbl" id="54_last_literals" data-ref="54_last_literals" data-ref-filename="54_last_literals">_last_literals</dfn>:</td></tr>
+<tr><th id="625">625</th><td>	<i>/* Encode Last Literals */</i></td></tr>
+<tr><th id="626">626</th><td>	{</td></tr>
+<tr><th id="627">627</th><td>		<em>int</em> <dfn class="local col5 decl" id="65lastRun" title='lastRun' data-type='int' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</dfn> = <a class="local col6 ref" href="#46iend" title='iend' data-ref="46iend" data-ref-filename="46iend">iend</a> - <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>;</td></tr>
+<tr><th id="628">628</th><td>		<b>if</b> (<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a> + <a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> + <var>1</var> + ((<a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> + <var>255</var> - <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) / <var>255</var>) &gt;</td></tr>
+<tr><th id="629">629</th><td>		    <a class="local col7 ref" href="#47oend" title='oend' data-ref="47oend" data-ref-filename="47oend">oend</a>)</td></tr>
+<tr><th id="630">630</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="631">631</th><td>		<b>if</b> (<a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> &gt;= (<em>int</em>)<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) {</td></tr>
+<tr><th id="632">632</th><td>			*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = (<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="633">633</th><td>			<a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> -= <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>;</td></tr>
+<tr><th id="634">634</th><td>			<b>for</b> (; <a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> &gt; <var>254</var>; <a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> -= <var>255</var>) {</td></tr>
+<tr><th id="635">635</th><td>				*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="636">636</th><td>			}</td></tr>
+<tr><th id="637">637</th><td>			*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a>)<a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a>;</td></tr>
+<tr><th id="638">638</th><td>		} <b>else</b></td></tr>
+<tr><th id="639">639</th><td>			*<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>++ = (<a class="local col5 ref" href="#65lastRun" title='lastRun' data-ref="65lastRun" data-ref-filename="65lastRun">lastRun</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="640">640</th><td>		(<em>void</em>) <a class="ref fn" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>, <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>, <a class="local col6 ref" href="#46iend" title='iend' data-ref="46iend" data-ref-filename="46iend">iend</a> - <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>);</td></tr>
+<tr><th id="641">641</th><td>		<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a> += <a class="local col6 ref" href="#46iend" title='iend' data-ref="46iend" data-ref-filename="46iend">iend</a> - <a class="local col5 ref" href="#45anchor" title='anchor' data-ref="45anchor" data-ref-filename="45anchor">anchor</a>;</td></tr>
+<tr><th id="642">642</th><td>	}</td></tr>
+<tr><th id="643">643</th><td></td></tr>
+<tr><th id="644">644</th><td>	<i>/* End */</i></td></tr>
+<tr><th id="645">645</th><td>	<b>return</b> (<em>int</em>)(((<em>char</em> *)<a class="local col9 ref" href="#49op" title='op' data-ref="49op" data-ref-filename="49op">op</a>) - <a class="local col8 ref" href="#38dest" title='dest' data-ref="38dest" data-ref-filename="38dest">dest</a>);</td></tr>
+<tr><th id="646">646</th><td>}</td></tr>
+<tr><th id="647">647</th><td></td></tr>
+<tr><th id="648">648</th><td></td></tr>
+<tr><th id="649">649</th><td></td></tr>
+<tr><th id="650">650</th><td><i>/* Note : this function is valid only if isize &lt; LZ4_64KLIMIT */</i></td></tr>
+<tr><th id="651">651</th><td><u>#define	<dfn class="macro" id="_M/LZ4_64KLIMIT" data-ref="_M/LZ4_64KLIMIT">LZ4_64KLIMIT</dfn> ((1 &lt;&lt; 16) + (MFLIMIT - 1))</u></td></tr>
+<tr><th id="652">652</th><td><u>#define	<dfn class="macro" id="_M/HASHLOG64K" data-ref="_M/HASHLOG64K">HASHLOG64K</dfn> (HASH_LOG + 1)</u></td></tr>
+<tr><th id="653">653</th><td><u>#define	<dfn class="macro" id="_M/HASH64KTABLESIZE" data-ref="_M/HASH64KTABLESIZE">HASH64KTABLESIZE</dfn> (1U &lt;&lt; HASHLOG64K)</u></td></tr>
+<tr><th id="654">654</th><td><u>#define	<dfn class="macro" id="_M/LZ4_HASH64K_FUNCTION" data-ref="_M/LZ4_HASH64K_FUNCTION">LZ4_HASH64K_FUNCTION</dfn>(i)	(((i) * 2654435761U) &gt;&gt; ((MINMATCH*8) - \</u></td></tr>
+<tr><th id="655">655</th><td><u>	HASHLOG64K))</u></td></tr>
+<tr><th id="656">656</th><td><u>#define	<dfn class="macro" id="_M/LZ4_HASH64K_VALUE" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</dfn>(p)	LZ4_HASH64K_FUNCTION(A32(p))</u></td></tr>
+<tr><th id="657">657</th><td></td></tr>
+<tr><th id="658">658</th><td><i  data-doc="LZ4_compress64kCtx">/*ARGSUSED*/</i></td></tr>
+<tr><th id="659">659</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="660">660</th><td><dfn class="tu decl def fn" id="LZ4_compress64kCtx" title='LZ4_compress64kCtx' data-type='int LZ4_compress64kCtx(void * ctx, const char * source, char * dest, int isize, int osize)' data-ref="LZ4_compress64kCtx" data-ref-filename="LZ4_compress64kCtx">LZ4_compress64kCtx</dfn>(<em>void</em> *<dfn class="local col6 decl" id="66ctx" title='ctx' data-type='void *' data-ref="66ctx" data-ref-filename="66ctx">ctx</dfn>, <em>const</em> <em>char</em> *<dfn class="local col7 decl" id="67source" title='source' data-type='const char *' data-ref="67source" data-ref-filename="67source">source</dfn>, <em>char</em> *<dfn class="local col8 decl" id="68dest" title='dest' data-type='char *' data-ref="68dest" data-ref-filename="68dest">dest</dfn>, <em>int</em> <dfn class="local col9 decl" id="69isize" title='isize' data-type='int' data-ref="69isize" data-ref-filename="69isize">isize</dfn>,</td></tr>
+<tr><th id="661">661</th><td>    <em>int</em> <dfn class="local col0 decl" id="70osize" title='osize' data-type='int' data-ref="70osize" data-ref-filename="70osize">osize</dfn>)</td></tr>
+<tr><th id="662">662</th><td>{</td></tr>
+<tr><th id="663">663</th><td><u>#<span data-ppcond="663">if</span> <a class="macro" href="#309" title="(12 &gt; 0)" data-ref="_M/HEAPMODE">HEAPMODE</a></u></td></tr>
+<tr><th id="664">664</th><td>	<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a> *<dfn class="local col1 decl" id="71srt" title='srt' data-type='struct refTables *' data-ref="71srt" data-ref-filename="71srt">srt</dfn> = (<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a> *)<a class="local col6 ref" href="#66ctx" title='ctx' data-ref="66ctx" data-ref-filename="66ctx">ctx</a>;</td></tr>
+<tr><th id="665">665</th><td>	<a class="macro" href="#266" title="uint16_t" data-ref="_M/U16">U16</a> *<dfn class="local col2 decl" id="72HashTable" title='HashTable' data-type='uint16_t *' data-ref="72HashTable" data-ref-filename="72HashTable">HashTable</dfn> = (<a class="macro" href="#266" title="uint16_t" data-ref="_M/U16">U16</a> *) (<a class="local col1 ref" href="#71srt" title='srt' data-ref="71srt" data-ref-filename="71srt">srt</a>-&gt;<a class="tu ref field" href="#refTables::hashTable" title='refTables::hashTable' data-use='r' data-ref="refTables::hashTable" data-ref-filename="refTables..hashTable">hashTable</a>);</td></tr>
+<tr><th id="666">666</th><td><u>#<span data-ppcond="663">else</span></u></td></tr>
+<tr><th id="667">667</th><td>	U16 HashTable[HASH64KTABLESIZE] = { <var>0</var> };</td></tr>
+<tr><th id="668">668</th><td><u>#<span data-ppcond="663">endif</span></u></td></tr>
+<tr><th id="669">669</th><td></td></tr>
+<tr><th id="670">670</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col3 decl" id="73ip" title='ip' data-type='const uint8_t *' data-ref="73ip" data-ref-filename="73ip">ip</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col7 ref" href="#67source" title='source' data-ref="67source" data-ref-filename="67source">source</a>;</td></tr>
+<tr><th id="671">671</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col4 decl" id="74anchor" title='anchor' data-type='const uint8_t *' data-ref="74anchor" data-ref-filename="74anchor">anchor</dfn> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>;</td></tr>
+<tr><th id="672">672</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col5 decl" id="75base" title='base' data-type='const uint8_t *const' data-ref="75base" data-ref-filename="75base">base</dfn> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>;</td></tr>
+<tr><th id="673">673</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col6 decl" id="76iend" title='iend' data-type='const uint8_t *const' data-ref="76iend" data-ref-filename="76iend">iend</dfn> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> + <a class="local col9 ref" href="#69isize" title='isize' data-ref="69isize" data-ref-filename="69isize">isize</a>;</td></tr>
+<tr><th id="674">674</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col7 decl" id="77oend" title='oend' data-type='const uint8_t *const' data-ref="77oend" data-ref-filename="77oend">oend</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col8 ref" href="#68dest" title='dest' data-ref="68dest" data-ref-filename="68dest">dest</a> + <a class="local col0 ref" href="#70osize" title='osize' data-ref="70osize" data-ref-filename="70osize">osize</a>;</td></tr>
+<tr><th id="675">675</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col8 decl" id="78mflimit" title='mflimit' data-type='const uint8_t *const' data-ref="78mflimit" data-ref-filename="78mflimit">mflimit</dfn> = <a class="local col6 ref" href="#76iend" title='iend' data-ref="76iend" data-ref-filename="76iend">iend</a> - <a class="macro" href="#312" title="(8 + 4)" data-ref="_M/MFLIMIT">MFLIMIT</a>;</td></tr>
+<tr><th id="676">676</th><td><u>#define	<dfn class="macro" id="_M/matchlimit" data-ref="_M/matchlimit">matchlimit</dfn> (<a class="local col6 ref" href="#76iend" title='iend' data-ref="76iend" data-ref-filename="76iend">iend</a> - LASTLITERALS)</u></td></tr>
+<tr><th id="677">677</th><td></td></tr>
+<tr><th id="678">678</th><td>	<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col9 decl" id="79op" title='op' data-type='uint8_t *' data-ref="79op" data-ref-filename="79op">op</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col8 ref" href="#68dest" title='dest' data-ref="68dest" data-ref-filename="68dest">dest</a>;</td></tr>
+<tr><th id="679">679</th><td></td></tr>
+<tr><th id="680">680</th><td>	<em>int</em> <dfn class="local col0 decl" id="80len" title='len' data-type='int' data-ref="80len" data-ref-filename="80len">len</dfn>, <dfn class="local col1 decl" id="81length" title='length' data-type='int' data-ref="81length" data-ref-filename="81length">length</dfn>;</td></tr>
+<tr><th id="681">681</th><td>	<em>const</em> <em>int</em> <dfn class="local col2 decl" id="82skipStrength" title='skipStrength' data-type='const int' data-ref="82skipStrength" data-ref-filename="82skipStrength">skipStrength</dfn> = <a class="macro" href="#302" title="(6 &gt; 2 ? 6 : 2)" data-ref="_M/SKIPSTRENGTH">SKIPSTRENGTH</a>;</td></tr>
+<tr><th id="682">682</th><td>	<a class="macro" href="#267" title="uint32_t" data-ref="_M/U32">U32</a> <dfn class="local col3 decl" id="83forwardH" title='forwardH' data-type='uint32_t' data-ref="83forwardH" data-ref-filename="83forwardH">forwardH</dfn>;</td></tr>
+<tr><th id="683">683</th><td></td></tr>
+<tr><th id="684">684</th><td>	<i>/* Init */</i></td></tr>
+<tr><th id="685">685</th><td>	<b>if</b> (<a class="local col9 ref" href="#69isize" title='isize' data-ref="69isize" data-ref-filename="69isize">isize</a> &lt; <a class="macro" href="#313" title="((8 + 4) + 1)" data-ref="_M/MINLENGTH">MINLENGTH</a>)</td></tr>
+<tr><th id="686">686</th><td>		<b>goto</b> <a class="lbl" href="#84_last_literals" data-ref="84_last_literals" data-ref-filename="84_last_literals">_last_literals</a>;</td></tr>
+<tr><th id="687">687</th><td></td></tr>
+<tr><th id="688">688</th><td>	<i>/* First Byte */</i></td></tr>
+<tr><th id="689">689</th><td>	<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>++;</td></tr>
+<tr><th id="690">690</th><td>	<a class="local col3 ref" href="#83forwardH" title='forwardH' data-ref="83forwardH" data-ref-filename="83forwardH">forwardH</a> = <a class="macro" href="#656" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4*8) - (12 + 1)))" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>);</td></tr>
+<tr><th id="691">691</th><td></td></tr>
+<tr><th id="692">692</th><td>	<i>/* Main Loop */</i></td></tr>
+<tr><th id="693">693</th><td>	<b>for</b> (;;) {</td></tr>
+<tr><th id="694">694</th><td>		<em>int</em> <dfn class="local col5 decl" id="85findMatchAttempts" title='findMatchAttempts' data-type='int' data-ref="85findMatchAttempts" data-ref-filename="85findMatchAttempts">findMatchAttempts</dfn> = (<var>1U</var> &lt;&lt; <a class="local col2 ref" href="#82skipStrength" title='skipStrength' data-ref="82skipStrength" data-ref-filename="82skipStrength">skipStrength</a>) + <var>3</var>;</td></tr>
+<tr><th id="695">695</th><td>		<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col6 decl" id="86forwardIp" title='forwardIp' data-type='const uint8_t *' data-ref="86forwardIp" data-ref-filename="86forwardIp">forwardIp</dfn> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>;</td></tr>
+<tr><th id="696">696</th><td>		<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col7 decl" id="87ref" title='ref' data-type='const uint8_t *' data-ref="87ref" data-ref-filename="87ref">ref</dfn>;</td></tr>
+<tr><th id="697">697</th><td>		<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col8 decl" id="88token" title='token' data-type='uint8_t *' data-ref="88token" data-ref-filename="88token">token</dfn>;</td></tr>
+<tr><th id="698">698</th><td></td></tr>
+<tr><th id="699">699</th><td>		<i>/* Find a match */</i></td></tr>
+<tr><th id="700">700</th><td>		<b>do</b> {</td></tr>
+<tr><th id="701">701</th><td>			<a class="macro" href="#267" title="uint32_t" data-ref="_M/U32">U32</a> <dfn class="local col9 decl" id="89h" title='h' data-type='uint32_t' data-ref="89h" data-ref-filename="89h">h</dfn> = <a class="local col3 ref" href="#83forwardH" title='forwardH' data-ref="83forwardH" data-ref-filename="83forwardH">forwardH</a>;</td></tr>
+<tr><th id="702">702</th><td>			<em>int</em> <dfn class="local col0 decl" id="90step" title='step' data-type='int' data-ref="90step" data-ref-filename="90step">step</dfn> = <a class="local col5 ref" href="#85findMatchAttempts" title='findMatchAttempts' data-ref="85findMatchAttempts" data-ref-filename="85findMatchAttempts">findMatchAttempts</a>++ &gt;&gt; <a class="local col2 ref" href="#82skipStrength" title='skipStrength' data-ref="82skipStrength" data-ref-filename="82skipStrength">skipStrength</a>;</td></tr>
+<tr><th id="703">703</th><td>			<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> = <a class="local col6 ref" href="#86forwardIp" title='forwardIp' data-ref="86forwardIp" data-ref-filename="86forwardIp">forwardIp</a>;</td></tr>
+<tr><th id="704">704</th><td>			<a class="local col6 ref" href="#86forwardIp" title='forwardIp' data-ref="86forwardIp" data-ref-filename="86forwardIp">forwardIp</a> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> + <a class="local col0 ref" href="#90step" title='step' data-ref="90step" data-ref-filename="90step">step</a>;</td></tr>
+<tr><th id="705">705</th><td></td></tr>
+<tr><th id="706">706</th><td>			<b>if</b> (<a class="local col6 ref" href="#86forwardIp" title='forwardIp' data-ref="86forwardIp" data-ref-filename="86forwardIp">forwardIp</a> &gt; <a class="local col8 ref" href="#78mflimit" title='mflimit' data-ref="78mflimit" data-ref-filename="78mflimit">mflimit</a>) {</td></tr>
+<tr><th id="707">707</th><td>				<b>goto</b> <a class="lbl" href="#84_last_literals" data-ref="84_last_literals" data-ref-filename="84_last_literals">_last_literals</a>;</td></tr>
+<tr><th id="708">708</th><td>			}</td></tr>
+<tr><th id="709">709</th><td></td></tr>
+<tr><th id="710">710</th><td>			<a class="local col3 ref" href="#83forwardH" title='forwardH' data-ref="83forwardH" data-ref-filename="83forwardH">forwardH</a> = <a class="macro" href="#656" title="((((((U32_S *)(forwardIp))-&gt;v)) * 2654435761U) &gt;&gt; ((4*8) - (12 + 1)))" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</a>(<a class="local col6 ref" href="#86forwardIp" title='forwardIp' data-ref="86forwardIp" data-ref-filename="86forwardIp">forwardIp</a>);</td></tr>
+<tr><th id="711">711</th><td>			<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> = <a class="local col5 ref" href="#75base" title='base' data-ref="75base" data-ref-filename="75base">base</a> + <a class="local col2 ref" href="#72HashTable" title='HashTable' data-ref="72HashTable" data-ref-filename="72HashTable">HashTable</a>[<a class="local col9 ref" href="#89h" title='h' data-ref="89h" data-ref-filename="89h">h</a>];</td></tr>
+<tr><th id="712">712</th><td>			<a class="local col2 ref" href="#72HashTable" title='HashTable' data-ref="72HashTable" data-ref-filename="72HashTable">HashTable</a>[<a class="local col9 ref" href="#89h" title='h' data-ref="89h" data-ref-filename="89h">h</a>] = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <a class="local col5 ref" href="#75base" title='base' data-ref="75base" data-ref-filename="75base">base</a>;</td></tr>
+<tr><th id="713">713</th><td></td></tr>
+<tr><th id="714">714</th><td>		} <b>while</b> (<a class="macro" href="#290" title="(((U32_S *)(ref))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>) != <a class="macro" href="#290" title="(((U32_S *)(ip))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>));</td></tr>
+<tr><th id="715">715</th><td></td></tr>
+<tr><th id="716">716</th><td>		<i>/* Catch up */</i></td></tr>
+<tr><th id="717">717</th><td>		<b>while</b> ((<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> &gt; <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>) &amp;&amp; (<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> &gt; (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col7 ref" href="#67source" title='source' data-ref="67source" data-ref-filename="67source">source</a>) &amp;&amp;</td></tr>
+<tr><th id="718">718</th><td>		    (<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>[-<var>1</var>] == <a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>[-<var>1</var>])) {</td></tr>
+<tr><th id="719">719</th><td>			<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>--;</td></tr>
+<tr><th id="720">720</th><td>			<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>--;</td></tr>
+<tr><th id="721">721</th><td>		}</td></tr>
+<tr><th id="722">722</th><td></td></tr>
+<tr><th id="723">723</th><td>		<i>/* Encode Literal length */</i></td></tr>
+<tr><th id="724">724</th><td>		<a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>;</td></tr>
+<tr><th id="725">725</th><td>		<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> = <a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++;</td></tr>
+<tr><th id="726">726</th><td></td></tr>
+<tr><th id="727">727</th><td>		<i>/* Check output limit */</i></td></tr>
+<tr><th id="728">728</th><td>		<b>if</b> <a class="macro" href="#262" title="(__builtin_expect(((op + length + (2 + 1 + 5) + (length &gt;&gt; 8) &gt; oend) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a> + <a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a> + (<var>2</var> + <var>1</var> + <a class="macro" href="#311" title="5" data-ref="_M/LASTLITERALS">LASTLITERALS</a>) +</td></tr>
+<tr><th id="729">729</th><td>		    (<a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a> &gt;&gt; <var>8</var>) &gt; <a class="local col7 ref" href="#77oend" title='oend' data-ref="77oend" data-ref-filename="77oend">oend</a>)</td></tr>
+<tr><th id="730">730</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="731">731</th><td></td></tr>
+<tr><th id="732">732</th><td>		<b>if</b> (<a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a> &gt;= (<em>int</em>)<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) {</td></tr>
+<tr><th id="733">733</th><td>			*<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> = (<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="734">734</th><td>			<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> = <a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a> - <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>;</td></tr>
+<tr><th id="735">735</th><td>			<b>for</b> (; <a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> &gt; <var>254</var>; <a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> -= <var>255</var>)</td></tr>
+<tr><th id="736">736</th><td>				*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="737">737</th><td>			*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a>)<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a>;</td></tr>
+<tr><th id="738">738</th><td>		} <b>else</b></td></tr>
+<tr><th id="739">739</th><td>			*<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> = (<a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="740">740</th><td></td></tr>
+<tr><th id="741">741</th><td>		<i>/* Copy Literals */</i></td></tr>
+<tr><th id="742">742</th><td>		<a class="macro" href="#369" title="{ uint8_t* e = (op) + length; do { (((U32_S *)(op))-&gt;v) = (((U32_S *)(anchor))-&gt;v); op += 4; anchor += 4;; (((U32_S *)(op))-&gt;v) = (((U32_S *)(anchor))-&gt;v); op += 4; anchor += 4;; } while (op &lt; e);; op = e; }" data-ref="_M/LZ4_BLINDCOPY">LZ4_BLINDCOPY</a>(<a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>, <a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>, <a class="local col1 ref" href="#81length" title='length' data-ref="81length" data-ref-filename="81length">length</a>);</td></tr>
+<tr><th id="743">743</th><td></td></tr>
+<tr><th id="744">744</th><td>		<dfn class="lbl" id="92_next_match" data-ref="92_next_match" data-ref-filename="92_next_match">_next_match</dfn>:</td></tr>
+<tr><th id="745">745</th><td>		<i>/* Encode Offset */</i></td></tr>
+<tr><th id="746">746</th><td>		<a class="macro" href="#354" title="{ (((U16_S *)(op))-&gt;v) = ip - ref; op += 2; }" data-ref="_M/LZ4_WRITE_LITTLEENDIAN_16">LZ4_WRITE_LITTLEENDIAN_16</a>(<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>, <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>);</td></tr>
+<tr><th id="747">747</th><td></td></tr>
+<tr><th id="748">748</th><td>		<i>/* Start Counting */</i></td></tr>
+<tr><th id="749">749</th><td>		<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> += <a class="macro" href="#296" title="4" data-ref="_M/MINMATCH">MINMATCH</a>;</td></tr>
+<tr><th id="750">750</th><td>		<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> += <a class="macro" href="#296" title="4" data-ref="_M/MINMATCH">MINMATCH</a>;	<i>/* MinMatch verified */</i></td></tr>
+<tr><th id="751">751</th><td>		<a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>;</td></tr>
+<tr><th id="752">752</th><td>		<b>while</b> (<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> &lt; <a class="macro" href="#676" title="(iend - 5)" data-ref="_M/matchlimit">matchlimit</a> - (<a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a> - <var>1</var>)) {</td></tr>
+<tr><th id="753">753</th><td>			<a class="macro" href="#338" title="uint32_t" data-ref="_M/UARCH">UARCH</a> <dfn class="local col3 decl" id="93diff" title='diff' data-type='uint32_t' data-ref="93diff" data-ref-filename="93diff">diff</dfn> = <a class="macro" href="#339" title="A32" data-ref="_M/AARCH">AARCH</a>(<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>) ^ <a class="macro" href="#339" title="A32" data-ref="_M/AARCH">AARCH</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>);</td></tr>
+<tr><th id="754">754</th><td>			<b>if</b> (!<a class="local col3 ref" href="#93diff" title='diff' data-ref="93diff" data-ref-filename="93diff">diff</a>) {</td></tr>
+<tr><th id="755">755</th><td>				<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> += <a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a>;</td></tr>
+<tr><th id="756">756</th><td>				<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> += <a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a>;</td></tr>
+<tr><th id="757">757</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="758">758</th><td>			}</td></tr>
+<tr><th id="759">759</th><td>			<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> += <a class="tu ref fn" href="#LZ4_NbCommonBytes" title='LZ4_NbCommonBytes' data-use='c' data-ref="LZ4_NbCommonBytes" data-ref-filename="LZ4_NbCommonBytes">LZ4_NbCommonBytes</a>(<a class="local col3 ref" href="#93diff" title='diff' data-ref="93diff" data-ref-filename="93diff">diff</a>);</td></tr>
+<tr><th id="760">760</th><td>			<b>goto</b> <a class="lbl" href="#94_endCount" data-ref="94_endCount" data-ref-filename="94_endCount">_endCount</a>;</td></tr>
+<tr><th id="761">761</th><td>		}</td></tr>
+<tr><th id="762">762</th><td><u>#<span data-ppcond="762">if</span> <a class="macro" href="#193" title="0" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</a></u></td></tr>
+<tr><th id="763">763</th><td>		<b>if</b> ((ip &lt; (matchlimit - <var>3</var>)) &amp;&amp; (A32(ref) == A32(ip))) {</td></tr>
+<tr><th id="764">764</th><td>			ip += <var>4</var>;</td></tr>
+<tr><th id="765">765</th><td>			ref += <var>4</var>;</td></tr>
+<tr><th id="766">766</th><td>		}</td></tr>
+<tr><th id="767">767</th><td><u>#<span data-ppcond="762">endif</span></u></td></tr>
+<tr><th id="768">768</th><td>		<b>if</b> ((<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> &lt; (<a class="macro" href="#676" title="(iend - 5)" data-ref="_M/matchlimit">matchlimit</a> - <var>1</var>)) &amp;&amp; (<a class="macro" href="#291" title="(((U16_S *)(ref))-&gt;v)" data-ref="_M/A16">A16</a>(<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>) == <a class="macro" href="#291" title="(((U16_S *)(ip))-&gt;v)" data-ref="_M/A16">A16</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>))) {</td></tr>
+<tr><th id="769">769</th><td>			<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> += <var>2</var>;</td></tr>
+<tr><th id="770">770</th><td>			<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> += <var>2</var>;</td></tr>
+<tr><th id="771">771</th><td>		}</td></tr>
+<tr><th id="772">772</th><td>		<b>if</b> ((<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> &lt; <a class="macro" href="#676" title="(iend - 5)" data-ref="_M/matchlimit">matchlimit</a>) &amp;&amp; (*<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> == *<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>))</td></tr>
+<tr><th id="773">773</th><td>			<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>++;</td></tr>
+<tr><th id="774">774</th><td>		<dfn class="lbl" id="94_endCount" data-ref="94_endCount" data-ref-filename="94_endCount">_endCount</dfn>:</td></tr>
+<tr><th id="775">775</th><td></td></tr>
+<tr><th id="776">776</th><td>		<i>/* Encode MatchLength */</i></td></tr>
+<tr><th id="777">777</th><td>		<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> = (<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>);</td></tr>
+<tr><th id="778">778</th><td>		<i>/* Check output limit */</i></td></tr>
+<tr><th id="779">779</th><td>		<b>if</b> <a class="macro" href="#262" title="(__builtin_expect(((op + (1 + 5) + (len &gt;&gt; 8) &gt; oend) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a> + (<var>1</var> + <a class="macro" href="#311" title="5" data-ref="_M/LASTLITERALS">LASTLITERALS</a>) + (<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> &gt;&gt; <var>8</var>) &gt; <a class="local col7 ref" href="#77oend" title='oend' data-ref="77oend" data-ref-filename="77oend">oend</a>)</td></tr>
+<tr><th id="780">780</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="781">781</th><td>		<b>if</b> (<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> &gt;= (<em>int</em>)<a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>) {</td></tr>
+<tr><th id="782">782</th><td>			*<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> += <a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>;</td></tr>
+<tr><th id="783">783</th><td>			<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> -= <a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>;</td></tr>
+<tr><th id="784">784</th><td>			<b>for</b> (; <a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> &gt; <var>509</var>; <a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> -= <var>510</var>) {</td></tr>
+<tr><th id="785">785</th><td>				*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="786">786</th><td>				*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="787">787</th><td>			}</td></tr>
+<tr><th id="788">788</th><td>			<b>if</b> (<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> &gt; <var>254</var>) {</td></tr>
+<tr><th id="789">789</th><td>				<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a> -= <var>255</var>;</td></tr>
+<tr><th id="790">790</th><td>				*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="791">791</th><td>			}</td></tr>
+<tr><th id="792">792</th><td>			*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a>)<a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a>;</td></tr>
+<tr><th id="793">793</th><td>		} <b>else</b></td></tr>
+<tr><th id="794">794</th><td>			*<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> += <a class="local col0 ref" href="#80len" title='len' data-ref="80len" data-ref-filename="80len">len</a>;</td></tr>
+<tr><th id="795">795</th><td></td></tr>
+<tr><th id="796">796</th><td>		<i>/* Test end of chunk */</i></td></tr>
+<tr><th id="797">797</th><td>		<b>if</b> (<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> &gt; <a class="local col8 ref" href="#78mflimit" title='mflimit' data-ref="78mflimit" data-ref-filename="78mflimit">mflimit</a>) {</td></tr>
+<tr><th id="798">798</th><td>			<a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>;</td></tr>
+<tr><th id="799">799</th><td>			<b>break</b>;</td></tr>
+<tr><th id="800">800</th><td>		}</td></tr>
+<tr><th id="801">801</th><td>		<i>/* Fill table */</i></td></tr>
+<tr><th id="802">802</th><td>		<a class="local col2 ref" href="#72HashTable" title='HashTable' data-ref="72HashTable" data-ref-filename="72HashTable">HashTable</a>[<a class="macro" href="#656" title="((((((U32_S *)(ip - 2))-&gt;v)) * 2654435761U) &gt;&gt; ((4*8) - (12 + 1)))" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <var>2</var>)] = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <var>2</var> - <a class="local col5 ref" href="#75base" title='base' data-ref="75base" data-ref-filename="75base">base</a>;</td></tr>
+<tr><th id="803">803</th><td></td></tr>
+<tr><th id="804">804</th><td>		<i>/* Test next position */</i></td></tr>
+<tr><th id="805">805</th><td>		<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a> = <a class="local col5 ref" href="#75base" title='base' data-ref="75base" data-ref-filename="75base">base</a> + <a class="local col2 ref" href="#72HashTable" title='HashTable' data-ref="72HashTable" data-ref-filename="72HashTable">HashTable</a>[<a class="macro" href="#656" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4*8) - (12 + 1)))" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>)];</td></tr>
+<tr><th id="806">806</th><td>		<a class="local col2 ref" href="#72HashTable" title='HashTable' data-ref="72HashTable" data-ref-filename="72HashTable">HashTable</a>[<a class="macro" href="#656" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4*8) - (12 + 1)))" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>)] = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a> - <a class="local col5 ref" href="#75base" title='base' data-ref="75base" data-ref-filename="75base">base</a>;</td></tr>
+<tr><th id="807">807</th><td>		<b>if</b> (<a class="macro" href="#290" title="(((U32_S *)(ref))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col7 ref" href="#87ref" title='ref' data-ref="87ref" data-ref-filename="87ref">ref</a>) == <a class="macro" href="#290" title="(((U32_S *)(ip))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>)) {</td></tr>
+<tr><th id="808">808</th><td>			<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> = <a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++;</td></tr>
+<tr><th id="809">809</th><td>			*<a class="local col8 ref" href="#88token" title='token' data-ref="88token" data-ref-filename="88token">token</a> = <var>0</var>;</td></tr>
+<tr><th id="810">810</th><td>			<b>goto</b> <a class="lbl" href="#92_next_match" data-ref="92_next_match" data-ref-filename="92_next_match">_next_match</a>;</td></tr>
+<tr><th id="811">811</th><td>		}</td></tr>
+<tr><th id="812">812</th><td>		<i>/* Prepare next loop */</i></td></tr>
+<tr><th id="813">813</th><td>		<a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a> = <a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>++;</td></tr>
+<tr><th id="814">814</th><td>		<a class="local col3 ref" href="#83forwardH" title='forwardH' data-ref="83forwardH" data-ref-filename="83forwardH">forwardH</a> = <a class="macro" href="#656" title="((((((U32_S *)(ip))-&gt;v)) * 2654435761U) &gt;&gt; ((4*8) - (12 + 1)))" data-ref="_M/LZ4_HASH64K_VALUE">LZ4_HASH64K_VALUE</a>(<a class="local col3 ref" href="#73ip" title='ip' data-ref="73ip" data-ref-filename="73ip">ip</a>);</td></tr>
+<tr><th id="815">815</th><td>	}</td></tr>
+<tr><th id="816">816</th><td></td></tr>
+<tr><th id="817">817</th><td>	<dfn class="lbl" id="84_last_literals" data-ref="84_last_literals" data-ref-filename="84_last_literals">_last_literals</dfn>:</td></tr>
+<tr><th id="818">818</th><td>	<i>/* Encode Last Literals */</i></td></tr>
+<tr><th id="819">819</th><td>	{</td></tr>
+<tr><th id="820">820</th><td>		<em>int</em> <dfn class="local col5 decl" id="95lastRun" title='lastRun' data-type='int' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</dfn> = <a class="local col6 ref" href="#76iend" title='iend' data-ref="76iend" data-ref-filename="76iend">iend</a> - <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>;</td></tr>
+<tr><th id="821">821</th><td>		<b>if</b> (<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a> + <a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> + <var>1</var> + ((<a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> + <var>255</var> - <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) / <var>255</var>) &gt;</td></tr>
+<tr><th id="822">822</th><td>		    <a class="local col7 ref" href="#77oend" title='oend' data-ref="77oend" data-ref-filename="77oend">oend</a>)</td></tr>
+<tr><th id="823">823</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="824">824</th><td>		<b>if</b> (<a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> &gt;= (<em>int</em>)<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) {</td></tr>
+<tr><th id="825">825</th><td>			*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = (<a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="826">826</th><td>			<a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> -= <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>;</td></tr>
+<tr><th id="827">827</th><td>			<b>for</b> (; <a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> &gt; <var>254</var>; <a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> -= <var>255</var>)</td></tr>
+<tr><th id="828">828</th><td>				*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = <var>255</var>;</td></tr>
+<tr><th id="829">829</th><td>			*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a>)<a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a>;</td></tr>
+<tr><th id="830">830</th><td>		} <b>else</b></td></tr>
+<tr><th id="831">831</th><td>			*<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>++ = (<a class="local col5 ref" href="#95lastRun" title='lastRun' data-ref="95lastRun" data-ref-filename="95lastRun">lastRun</a> &lt;&lt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>);</td></tr>
+<tr><th id="832">832</th><td>		(<em>void</em>) <a class="ref fn" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>, <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>, <a class="local col6 ref" href="#76iend" title='iend' data-ref="76iend" data-ref-filename="76iend">iend</a> - <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>);</td></tr>
+<tr><th id="833">833</th><td>		<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a> += <a class="local col6 ref" href="#76iend" title='iend' data-ref="76iend" data-ref-filename="76iend">iend</a> - <a class="local col4 ref" href="#74anchor" title='anchor' data-ref="74anchor" data-ref-filename="74anchor">anchor</a>;</td></tr>
+<tr><th id="834">834</th><td>	}</td></tr>
+<tr><th id="835">835</th><td></td></tr>
+<tr><th id="836">836</th><td>	<i>/* End */</i></td></tr>
+<tr><th id="837">837</th><td>	<b>return</b> (<em>int</em>)(((<em>char</em> *)<a class="local col9 ref" href="#79op" title='op' data-ref="79op" data-ref-filename="79op">op</a>) - <a class="local col8 ref" href="#68dest" title='dest' data-ref="68dest" data-ref-filename="68dest">dest</a>);</td></tr>
+<tr><th id="838">838</th><td>}</td></tr>
+<tr><th id="839">839</th><td></td></tr>
+<tr><th id="840">840</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="841">841</th><td><dfn class="tu decl def fn" id="real_LZ4_compress" title='real_LZ4_compress' data-type='int real_LZ4_compress(const char * source, char * dest, int isize, int osize)' data-ref="real_LZ4_compress" data-ref-filename="real_LZ4_compress">real_LZ4_compress</dfn>(<em>const</em> <em>char</em> *<dfn class="local col6 decl" id="96source" title='source' data-type='const char *' data-ref="96source" data-ref-filename="96source">source</dfn>, <em>char</em> *<dfn class="local col7 decl" id="97dest" title='dest' data-type='char *' data-ref="97dest" data-ref-filename="97dest">dest</dfn>, <em>int</em> <dfn class="local col8 decl" id="98isize" title='isize' data-type='int' data-ref="98isize" data-ref-filename="98isize">isize</dfn>, <em>int</em> <dfn class="local col9 decl" id="99osize" title='osize' data-type='int' data-ref="99osize" data-ref-filename="99osize">osize</dfn>)</td></tr>
+<tr><th id="842">842</th><td>{</td></tr>
+<tr><th id="843">843</th><td><u>#<span data-ppcond="843">if</span> <a class="macro" href="#309" title="(12 &gt; 0)" data-ref="_M/HEAPMODE">HEAPMODE</a></u></td></tr>
+<tr><th id="844">844</th><td><u>#<span data-ppcond="844">ifdef</span> <span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span></u></td></tr>
+<tr><th id="845">845</th><td>	<em>void</em> *ctx = kmem_cache_alloc(lz4_ctx_cache, KM_NOSLEEP);</td></tr>
+<tr><th id="846">846</th><td><u>#<span data-ppcond="844">else</span></u></td></tr>
+<tr><th id="847">847</th><td>	<em>void</em> *<dfn class="local col0 decl" id="100ctx" title='ctx' data-type='void *' data-ref="100ctx" data-ref-filename="100ctx">ctx</dfn> = <a class="macro" href="../../../../lib/libzpool/common/sys/zfs_context.h.html#366" title="umem_zalloc(sizeof (struct refTables), 0x0000)" data-ref="_M/kmem_zalloc">kmem_zalloc</a>(<b>sizeof</b> (<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a>), <a class="macro" href="../../../../lib/libzpool/common/sys/zfs_context.h.html#361" title="0x0000" data-ref="_M/KM_NOSLEEP">KM_NOSLEEP</a>);</td></tr>
+<tr><th id="848">848</th><td><u>#<span data-ppcond="844">endif</span></u></td></tr>
+<tr><th id="849">849</th><td>	<em>int</em> <dfn class="local col1 decl" id="101result" title='result' data-type='int' data-ref="101result" data-ref-filename="101result">result</dfn>;</td></tr>
+<tr><th id="850">850</th><td></td></tr>
+<tr><th id="851">851</th><td>	<i>/*</i></td></tr>
+<tr><th id="852">852</th><td><i>	 * out of kernel memory, gently fall through - this will disable</i></td></tr>
+<tr><th id="853">853</th><td><i>	 * compression in zio_compress_data</i></td></tr>
+<tr><th id="854">854</th><td><i>	 */</i></td></tr>
+<tr><th id="855">855</th><td>	<b>if</b> (<a class="local col0 ref" href="#100ctx" title='ctx' data-ref="100ctx" data-ref-filename="100ctx">ctx</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="856">856</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="857">857</th><td></td></tr>
+<tr><th id="858">858</th><td>	<a class="ref fn" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/strings.h.html#bzero" title='bzero' data-ref="bzero" data-ref-filename="bzero">bzero</a>(<a class="local col0 ref" href="#100ctx" title='ctx' data-ref="100ctx" data-ref-filename="100ctx">ctx</a>, <b>sizeof</b>(<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a>));</td></tr>
+<tr><th id="859">859</th><td>	<b>if</b> (<a class="local col8 ref" href="#98isize" title='isize' data-ref="98isize" data-ref-filename="98isize">isize</a> &lt; <a class="macro" href="#651" title="((1 &lt;&lt; 16) + ((8 + 4) - 1))" data-ref="_M/LZ4_64KLIMIT">LZ4_64KLIMIT</a>)</td></tr>
+<tr><th id="860">860</th><td>		<a class="local col1 ref" href="#101result" title='result' data-ref="101result" data-ref-filename="101result">result</a> = <a class="tu ref fn" href="#LZ4_compress64kCtx" title='LZ4_compress64kCtx' data-use='c' data-ref="LZ4_compress64kCtx" data-ref-filename="LZ4_compress64kCtx">LZ4_compress64kCtx</a>(<a class="local col0 ref" href="#100ctx" title='ctx' data-ref="100ctx" data-ref-filename="100ctx">ctx</a>, <a class="local col6 ref" href="#96source" title='source' data-ref="96source" data-ref-filename="96source">source</a>, <a class="local col7 ref" href="#97dest" title='dest' data-ref="97dest" data-ref-filename="97dest">dest</a>, <a class="local col8 ref" href="#98isize" title='isize' data-ref="98isize" data-ref-filename="98isize">isize</a>, <a class="local col9 ref" href="#99osize" title='osize' data-ref="99osize" data-ref-filename="99osize">osize</a>);</td></tr>
+<tr><th id="861">861</th><td>	<b>else</b></td></tr>
+<tr><th id="862">862</th><td>		<a class="local col1 ref" href="#101result" title='result' data-ref="101result" data-ref-filename="101result">result</a> = <a class="tu ref fn" href="#LZ4_compressCtx" title='LZ4_compressCtx' data-use='c' data-ref="LZ4_compressCtx" data-ref-filename="LZ4_compressCtx">LZ4_compressCtx</a>(<a class="local col0 ref" href="#100ctx" title='ctx' data-ref="100ctx" data-ref-filename="100ctx">ctx</a>, <a class="local col6 ref" href="#96source" title='source' data-ref="96source" data-ref-filename="96source">source</a>, <a class="local col7 ref" href="#97dest" title='dest' data-ref="97dest" data-ref-filename="97dest">dest</a>, <a class="local col8 ref" href="#98isize" title='isize' data-ref="98isize" data-ref-filename="98isize">isize</a>, <a class="local col9 ref" href="#99osize" title='osize' data-ref="99osize" data-ref-filename="99osize">osize</a>);</td></tr>
+<tr><th id="863">863</th><td></td></tr>
+<tr><th id="864">864</th><td><u>#<span data-ppcond="864">ifdef</span> <span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span></u></td></tr>
+<tr><th id="865">865</th><td>	kmem_cache_free(lz4_ctx_cache, ctx);</td></tr>
+<tr><th id="866">866</th><td><u>#<span data-ppcond="864">else</span></u></td></tr>
+<tr><th id="867">867</th><td>	<a class="macro" href="../../../../lib/libzpool/common/sys/zfs_context.h.html#367" title="umem_free(ctx, sizeof (struct refTables))" data-ref="_M/kmem_free">kmem_free</a>(<a class="local col0 ref" href="#100ctx" title='ctx' data-ref="100ctx" data-ref-filename="100ctx">ctx</a>, <b>sizeof</b> (<b>struct</b> <a class="type" href="#refTables" title='refTables' data-ref="refTables" data-ref-filename="refTables">refTables</a>));</td></tr>
+<tr><th id="868">868</th><td><u>#<span data-ppcond="864">endif</span></u></td></tr>
+<tr><th id="869">869</th><td>	<b>return</b> (<a class="local col1 ref" href="#101result" title='result' data-ref="101result" data-ref-filename="101result">result</a>);</td></tr>
+<tr><th id="870">870</th><td><u>#<span data-ppcond="843">else</span></u></td></tr>
+<tr><th id="871">871</th><td>	<b>if</b> (isize &lt; (<em>int</em>)LZ4_64KLIMIT)</td></tr>
+<tr><th id="872">872</th><td>		<b>return</b> (LZ4_compress64kCtx(NULL, source, dest, isize, osize));</td></tr>
+<tr><th id="873">873</th><td>	<b>return</b> (LZ4_compressCtx(NULL, source, dest, isize, osize));</td></tr>
+<tr><th id="874">874</th><td><u>#<span data-ppcond="843">endif</span></u></td></tr>
+<tr><th id="875">875</th><td>}</td></tr>
+<tr><th id="876">876</th><td></td></tr>
+<tr><th id="877">877</th><td><i>/* Decompression functions */</i></td></tr>
+<tr><th id="878">878</th><td></td></tr>
+<tr><th id="879">879</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize">/*</i></td></tr>
+<tr><th id="880">880</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> * Note: The decoding function LZ4_uncompress_unknownOutputSize() is safe</i></td></tr>
+<tr><th id="881">881</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> *	against "buffer overflow" attack type. They will never write nor</i></td></tr>
+<tr><th id="882">882</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> *	read outside of the provided output buffers.</i></td></tr>
+<tr><th id="883">883</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> *	LZ4_uncompress_unknownOutputSize() also insures that it will never</i></td></tr>
+<tr><th id="884">884</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> *	read outside of the input buffer.  A corrupted input will produce</i></td></tr>
+<tr><th id="885">885</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> *	an error result, a negative int, indicating the position of the</i></td></tr>
+<tr><th id="886">886</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> *	error within input stream.</i></td></tr>
+<tr><th id="887">887</th><td><i  data-doc="LZ4_uncompress_unknownOutputSize"> */</i></td></tr>
+<tr><th id="888">888</th><td></td></tr>
+<tr><th id="889">889</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="890">890</th><td><dfn class="tu decl def fn" id="LZ4_uncompress_unknownOutputSize" title='LZ4_uncompress_unknownOutputSize' data-type='int LZ4_uncompress_unknownOutputSize(const char * source, char * dest, int isize, int maxOutputSize)' data-ref="LZ4_uncompress_unknownOutputSize" data-ref-filename="LZ4_uncompress_unknownOutputSize">LZ4_uncompress_unknownOutputSize</dfn>(<em>const</em> <em>char</em> *<dfn class="local col2 decl" id="102source" title='source' data-type='const char *' data-ref="102source" data-ref-filename="102source">source</dfn>, <em>char</em> *<dfn class="local col3 decl" id="103dest" title='dest' data-type='char *' data-ref="103dest" data-ref-filename="103dest">dest</dfn>, <em>int</em> <dfn class="local col4 decl" id="104isize" title='isize' data-type='int' data-ref="104isize" data-ref-filename="104isize">isize</dfn>,</td></tr>
+<tr><th id="891">891</th><td>    <em>int</em> <dfn class="local col5 decl" id="105maxOutputSize" title='maxOutputSize' data-type='int' data-ref="105maxOutputSize" data-ref-filename="105maxOutputSize">maxOutputSize</dfn>)</td></tr>
+<tr><th id="892">892</th><td>{</td></tr>
+<tr><th id="893">893</th><td>	<i>/* Local Variables */</i></td></tr>
+<tr><th id="894">894</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<b>restrict</b> <dfn class="local col6 decl" id="106ip" title='ip' data-type='const uint8_t *restrict' data-ref="106ip" data-ref-filename="106ip">ip</dfn> = (<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col2 ref" href="#102source" title='source' data-ref="102source" data-ref-filename="102source">source</a>;</td></tr>
+<tr><th id="895">895</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col7 decl" id="107iend" title='iend' data-type='const uint8_t *const' data-ref="107iend" data-ref-filename="107iend">iend</dfn> = <a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> + <a class="local col4 ref" href="#104isize" title='isize' data-ref="104isize" data-ref-filename="104isize">isize</a>;</td></tr>
+<tr><th id="896">896</th><td>	<em>const</em> <a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col8 decl" id="108ref" title='ref' data-type='const uint8_t *' data-ref="108ref" data-ref-filename="108ref">ref</dfn>;</td></tr>
+<tr><th id="897">897</th><td></td></tr>
+<tr><th id="898">898</th><td>	<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col9 decl" id="109op" title='op' data-type='uint8_t *' data-ref="109op" data-ref-filename="109op">op</dfn> = (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *) <a class="local col3 ref" href="#103dest" title='dest' data-ref="103dest" data-ref-filename="103dest">dest</a>;</td></tr>
+<tr><th id="899">899</th><td>	<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<em>const</em> <dfn class="local col0 decl" id="110oend" title='oend' data-type='uint8_t *const' data-ref="110oend" data-ref-filename="110oend">oend</dfn> = <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> + <a class="local col5 ref" href="#105maxOutputSize" title='maxOutputSize' data-ref="105maxOutputSize" data-ref-filename="105maxOutputSize">maxOutputSize</a>;</td></tr>
+<tr><th id="900">900</th><td>	<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> *<dfn class="local col1 decl" id="111cpy" title='cpy' data-type='uint8_t *' data-ref="111cpy" data-ref-filename="111cpy">cpy</dfn>;</td></tr>
+<tr><th id="901">901</th><td></td></tr>
+<tr><th id="902">902</th><td>	<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col2 decl" id="112dec32table" title='dec32table' data-type='size_t [8]' data-ref="112dec32table" data-ref-filename="112dec32table">dec32table</dfn>[] = {<var>0</var>, <var>3</var>, <var>2</var>, <var>3</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>};</td></tr>
+<tr><th id="903">903</th><td><u>#<span data-ppcond="903">if</span> <a class="macro" href="#193" title="0" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</a></u></td></tr>
+<tr><th id="904">904</th><td>	size_t dec64table[] = {<var>0</var>, <var>0</var>, <var>0</var>, (size_t)-<var>1</var>, <var>0</var>, <var>1</var>, <var>2</var>, <var>3</var>};</td></tr>
+<tr><th id="905">905</th><td><u>#<span data-ppcond="903">endif</span></u></td></tr>
+<tr><th id="906">906</th><td></td></tr>
+<tr><th id="907">907</th><td>	<i>/* Main Loop */</i></td></tr>
+<tr><th id="908">908</th><td>	<b>while</b> (<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> &lt; <a class="local col7 ref" href="#107iend" title='iend' data-ref="107iend" data-ref-filename="107iend">iend</a>) {</td></tr>
+<tr><th id="909">909</th><td>		<em>unsigned</em> <dfn class="local col3 decl" id="113token" title='token' data-type='unsigned int' data-ref="113token" data-ref-filename="113token">token</dfn>;</td></tr>
+<tr><th id="910">910</th><td>		<a class="typedef" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="114length" title='length' data-type='size_t' data-ref="114length" data-ref-filename="114length">length</dfn>;</td></tr>
+<tr><th id="911">911</th><td></td></tr>
+<tr><th id="912">912</th><td>		<i>/* get runlength */</i></td></tr>
+<tr><th id="913">913</th><td>		<a class="local col3 ref" href="#113token" title='token' data-ref="113token" data-ref-filename="113token">token</a> = *<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>++;</td></tr>
+<tr><th id="914">914</th><td>		<b>if</b> ((<a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> = (<a class="local col3 ref" href="#113token" title='token' data-ref="113token" data-ref-filename="113token">token</a> &gt;&gt; <a class="macro" href="#318" title="4" data-ref="_M/ML_BITS">ML_BITS</a>)) == <a class="macro" href="#321" title="((1U&lt;&lt;(8-4))-1)" data-ref="_M/RUN_MASK">RUN_MASK</a>) {</td></tr>
+<tr><th id="915">915</th><td>			<em>int</em> <dfn class="local col5 decl" id="115s" title='s' data-type='int' data-ref="115s" data-ref-filename="115s">s</dfn> = <var>255</var>;</td></tr>
+<tr><th id="916">916</th><td>			<b>while</b> ((<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> &lt; <a class="local col7 ref" href="#107iend" title='iend' data-ref="107iend" data-ref-filename="107iend">iend</a>) &amp;&amp; (<a class="local col5 ref" href="#115s" title='s' data-ref="115s" data-ref-filename="115s">s</a> == <var>255</var>)) {</td></tr>
+<tr><th id="917">917</th><td>				<a class="local col5 ref" href="#115s" title='s' data-ref="115s" data-ref-filename="115s">s</a> = *<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>++;</td></tr>
+<tr><th id="918">918</th><td>				<a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> += <a class="local col5 ref" href="#115s" title='s' data-ref="115s" data-ref-filename="115s">s</a>;</td></tr>
+<tr><th id="919">919</th><td>			}</td></tr>
+<tr><th id="920">920</th><td>		}</td></tr>
+<tr><th id="921">921</th><td>		<i>/* copy literals */</i></td></tr>
+<tr><th id="922">922</th><td>		<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> = <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> + <a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a>;</td></tr>
+<tr><th id="923">923</th><td>		<i>/* CORNER-CASE: cpy might overflow. */</i></td></tr>
+<tr><th id="924">924</th><td>		<b>if</b> (<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> &lt; <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>)</td></tr>
+<tr><th id="925">925</th><td>			<b>goto</b> <a class="lbl" href="#116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</a>;	<i>/* cpy was overflowed, bail! */</i></td></tr>
+<tr><th id="926">926</th><td>		<b>if</b> ((<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> &gt; <a class="local col0 ref" href="#110oend" title='oend' data-ref="110oend" data-ref-filename="110oend">oend</a> - <a class="macro" href="#310" title="8" data-ref="_M/COPYLENGTH">COPYLENGTH</a>) ||</td></tr>
+<tr><th id="927">927</th><td>		    (<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> + <a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> &gt; <a class="local col7 ref" href="#107iend" title='iend' data-ref="107iend" data-ref-filename="107iend">iend</a> - <a class="macro" href="#310" title="8" data-ref="_M/COPYLENGTH">COPYLENGTH</a>)) {</td></tr>
+<tr><th id="928">928</th><td>			<b>if</b> (<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> &gt; <a class="local col0 ref" href="#110oend" title='oend' data-ref="110oend" data-ref-filename="110oend">oend</a>)</td></tr>
+<tr><th id="929">929</th><td>				<i>/* Error: writes beyond output buffer */</i></td></tr>
+<tr><th id="930">930</th><td>				<b>goto</b> <a class="lbl" href="#116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</a>;</td></tr>
+<tr><th id="931">931</th><td>			<b>if</b> (<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> + <a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> != <a class="local col7 ref" href="#107iend" title='iend' data-ref="107iend" data-ref-filename="107iend">iend</a>)</td></tr>
+<tr><th id="932">932</th><td>				<i>/*</i></td></tr>
+<tr><th id="933">933</th><td><i>				 * Error: LZ4 format requires to consume all</i></td></tr>
+<tr><th id="934">934</th><td><i>				 * input at this stage</i></td></tr>
+<tr><th id="935">935</th><td><i>				 */</i></td></tr>
+<tr><th id="936">936</th><td>				<b>goto</b> <a class="lbl" href="#116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</a>;</td></tr>
+<tr><th id="937">937</th><td>			(<em>void</em>) <a class="ref fn" href="../../../../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>, <a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>, <a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a>);</td></tr>
+<tr><th id="938">938</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> += <a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a>;</td></tr>
+<tr><th id="939">939</th><td>			<i>/* Necessarily EOF, due to parsing restrictions */</i></td></tr>
+<tr><th id="940">940</th><td>			<b>break</b>;</td></tr>
+<tr><th id="941">941</th><td>		}</td></tr>
+<tr><th id="942">942</th><td>		<a class="macro" href="#368" title="do { (((U32_S *)(op))-&gt;v) = (((U32_S *)(ip))-&gt;v); op += 4; ip += 4;; (((U32_S *)(op))-&gt;v) = (((U32_S *)(ip))-&gt;v); op += 4; ip += 4;; } while (op &lt; cpy);" data-ref="_M/LZ4_WILDCOPY">LZ4_WILDCOPY</a>(<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>, <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>, <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>);</td></tr>
+<tr><th id="943">943</th><td>		<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> -= (<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> - <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>);</td></tr>
+<tr><th id="944">944</th><td>		<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> = <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>;</td></tr>
+<tr><th id="945">945</th><td></td></tr>
+<tr><th id="946">946</th><td>		<i>/* get offset */</i></td></tr>
+<tr><th id="947">947</th><td>		<a class="macro" href="#353" title="{ ref = (cpy) - (((U16_S *)(ip))-&gt;v); }" data-ref="_M/LZ4_READ_LITTLEENDIAN_16">LZ4_READ_LITTLEENDIAN_16</a>(<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>, <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>, <a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>);</td></tr>
+<tr><th id="948">948</th><td>		<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> += <var>2</var>;</td></tr>
+<tr><th id="949">949</th><td>		<b>if</b> (<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a> &lt; (<a class="macro" href="#265" title="uint8_t" data-ref="_M/BYTE">BYTE</a> * <em>const</em>) <a class="local col3 ref" href="#103dest" title='dest' data-ref="103dest" data-ref-filename="103dest">dest</a>)</td></tr>
+<tr><th id="950">950</th><td>			<i>/*</i></td></tr>
+<tr><th id="951">951</th><td><i>			 * Error: offset creates reference outside of</i></td></tr>
+<tr><th id="952">952</th><td><i>			 * destination buffer</i></td></tr>
+<tr><th id="953">953</th><td><i>			 */</i></td></tr>
+<tr><th id="954">954</th><td>			<b>goto</b> <a class="lbl" href="#116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</a>;</td></tr>
+<tr><th id="955">955</th><td></td></tr>
+<tr><th id="956">956</th><td>		<i>/* get matchlength */</i></td></tr>
+<tr><th id="957">957</th><td>		<b>if</b> ((<a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> = (<a class="local col3 ref" href="#113token" title='token' data-ref="113token" data-ref-filename="113token">token</a> &amp; <a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>)) == <a class="macro" href="#319" title="((1U&lt;&lt;4)-1)" data-ref="_M/ML_MASK">ML_MASK</a>) {</td></tr>
+<tr><th id="958">958</th><td>			<b>while</b> (<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a> &lt; <a class="local col7 ref" href="#107iend" title='iend' data-ref="107iend" data-ref-filename="107iend">iend</a>) {</td></tr>
+<tr><th id="959">959</th><td>				<em>int</em> <dfn class="local col7 decl" id="117s" title='s' data-type='int' data-ref="117s" data-ref-filename="117s">s</dfn> = *<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>++;</td></tr>
+<tr><th id="960">960</th><td>				<a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> += <a class="local col7 ref" href="#117s" title='s' data-ref="117s" data-ref-filename="117s">s</a>;</td></tr>
+<tr><th id="961">961</th><td>				<b>if</b> (<a class="local col7 ref" href="#117s" title='s' data-ref="117s" data-ref-filename="117s">s</a> == <var>255</var>)</td></tr>
+<tr><th id="962">962</th><td>					<b>continue</b>;</td></tr>
+<tr><th id="963">963</th><td>				<b>break</b>;</td></tr>
+<tr><th id="964">964</th><td>			}</td></tr>
+<tr><th id="965">965</th><td>		}</td></tr>
+<tr><th id="966">966</th><td>		<i>/* copy repeated sequence */</i></td></tr>
+<tr><th id="967">967</th><td>		<b>if</b> <a class="macro" href="#262" title="(__builtin_expect(((op - ref &lt; 4) != 0), (0)))" data-ref="_M/unlikely">unlikely</a>(<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> - <a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a> &lt; <a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a>) {</td></tr>
+<tr><th id="968">968</th><td><u>#<span data-ppcond="968">if</span> <a class="macro" href="#193" title="0" data-ref="_M/LZ4_ARCH64">LZ4_ARCH64</a></u></td></tr>
+<tr><th id="969">969</th><td>			size_t dec64 = dec64table[op-ref];</td></tr>
+<tr><th id="970">970</th><td><u>#<span data-ppcond="968">else</span></u></td></tr>
+<tr><th id="971">971</th><td>			<em>const</em> <em>int</em> <dfn class="local col8 decl" id="118dec64" title='dec64' data-type='const int' data-ref="118dec64" data-ref-filename="118dec64">dec64</dfn> = <var>0</var>;</td></tr>
+<tr><th id="972">972</th><td><u>#<span data-ppcond="968">endif</span></u></td></tr>
+<tr><th id="973">973</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>[<var>0</var>] = <a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>[<var>0</var>];</td></tr>
+<tr><th id="974">974</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>[<var>1</var>] = <a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>[<var>1</var>];</td></tr>
+<tr><th id="975">975</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>[<var>2</var>] = <a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>[<var>2</var>];</td></tr>
+<tr><th id="976">976</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>[<var>3</var>] = <a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>[<var>3</var>];</td></tr>
+<tr><th id="977">977</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> += <var>4</var>;</td></tr>
+<tr><th id="978">978</th><td>			<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a> += <var>4</var>;</td></tr>
+<tr><th id="979">979</th><td>			<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a> -= <a class="local col2 ref" href="#112dec32table" title='dec32table' data-ref="112dec32table" data-ref-filename="112dec32table">dec32table</a>[<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>-<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>];</td></tr>
+<tr><th id="980">980</th><td>			<a class="macro" href="#290" title="(((U32_S *)(op))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>) = <a class="macro" href="#290" title="(((U32_S *)(ref))-&gt;v)" data-ref="_M/A32">A32</a>(<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>);</td></tr>
+<tr><th id="981">981</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> += <a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a> - <var>4</var>;</td></tr>
+<tr><th id="982">982</th><td>			<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a> -= <a class="local col8 ref" href="#118dec64" title='dec64' data-ref="118dec64" data-ref-filename="118dec64">dec64</a>;</td></tr>
+<tr><th id="983">983</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="984">984</th><td>			<a class="macro" href="#340" title="(((U32_S *)(op))-&gt;v) = (((U32_S *)(ref))-&gt;v); op += 4; ref += 4;" data-ref="_M/LZ4_COPYSTEP">LZ4_COPYSTEP</a>(<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>, <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>);</td></tr>
+<tr><th id="985">985</th><td>		}</td></tr>
+<tr><th id="986">986</th><td>		<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> = <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> + <a class="local col4 ref" href="#114length" title='length' data-ref="114length" data-ref-filename="114length">length</a> - (<a class="macro" href="#337" title="4" data-ref="_M/STEPSIZE">STEPSIZE</a> - <var>4</var>);</td></tr>
+<tr><th id="987">987</th><td>		<b>if</b> (<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> &gt; <a class="local col0 ref" href="#110oend" title='oend' data-ref="110oend" data-ref-filename="110oend">oend</a> - <a class="macro" href="#310" title="8" data-ref="_M/COPYLENGTH">COPYLENGTH</a>) {</td></tr>
+<tr><th id="988">988</th><td>			<b>if</b> (<a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a> &gt; <a class="local col0 ref" href="#110oend" title='oend' data-ref="110oend" data-ref-filename="110oend">oend</a>)</td></tr>
+<tr><th id="989">989</th><td>				<i>/*</i></td></tr>
+<tr><th id="990">990</th><td><i>				 * Error: request to write outside of</i></td></tr>
+<tr><th id="991">991</th><td><i>				 * destination buffer</i></td></tr>
+<tr><th id="992">992</th><td><i>				 */</i></td></tr>
+<tr><th id="993">993</th><td>				<b>goto</b> <a class="lbl" href="#116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</a>;</td></tr>
+<tr><th id="994">994</th><td>			<a class="macro" href="#342" title="LZ4_WILDCOPY" data-ref="_M/LZ4_SECURECOPY">LZ4_SECURECOPY</a>(<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>, <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>, (<a class="local col0 ref" href="#110oend" title='oend' data-ref="110oend" data-ref-filename="110oend">oend</a> - <a class="macro" href="#310" title="8" data-ref="_M/COPYLENGTH">COPYLENGTH</a>));</td></tr>
+<tr><th id="995">995</th><td>			<b>while</b> (<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> &lt; <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>)</td></tr>
+<tr><th id="996">996</th><td>				*<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>++ = *<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>++;</td></tr>
+<tr><th id="997">997</th><td>			<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> = <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>;</td></tr>
+<tr><th id="998">998</th><td>			<b>if</b> (<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> == <a class="local col0 ref" href="#110oend" title='oend' data-ref="110oend" data-ref-filename="110oend">oend</a>)</td></tr>
+<tr><th id="999">999</th><td>				<i>/*</i></td></tr>
+<tr><th id="1000">1000</th><td><i>				 * Check EOF (should never happen, since</i></td></tr>
+<tr><th id="1001">1001</th><td><i>				 * last 5 bytes are supposed to be literals)</i></td></tr>
+<tr><th id="1002">1002</th><td><i>				 */</i></td></tr>
+<tr><th id="1003">1003</th><td>				<b>goto</b> <a class="lbl" href="#116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</a>;</td></tr>
+<tr><th id="1004">1004</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="1005">1005</th><td>		}</td></tr>
+<tr><th id="1006">1006</th><td>		<a class="macro" href="#342" title="LZ4_WILDCOPY" data-ref="_M/LZ4_SECURECOPY">LZ4_SECURECOPY</a>(<a class="local col8 ref" href="#108ref" title='ref' data-ref="108ref" data-ref-filename="108ref">ref</a>, <a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>, <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>);</td></tr>
+<tr><th id="1007">1007</th><td>		<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a> = <a class="local col1 ref" href="#111cpy" title='cpy' data-ref="111cpy" data-ref-filename="111cpy">cpy</a>;	<i>/* correction */</i></td></tr>
+<tr><th id="1008">1008</th><td>	}</td></tr>
+<tr><th id="1009">1009</th><td></td></tr>
+<tr><th id="1010">1010</th><td>	<i>/* end of decoding */</i></td></tr>
+<tr><th id="1011">1011</th><td>	<b>return</b> (<em>int</em>)(((<em>char</em> *)<a class="local col9 ref" href="#109op" title='op' data-ref="109op" data-ref-filename="109op">op</a>) - <a class="local col3 ref" href="#103dest" title='dest' data-ref="103dest" data-ref-filename="103dest">dest</a>);</td></tr>
+<tr><th id="1012">1012</th><td></td></tr>
+<tr><th id="1013">1013</th><td>	<i>/* write overflow error detected */</i></td></tr>
+<tr><th id="1014">1014</th><td>	<dfn class="lbl" id="116_output_error" data-ref="116_output_error" data-ref-filename="116_output_error">_output_error</dfn>:</td></tr>
+<tr><th id="1015">1015</th><td>	<b>return</b> (<em>int</em>)(-(((<em>char</em> *)<a class="local col6 ref" href="#106ip" title='ip' data-ref="106ip" data-ref-filename="106ip">ip</a>) - <a class="local col2 ref" href="#102source" title='source' data-ref="102source" data-ref-filename="102source">source</a>));</td></tr>
+<tr><th id="1016">1016</th><td>}</td></tr>
+<tr><th id="1017">1017</th><td></td></tr>
+<tr><th id="1018">1018</th><td><u>#<span data-ppcond="1018">ifdef</span> <span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span></u></td></tr>
+<tr><th id="1019">1019</th><td></td></tr>
+<tr><th id="1020">1020</th><td><b>extern</b> <em>void</em></td></tr>
+<tr><th id="1021">1021</th><td>lz4_init(<em>void</em>)</td></tr>
+<tr><th id="1022">1022</th><td>{</td></tr>
+<tr><th id="1023">1023</th><td></td></tr>
+<tr><th id="1024">1024</th><td><u>#if HEAPMODE</u></td></tr>
+<tr><th id="1025">1025</th><td>	lz4_ctx_cache = kmem_cache_create(<q>"lz4_ctx"</q>, <b>sizeof</b>(<b>struct</b> refTables),</td></tr>
+<tr><th id="1026">1026</th><td>	    <var>0</var>, NULL, NULL, NULL, NULL, NULL, <var>0</var>);</td></tr>
+<tr><th id="1027">1027</th><td><u>#endif</u></td></tr>
+<tr><th id="1028">1028</th><td>}</td></tr>
+<tr><th id="1029">1029</th><td></td></tr>
+<tr><th id="1030">1030</th><td><b>extern</b> <em>void</em></td></tr>
+<tr><th id="1031">1031</th><td>lz4_fini(<em>void</em>)</td></tr>
+<tr><th id="1032">1032</th><td>{</td></tr>
+<tr><th id="1033">1033</th><td></td></tr>
+<tr><th id="1034">1034</th><td><u>#if HEAPMODE</u></td></tr>
+<tr><th id="1035">1035</th><td>	kmem_cache_destroy(lz4_ctx_cache);</td></tr>
+<tr><th id="1036">1036</th><td><u>#endif</u></td></tr>
+<tr><th id="1037">1037</th><td>}</td></tr>
+<tr><th id="1038">1038</th><td></td></tr>
+<tr><th id="1039">1039</th><td><u>#<span data-ppcond="1018">endif</span> /* __FreeBSD__ */</u></td></tr>
+<tr><th id="1040">1040</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

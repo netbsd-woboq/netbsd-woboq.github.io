@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>input-file.c source code [netbsd/external/gpl3/binutils/dist/gas/input-file.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="saved_file "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/binutils/dist/gas/input-file.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>binutils</a>/<a href='..'>dist</a>/<a href='./'>gas</a>/<a href='input-file.c.html'>input-file.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* input_file.c - Deal with Input Files -</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 1987-2018 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i></i></td></tr>
+<tr><th id="4">4</th><td><i>   This file is part of GAS, the GNU Assembler.</i></td></tr>
+<tr><th id="5">5</th><td><i></i></td></tr>
+<tr><th id="6">6</th><td><i>   GAS is free software; you can redistribute it and/or modify</i></td></tr>
+<tr><th id="7">7</th><td><i>   it under the terms of the GNU General Public License as published by</i></td></tr>
+<tr><th id="8">8</th><td><i>   the Free Software Foundation; either version 3, or (at your option)</i></td></tr>
+<tr><th id="9">9</th><td><i>   any later version.</i></td></tr>
+<tr><th id="10">10</th><td><i></i></td></tr>
+<tr><th id="11">11</th><td><i>   GAS is distributed in the hope that it will be useful,</i></td></tr>
+<tr><th id="12">12</th><td><i>   but WITHOUT ANY WARRANTY; without even the implied warranty of</i></td></tr>
+<tr><th id="13">13</th><td><i>   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</i></td></tr>
+<tr><th id="14">14</th><td><i>   GNU General Public License for more details.</i></td></tr>
+<tr><th id="15">15</th><td><i></i></td></tr>
+<tr><th id="16">16</th><td><i>   You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="17">17</th><td><i>   along with GAS; see the file COPYING.  If not, write to the Free</i></td></tr>
+<tr><th id="18">18</th><td><i>   Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA</i></td></tr>
+<tr><th id="19">19</th><td><i>   02110-1301, USA.  */</i></td></tr>
+<tr><th id="20">20</th><td></td></tr>
+<tr><th id="21">21</th><td><i>/* Confines all details of reading source bytes to this module.</i></td></tr>
+<tr><th id="22">22</th><td><i>   All O/S specific crocks should live here.</i></td></tr>
+<tr><th id="23">23</th><td><i>   What we lose in "efficiency" we gain in modularity.</i></td></tr>
+<tr><th id="24">24</th><td><i>   Note we don't need to #include the "as.h" file. No common coupling!  */</i></td></tr>
+<tr><th id="25">25</th><td></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="as.h.html">"as.h"</a></u></td></tr>
+<tr><th id="27">27</th><td><u>#include <a href="input-file.h.html">"input-file.h"</a></u></td></tr>
+<tr><th id="28">28</th><td><u>#include <a href="../include/safe-ctype.h.html">"safe-ctype.h"</a></u></td></tr>
+<tr><th id="29">29</th><td></td></tr>
+<tr><th id="30">30</th><td><i>/* This variable is non-zero if the file currently being read should be</i></td></tr>
+<tr><th id="31">31</th><td><i>   preprocessed by app.  It is zero if the file can be read straight in.  */</i></td></tr>
+<tr><th id="32">32</th><td><em>int</em> <dfn class="decl def" id="preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</dfn> = <var>0</var>;</td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/* This code opens a file, then delivers BUFFER_SIZE character</i></td></tr>
+<tr><th id="35">35</th><td><i>   chunks of the file on demand.</i></td></tr>
+<tr><th id="36">36</th><td><i>   BUFFER_SIZE is supposed to be a number chosen for speed.</i></td></tr>
+<tr><th id="37">37</th><td><i>   The caller only asks once what BUFFER_SIZE is, and asks before</i></td></tr>
+<tr><th id="38">38</th><td><i>   the nature of the input files (if any) is known.  */</i></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#define <dfn class="macro" id="_M/BUFFER_SIZE" data-ref="_M/BUFFER_SIZE">BUFFER_SIZE</dfn> (32 * 1024)</u></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td><i  data-doc="f_in">/* We use static data: the data area is not sharable.  */</i></td></tr>
+<tr><th id="43">43</th><td></td></tr>
+<tr><th id="44">44</th><td><em>static</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *<dfn class="tu decl def" id="f_in" title='f_in' data-type='FILE *' data-ref="f_in" data-ref-filename="f_in">f_in</dfn>;</td></tr>
+<tr><th id="45">45</th><td><em>static</em> <em>const</em> <em>char</em> *<dfn class="tu decl def" id="file_name" title='file_name' data-type='const char *' data-ref="file_name" data-ref-filename="file_name">file_name</dfn>;</td></tr>
+<tr><th id="46">46</th><td></td></tr>
+<tr><th id="47">47</th><td><i>/* Struct for saving the state of this module for file includes.  */</i></td></tr>
+<tr><th id="48">48</th><td><b>struct</b> <dfn class="type def" id="saved_file" title='saved_file' data-ref="saved_file" data-ref-filename="saved_file">saved_file</dfn></td></tr>
+<tr><th id="49">49</th><td>  {</td></tr>
+<tr><th id="50">50</th><td>    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> * <dfn class="tu decl field" id="saved_file::f_in" title='saved_file::f_in' data-type='FILE *' data-ref="saved_file::f_in" data-ref-filename="saved_file..f_in">f_in</dfn>;</td></tr>
+<tr><th id="51">51</th><td>    <em>const</em> <em>char</em> * <dfn class="tu decl field" id="saved_file::file_name" title='saved_file::file_name' data-type='const char *' data-ref="saved_file::file_name" data-ref-filename="saved_file..file_name">file_name</dfn>;</td></tr>
+<tr><th id="52">52</th><td>    <em>int</em>    <dfn class="tu decl field" id="saved_file::preprocess" title='saved_file::preprocess' data-type='int' data-ref="saved_file::preprocess" data-ref-filename="saved_file..preprocess">preprocess</dfn>;</td></tr>
+<tr><th id="53">53</th><td>    <em>char</em> * <dfn class="tu decl field" id="saved_file::app_save" title='saved_file::app_save' data-type='char *' data-ref="saved_file::app_save" data-ref-filename="saved_file..app_save">app_save</dfn>;</td></tr>
+<tr><th id="54">54</th><td>  };</td></tr>
+<tr><th id="55">55</th><td></td></tr>
+<tr><th id="56">56</th><td><i>/* These hooks accommodate most operating systems.  */</i></td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td><em>void</em></td></tr>
+<tr><th id="59">59</th><td><dfn class="decl def fn" id="input_file_begin" title='input_file_begin' data-ref="input_file_begin" data-ref-filename="input_file_begin">input_file_begin</dfn> (<em>void</em>)</td></tr>
+<tr><th id="60">60</th><td>{</td></tr>
+<tr><th id="61">61</th><td>  <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *) <var>0</var>;</td></tr>
+<tr><th id="62">62</th><td>}</td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><em>void</em></td></tr>
+<tr><th id="65">65</th><td><dfn class="decl def fn" id="input_file_end" title='input_file_end' data-ref="input_file_end" data-ref-filename="input_file_end">input_file_end</dfn> (<em>void</em>)</td></tr>
+<tr><th id="66">66</th><td>{</td></tr>
+<tr><th id="67">67</th><td>}</td></tr>
+<tr><th id="68">68</th><td></td></tr>
+<tr><th id="69">69</th><td><i>/* Return BUFFER_SIZE.  */</i></td></tr>
+<tr><th id="70">70</th><td><a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a></td></tr>
+<tr><th id="71">71</th><td><dfn class="decl def fn" id="input_file_buffer_size" title='input_file_buffer_size' data-ref="input_file_buffer_size" data-ref-filename="input_file_buffer_size">input_file_buffer_size</dfn> (<em>void</em>)</td></tr>
+<tr><th id="72">72</th><td>{</td></tr>
+<tr><th id="73">73</th><td>  <b>return</b> (<a class="macro" href="#40" title="(32 * 1024)" data-ref="_M/BUFFER_SIZE">BUFFER_SIZE</a>);</td></tr>
+<tr><th id="74">74</th><td>}</td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><i>/* Push the state of our input, returning a pointer to saved info that</i></td></tr>
+<tr><th id="77">77</th><td><i>   can be restored with input_file_pop ().  */</i></td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td><em>char</em> *</td></tr>
+<tr><th id="80">80</th><td><dfn class="decl def fn" id="input_file_push" title='input_file_push' data-ref="input_file_push" data-ref-filename="input_file_push">input_file_push</dfn> (<em>void</em>)</td></tr>
+<tr><th id="81">81</th><td>{</td></tr>
+<tr><th id="82">82</th><td>  <b>struct</b> <a class="type" href="#saved_file" title='saved_file' data-ref="saved_file" data-ref-filename="saved_file">saved_file</a> *<dfn class="local col5 decl" id="5saved" title='saved' data-type='struct saved_file *' data-ref="5saved" data-ref-filename="5saved">saved</dfn>;</td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td>  <a class="local col5 ref" href="#5saved" title='saved' data-ref="5saved" data-ref-filename="5saved">saved</a> = <a class="macro" href="../include/libiberty.h.html#349" title="((struct saved_file *) xmalloc (sizeof (struct saved_file)))" data-ref="_M/XNEW">XNEW</a> (<b>struct</b> <a class="type" href="#saved_file" title='saved_file' data-ref="saved_file" data-ref-filename="saved_file">saved_file</a>);</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td>  <a class="local col5 ref" href="#5saved" title='saved' data-ref="5saved" data-ref-filename="5saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::f_in" title='saved_file::f_in' data-use='w' data-ref="saved_file::f_in" data-ref-filename="saved_file..f_in">f_in</a> = <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>;</td></tr>
+<tr><th id="87">87</th><td>  <a class="local col5 ref" href="#5saved" title='saved' data-ref="5saved" data-ref-filename="5saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::file_name" title='saved_file::file_name' data-use='w' data-ref="saved_file::file_name" data-ref-filename="saved_file..file_name">file_name</a> = <a class="tu ref" href="#file_name" title='file_name' data-use='r' data-ref="file_name" data-ref-filename="file_name">file_name</a>;</td></tr>
+<tr><th id="88">88</th><td>  <a class="local col5 ref" href="#5saved" title='saved' data-ref="5saved" data-ref-filename="5saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::preprocess" title='saved_file::preprocess' data-use='w' data-ref="saved_file::preprocess" data-ref-filename="saved_file..preprocess">preprocess</a> = <a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a>;</td></tr>
+<tr><th id="89">89</th><td>  <b>if</b> (<a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a>)</td></tr>
+<tr><th id="90">90</th><td>    <a class="local col5 ref" href="#5saved" title='saved' data-ref="5saved" data-ref-filename="5saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::app_save" title='saved_file::app_save' data-use='w' data-ref="saved_file::app_save" data-ref-filename="saved_file..app_save">app_save</a> = <a class="ref fn" href="as.h.html#app_push" title='app_push' data-ref="app_push" data-ref-filename="app_push">app_push</a> ();</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td>  <i>/* Initialize for new file.  */</i></td></tr>
+<tr><th id="93">93</th><td>  <a class="ref fn" href="#input_file_begin" title='input_file_begin' data-ref="input_file_begin" data-ref-filename="input_file_begin">input_file_begin</a> ();</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td>  <b>return</b> (<em>char</em> *) <a class="local col5 ref" href="#5saved" title='saved' data-ref="5saved" data-ref-filename="5saved">saved</a>;</td></tr>
+<tr><th id="96">96</th><td>}</td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td><em>void</em></td></tr>
+<tr><th id="99">99</th><td><dfn class="decl def fn" id="input_file_pop" title='input_file_pop' data-ref="input_file_pop" data-ref-filename="input_file_pop">input_file_pop</dfn> (<em>char</em> *<dfn class="local col6 decl" id="6arg" title='arg' data-type='char *' data-ref="6arg" data-ref-filename="6arg">arg</dfn>)</td></tr>
+<tr><th id="100">100</th><td>{</td></tr>
+<tr><th id="101">101</th><td>  <b>struct</b> <a class="type" href="#saved_file" title='saved_file' data-ref="saved_file" data-ref-filename="saved_file">saved_file</a> *<dfn class="local col7 decl" id="7saved" title='saved' data-type='struct saved_file *' data-ref="7saved" data-ref-filename="7saved">saved</dfn> = (<b>struct</b> <a class="type" href="#saved_file" title='saved_file' data-ref="saved_file" data-ref-filename="saved_file">saved_file</a> *) <a class="local col6 ref" href="#6arg" title='arg' data-ref="6arg" data-ref-filename="6arg">arg</a>;</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td>  <a class="ref fn" href="#input_file_end" title='input_file_end' data-ref="input_file_end" data-ref-filename="input_file_end">input_file_end</a> ();		<i>/* Close out old file.  */</i></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td>  <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = <a class="local col7 ref" href="#7saved" title='saved' data-ref="7saved" data-ref-filename="7saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::f_in" title='saved_file::f_in' data-use='r' data-ref="saved_file::f_in" data-ref-filename="saved_file..f_in">f_in</a>;</td></tr>
+<tr><th id="106">106</th><td>  <a class="tu ref" href="#file_name" title='file_name' data-use='w' data-ref="file_name" data-ref-filename="file_name">file_name</a> = <a class="local col7 ref" href="#7saved" title='saved' data-ref="7saved" data-ref-filename="7saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::file_name" title='saved_file::file_name' data-use='r' data-ref="saved_file::file_name" data-ref-filename="saved_file..file_name">file_name</a>;</td></tr>
+<tr><th id="107">107</th><td>  <a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a> = <a class="local col7 ref" href="#7saved" title='saved' data-ref="7saved" data-ref-filename="7saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::preprocess" title='saved_file::preprocess' data-use='r' data-ref="saved_file::preprocess" data-ref-filename="saved_file..preprocess">preprocess</a>;</td></tr>
+<tr><th id="108">108</th><td>  <b>if</b> (<a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a>)</td></tr>
+<tr><th id="109">109</th><td>    <a class="ref fn" href="as.h.html#app_pop" title='app_pop' data-ref="app_pop" data-ref-filename="app_pop">app_pop</a> (<a class="local col7 ref" href="#7saved" title='saved' data-ref="7saved" data-ref-filename="7saved">saved</a>-&gt;<a class="tu ref field" href="#saved_file::app_save" title='saved_file::app_save' data-use='r' data-ref="saved_file::app_save" data-ref-filename="saved_file..app_save">app_save</a>);</td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td>  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col6 ref" href="#6arg" title='arg' data-ref="6arg" data-ref-filename="6arg">arg</a>);</td></tr>
+<tr><th id="112">112</th><td>}</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td><i>/* Open the specified file, "" means stdin.  Filename must not be null.  */</i></td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td><em>void</em></td></tr>
+<tr><th id="117">117</th><td><dfn class="decl def fn" id="input_file_open" title='input_file_open' data-ref="input_file_open" data-ref-filename="input_file_open">input_file_open</dfn> (<em>const</em> <em>char</em> *<dfn class="local col8 decl" id="8filename" title='filename' data-type='const char *' data-ref="8filename" data-ref-filename="8filename">filename</dfn>,</td></tr>
+<tr><th id="118">118</th><td>		 <em>int</em> <dfn class="local col9 decl" id="9pre" title='pre' data-type='int' data-ref="9pre" data-ref-filename="9pre">pre</dfn>)</td></tr>
+<tr><th id="119">119</th><td>{</td></tr>
+<tr><th id="120">120</th><td>  <em>int</em> <dfn class="local col0 decl" id="10c" title='c' data-type='int' data-ref="10c" data-ref-filename="10c">c</dfn>;</td></tr>
+<tr><th id="121">121</th><td>  <em>char</em> <dfn class="local col1 decl" id="11buf" title='buf' data-type='char [80]' data-ref="11buf" data-ref-filename="11buf">buf</dfn>[<var>80</var>];</td></tr>
+<tr><th id="122">122</th><td></td></tr>
+<tr><th id="123">123</th><td>  <a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a> = <a class="local col9 ref" href="#9pre" title='pre' data-ref="9pre" data-ref-filename="9pre">pre</a>;</td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td>  <a class="macro" href="as.h.html#88" title="((void) ((filename != 0) ? 0 : (as_abort (&quot;/___NETBSD_SRC___/objdir.amd64/external/gpl3/binutils/usr.bin/gas/../../../../../../external/gpl3/binutils/dist/gas/input-file.c&quot;, 125, __PRETTY_FUNCTION__), 0)))" data-ref="_M/gas_assert">gas_assert</a> (<a class="local col8 ref" href="#8filename" title='filename' data-ref="8filename" data-ref-filename="8filename">filename</a> != <var>0</var>);	<i>/* Filename may not be NULL.  */</i></td></tr>
+<tr><th id="126">126</th><td>  <b>if</b> (<a class="local col8 ref" href="#8filename" title='filename' data-ref="8filename" data-ref-filename="8filename">filename</a>[<var>0</var>])</td></tr>
+<tr><th id="127">127</th><td>    {</td></tr>
+<tr><th id="128">128</th><td>      <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fopen" title='fopen' data-ref="fopen" data-ref-filename="fopen">fopen</a> (<a class="local col8 ref" href="#8filename" title='filename' data-ref="8filename" data-ref-filename="8filename">filename</a>, <a class="macro" href="../include/fopen-same.h.html#39" title="&quot;r&quot;" data-ref="_M/FOPEN_RT">FOPEN_RT</a>);</td></tr>
+<tr><th id="129">129</th><td>      <a class="tu ref" href="#file_name" title='file_name' data-use='w' data-ref="file_name" data-ref-filename="file_name">file_name</a> = <a class="local col8 ref" href="#8filename" title='filename' data-ref="8filename" data-ref-filename="8filename">filename</a>;</td></tr>
+<tr><th id="130">130</th><td>    }</td></tr>
+<tr><th id="131">131</th><td>  <b>else</b></td></tr>
+<tr><th id="132">132</th><td>    {</td></tr>
+<tr><th id="133">133</th><td>      <i>/* Use stdin for the input file.  */</i></td></tr>
+<tr><th id="134">134</th><td>      <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#215" title="(&amp;__sF[0])" data-ref="_M/stdin">stdin</a>;</td></tr>
+<tr><th id="135">135</th><td>      <i>/* For error messages.  */</i></td></tr>
+<tr><th id="136">136</th><td>      <a class="tu ref" href="#file_name" title='file_name' data-use='w' data-ref="file_name" data-ref-filename="file_name">file_name</a> = <a class="macro" href="asintl.h.html#38" title="gettext (&quot;{standard input}&quot;)" data-ref="_M/_">_</a>(<q>"{standard input}"</q>);</td></tr>
+<tr><th id="137">137</th><td>    }</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td>  <b>if</b> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="140">140</th><td>    {</td></tr>
+<tr><th id="141">141</th><td>      <a class="ref fn" href="as.h.html#464" title='as_bad' data-ref="as_bad" data-ref-filename="as_bad">as_bad</a> (<a class="macro" href="asintl.h.html#38" title="gettext (&quot;can&apos;t open %s for reading: %s&quot;)" data-ref="_M/_">_</a>(<q>"can't open %s for reading: %s"</q>),</td></tr>
+<tr><th id="142">142</th><td>	      <a class="tu ref" href="#file_name" title='file_name' data-use='r' data-ref="file_name" data-ref-filename="file_name">file_name</a>, <a class="ref fn" href="../include/libiberty.h.html#xstrerror" title='xstrerror' data-ref="xstrerror" data-ref-filename="xstrerror">xstrerror</a> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="143">143</th><td>      <b>return</b>;</td></tr>
+<tr><th id="144">144</th><td>    }</td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td>  <a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#496" title="(--(f_in)-&gt;_r &lt; 0 ? __srget(f_in) : (int)(*(f_in)-&gt;_p++))" data-ref="_M/getc">getc</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td>  <b>if</b> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#493" title="(((f_in)-&gt;_flags &amp; 0x0040) != 0)" data-ref="_M/ferror">ferror</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>))</td></tr>
+<tr><th id="149">149</th><td>    {</td></tr>
+<tr><th id="150">150</th><td>      <a class="ref fn" href="as.h.html#464" title='as_bad' data-ref="as_bad" data-ref-filename="as_bad">as_bad</a> (<a class="macro" href="asintl.h.html#38" title="gettext (&quot;can&apos;t read from %s: %s&quot;)" data-ref="_M/_">_</a>(<q>"can't read from %s: %s"</q>),</td></tr>
+<tr><th id="151">151</th><td>	      <a class="tu ref" href="#file_name" title='file_name' data-use='r' data-ref="file_name" data-ref-filename="file_name">file_name</a>, <a class="ref fn" href="../include/libiberty.h.html#xstrerror" title='xstrerror' data-ref="xstrerror" data-ref-filename="xstrerror">xstrerror</a> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="154">154</th><td>      <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="155">155</th><td>      <b>return</b>;</td></tr>
+<tr><th id="156">156</th><td>    }</td></tr>
+<tr><th id="157">157</th><td></td></tr>
+<tr><th id="158">158</th><td>  <i>/* Check for an empty input file.  */</i></td></tr>
+<tr><th id="159">159</th><td>  <b>if</b> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#492" title="(((f_in)-&gt;_flags &amp; 0x0020) != 0)" data-ref="_M/feof">feof</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>))</td></tr>
+<tr><th id="160">160</th><td>    {</td></tr>
+<tr><th id="161">161</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="162">162</th><td>      <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="163">163</th><td>      <b>return</b>;</td></tr>
+<tr><th id="164">164</th><td>    }</td></tr>
+<tr><th id="165">165</th><td>  <a class="macro" href="as.h.html#88" title="((void) ((c != (-1)) ? 0 : (as_abort (&quot;/___NETBSD_SRC___/objdir.amd64/external/gpl3/binutils/usr.bin/gas/../../../../../../external/gpl3/binutils/dist/gas/input-file.c&quot;, 165, __PRETTY_FUNCTION__), 0)))" data-ref="_M/gas_assert">gas_assert</a> (<a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> != <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#183" title="(-1)" data-ref="_M/EOF">EOF</a>);</td></tr>
+<tr><th id="166">166</th><td></td></tr>
+<tr><th id="167">167</th><td>  <b>if</b> (<a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> == <kbd>'#'</kbd>)</td></tr>
+<tr><th id="168">168</th><td>    {</td></tr>
+<tr><th id="169">169</th><td>      <i>/* Begins with comment, may not want to preprocess.  */</i></td></tr>
+<tr><th id="170">170</th><td>      <a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#496" title="(--(f_in)-&gt;_r &lt; 0 ? __srget(f_in) : (int)(*(f_in)-&gt;_p++))" data-ref="_M/getc">getc</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="171">171</th><td>      <b>if</b> (<a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> == <kbd>'N'</kbd>)</td></tr>
+<tr><th id="172">172</th><td>	{</td></tr>
+<tr><th id="173">173</th><td>	  <b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fgets" title='fgets' data-ref="fgets" data-ref-filename="fgets">fgets</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>, <b>sizeof</b> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>), <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>)</td></tr>
+<tr><th id="174">174</th><td>	      &amp;&amp; !<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strncmp" title='strncmp' data-ref="strncmp" data-ref-filename="strncmp">strncmp</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>, <q>"O_APP"</q>, <var>5</var>) &amp;&amp; <a class="macro" href="../include/safe-ctype.h.html#98" title="(_sch_istable[(buf[5]) &amp; 0xff] &amp; (unsigned short)(_sch_isspace))" data-ref="_M/ISSPACE">ISSPACE</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>[<var>5</var>]))</td></tr>
+<tr><th id="175">175</th><td>	    <a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a> = <var>0</var>;</td></tr>
+<tr><th id="176">176</th><td>	  <b>if</b> (!<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strchr" title='strchr' data-ref="strchr" data-ref-filename="strchr">strchr</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>, <kbd>'\n'</kbd>))</td></tr>
+<tr><th id="177">177</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<kbd>'#'</kbd>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);	<i>/* It was longer.  */</i></td></tr>
+<tr><th id="178">178</th><td>	  <b>else</b></td></tr>
+<tr><th id="179">179</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<kbd>'\n'</kbd>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="180">180</th><td>	}</td></tr>
+<tr><th id="181">181</th><td>      <b>else</b> <b>if</b> (<a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> == <kbd>'A'</kbd>)</td></tr>
+<tr><th id="182">182</th><td>	{</td></tr>
+<tr><th id="183">183</th><td>	  <b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fgets" title='fgets' data-ref="fgets" data-ref-filename="fgets">fgets</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>, <b>sizeof</b> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>), <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>)</td></tr>
+<tr><th id="184">184</th><td>	      &amp;&amp; !<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strncmp" title='strncmp' data-ref="strncmp" data-ref-filename="strncmp">strncmp</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>, <q>"PP"</q>, <var>2</var>) &amp;&amp; <a class="macro" href="../include/safe-ctype.h.html#98" title="(_sch_istable[(buf[2]) &amp; 0xff] &amp; (unsigned short)(_sch_isspace))" data-ref="_M/ISSPACE">ISSPACE</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>[<var>2</var>]))</td></tr>
+<tr><th id="185">185</th><td>	    <a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a> = <var>1</var>;</td></tr>
+<tr><th id="186">186</th><td>	  <b>if</b> (!<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strchr" title='strchr' data-ref="strchr" data-ref-filename="strchr">strchr</a> (<a class="local col1 ref" href="#11buf" title='buf' data-ref="11buf" data-ref-filename="11buf">buf</a>, <kbd>'\n'</kbd>))</td></tr>
+<tr><th id="187">187</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<kbd>'#'</kbd>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="188">188</th><td>	  <b>else</b></td></tr>
+<tr><th id="189">189</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<kbd>'\n'</kbd>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="190">190</th><td>	}</td></tr>
+<tr><th id="191">191</th><td>      <b>else</b> <b>if</b> (<a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a> == <kbd>'\n'</kbd>)</td></tr>
+<tr><th id="192">192</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<kbd>'\n'</kbd>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="193">193</th><td>      <b>else</b></td></tr>
+<tr><th id="194">194</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<kbd>'#'</kbd>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="195">195</th><td>    }</td></tr>
+<tr><th id="196">196</th><td>  <b>else</b></td></tr>
+<tr><th id="197">197</th><td>    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#ungetc" title='ungetc' data-ref="ungetc" data-ref-filename="ungetc">ungetc</a> (<a class="local col0 ref" href="#10c" title='c' data-ref="10c" data-ref-filename="10c">c</a>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="198">198</th><td>}</td></tr>
+<tr><th id="199">199</th><td></td></tr>
+<tr><th id="200">200</th><td><i>/* Close input file.  */</i></td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td><em>void</em></td></tr>
+<tr><th id="203">203</th><td><dfn class="decl def fn" id="input_file_close" title='input_file_close' data-ref="input_file_close" data-ref-filename="input_file_close">input_file_close</dfn> (<em>void</em>)</td></tr>
+<tr><th id="204">204</th><td>{</td></tr>
+<tr><th id="205">205</th><td>  <i>/* Don't close a null file pointer.  */</i></td></tr>
+<tr><th id="206">206</th><td>  <b>if</b> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="207">207</th><td>    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td>  <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = <var>0</var>;</td></tr>
+<tr><th id="210">210</th><td>}</td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td><i  data-doc="input_file_get">/* This function is passed to do_scrub_chars.  */</i></td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td><em>static</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a></td></tr>
+<tr><th id="215">215</th><td><dfn class="tu decl def fn" id="input_file_get" title='input_file_get' data-type='size_t input_file_get(char * buf, size_t buflen)' data-ref="input_file_get" data-ref-filename="input_file_get">input_file_get</dfn> (<em>char</em> *<dfn class="local col2 decl" id="12buf" title='buf' data-type='char *' data-ref="12buf" data-ref-filename="12buf">buf</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="13buflen" title='buflen' data-type='size_t' data-ref="13buflen" data-ref-filename="13buflen">buflen</dfn>)</td></tr>
+<tr><th id="216">216</th><td>{</td></tr>
+<tr><th id="217">217</th><td>  <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="14size" title='size' data-type='size_t' data-ref="14size" data-ref-filename="14size">size</dfn>;</td></tr>
+<tr><th id="218">218</th><td></td></tr>
+<tr><th id="219">219</th><td>  <b>if</b> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#492" title="(((f_in)-&gt;_flags &amp; 0x0020) != 0)" data-ref="_M/feof">feof</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>))</td></tr>
+<tr><th id="220">220</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td>  <a class="local col4 ref" href="#14size" title='size' data-ref="14size" data-ref-filename="14size">size</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fread" title='fread' data-ref="fread" data-ref-filename="fread">fread</a> (<a class="local col2 ref" href="#12buf" title='buf' data-ref="12buf" data-ref-filename="12buf">buf</a>, <b>sizeof</b> (<em>char</em>), <a class="local col3 ref" href="#13buflen" title='buflen' data-ref="13buflen" data-ref-filename="13buflen">buflen</a>, <a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>);</td></tr>
+<tr><th id="223">223</th><td>  <b>if</b> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#493" title="(((f_in)-&gt;_flags &amp; 0x0040) != 0)" data-ref="_M/ferror">ferror</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>))</td></tr>
+<tr><th id="224">224</th><td>    <a class="ref fn" href="as.h.html#464" title='as_bad' data-ref="as_bad" data-ref-filename="as_bad">as_bad</a> (<a class="macro" href="asintl.h.html#38" title="gettext (&quot;can&apos;t read from %s: %s&quot;)" data-ref="_M/_">_</a>(<q>"can't read from %s: %s"</q>), <a class="tu ref" href="#file_name" title='file_name' data-use='r' data-ref="file_name" data-ref-filename="file_name">file_name</a>, <a class="ref fn" href="../include/libiberty.h.html#xstrerror" title='xstrerror' data-ref="xstrerror" data-ref-filename="xstrerror">xstrerror</a> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="225">225</th><td>  <b>return</b> <a class="local col4 ref" href="#14size" title='size' data-ref="14size" data-ref-filename="14size">size</a>;</td></tr>
+<tr><th id="226">226</th><td>}</td></tr>
+<tr><th id="227">227</th><td></td></tr>
+<tr><th id="228">228</th><td><i>/* Read a buffer from the input file.  */</i></td></tr>
+<tr><th id="229">229</th><td></td></tr>
+<tr><th id="230">230</th><td><em>char</em> *</td></tr>
+<tr><th id="231">231</th><td><dfn class="decl def fn" id="input_file_give_next_buffer" title='input_file_give_next_buffer' data-ref="input_file_give_next_buffer" data-ref-filename="input_file_give_next_buffer">input_file_give_next_buffer</dfn> (<em>char</em> *<dfn class="local col5 decl" id="15where" title='where' data-type='char *' data-ref="15where" data-ref-filename="15where">where</dfn> <i>/* Where to place 1st character of new buffer.  */</i>)</td></tr>
+<tr><th id="232">232</th><td>{</td></tr>
+<tr><th id="233">233</th><td>  <em>char</em> *<dfn class="local col6 decl" id="16return_value" title='return_value' data-type='char *' data-ref="16return_value" data-ref-filename="16return_value">return_value</dfn>;		<i>/* -&gt; Last char of what we read, + 1.  */</i></td></tr>
+<tr><th id="234">234</th><td>  <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col7 decl" id="17size" title='size' data-type='size_t' data-ref="17size" data-ref-filename="17size">size</dfn>;</td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td>  <b>if</b> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a> == (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *) <var>0</var>)</td></tr>
+<tr><th id="237">237</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="238">238</th><td>  <i>/* fflush (stdin); could be done here if you want to synchronise</i></td></tr>
+<tr><th id="239">239</th><td><i>     stdin and stdout, for the case where our input file is stdin.</i></td></tr>
+<tr><th id="240">240</th><td><i>     Since the assembler shouldn't do any output to stdout, we</i></td></tr>
+<tr><th id="241">241</th><td><i>     don't bother to synch output and input.  */</i></td></tr>
+<tr><th id="242">242</th><td>  <b>if</b> (<a class="ref" href="#preprocess" title='preprocess' data-ref="preprocess" data-ref-filename="preprocess">preprocess</a>)</td></tr>
+<tr><th id="243">243</th><td>    <a class="local col7 ref" href="#17size" title='size' data-ref="17size" data-ref-filename="17size">size</a> = <a class="ref fn" href="as.h.html#do_scrub_chars" title='do_scrub_chars' data-ref="do_scrub_chars" data-ref-filename="do_scrub_chars">do_scrub_chars</a> (<a class="tu ref fn" href="#input_file_get" title='input_file_get' data-use='r' data-ref="input_file_get" data-ref-filename="input_file_get">input_file_get</a>, <a class="local col5 ref" href="#15where" title='where' data-ref="15where" data-ref-filename="15where">where</a>, <a class="macro" href="#40" title="(32 * 1024)" data-ref="_M/BUFFER_SIZE">BUFFER_SIZE</a>);</td></tr>
+<tr><th id="244">244</th><td>  <b>else</b></td></tr>
+<tr><th id="245">245</th><td>    <a class="local col7 ref" href="#17size" title='size' data-ref="17size" data-ref-filename="17size">size</a> = <a class="tu ref fn" href="#input_file_get" title='input_file_get' data-use='c' data-ref="input_file_get" data-ref-filename="input_file_get">input_file_get</a> (<a class="local col5 ref" href="#15where" title='where' data-ref="15where" data-ref-filename="15where">where</a>, <a class="macro" href="#40" title="(32 * 1024)" data-ref="_M/BUFFER_SIZE">BUFFER_SIZE</a>);</td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td>  <b>if</b> (<a class="local col7 ref" href="#17size" title='size' data-ref="17size" data-ref-filename="17size">size</a>)</td></tr>
+<tr><th id="248">248</th><td>    <a class="local col6 ref" href="#16return_value" title='return_value' data-ref="16return_value" data-ref-filename="16return_value">return_value</a> = <a class="local col5 ref" href="#15where" title='where' data-ref="15where" data-ref-filename="15where">where</a> + <a class="local col7 ref" href="#17size" title='size' data-ref="17size" data-ref-filename="17size">size</a>;</td></tr>
+<tr><th id="249">249</th><td>  <b>else</b></td></tr>
+<tr><th id="250">250</th><td>    {</td></tr>
+<tr><th id="251">251</th><td>      <b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a> (<a class="tu ref" href="#f_in" title='f_in' data-use='r' data-ref="f_in" data-ref-filename="f_in">f_in</a>))</td></tr>
+<tr><th id="252">252</th><td>	<a class="ref fn" href="as.h.html#467" title='as_warn' data-ref="as_warn" data-ref-filename="as_warn">as_warn</a> (<a class="macro" href="asintl.h.html#38" title="gettext (&quot;can&apos;t close %s: %s&quot;)" data-ref="_M/_">_</a>(<q>"can't close %s: %s"</q>), <a class="tu ref" href="#file_name" title='file_name' data-use='r' data-ref="file_name" data-ref-filename="file_name">file_name</a>, <a class="ref fn" href="../include/libiberty.h.html#xstrerror" title='xstrerror' data-ref="xstrerror" data-ref-filename="xstrerror">xstrerror</a> (<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>));</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>      <a class="tu ref" href="#f_in" title='f_in' data-use='w' data-ref="f_in" data-ref-filename="f_in">f_in</a> = (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *) <var>0</var>;</td></tr>
+<tr><th id="255">255</th><td>      <a class="local col6 ref" href="#16return_value" title='return_value' data-ref="16return_value" data-ref-filename="16return_value">return_value</a> = <var>0</var>;</td></tr>
+<tr><th id="256">256</th><td>    }</td></tr>
+<tr><th id="257">257</th><td></td></tr>
+<tr><th id="258">258</th><td>  <b>return</b> <a class="local col6 ref" href="#16return_value" title='return_value' data-ref="16return_value" data-ref-filename="16return_value">return_value</a>;</td></tr>
+<tr><th id="259">259</th><td>}</td></tr>
+<tr><th id="260">260</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

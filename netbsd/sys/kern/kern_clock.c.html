@@ -1,0 +1,466 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>kern_clock.c source code [netbsd/sys/kern/kern_clock.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/kern_clock.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='kern_clock.c.html'>kern_clock.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: kern_clock.c,v 1.138 2018/09/03 21:29:30 riastradh Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2000, 2004, 2006, 2007, 2008 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,</i></td></tr>
+<tr><th id="9">9</th><td><i> * NASA Ames Research Center.</i></td></tr>
+<tr><th id="10">10</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="11">11</th><td><i> * by Charles M. Hannum.</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="14">14</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="15">15</th><td><i> * are met:</i></td></tr>
+<tr><th id="16">16</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="17">17</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="18">18</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="19">19</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="20">20</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="21">21</th><td><i> *</i></td></tr>
+<tr><th id="22">22</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="24">24</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="25">25</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="26">26</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="28">28</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="29">29</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="30">30</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="31">31</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="32">32</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="33">33</th><td><i> */</i></td></tr>
+<tr><th id="34">34</th><td></td></tr>
+<tr><th id="35">35</th><td><i>/*-</i></td></tr>
+<tr><th id="36">36</th><td><i> * Copyright (c) 1982, 1986, 1991, 1993</i></td></tr>
+<tr><th id="37">37</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="38">38</th><td><i> * (c) UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="39">39</th><td><i> * All or some portions of this file are derived from material licensed</i></td></tr>
+<tr><th id="40">40</th><td><i> * to the University of California by American Telephone and Telegraph</i></td></tr>
+<tr><th id="41">41</th><td><i> * Co. or Unix System Laboratories, Inc. and are reproduced herein with</i></td></tr>
+<tr><th id="42">42</th><td><i> * the permission of UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="43">43</th><td><i> *</i></td></tr>
+<tr><th id="44">44</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="45">45</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="46">46</th><td><i> * are met:</i></td></tr>
+<tr><th id="47">47</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="48">48</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="49">49</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="50">50</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="51">51</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="52">52</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="53">53</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="54">54</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="55">55</th><td><i> *</i></td></tr>
+<tr><th id="56">56</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="57">57</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="58">58</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="59">59</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="60">60</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="61">61</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="62">62</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="63">63</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="64">64</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="65">65</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="66">66</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="67">67</th><td><i> *</i></td></tr>
+<tr><th id="68">68</th><td><i> *	@(#)kern_clock.c	8.5 (Berkeley) 1/21/94</i></td></tr>
+<tr><th id="69">69</th><td><i> */</i></td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="72">72</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: kern_clock.c,v 1.138 2018/09/03 21:29:30 riastradh Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: kern_clock.c,v 1.138 2018/09/03 21:29:30 riastradh Exp $"</q>);</td></tr>
+<tr><th id="73">73</th><td></td></tr>
+<tr><th id="74">74</th><td><u>#<span data-ppcond="74">ifdef</span> <span class="macro" data-ref="_M/_KERNEL_OPT">_KERNEL_OPT</span></u></td></tr>
+<tr><th id="75">75</th><td><u>#include "opt_dtrace.h"</u></td></tr>
+<tr><th id="76">76</th><td><u>#include "opt_gprof.h"</u></td></tr>
+<tr><th id="77">77</th><td><u>#<span data-ppcond="74">endif</span></u></td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="80">80</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="81">81</th><td><u>#include <a href="../sys/callout.h.html">&lt;sys/callout.h&gt;</a></u></td></tr>
+<tr><th id="82">82</th><td><u>#include <a href="../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="83">83</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="84">84</th><td><u>#include <a href="../sys/resourcevar.h.html">&lt;sys/resourcevar.h&gt;</a></u></td></tr>
+<tr><th id="85">85</th><td><u>#include <a href="../sys/signalvar.h.html">&lt;sys/signalvar.h&gt;</a></u></td></tr>
+<tr><th id="86">86</th><td><u>#include <a href="../sys/sysctl.h.html">&lt;sys/sysctl.h&gt;</a></u></td></tr>
+<tr><th id="87">87</th><td><u>#include <a href="../sys/timex.h.html">&lt;sys/timex.h&gt;</a></u></td></tr>
+<tr><th id="88">88</th><td><u>#include <a href="../sys/sched.h.html">&lt;sys/sched.h&gt;</a></u></td></tr>
+<tr><th id="89">89</th><td><u>#include <a href="../sys/time.h.html">&lt;sys/time.h&gt;</a></u></td></tr>
+<tr><th id="90">90</th><td><u>#include <a href="../sys/timetc.h.html">&lt;sys/timetc.h&gt;</a></u></td></tr>
+<tr><th id="91">91</th><td><u>#include <a href="../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="92">92</th><td><u>#include <a href="../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><u>#<span data-ppcond="94">ifdef</span> <span class="macro" data-ref="_M/GPROF">GPROF</span></u></td></tr>
+<tr><th id="95">95</th><td><u>#include &lt;sys/gmon.h&gt;</u></td></tr>
+<tr><th id="96">96</th><td><u>#<span data-ppcond="94">endif</span></u></td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td><u>#<span data-ppcond="98">ifdef</span> <span class="macro" data-ref="_M/KDTRACE_HOOKS">KDTRACE_HOOKS</span></u></td></tr>
+<tr><th id="99">99</th><td><u>#include &lt;sys/dtrace_bsd.h&gt;</u></td></tr>
+<tr><th id="100">100</th><td><u>#include &lt;sys/cpu.h&gt;</u></td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td>cyclic_clock_func_t	cyclic_clock_func[MAXCPUS];</td></tr>
+<tr><th id="103">103</th><td><u>#<span data-ppcond="98">endif</span></u></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#sysctl_kern_clockrate" title='sysctl_kern_clockrate' data-type='int sysctl_kern_clockrate(const int * , u_int , void * , size_t * , const void * , size_t , const int * , struct lwp * , const struct sysctlnode * )' data-ref="sysctl_kern_clockrate" data-ref-filename="sysctl_kern_clockrate">sysctl_kern_clockrate</a>(<a class="macro" href="../sys/sysctl.h.html#954" title="const int *, u_int, void *, size_t *, const void *, size_t, const int *, struct lwp *, const struct sysctlnode *" data-ref="_M/SYSCTLFN_PROTO">SYSCTLFN_PROTO</a>);</td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><i>/*</i></td></tr>
+<tr><th id="108">108</th><td><i> * Clock handling routines.</i></td></tr>
+<tr><th id="109">109</th><td><i> *</i></td></tr>
+<tr><th id="110">110</th><td><i> * This code is written to operate with two timers that run independently of</i></td></tr>
+<tr><th id="111">111</th><td><i> * each other.  The main clock, running hz times per second, is used to keep</i></td></tr>
+<tr><th id="112">112</th><td><i> * track of real time.  The second timer handles kernel and user profiling,</i></td></tr>
+<tr><th id="113">113</th><td><i> * and does resource use estimation.  If the second timer is programmable,</i></td></tr>
+<tr><th id="114">114</th><td><i> * it is randomized to avoid aliasing between the two clocks.  For example,</i></td></tr>
+<tr><th id="115">115</th><td><i> * the randomization prevents an adversary from always giving up the CPU</i></td></tr>
+<tr><th id="116">116</th><td><i> * just before its quantum expires.  Otherwise, it would never accumulate</i></td></tr>
+<tr><th id="117">117</th><td><i> * CPU ticks.  The mean frequency of the second timer is stathz.</i></td></tr>
+<tr><th id="118">118</th><td><i> *</i></td></tr>
+<tr><th id="119">119</th><td><i> * If no second timer exists, stathz will be zero; in this case we drive</i></td></tr>
+<tr><th id="120">120</th><td><i> * profiling and statistics off the main clock.  This WILL NOT be accurate;</i></td></tr>
+<tr><th id="121">121</th><td><i> * do not do it unless absolutely necessary.</i></td></tr>
+<tr><th id="122">122</th><td><i> *</i></td></tr>
+<tr><th id="123">123</th><td><i> * The statistics clock may (or may not) be run at a higher rate while</i></td></tr>
+<tr><th id="124">124</th><td><i> * profiling.  This profile clock runs at profhz.  We require that profhz</i></td></tr>
+<tr><th id="125">125</th><td><i> * be an integral multiple of stathz.</i></td></tr>
+<tr><th id="126">126</th><td><i> *</i></td></tr>
+<tr><th id="127">127</th><td><i> * If the statistics clock is running fast, it must be divided by the ratio</i></td></tr>
+<tr><th id="128">128</th><td><i> * profhz/stathz for statistics.  (For profiling, every tick counts.)</i></td></tr>
+<tr><th id="129">129</th><td><i> */</i></td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td><em>int</em>	<dfn class="decl def" id="stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</dfn>;</td></tr>
+<tr><th id="132">132</th><td><em>int</em>	<dfn class="decl def" id="profhz" title='profhz' data-ref="profhz" data-ref-filename="profhz">profhz</dfn>;</td></tr>
+<tr><th id="133">133</th><td><em>int</em>	<dfn class="decl def" id="profsrc" title='profsrc' data-ref="profsrc" data-ref-filename="profsrc">profsrc</dfn>;</td></tr>
+<tr><th id="134">134</th><td><em>int</em>	<dfn class="decl def" id="schedhz" title='schedhz' data-ref="schedhz" data-ref-filename="schedhz">schedhz</dfn>;</td></tr>
+<tr><th id="135">135</th><td><em>int</em>	<dfn class="decl def" id="profprocs" title='profprocs' data-ref="profprocs" data-ref-filename="profprocs">profprocs</dfn>;</td></tr>
+<tr><th id="136">136</th><td><em>int</em>	<dfn class="decl def" id="hardclock_ticks" title='hardclock_ticks' data-ref="hardclock_ticks" data-ref-filename="hardclock_ticks">hardclock_ticks</dfn>;</td></tr>
+<tr><th id="137">137</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="hardscheddiv" title='hardscheddiv' data-type='int' data-ref="hardscheddiv" data-ref-filename="hardscheddiv">hardscheddiv</dfn>; <i  data-doc="hardscheddiv">/* hard =&gt; sched divider (used if schedhz == 0) */</i></td></tr>
+<tr><th id="138">138</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="psdiv" title='psdiv' data-type='int' data-ref="psdiv" data-ref-filename="psdiv">psdiv</dfn>;			<i  data-doc="psdiv">/* prof =&gt; stat divider */</i></td></tr>
+<tr><th id="139">139</th><td><em>int</em>	<dfn class="decl def" id="psratio" title='psratio' data-ref="psratio" data-ref-filename="psratio">psratio</dfn>;			<i>/* ratio: prof / stat */</i></td></tr>
+<tr><th id="140">140</th><td></td></tr>
+<tr><th id="141">141</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <a class="tu decl fn" href="#get_intr_timecount" title='get_intr_timecount' data-type='u_int get_intr_timecount(struct timecounter * )' data-ref="get_intr_timecount" data-ref-filename="get_intr_timecount">get_intr_timecount</a>(<b>struct</b> <a class="type" href="../sys/timetc.h.html#timecounter" title='timecounter' data-ref="timecounter" data-ref-filename="timecounter">timecounter</a> *);</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/timetc.h.html#timecounter" title='timecounter' data-ref="timecounter" data-ref-filename="timecounter">timecounter</a> <dfn class="tu decl def" id="intr_timecounter" title='intr_timecounter' data-type='struct timecounter' data-ref="intr_timecounter" data-ref-filename="intr_timecounter">intr_timecounter</dfn> = {</td></tr>
+<tr><th id="144">144</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_get_timecount" title='timecounter::tc_get_timecount' data-ref="timecounter::tc_get_timecount" data-ref-filename="timecounter..tc_get_timecount">tc_get_timecount</a>	= <a class="tu ref fn" href="#get_intr_timecount" title='get_intr_timecount' data-ref="get_intr_timecount" data-ref-filename="get_intr_timecount">get_intr_timecount</a>,</td></tr>
+<tr><th id="145">145</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_poll_pps" title='timecounter::tc_poll_pps' data-ref="timecounter::tc_poll_pps" data-ref-filename="timecounter..tc_poll_pps">tc_poll_pps</a>		= <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="146">146</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_counter_mask" title='timecounter::tc_counter_mask' data-ref="timecounter::tc_counter_mask" data-ref-filename="timecounter..tc_counter_mask">tc_counter_mask</a>	= ~<var>0u</var>,</td></tr>
+<tr><th id="147">147</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_frequency" title='timecounter::tc_frequency' data-ref="timecounter::tc_frequency" data-ref-filename="timecounter..tc_frequency">tc_frequency</a>		= <var>0</var>,</td></tr>
+<tr><th id="148">148</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_name" title='timecounter::tc_name' data-ref="timecounter::tc_name" data-ref-filename="timecounter..tc_name">tc_name</a>		= <q>"clockinterrupt"</q>,</td></tr>
+<tr><th id="149">149</th><td>	<i>/* quality - minimum implementation level for a clock */</i></td></tr>
+<tr><th id="150">150</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_quality" title='timecounter::tc_quality' data-ref="timecounter::tc_quality" data-ref-filename="timecounter..tc_quality">tc_quality</a>		= <var>0</var>,</td></tr>
+<tr><th id="151">151</th><td>	.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_priv" title='timecounter::tc_priv' data-ref="timecounter::tc_priv" data-ref-filename="timecounter..tc_priv">tc_priv</a>		= <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="152">152</th><td>};</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a></td></tr>
+<tr><th id="155">155</th><td><dfn class="tu decl def fn" id="get_intr_timecount" title='get_intr_timecount' data-type='u_int get_intr_timecount(struct timecounter * tc)' data-ref="get_intr_timecount" data-ref-filename="get_intr_timecount">get_intr_timecount</dfn>(<b>struct</b> <a class="type" href="../sys/timetc.h.html#timecounter" title='timecounter' data-ref="timecounter" data-ref-filename="timecounter">timecounter</a> *<dfn class="local col3 decl" id="3tc" title='tc' data-type='struct timecounter *' data-ref="3tc" data-ref-filename="3tc">tc</dfn>)</td></tr>
+<tr><th id="156">156</th><td>{</td></tr>
+<tr><th id="157">157</th><td></td></tr>
+<tr><th id="158">158</th><td>	<b>return</b> (<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>)<a class="ref" href="../sys/kernel.h.html#hardclock_ticks" title='hardclock_ticks' data-ref="hardclock_ticks" data-ref-filename="hardclock_ticks">hardclock_ticks</a>;</td></tr>
+<tr><th id="159">159</th><td>}</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td><i>/*</i></td></tr>
+<tr><th id="162">162</th><td><i> * Initialize clock frequencies and start both clocks running.</i></td></tr>
+<tr><th id="163">163</th><td><i> */</i></td></tr>
+<tr><th id="164">164</th><td><em>void</em></td></tr>
+<tr><th id="165">165</th><td><dfn class="decl def fn" id="initclocks" title='initclocks' data-ref="initclocks" data-ref-filename="initclocks">initclocks</dfn>(<em>void</em>)</td></tr>
+<tr><th id="166">166</th><td>{</td></tr>
+<tr><th id="167">167</th><td>	<em>static</em> <b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctllog" title='sysctllog' data-ref="sysctllog" data-ref-filename="sysctllog">sysctllog</a> *<dfn class="local col4 decl" id="4clog" title='clog' data-type='struct sysctllog *' data-ref="4clog" data-ref-filename="4clog">clog</dfn>;</td></tr>
+<tr><th id="168">168</th><td>	<em>int</em> <dfn class="local col5 decl" id="5i" title='i' data-type='int' data-ref="5i" data-ref-filename="5i">i</dfn>;</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>	<i>/*</i></td></tr>
+<tr><th id="171">171</th><td><i>	 * Set divisors to 1 (normal case) and let the machine-specific</i></td></tr>
+<tr><th id="172">172</th><td><i>	 * code do its bit.</i></td></tr>
+<tr><th id="173">173</th><td><i>	 */</i></td></tr>
+<tr><th id="174">174</th><td>	<a class="tu ref" href="#psdiv" title='psdiv' data-use='w' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a> = <var>1</var>;</td></tr>
+<tr><th id="175">175</th><td>	<i>/*</i></td></tr>
+<tr><th id="176">176</th><td><i>	 * provide minimum default time counter</i></td></tr>
+<tr><th id="177">177</th><td><i>	 * will only run at interrupt resolution</i></td></tr>
+<tr><th id="178">178</th><td><i>	 */</i></td></tr>
+<tr><th id="179">179</th><td>	<a class="tu ref" href="#intr_timecounter" title='intr_timecounter' data-use='m' data-ref="intr_timecounter" data-ref-filename="intr_timecounter">intr_timecounter</a>.<a class="ref field" href="../sys/timetc.h.html#timecounter::tc_frequency" title='timecounter::tc_frequency' data-ref="timecounter::tc_frequency" data-ref-filename="timecounter..tc_frequency">tc_frequency</a> = <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>;</td></tr>
+<tr><th id="180">180</th><td>	<a class="ref fn" href="../sys/timetc.h.html#tc_init" title='tc_init' data-ref="tc_init" data-ref-filename="tc_init">tc_init</a>(&amp;<a class="tu ref" href="#intr_timecounter" title='intr_timecounter' data-use='a' data-ref="intr_timecounter" data-ref-filename="intr_timecounter">intr_timecounter</a>);</td></tr>
+<tr><th id="181">181</th><td>	<a class="ref fn" href="../sys/systm.h.html#cpu_initclocks" title='cpu_initclocks' data-ref="cpu_initclocks" data-ref-filename="cpu_initclocks">cpu_initclocks</a>();</td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td>	<i>/*</i></td></tr>
+<tr><th id="184">184</th><td><i>	 * Compute profhz and stathz, fix profhz if needed.</i></td></tr>
+<tr><th id="185">185</th><td><i>	 */</i></td></tr>
+<tr><th id="186">186</th><td>	<a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a> = <a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> ? <a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> : <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>;</td></tr>
+<tr><th id="187">187</th><td>	<b>if</b> (<a class="ref" href="../sys/kernel.h.html#profhz" title='profhz' data-ref="profhz" data-ref-filename="profhz">profhz</a> == <var>0</var>)</td></tr>
+<tr><th id="188">188</th><td>		<a class="ref" href="../sys/kernel.h.html#profhz" title='profhz' data-ref="profhz" data-ref-filename="profhz">profhz</a> = <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>;</td></tr>
+<tr><th id="189">189</th><td>	<a class="ref" href="../sys/kernel.h.html#psratio" title='psratio' data-ref="psratio" data-ref-filename="psratio">psratio</a> = <a class="ref" href="../sys/kernel.h.html#profhz" title='profhz' data-ref="profhz" data-ref-filename="profhz">profhz</a> / <a class="local col5 ref" href="#5i" title='i' data-ref="5i" data-ref-filename="5i">i</a>;</td></tr>
+<tr><th id="190">190</th><td>	<b>if</b> (<a class="ref" href="../sys/sched.h.html#schedhz" title='schedhz' data-ref="schedhz" data-ref-filename="schedhz">schedhz</a> == <var>0</var>) {</td></tr>
+<tr><th id="191">191</th><td>		<i>/* 16Hz is best */</i></td></tr>
+<tr><th id="192">192</th><td>		<a class="tu ref" href="#hardscheddiv" title='hardscheddiv' data-use='w' data-ref="hardscheddiv" data-ref-filename="hardscheddiv">hardscheddiv</a> = <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a> / <var>16</var>;</td></tr>
+<tr><th id="193">193</th><td>		<b>if</b> (<a class="tu ref" href="#hardscheddiv" title='hardscheddiv' data-use='r' data-ref="hardscheddiv" data-ref-filename="hardscheddiv">hardscheddiv</a> &lt;= <var>0</var>)</td></tr>
+<tr><th id="194">194</th><td>			<a class="ref fn" href="../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"hardscheddiv"</q>);</td></tr>
+<tr><th id="195">195</th><td>	}</td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td>	<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(&amp;clog, 0, ((void *)0), ((void *)0), 0x00000200, 5, &quot;clockrate&quot;, ((void *)0), sysctl_kern_clockrate, 0, __sysctl_verify_CTLTYPE_STRUCT_arg(((void *)0)), sizeof(struct clockinfo), 1, 12, (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(&amp;<a class="local col4 ref" href="#4clog" title='clog' data-ref="4clog" data-ref-filename="4clog">clog</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="198">198</th><td>		       <a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="199">199</th><td>		       <a class="macro" href="../sys/sysctl.h.html#96" title="5" data-ref="_M/CTLTYPE_STRUCT">CTLTYPE_STRUCT</a>, <q>"clockrate"</q>,</td></tr>
+<tr><th id="200">200</th><td>		       <a class="macro" href="../sys/sysctl.h.html#1128" title="((void *)0)" data-ref="_M/SYSCTL_DESCR">SYSCTL_DESCR</a>(<q>"Kernel clock rates"</q>),</td></tr>
+<tr><th id="201">201</th><td>		       <a class="tu ref fn" href="#sysctl_kern_clockrate" title='sysctl_kern_clockrate' data-use='r' data-ref="sysctl_kern_clockrate" data-ref-filename="sysctl_kern_clockrate">sysctl_kern_clockrate</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="202">202</th><td>		       <b>sizeof</b>(<b>struct</b> <a class="type" href="../sys/sysctl.h.html#clockinfo" title='clockinfo' data-ref="clockinfo" data-ref-filename="clockinfo">clockinfo</a>),</td></tr>
+<tr><th id="203">203</th><td>		       <a class="macro" href="../sys/sysctl.h.html#170" title="1" data-ref="_M/CTL_KERN">CTL_KERN</a>, <a class="macro" href="../sys/sysctl.h.html#204" title="12" data-ref="_M/KERN_CLOCKRATE">KERN_CLOCKRATE</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="204">204</th><td>	<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(&amp;clog, 0, ((void *)0), ((void *)0), 0x00000200, 2, &quot;hardclock_ticks&quot;, ((void *)0), ((void *)0), 0, __sysctl_verify_CTLTYPE_INT_arg(&amp;hardclock_ticks), sizeof(hardclock_ticks), 1, 80, (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(&amp;<a class="local col4 ref" href="#4clog" title='clog' data-ref="4clog" data-ref-filename="4clog">clog</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="205">205</th><td>		       <a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="206">206</th><td>		       <a class="macro" href="../sys/sysctl.h.html#93" title="2" data-ref="_M/CTLTYPE_INT">CTLTYPE_INT</a>, <q>"hardclock_ticks"</q>,</td></tr>
+<tr><th id="207">207</th><td>		       <a class="macro" href="../sys/sysctl.h.html#1128" title="((void *)0)" data-ref="_M/SYSCTL_DESCR">SYSCTL_DESCR</a>(<q>"Number of hardclock ticks"</q>),</td></tr>
+<tr><th id="208">208</th><td>		       <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>, &amp;<a class="ref" href="../sys/kernel.h.html#hardclock_ticks" title='hardclock_ticks' data-ref="hardclock_ticks" data-ref-filename="hardclock_ticks">hardclock_ticks</a>, <b>sizeof</b>(<a class="ref" href="../sys/kernel.h.html#hardclock_ticks" title='hardclock_ticks' data-ref="hardclock_ticks" data-ref-filename="hardclock_ticks">hardclock_ticks</a>),</td></tr>
+<tr><th id="209">209</th><td>		       <a class="macro" href="../sys/sysctl.h.html#170" title="1" data-ref="_M/CTL_KERN">CTL_KERN</a>, <a class="macro" href="../sys/sysctl.h.html#272" title="80" data-ref="_M/KERN_HARDCLOCK_TICKS">KERN_HARDCLOCK_TICKS</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="210">210</th><td>}</td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td><i>/*</i></td></tr>
+<tr><th id="213">213</th><td><i> * The real-time timer, interrupting hz times per second.</i></td></tr>
+<tr><th id="214">214</th><td><i> */</i></td></tr>
+<tr><th id="215">215</th><td><em>void</em></td></tr>
+<tr><th id="216">216</th><td><dfn class="decl def fn" id="hardclock" title='hardclock' data-ref="hardclock" data-ref-filename="hardclock">hardclock</dfn>(<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#clockframe" title='clockframe' data-ref="clockframe" data-ref-filename="clockframe">clockframe</a> *<dfn class="local col6 decl" id="6frame" title='frame' data-type='struct clockframe *' data-ref="6frame" data-ref-filename="6frame">frame</dfn>)</td></tr>
+<tr><th id="217">217</th><td>{</td></tr>
+<tr><th id="218">218</th><td>	<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col7 decl" id="7l" title='l' data-type='struct lwp *' data-ref="7l" data-ref-filename="7l">l</dfn>;</td></tr>
+<tr><th id="219">219</th><td>	<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col8 decl" id="8ci" title='ci' data-type='struct cpu_info *' data-ref="8ci" data-ref-filename="8ci">ci</dfn>;</td></tr>
+<tr><th id="220">220</th><td></td></tr>
+<tr><th id="221">221</th><td>	<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a> = <a class="macro" href="../arch/x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="222">222</th><td>	<a class="local col7 ref" href="#7l" title='l' data-ref="7l" data-ref-filename="7l">l</a> = <a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_data" title='cpu_info::ci_data' data-ref="cpu_info::ci_data" data-ref-filename="cpu_info..ci_data">ci_data</a>.<a class="ref field" href="../sys/cpu_data.h.html#cpu_data::cpu_onproc" title='cpu_data::cpu_onproc' data-ref="cpu_data::cpu_onproc" data-ref-filename="cpu_data..cpu_onproc">cpu_onproc</a>;</td></tr>
+<tr><th id="223">223</th><td></td></tr>
+<tr><th id="224">224</th><td>	<a class="ref fn" href="../sys/timevar.h.html#timer_tick" title='timer_tick' data-ref="timer_tick" data-ref-filename="timer_tick">timer_tick</a>(<a class="local col7 ref" href="#7l" title='l' data-ref="7l" data-ref-filename="7l">l</a>, <a class="macro" href="../arch/i386/include/cpu.h.html#88" title="((((frame)-&gt;cf_if.if_cs) &amp; 3) == 3)" data-ref="_M/CLKF_USERMODE">CLKF_USERMODE</a>(<a class="local col6 ref" href="#6frame" title='frame' data-ref="6frame" data-ref-filename="6frame">frame</a>));</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td>	<i>/*</i></td></tr>
+<tr><th id="227">227</th><td><i>	 * If no separate statistics clock is available, run it from here.</i></td></tr>
+<tr><th id="228">228</th><td><i>	 */</i></td></tr>
+<tr><th id="229">229</th><td>	<b>if</b> (<a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> == <var>0</var>)</td></tr>
+<tr><th id="230">230</th><td>		<a class="ref fn" href="#statclock" title='statclock' data-ref="statclock" data-ref-filename="statclock">statclock</a>(<a class="local col6 ref" href="#6frame" title='frame' data-ref="6frame" data-ref-filename="6frame">frame</a>);</td></tr>
+<tr><th id="231">231</th><td>	<i>/*</i></td></tr>
+<tr><th id="232">232</th><td><i>	 * If no separate schedclock is provided, call it here</i></td></tr>
+<tr><th id="233">233</th><td><i>	 * at about 16 Hz.</i></td></tr>
+<tr><th id="234">234</th><td><i>	 */</i></td></tr>
+<tr><th id="235">235</th><td>	<b>if</b> (<a class="ref" href="../sys/sched.h.html#schedhz" title='schedhz' data-ref="schedhz" data-ref-filename="schedhz">schedhz</a> == <var>0</var>) {</td></tr>
+<tr><th id="236">236</th><td>		<b>if</b> ((<em>int</em>)(--<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_schedticks" title='schedstate_percpu::spc_schedticks' data-ref="schedstate_percpu::spc_schedticks" data-ref-filename="schedstate_percpu..spc_schedticks">spc_schedticks</a>) &lt;= <var>0</var>) {</td></tr>
+<tr><th id="237">237</th><td>			<a class="ref fn" href="#schedclock" title='schedclock' data-ref="schedclock" data-ref-filename="schedclock">schedclock</a>(<a class="local col7 ref" href="#7l" title='l' data-ref="7l" data-ref-filename="7l">l</a>);</td></tr>
+<tr><th id="238">238</th><td>			<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_schedticks" title='schedstate_percpu::spc_schedticks' data-ref="schedstate_percpu::spc_schedticks" data-ref-filename="schedstate_percpu..spc_schedticks">spc_schedticks</a> = <a class="tu ref" href="#hardscheddiv" title='hardscheddiv' data-use='r' data-ref="hardscheddiv" data-ref-filename="hardscheddiv">hardscheddiv</a>;</td></tr>
+<tr><th id="239">239</th><td>		}</td></tr>
+<tr><th id="240">240</th><td>	}</td></tr>
+<tr><th id="241">241</th><td>	<b>if</b> ((--<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_ticks" title='schedstate_percpu::spc_ticks' data-ref="schedstate_percpu::spc_ticks" data-ref-filename="schedstate_percpu..spc_ticks">spc_ticks</a>) &lt;= <var>0</var>)</td></tr>
+<tr><th id="242">242</th><td>		<a class="ref fn" href="../sys/sched.h.html#sched_tick" title='sched_tick' data-ref="sched_tick" data-ref-filename="sched_tick">sched_tick</a>(<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>);</td></tr>
+<tr><th id="243">243</th><td></td></tr>
+<tr><th id="244">244</th><td>	<b>if</b> (<a class="macro" href="../arch/x86/include/cpu.h.html#385" title="((ci)-&gt;ci_flags &amp; 0x0008)" data-ref="_M/CPU_IS_PRIMARY">CPU_IS_PRIMARY</a>(<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>)) {</td></tr>
+<tr><th id="245">245</th><td>		<a class="ref" href="../sys/kernel.h.html#hardclock_ticks" title='hardclock_ticks' data-ref="hardclock_ticks" data-ref-filename="hardclock_ticks">hardclock_ticks</a>++;</td></tr>
+<tr><th id="246">246</th><td>		<a class="ref fn" href="../sys/timetc.h.html#tc_ticktock" title='tc_ticktock' data-ref="tc_ticktock" data-ref-filename="tc_ticktock">tc_ticktock</a>();</td></tr>
+<tr><th id="247">247</th><td>	}</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td>	<i>/*</i></td></tr>
+<tr><th id="250">250</th><td><i>	 * Update real-time timeout queue.</i></td></tr>
+<tr><th id="251">251</th><td><i>	 */</i></td></tr>
+<tr><th id="252">252</th><td>	<a class="ref fn" href="../sys/callout.h.html#callout_hardclock" title='callout_hardclock' data-ref="callout_hardclock" data-ref-filename="callout_hardclock">callout_hardclock</a>();</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td><u>#<span data-ppcond="254">ifdef</span> <span class="macro" data-ref="_M/KDTRACE_HOOKS">KDTRACE_HOOKS</span></u></td></tr>
+<tr><th id="255">255</th><td>	cyclic_clock_func_t func = cyclic_clock_func[cpu_index(ci)];</td></tr>
+<tr><th id="256">256</th><td>	<b>if</b> (func) {</td></tr>
+<tr><th id="257">257</th><td>		(*func)((<b>struct</b> clockframe *)frame);</td></tr>
+<tr><th id="258">258</th><td>	}</td></tr>
+<tr><th id="259">259</th><td><u>#<span data-ppcond="254">endif</span></u></td></tr>
+<tr><th id="260">260</th><td>}</td></tr>
+<tr><th id="261">261</th><td></td></tr>
+<tr><th id="262">262</th><td><i>/*</i></td></tr>
+<tr><th id="263">263</th><td><i> * Start profiling on a process.</i></td></tr>
+<tr><th id="264">264</th><td><i> *</i></td></tr>
+<tr><th id="265">265</th><td><i> * Kernel profiling passes proc0 which never exits and hence</i></td></tr>
+<tr><th id="266">266</th><td><i> * keeps the profile clock running constantly.</i></td></tr>
+<tr><th id="267">267</th><td><i> */</i></td></tr>
+<tr><th id="268">268</th><td><em>void</em></td></tr>
+<tr><th id="269">269</th><td><dfn class="decl def fn" id="startprofclock" title='startprofclock' data-ref="startprofclock" data-ref-filename="startprofclock">startprofclock</dfn>(<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col9 decl" id="9p" title='p' data-type='struct proc *' data-ref="9p" data-ref-filename="9p">p</dfn>)</td></tr>
+<tr><th id="270">270</th><td>{</td></tr>
+<tr><th id="271">271</th><td></td></tr>
+<tr><th id="272">272</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(&amp;p-&gt;p_stmutex))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(&amp;p-&gt;p_stmutex)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/kern_clock.c&quot;, 272))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/mutex.h.html#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(&amp;<a class="local col9 ref" href="#9p" title='p' data-ref="9p" data-ref-filename="9p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stmutex" title='proc::p_stmutex' data-ref="proc::p_stmutex" data-ref-filename="proc..p_stmutex">p_stmutex</a>));</td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td>	<b>if</b> ((<a class="local col9 ref" href="#9p" title='p' data-ref="9p" data-ref-filename="9p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stflag" title='proc::p_stflag' data-ref="proc::p_stflag" data-ref-filename="proc..p_stflag">p_stflag</a> &amp; <a class="macro" href="../sys/proc.h.html#425" title="0x00000020" data-ref="_M/PST_PROFIL">PST_PROFIL</a>) == <var>0</var>) {</td></tr>
+<tr><th id="275">275</th><td>		<a class="local col9 ref" href="#9p" title='p' data-ref="9p" data-ref-filename="9p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stflag" title='proc::p_stflag' data-ref="proc::p_stflag" data-ref-filename="proc..p_stflag">p_stflag</a> |= <a class="macro" href="../sys/proc.h.html#425" title="0x00000020" data-ref="_M/PST_PROFIL">PST_PROFIL</a>;</td></tr>
+<tr><th id="276">276</th><td>		<i>/*</i></td></tr>
+<tr><th id="277">277</th><td><i>		 * This is only necessary if using the clock as the</i></td></tr>
+<tr><th id="278">278</th><td><i>		 * profiling source.</i></td></tr>
+<tr><th id="279">279</th><td><i>		 */</i></td></tr>
+<tr><th id="280">280</th><td>		<b>if</b> (++<a class="ref" href="#profprocs" title='profprocs' data-ref="profprocs" data-ref-filename="profprocs">profprocs</a> == <var>1</var> &amp;&amp; <a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> != <var>0</var>)</td></tr>
+<tr><th id="281">281</th><td>			<a class="tu ref" href="#psdiv" title='psdiv' data-use='w' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a> = <a class="ref" href="../sys/kernel.h.html#psratio" title='psratio' data-ref="psratio" data-ref-filename="psratio">psratio</a>;</td></tr>
+<tr><th id="282">282</th><td>	}</td></tr>
+<tr><th id="283">283</th><td>}</td></tr>
+<tr><th id="284">284</th><td></td></tr>
+<tr><th id="285">285</th><td><i>/*</i></td></tr>
+<tr><th id="286">286</th><td><i> * Stop profiling on a process.</i></td></tr>
+<tr><th id="287">287</th><td><i> */</i></td></tr>
+<tr><th id="288">288</th><td><em>void</em></td></tr>
+<tr><th id="289">289</th><td><dfn class="decl def fn" id="stopprofclock" title='stopprofclock' data-ref="stopprofclock" data-ref-filename="stopprofclock">stopprofclock</dfn>(<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col0 decl" id="10p" title='p' data-type='struct proc *' data-ref="10p" data-ref-filename="10p">p</dfn>)</td></tr>
+<tr><th id="290">290</th><td>{</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(&amp;p-&gt;p_stmutex))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(&amp;p-&gt;p_stmutex)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/kern_clock.c&quot;, 292))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/mutex.h.html#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(&amp;<a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stmutex" title='proc::p_stmutex' data-ref="proc::p_stmutex" data-ref-filename="proc..p_stmutex">p_stmutex</a>));</td></tr>
+<tr><th id="293">293</th><td></td></tr>
+<tr><th id="294">294</th><td>	<b>if</b> (<a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stflag" title='proc::p_stflag' data-ref="proc::p_stflag" data-ref-filename="proc..p_stflag">p_stflag</a> &amp; <a class="macro" href="../sys/proc.h.html#425" title="0x00000020" data-ref="_M/PST_PROFIL">PST_PROFIL</a>) {</td></tr>
+<tr><th id="295">295</th><td>		<a class="local col0 ref" href="#10p" title='p' data-ref="10p" data-ref-filename="10p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stflag" title='proc::p_stflag' data-ref="proc::p_stflag" data-ref-filename="proc..p_stflag">p_stflag</a> &amp;= ~<a class="macro" href="../sys/proc.h.html#425" title="0x00000020" data-ref="_M/PST_PROFIL">PST_PROFIL</a>;</td></tr>
+<tr><th id="296">296</th><td>		<i>/*</i></td></tr>
+<tr><th id="297">297</th><td><i>		 * This is only necessary if using the clock as the</i></td></tr>
+<tr><th id="298">298</th><td><i>		 * profiling source.</i></td></tr>
+<tr><th id="299">299</th><td><i>		 */</i></td></tr>
+<tr><th id="300">300</th><td>		<b>if</b> (--<a class="ref" href="#profprocs" title='profprocs' data-ref="profprocs" data-ref-filename="profprocs">profprocs</a> == <var>0</var> &amp;&amp; <a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> != <var>0</var>)</td></tr>
+<tr><th id="301">301</th><td>			<a class="tu ref" href="#psdiv" title='psdiv' data-use='w' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a> = <var>1</var>;</td></tr>
+<tr><th id="302">302</th><td>	}</td></tr>
+<tr><th id="303">303</th><td>}</td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td><em>void</em></td></tr>
+<tr><th id="306">306</th><td><dfn class="decl def fn" id="schedclock" title='schedclock' data-ref="schedclock" data-ref-filename="schedclock">schedclock</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col1 decl" id="11l" title='l' data-type='struct lwp *' data-ref="11l" data-ref-filename="11l">l</dfn>)</td></tr>
+<tr><th id="307">307</th><td>{</td></tr>
+<tr><th id="308">308</th><td>	<b>if</b> ((<a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../sys/lwp.h.html#234" title="0x00000001" data-ref="_M/LW_IDLE">LW_IDLE</a>) != <var>0</var>)</td></tr>
+<tr><th id="309">309</th><td>		<b>return</b>;</td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td>	<a class="ref fn" href="../sys/sched.h.html#sched_schedclock" title='sched_schedclock' data-ref="sched_schedclock" data-ref-filename="sched_schedclock">sched_schedclock</a>(<a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>);</td></tr>
+<tr><th id="312">312</th><td>}</td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td><i>/*</i></td></tr>
+<tr><th id="315">315</th><td><i> * Statistics clock.  Grab profile sample, and if divider reaches 0,</i></td></tr>
+<tr><th id="316">316</th><td><i> * do process and kernel statistics.</i></td></tr>
+<tr><th id="317">317</th><td><i> */</i></td></tr>
+<tr><th id="318">318</th><td><em>void</em></td></tr>
+<tr><th id="319">319</th><td><dfn class="decl def fn" id="statclock" title='statclock' data-ref="statclock" data-ref-filename="statclock">statclock</dfn>(<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#clockframe" title='clockframe' data-ref="clockframe" data-ref-filename="clockframe">clockframe</a> *<dfn class="local col2 decl" id="12frame" title='frame' data-type='struct clockframe *' data-ref="12frame" data-ref-filename="12frame">frame</dfn>)</td></tr>
+<tr><th id="320">320</th><td>{</td></tr>
+<tr><th id="321">321</th><td><u>#<span data-ppcond="321">ifdef</span> <span class="macro" data-ref="_M/GPROF">GPROF</span></u></td></tr>
+<tr><th id="322">322</th><td>	<b>struct</b> gmonparam *g;</td></tr>
+<tr><th id="323">323</th><td>	intptr_t i;</td></tr>
+<tr><th id="324">324</th><td><u>#<span data-ppcond="321">endif</span></u></td></tr>
+<tr><th id="325">325</th><td>	<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col3 decl" id="13ci" title='ci' data-type='struct cpu_info *' data-ref="13ci" data-ref-filename="13ci">ci</dfn> = <a class="macro" href="../arch/x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="326">326</th><td>	<b>struct</b> <a class="type" href="../sys/sched.h.html#schedstate_percpu" title='schedstate_percpu' data-ref="schedstate_percpu" data-ref-filename="schedstate_percpu">schedstate_percpu</a> *<dfn class="local col4 decl" id="14spc" title='spc' data-type='struct schedstate_percpu *' data-ref="14spc" data-ref-filename="14spc">spc</dfn> = &amp;<a class="local col3 ref" href="#13ci" title='ci' data-ref="13ci" data-ref-filename="13ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>;</td></tr>
+<tr><th id="327">327</th><td>	<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col5 decl" id="15p" title='p' data-type='struct proc *' data-ref="15p" data-ref-filename="15p">p</dfn>;</td></tr>
+<tr><th id="328">328</th><td>	<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col6 decl" id="16l" title='l' data-type='struct lwp *' data-ref="16l" data-ref-filename="16l">l</dfn>;</td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td>	<i>/*</i></td></tr>
+<tr><th id="331">331</th><td><i>	 * Notice changes in divisor frequency, and adjust clock</i></td></tr>
+<tr><th id="332">332</th><td><i>	 * frequency accordingly.</i></td></tr>
+<tr><th id="333">333</th><td><i>	 */</i></td></tr>
+<tr><th id="334">334</th><td>	<b>if</b> (<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_psdiv" title='schedstate_percpu::spc_psdiv' data-ref="schedstate_percpu::spc_psdiv" data-ref-filename="schedstate_percpu..spc_psdiv">spc_psdiv</a> != <a class="tu ref" href="#psdiv" title='psdiv' data-use='r' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a>) {</td></tr>
+<tr><th id="335">335</th><td>		<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_psdiv" title='schedstate_percpu::spc_psdiv' data-ref="schedstate_percpu::spc_psdiv" data-ref-filename="schedstate_percpu..spc_psdiv">spc_psdiv</a> = <a class="tu ref" href="#psdiv" title='psdiv' data-use='r' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a>;</td></tr>
+<tr><th id="336">336</th><td>		<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_pscnt" title='schedstate_percpu::spc_pscnt' data-ref="schedstate_percpu::spc_pscnt" data-ref-filename="schedstate_percpu..spc_pscnt">spc_pscnt</a> = <a class="tu ref" href="#psdiv" title='psdiv' data-use='r' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a>;</td></tr>
+<tr><th id="337">337</th><td>		<b>if</b> (<a class="tu ref" href="#psdiv" title='psdiv' data-use='r' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a> == <var>1</var>) {</td></tr>
+<tr><th id="338">338</th><td>			<a class="ref fn" href="../sys/systm.h.html#setstatclockrate" title='setstatclockrate' data-ref="setstatclockrate" data-ref-filename="setstatclockrate">setstatclockrate</a>(<a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a>);</td></tr>
+<tr><th id="339">339</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="340">340</th><td>			<a class="ref fn" href="../sys/systm.h.html#setstatclockrate" title='setstatclockrate' data-ref="setstatclockrate" data-ref-filename="setstatclockrate">setstatclockrate</a>(<a class="ref" href="../sys/kernel.h.html#profhz" title='profhz' data-ref="profhz" data-ref-filename="profhz">profhz</a>);</td></tr>
+<tr><th id="341">341</th><td>		}</td></tr>
+<tr><th id="342">342</th><td>	}</td></tr>
+<tr><th id="343">343</th><td>	<a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a> = <a class="local col3 ref" href="#13ci" title='ci' data-ref="13ci" data-ref-filename="13ci">ci</a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_data" title='cpu_info::ci_data' data-ref="cpu_info::ci_data" data-ref-filename="cpu_info..ci_data">ci_data</a>.<a class="ref field" href="../sys/cpu_data.h.html#cpu_data::cpu_onproc" title='cpu_data::cpu_onproc' data-ref="cpu_data::cpu_onproc" data-ref-filename="cpu_data..cpu_onproc">cpu_onproc</a>;</td></tr>
+<tr><th id="344">344</th><td>	<b>if</b> ((<a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../sys/lwp.h.html#234" title="0x00000001" data-ref="_M/LW_IDLE">LW_IDLE</a>) != <var>0</var>) {</td></tr>
+<tr><th id="345">345</th><td>		<i>/*</i></td></tr>
+<tr><th id="346">346</th><td><i>		 * don't account idle lwps as swapper.</i></td></tr>
+<tr><th id="347">347</th><td><i>		 */</i></td></tr>
+<tr><th id="348">348</th><td>		<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="349">349</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="350">350</th><td>		<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> = <a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_proc" title='lwp::l_proc' data-ref="lwp::l_proc" data-ref-filename="lwp..l_proc">l_proc</a>;</td></tr>
+<tr><th id="351">351</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_enter" title='mutex_spin_enter' data-ref="mutex_spin_enter" data-ref-filename="mutex_spin_enter">mutex_spin_enter</a>(&amp;<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stmutex" title='proc::p_stmutex' data-ref="proc::p_stmutex" data-ref-filename="proc..p_stmutex">p_stmutex</a>);</td></tr>
+<tr><th id="352">352</th><td>	}</td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td>	<b>if</b> (<a class="macro" href="../arch/i386/include/cpu.h.html#88" title="((((frame)-&gt;cf_if.if_cs) &amp; 3) == 3)" data-ref="_M/CLKF_USERMODE">CLKF_USERMODE</a>(<a class="local col2 ref" href="#12frame" title='frame' data-ref="12frame" data-ref-filename="12frame">frame</a>)) {</td></tr>
+<tr><th id="355">355</th><td>		<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((p != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;p != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/kern_clock.c&quot;, 355))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="356">356</th><td>		<b>if</b> ((<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stflag" title='proc::p_stflag' data-ref="proc::p_stflag" data-ref-filename="proc..p_stflag">p_stflag</a> &amp; <a class="macro" href="../sys/proc.h.html#425" title="0x00000020" data-ref="_M/PST_PROFIL">PST_PROFIL</a>) &amp;&amp; <a class="ref" href="../sys/kernel.h.html#profsrc" title='profsrc' data-ref="profsrc" data-ref-filename="profsrc">profsrc</a> == <a class="macro" href="../sys/kernel.h.html#68" title="0" data-ref="_M/PROFSRC_CLOCK">PROFSRC_CLOCK</a>)</td></tr>
+<tr><th id="357">357</th><td>			<a class="ref fn" href="../sys/resourcevar.h.html#addupc_intr" title='addupc_intr' data-ref="addupc_intr" data-ref-filename="addupc_intr">addupc_intr</a>(<a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a>, <a class="macro" href="../arch/i386/include/cpu.h.html#89" title="((frame)-&gt;cf_if.if_eip)" data-ref="_M/CLKF_PC">CLKF_PC</a>(<a class="local col2 ref" href="#12frame" title='frame' data-ref="12frame" data-ref-filename="12frame">frame</a>));</td></tr>
+<tr><th id="358">358</th><td>		<b>if</b> (--<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_pscnt" title='schedstate_percpu::spc_pscnt' data-ref="schedstate_percpu::spc_pscnt" data-ref-filename="schedstate_percpu..spc_pscnt">spc_pscnt</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="359">359</th><td>			<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_exit" title='mutex_spin_exit' data-ref="mutex_spin_exit" data-ref-filename="mutex_spin_exit">mutex_spin_exit</a>(&amp;<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stmutex" title='proc::p_stmutex' data-ref="proc::p_stmutex" data-ref-filename="proc..p_stmutex">p_stmutex</a>);</td></tr>
+<tr><th id="360">360</th><td>			<b>return</b>;</td></tr>
+<tr><th id="361">361</th><td>		}</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td>		<i>/*</i></td></tr>
+<tr><th id="364">364</th><td><i>		 * Came from user mode; CPU was in user state.</i></td></tr>
+<tr><th id="365">365</th><td><i>		 * If this process is being profiled record the tick.</i></td></tr>
+<tr><th id="366">366</th><td><i>		 */</i></td></tr>
+<tr><th id="367">367</th><td>		<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_uticks" title='proc::p_uticks' data-ref="proc::p_uticks" data-ref-filename="proc..p_uticks">p_uticks</a>++;</td></tr>
+<tr><th id="368">368</th><td>		<b>if</b> (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_nice" title='proc::p_nice' data-ref="proc::p_nice" data-ref-filename="proc..p_nice">p_nice</a> &gt; <a class="macro" href="../sys/syslimits.h.html#85" title="20" data-ref="_M/NZERO">NZERO</a>)</td></tr>
+<tr><th id="369">369</th><td>			<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_cp_time" title='schedstate_percpu::spc_cp_time' data-ref="schedstate_percpu::spc_cp_time" data-ref-filename="schedstate_percpu..spc_cp_time">spc_cp_time</a>[<a class="macro" href="../sys/sched.h.html#136" title="1" data-ref="_M/CP_NICE">CP_NICE</a>]++;</td></tr>
+<tr><th id="370">370</th><td>		<b>else</b></td></tr>
+<tr><th id="371">371</th><td>			<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_cp_time" title='schedstate_percpu::spc_cp_time' data-ref="schedstate_percpu::spc_cp_time" data-ref-filename="schedstate_percpu..spc_cp_time">spc_cp_time</a>[<a class="macro" href="../sys/sched.h.html#135" title="0" data-ref="_M/CP_USER">CP_USER</a>]++;</td></tr>
+<tr><th id="372">372</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="373">373</th><td><u>#<span data-ppcond="373">ifdef</span> <span class="macro" data-ref="_M/GPROF">GPROF</span></u></td></tr>
+<tr><th id="374">374</th><td>		<i>/*</i></td></tr>
+<tr><th id="375">375</th><td><i>		 * Kernel statistics are just like addupc_intr, only easier.</i></td></tr>
+<tr><th id="376">376</th><td><i>		 */</i></td></tr>
+<tr><th id="377">377</th><td>		g = &amp;_gmonparam;</td></tr>
+<tr><th id="378">378</th><td>		<b>if</b> (profsrc == PROFSRC_CLOCK &amp;&amp; g-&gt;state == GMON_PROF_ON) {</td></tr>
+<tr><th id="379">379</th><td>			i = CLKF_PC(frame) - g-&gt;lowpc;</td></tr>
+<tr><th id="380">380</th><td>			<b>if</b> (i &lt; g-&gt;textsize) {</td></tr>
+<tr><th id="381">381</th><td>				i /= HISTFRACTION * <b>sizeof</b>(*g-&gt;kcount);</td></tr>
+<tr><th id="382">382</th><td>				g-&gt;kcount[i]++;</td></tr>
+<tr><th id="383">383</th><td>			}</td></tr>
+<tr><th id="384">384</th><td>		}</td></tr>
+<tr><th id="385">385</th><td><u>#<span data-ppcond="373">endif</span></u></td></tr>
+<tr><th id="386">386</th><td><u>#<span data-ppcond="386">ifdef</span> <a class="macro" href="../arch/i386/include/cpu.h.html#92" data-ref="_M/LWP_PC">LWP_PC</a></u></td></tr>
+<tr><th id="387">387</th><td>		<b>if</b> (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> &amp;&amp; <a class="ref" href="../sys/kernel.h.html#profsrc" title='profsrc' data-ref="profsrc" data-ref-filename="profsrc">profsrc</a> == <a class="macro" href="../sys/kernel.h.html#68" title="0" data-ref="_M/PROFSRC_CLOCK">PROFSRC_CLOCK</a> &amp;&amp;</td></tr>
+<tr><th id="388">388</th><td>		    (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stflag" title='proc::p_stflag' data-ref="proc::p_stflag" data-ref-filename="proc..p_stflag">p_stflag</a> &amp; <a class="macro" href="../sys/proc.h.html#425" title="0x00000020" data-ref="_M/PST_PROFIL">PST_PROFIL</a>)) {</td></tr>
+<tr><th id="389">389</th><td>			<a class="ref fn" href="../sys/resourcevar.h.html#addupc_intr" title='addupc_intr' data-ref="addupc_intr" data-ref-filename="addupc_intr">addupc_intr</a>(<a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a>, <a class="macro" href="../arch/i386/include/cpu.h.html#92" title="((l)-&gt;l_md.md_regs-&gt;tf_eip)" data-ref="_M/LWP_PC">LWP_PC</a>(<a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a>));</td></tr>
+<tr><th id="390">390</th><td>		}</td></tr>
+<tr><th id="391">391</th><td><u>#<span data-ppcond="386">endif</span></u></td></tr>
+<tr><th id="392">392</th><td>		<b>if</b> (--<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_pscnt" title='schedstate_percpu::spc_pscnt' data-ref="schedstate_percpu::spc_pscnt" data-ref-filename="schedstate_percpu..spc_pscnt">spc_pscnt</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="393">393</th><td>			<b>if</b> (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="394">394</th><td>				<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_exit" title='mutex_spin_exit' data-ref="mutex_spin_exit" data-ref-filename="mutex_spin_exit">mutex_spin_exit</a>(&amp;<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stmutex" title='proc::p_stmutex' data-ref="proc::p_stmutex" data-ref-filename="proc..p_stmutex">p_stmutex</a>);</td></tr>
+<tr><th id="395">395</th><td>			<b>return</b>;</td></tr>
+<tr><th id="396">396</th><td>		}</td></tr>
+<tr><th id="397">397</th><td>		<i>/*</i></td></tr>
+<tr><th id="398">398</th><td><i>		 * Came from kernel mode, so we were:</i></td></tr>
+<tr><th id="399">399</th><td><i>		 * - handling an interrupt,</i></td></tr>
+<tr><th id="400">400</th><td><i>		 * - doing syscall or trap work on behalf of the current</i></td></tr>
+<tr><th id="401">401</th><td><i>		 *   user process, or</i></td></tr>
+<tr><th id="402">402</th><td><i>		 * - spinning in the idle loop.</i></td></tr>
+<tr><th id="403">403</th><td><i>		 * Whichever it is, charge the time as appropriate.</i></td></tr>
+<tr><th id="404">404</th><td><i>		 * Note that we charge interrupts to the current process,</i></td></tr>
+<tr><th id="405">405</th><td><i>		 * regardless of whether they are ``for'' that process,</i></td></tr>
+<tr><th id="406">406</th><td><i>		 * so that we know how much of its real time was spent</i></td></tr>
+<tr><th id="407">407</th><td><i>		 * in ``non-process'' (i.e., interrupt) work.</i></td></tr>
+<tr><th id="408">408</th><td><i>		 */</i></td></tr>
+<tr><th id="409">409</th><td>		<b>if</b> (<a class="macro" href="../arch/i386/include/cpu.h.html#91" title="(x86_curcpu()-&gt;ci_idepth &gt; 0)" data-ref="_M/CLKF_INTR">CLKF_INTR</a>(frame) || (<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_pflag" title='lwp::l_pflag' data-ref="lwp::l_pflag" data-ref-filename="lwp..l_pflag">l_pflag</a> &amp; <a class="macro" href="../sys/lwp.h.html#257" title="0x00000040" data-ref="_M/LP_INTR">LP_INTR</a>) != <var>0</var>) {</td></tr>
+<tr><th id="410">410</th><td>			<b>if</b> (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="411">411</th><td>				<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_iticks" title='proc::p_iticks' data-ref="proc::p_iticks" data-ref-filename="proc..p_iticks">p_iticks</a>++;</td></tr>
+<tr><th id="412">412</th><td>			}</td></tr>
+<tr><th id="413">413</th><td>			<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_cp_time" title='schedstate_percpu::spc_cp_time' data-ref="schedstate_percpu::spc_cp_time" data-ref-filename="schedstate_percpu..spc_cp_time">spc_cp_time</a>[<a class="macro" href="../sys/sched.h.html#138" title="3" data-ref="_M/CP_INTR">CP_INTR</a>]++;</td></tr>
+<tr><th id="414">414</th><td>		} <b>else</b> <b>if</b> (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="415">415</th><td>			<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_sticks" title='proc::p_sticks' data-ref="proc::p_sticks" data-ref-filename="proc..p_sticks">p_sticks</a>++;</td></tr>
+<tr><th id="416">416</th><td>			<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_cp_time" title='schedstate_percpu::spc_cp_time' data-ref="schedstate_percpu::spc_cp_time" data-ref-filename="schedstate_percpu..spc_cp_time">spc_cp_time</a>[<a class="macro" href="../sys/sched.h.html#137" title="2" data-ref="_M/CP_SYS">CP_SYS</a>]++;</td></tr>
+<tr><th id="417">417</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="418">418</th><td>			<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_cp_time" title='schedstate_percpu::spc_cp_time' data-ref="schedstate_percpu::spc_cp_time" data-ref-filename="schedstate_percpu..spc_cp_time">spc_cp_time</a>[<a class="macro" href="../sys/sched.h.html#139" title="4" data-ref="_M/CP_IDLE">CP_IDLE</a>]++;</td></tr>
+<tr><th id="419">419</th><td>		}</td></tr>
+<tr><th id="420">420</th><td>	}</td></tr>
+<tr><th id="421">421</th><td>	<a class="local col4 ref" href="#14spc" title='spc' data-ref="14spc" data-ref-filename="14spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_pscnt" title='schedstate_percpu::spc_pscnt' data-ref="schedstate_percpu::spc_pscnt" data-ref-filename="schedstate_percpu..spc_pscnt">spc_pscnt</a> = <a class="tu ref" href="#psdiv" title='psdiv' data-use='r' data-ref="psdiv" data-ref-filename="psdiv">psdiv</a>;</td></tr>
+<tr><th id="422">422</th><td></td></tr>
+<tr><th id="423">423</th><td>	<b>if</b> (<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="424">424</th><td>		<a class="ref fn" href="../sys/atomic.h.html#atomic_inc_uint" title='atomic_inc_uint' data-ref="atomic_inc_uint" data-ref-filename="atomic_inc_uint">atomic_inc_uint</a>(&amp;<a class="local col6 ref" href="#16l" title='l' data-ref="16l" data-ref-filename="16l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cpticks" title='lwp::l_cpticks' data-ref="lwp::l_cpticks" data-ref-filename="lwp..l_cpticks">l_cpticks</a>);</td></tr>
+<tr><th id="425">425</th><td>		<a class="ref fn" href="../sys/mutex.h.html#mutex_spin_exit" title='mutex_spin_exit' data-ref="mutex_spin_exit" data-ref-filename="mutex_spin_exit">mutex_spin_exit</a>(&amp;<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stmutex" title='proc::p_stmutex' data-ref="proc::p_stmutex" data-ref-filename="proc..p_stmutex">p_stmutex</a>);</td></tr>
+<tr><th id="426">426</th><td>	}</td></tr>
+<tr><th id="427">427</th><td>}</td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td><i  data-doc="sysctl_kern_clockrate">/*</i></td></tr>
+<tr><th id="430">430</th><td><i  data-doc="sysctl_kern_clockrate"> * sysctl helper routine for kern.clockrate. Assembles a struct on</i></td></tr>
+<tr><th id="431">431</th><td><i  data-doc="sysctl_kern_clockrate"> * the fly to be returned to the caller.</i></td></tr>
+<tr><th id="432">432</th><td><i  data-doc="sysctl_kern_clockrate"> */</i></td></tr>
+<tr><th id="433">433</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="434">434</th><td><dfn class="tu decl def fn" id="sysctl_kern_clockrate" title='sysctl_kern_clockrate' data-type='int sysctl_kern_clockrate(const int * name, u_int namelen, void * oldp, size_t * oldlenp, const void * newp, size_t newlen, const int * oname, struct lwp * l, const struct sysctlnode * rnode)' data-ref="sysctl_kern_clockrate" data-ref-filename="sysctl_kern_clockrate">sysctl_kern_clockrate</dfn>(<a class="macro" href="../sys/sysctl.h.html#957" title="const int *name, u_int namelen, void *oldp, size_t *oldlenp, const void *newp, size_t newlen, const int *oname, struct lwp *l, const struct sysctlnode *rnode" data-ref="_M/SYSCTLFN_ARGS">SYSCTLFN_ARGS</a>)</td></tr>
+<tr><th id="435">435</th><td>{</td></tr>
+<tr><th id="436">436</th><td>	<b>struct</b> <a class="type" href="../sys/sysctl.h.html#clockinfo" title='clockinfo' data-ref="clockinfo" data-ref-filename="clockinfo">clockinfo</a> <dfn class="local col7 decl" id="17clkinfo" title='clkinfo' data-type='struct clockinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</dfn>;</td></tr>
+<tr><th id="437">437</th><td>	<b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctlnode" title='sysctlnode' data-ref="sysctlnode" data-ref-filename="sysctlnode">sysctlnode</a> <dfn class="local col8 decl" id="18node" title='node' data-type='struct sysctlnode' data-ref="18node" data-ref-filename="18node">node</dfn>;</td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td>	<a class="local col7 ref" href="#17clkinfo" title='clkinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</a>.<a class="ref field" href="../sys/sysctl.h.html#clockinfo::tick" title='clockinfo::tick' data-ref="clockinfo::tick" data-ref-filename="clockinfo..tick">tick</a> = <a class="ref" href="../sys/kernel.h.html#tick" title='tick' data-ref="tick" data-ref-filename="tick">tick</a>;</td></tr>
+<tr><th id="440">440</th><td>	<a class="local col7 ref" href="#17clkinfo" title='clkinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</a>.<a class="ref field" href="../sys/sysctl.h.html#clockinfo::tickadj" title='clockinfo::tickadj' data-ref="clockinfo::tickadj" data-ref-filename="clockinfo..tickadj">tickadj</a> = <a class="ref" href="../sys/kernel.h.html#tickadj" title='tickadj' data-ref="tickadj" data-ref-filename="tickadj">tickadj</a>;</td></tr>
+<tr><th id="441">441</th><td>	<a class="local col7 ref" href="#17clkinfo" title='clkinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</a>.<a class="ref field" href="../sys/sysctl.h.html#clockinfo::hz" title='clockinfo::hz' data-ref="clockinfo::hz" data-ref-filename="clockinfo..hz">hz</a> = <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>;</td></tr>
+<tr><th id="442">442</th><td>	<a class="local col7 ref" href="#17clkinfo" title='clkinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</a>.<a class="ref field" href="../sys/sysctl.h.html#clockinfo::profhz" title='clockinfo::profhz' data-ref="clockinfo::profhz" data-ref-filename="clockinfo..profhz">profhz</a> = <a class="ref" href="../sys/kernel.h.html#profhz" title='profhz' data-ref="profhz" data-ref-filename="profhz">profhz</a>;</td></tr>
+<tr><th id="443">443</th><td>	<a class="local col7 ref" href="#17clkinfo" title='clkinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</a>.<a class="ref field" href="../sys/sysctl.h.html#clockinfo::stathz" title='clockinfo::stathz' data-ref="clockinfo::stathz" data-ref-filename="clockinfo..stathz">stathz</a> = <a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> ? <a class="ref" href="../sys/kernel.h.html#stathz" title='stathz' data-ref="stathz" data-ref-filename="stathz">stathz</a> : <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>;</td></tr>
+<tr><th id="444">444</th><td></td></tr>
+<tr><th id="445">445</th><td>	<a class="local col8 ref" href="#18node" title='node' data-ref="18node" data-ref-filename="18node">node</a> = *<a class="local col9 ref" href="#434" title='rnode' data-ref="19rnode" data-ref-filename="19rnode">rnode</a>;</td></tr>
+<tr><th id="446">446</th><td>	<a class="local col8 ref" href="#18node" title='node' data-ref="18node" data-ref-filename="18node">node</a>.<a class="macro" href="../sys/sysctl.h.html#1255" title="sysctl_un.scu_data._sud_data.__sysc_ustr.__sysc_sdatum" data-ref="_M/sysctl_data">sysctl_data</a> = &amp;<a class="local col7 ref" href="#17clkinfo" title='clkinfo' data-ref="17clkinfo" data-ref-filename="17clkinfo">clkinfo</a>;</td></tr>
+<tr><th id="447">447</th><td>	<b>return</b> (<a class="ref fn" href="../sys/sysctl.h.html#sysctl_lookup" title='sysctl_lookup' data-ref="sysctl_lookup" data-ref-filename="sysctl_lookup">sysctl_lookup</a>(<a class="macro" href="../sys/sysctl.h.html#962" title="name, namelen, oldp, oldlenp, newp, newlen, oname, l, &amp;node" data-ref="_M/SYSCTLFN_CALL">SYSCTLFN_CALL</a>(&amp;<a class="local col8 ref" href="#18node" title='node' data-ref="18node" data-ref-filename="18node">node</a>)));</td></tr>
+<tr><th id="448">448</th><td>}</td></tr>
+<tr><th id="449">449</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

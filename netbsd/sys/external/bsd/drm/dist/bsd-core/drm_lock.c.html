@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>drm_lock.c source code [netbsd/sys/external/bsd/drm/dist/bsd-core/drm_lock.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/external/bsd/drm/dist/bsd-core/drm_lock.c'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>sys</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>drm</a>/<a href='..'>dist</a>/<a href='./'>bsd-core</a>/<a href='drm_lock.c.html'>drm_lock.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*-</i></td></tr>
+<tr><th id="2">2</th><td><i> * Copyright 1999 Precision Insight, Inc., Cedar Park, Texas.</i></td></tr>
+<tr><th id="3">3</th><td><i> * Copyright 2000 VA Linux Systems, Inc., Sunnyvale, California.</i></td></tr>
+<tr><th id="4">4</th><td><i> * All Rights Reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Permission is hereby granted, free of charge, to any person obtaining a</i></td></tr>
+<tr><th id="7">7</th><td><i> * copy of this software and associated documentation files (the "Software"),</i></td></tr>
+<tr><th id="8">8</th><td><i> * to deal in the Software without restriction, including without limitation</i></td></tr>
+<tr><th id="9">9</th><td><i> * the rights to use, copy, modify, merge, publish, distribute, sublicense,</i></td></tr>
+<tr><th id="10">10</th><td><i> * and/or sell copies of the Software, and to permit persons to whom the</i></td></tr>
+<tr><th id="11">11</th><td><i> * Software is furnished to do so, subject to the following conditions:</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * The above copyright notice and this permission notice (including the next</i></td></tr>
+<tr><th id="14">14</th><td><i> * paragraph) shall be included in all copies or substantial portions of the</i></td></tr>
+<tr><th id="15">15</th><td><i> * Software.</i></td></tr>
+<tr><th id="16">16</th><td><i> *</i></td></tr>
+<tr><th id="17">17</th><td><i> * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR</i></td></tr>
+<tr><th id="18">18</th><td><i> * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,</i></td></tr>
+<tr><th id="19">19</th><td><i> * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL</i></td></tr>
+<tr><th id="20">20</th><td><i> * VA LINUX SYSTEMS AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR</i></td></tr>
+<tr><th id="21">21</th><td><i> * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,</i></td></tr>
+<tr><th id="22">22</th><td><i> * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR</i></td></tr>
+<tr><th id="23">23</th><td><i> * OTHER DEALINGS IN THE SOFTWARE.</i></td></tr>
+<tr><th id="24">24</th><td><i> *</i></td></tr>
+<tr><th id="25">25</th><td><i> * Authors:</i></td></tr>
+<tr><th id="26">26</th><td><i> *    Rickard E. (Rik) Faith &lt;faith@valinux.com&gt;</i></td></tr>
+<tr><th id="27">27</th><td><i> *    Gareth Hughes &lt;gareth@valinux.com&gt;</i></td></tr>
+<tr><th id="28">28</th><td><i> *</i></td></tr>
+<tr><th id="29">29</th><td><i> */</i></td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><i class="doc">/**<span class="command"> @file</span> drm_lock.c</i></td></tr>
+<tr><th id="32">32</th><td><i class="doc"> * Implementation of the ioctls and other support code for dealing with the</i></td></tr>
+<tr><th id="33">33</th><td><i class="doc"> * hardware lock.</i></td></tr>
+<tr><th id="34">34</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="35">35</th><td><i class="doc"> * The DRM hardware lock is a shared structure between the kernel and userland.</i></td></tr>
+<tr><th id="36">36</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> * On uncontended access where the new context was the last context, the</i></td></tr>
+<tr><th id="38">38</th><td><i class="doc"> * client may take the lock without dropping down into the kernel, using atomic</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> * compare-and-set.</i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="41">41</th><td><i class="doc"> * If the client finds during compare-and-set that it was not the last owner</i></td></tr>
+<tr><th id="42">42</th><td><i class="doc"> * of the lock, it calls the DRM lock ioctl, which may sleep waiting for the</i></td></tr>
+<tr><th id="43">43</th><td><i class="doc"> * lock, and may have side-effects of kernel-managed context switching.</i></td></tr>
+<tr><th id="44">44</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="45">45</th><td><i class="doc"> * When the client releases the lock, if the lock is marked as being contended</i></td></tr>
+<tr><th id="46">46</th><td><i class="doc"> * by another client, then the DRM unlock ioctl is called so that the</i></td></tr>
+<tr><th id="47">47</th><td><i class="doc"> * contending client may be woken up.</i></td></tr>
+<tr><th id="48">48</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="49">49</th><td></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="drmP.h.html">"drmP.h"</a></u></td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td><em>int</em> <dfn class="decl def fn" id="drm_lock" title='drm_lock' data-ref="drm_lock" data-ref-filename="drm_lock">drm_lock</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_device" title='drm_device' data-ref="drm_device" data-ref-filename="drm_device">drm_device</a> *<dfn class="local col1 decl" id="1dev" title='dev' data-type='struct drm_device *' data-ref="1dev" data-ref-filename="1dev">dev</dfn>, <em>void</em> *<dfn class="local col2 decl" id="2data" title='data' data-type='void *' data-ref="2data" data-ref-filename="2data">data</dfn>, <b>struct</b> <a class="type" href="drmP.h.html#drm_file" title='drm_file' data-ref="drm_file" data-ref-filename="drm_file">drm_file</a> *<dfn class="local col3 decl" id="3file_priv" title='file_priv' data-type='struct drm_file *' data-ref="3file_priv" data-ref-filename="3file_priv">file_priv</dfn>)</td></tr>
+<tr><th id="53">53</th><td>{</td></tr>
+<tr><th id="54">54</th><td>	<b>struct</b> <a class="type" href="../shared-core/drm.h.html#drm_lock" title='drm_lock' data-ref="drm_lock" data-ref-filename="drm_lock">drm_lock</a> *<dfn class="local col4 decl" id="4lock" title='lock' data-type='struct drm_lock *' data-ref="4lock" data-ref-filename="4lock">lock</dfn> = <a class="local col2 ref" href="#2data" title='data' data-ref="2data" data-ref-filename="2data">data</a>;</td></tr>
+<tr><th id="55">55</th><td>	<em>int</em> <dfn class="local col5 decl" id="5ret" title='ret' data-type='int' data-ref="5ret" data-ref-filename="5ret">ret</dfn> = <var>0</var>;</td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td>	<b>if</b> (<a class="local col4 ref" href="#4lock" title='lock' data-ref="4lock" data-ref-filename="4lock">lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_lock::context" title='drm_lock::context' data-ref="drm_lock::context" data-ref-filename="drm_lock..context">context</a> == <a class="macro" href="drmP.h.html#168" title="0" data-ref="_M/DRM_KERNEL_CONTEXT">DRM_KERNEL_CONTEXT</a>) {</td></tr>
+<tr><th id="58">58</th><td>		<a class="macro" href="drmP.h.html#427" title="printf(&quot;error: [&quot; &quot;drm&quot; &quot;:pid%d:%s] *ERROR* &quot; &quot;Process %d using kernel context %d\n&quot;, DRM_CURRENTPID, __func__ , DRM_CURRENTPID, lock-&gt;context)" data-ref="_M/DRM_ERROR">DRM_ERROR</a>(<q>"Process %d using kernel context %d\n"</q>,</td></tr>
+<tr><th id="59">59</th><td>		    <span class='error' title="use of undeclared identifier &apos;DRM_CURRENTPID&apos;">DRM_CURRENTPID</span>, lock-&gt;context);</td></tr>
+<tr><th id="60">60</th><td>		<b>return</b> <a class="macro" href="../../../../../sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="61">61</th><td>	}</td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td>	<a class="macro" href="drmP.h.html#433" title="do { if (drm_debug_flag) printf(&quot;[&quot; &quot;drm&quot; &quot;:pid%d:%s] &quot; &quot;%d (pid %d) requests lock (0x%08x), flags = 0x%08x\n&quot;, DRM_CURRENTPID, __func__ , lock-&gt;context, DRM_CURRENTPID, dev-&gt;lock.hw_lock-&gt;lock, lock-&gt;flags); } while (0)" data-ref="_M/DRM_DEBUG">DRM_DEBUG</a>(<q>"%d (pid %d) requests lock (0x%08x), flags = 0x%08x\n"</q>,</td></tr>
+<tr><th id="64">64</th><td>	    lock-&gt;context, <span class='error' title="use of undeclared identifier &apos;DRM_CURRENTPID&apos;">DRM_CURRENTPID</span>, dev-&gt;lock.hw_lock-&gt;lock,</td></tr>
+<tr><th id="65">65</th><td>	    lock-&gt;flags);</td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td>	<b>if</b> (<a class="ref fn" href="drmP.h.html#drm_core_check_feature" title='drm_core_check_feature' data-ref="drm_core_check_feature" data-ref-filename="drm_core_check_feature">drm_core_check_feature</a>(<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>, <a class="macro" href="drmP.h.html#164" title="0x100" data-ref="_M/DRIVER_DMA_QUEUE">DRIVER_DMA_QUEUE</a>) &amp;&amp;</td></tr>
+<tr><th id="68">68</th><td>	    <a class="local col4 ref" href="#4lock" title='lock' data-ref="4lock" data-ref-filename="4lock">lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_lock::context" title='drm_lock::context' data-ref="drm_lock::context" data-ref-filename="drm_lock..context">context</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="69">69</th><td>		<b>return</b> <a class="macro" href="../../../../../sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td>	<a class="ref fn" href="#71" title='DRM_LOCK' data-ref="DRM_LOCK" data-ref-filename="DRM_LOCK">DRM_LOCK</a>();</td></tr>
+<tr><th id="72">72</th><td>	<b>for</b> (;;) {</td></tr>
+<tr><th id="73">73</th><td>		<b>if</b> (<a class="ref fn" href="#drm_lock_take" title='drm_lock_take' data-ref="drm_lock_take" data-ref-filename="drm_lock_take">drm_lock_take</a>(&amp;<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::lock" title='drm_device::lock' data-ref="drm_device::lock" data-ref-filename="drm_device..lock">lock</a>, <a class="local col4 ref" href="#4lock" title='lock' data-ref="4lock" data-ref-filename="4lock">lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_lock::context" title='drm_lock::context' data-ref="drm_lock::context" data-ref-filename="drm_lock..context">context</a>)) {</td></tr>
+<tr><th id="74">74</th><td>			<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::lock" title='drm_device::lock' data-ref="drm_device::lock" data-ref-filename="drm_device..lock">lock</a>.<a class="ref field" href="drmP.h.html#drm_lock_data::file_priv" title='drm_lock_data::file_priv' data-ref="drm_lock_data::file_priv" data-ref-filename="drm_lock_data..file_priv">file_priv</a> = <a class="local col3 ref" href="#3file_priv" title='file_priv' data-ref="3file_priv" data-ref-filename="3file_priv">file_priv</a>;</td></tr>
+<tr><th id="75">75</th><td>			dev-&gt;lock.lock_time = <span class='error' title="use of undeclared identifier &apos;jiffies&apos;">jiffies</span>;</td></tr>
+<tr><th id="76">76</th><td>			<a class="ref fn" href="#76" title='atomic_inc' data-ref="atomic_inc" data-ref-filename="atomic_inc">atomic_inc</a>(&amp;<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::counts" title='drm_device::counts' data-ref="drm_device::counts" data-ref-filename="drm_device..counts">counts</a>[<a class="enum" href="../shared-core/drm.h.html#_DRM_STAT_LOCKS" title='_DRM_STAT_LOCKS' data-ref="_DRM_STAT_LOCKS" data-ref-filename="_DRM_STAT_LOCKS">_DRM_STAT_LOCKS</a>]);</td></tr>
+<tr><th id="77">77</th><td>			<b>break</b>;  <i>/* Got lock */</i></td></tr>
+<tr><th id="78">78</th><td>		}</td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td>		<i>/* Contention */</i></td></tr>
+<tr><th id="81">81</th><td><u>#<span data-ppcond="81">if</span> defined(<span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span>)</u></td></tr>
+<tr><th id="82">82</th><td>		ret = mtx_sleep((<em>void</em> *)&amp;dev-&gt;lock.lock_queue, &amp;dev-&gt;dev_lock,</td></tr>
+<tr><th id="83">83</th><td>		    PCATCH, <q>"drmlk2"</q>, <var>0</var>);</td></tr>
+<tr><th id="84">84</th><td><u>#<span data-ppcond="81">elif</span>   defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="85">85</th><td>        ret = mtsleep((<em>void</em> *)&amp;dev-&gt;lock.lock_queue, PCATCH, <q>"drmlk2"</q>, <var>0</var>,</td></tr>
+<tr><th id="86">86</th><td>                &amp;dev-&gt;dev_lock);</td></tr>
+<tr><th id="87">87</th><td><u>#<span data-ppcond="81">endif</span></u></td></tr>
+<tr><th id="88">88</th><td>		<b>if</b> (<a class="local col5 ref" href="#5ret" title='ret' data-ref="5ret" data-ref-filename="5ret">ret</a> != <var>0</var>)</td></tr>
+<tr><th id="89">89</th><td>			<b>break</b>;</td></tr>
+<tr><th id="90">90</th><td>	}</td></tr>
+<tr><th id="91">91</th><td>	<a class="ref fn" href="#91" title='DRM_UNLOCK' data-ref="DRM_UNLOCK" data-ref-filename="DRM_UNLOCK">DRM_UNLOCK</a>();</td></tr>
+<tr><th id="92">92</th><td>	<a class="macro" href="drmP.h.html#433" title="do { if (drm_debug_flag) printf(&quot;[&quot; &quot;drm&quot; &quot;:pid%d:%s] &quot; &quot;%d %s\n&quot;, DRM_CURRENTPID, __func__ , lock-&gt;context, ret ? &quot;interrupted&quot; : &quot;has lock&quot;); } while (0)" data-ref="_M/DRM_DEBUG">DRM_DEBUG</a>(<q>"%d %s\n"</q>, lock-&gt;context, ret ? <q>"interrupted"</q> : <q>"has lock"</q>);</td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td>	<b>if</b> (<a class="local col5 ref" href="#5ret" title='ret' data-ref="5ret" data-ref-filename="5ret">ret</a> != <var>0</var>)</td></tr>
+<tr><th id="95">95</th><td>		<b>return</b> <a class="local col5 ref" href="#5ret" title='ret' data-ref="5ret" data-ref-filename="5ret">ret</a>;</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td>	<i>/* XXX: Add signal blocking here */</i></td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td>	<b>if</b> (<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::driver" title='drm_device::driver' data-ref="drm_device::driver" data-ref-filename="drm_device..driver">driver</a>-&gt;<a class="ref field" href="drmP.h.html#drm_driver_info::dma_quiescent" title='drm_driver_info::dma_quiescent' data-ref="drm_driver_info::dma_quiescent" data-ref-filename="drm_driver_info..dma_quiescent">dma_quiescent</a> != <a class="macro" href="../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> &amp;&amp;</td></tr>
+<tr><th id="100">100</th><td>	    (<a class="local col4 ref" href="#4lock" title='lock' data-ref="4lock" data-ref-filename="4lock">lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_lock::flags" title='drm_lock::flags' data-ref="drm_lock::flags" data-ref-filename="drm_lock..flags">flags</a> &amp; <a class="enum" href="../shared-core/drm.h.html#_DRM_LOCK_QUIESCENT" title='_DRM_LOCK_QUIESCENT' data-ref="_DRM_LOCK_QUIESCENT" data-ref-filename="_DRM_LOCK_QUIESCENT">_DRM_LOCK_QUIESCENT</a>))</td></tr>
+<tr><th id="101">101</th><td>		<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::driver" title='drm_device::driver' data-ref="drm_device::driver" data-ref-filename="drm_device..driver">driver</a>-&gt;<a class="ref field" href="drmP.h.html#drm_driver_info::dma_quiescent" title='drm_driver_info::dma_quiescent' data-ref="drm_driver_info::dma_quiescent" data-ref-filename="drm_driver_info..dma_quiescent">dma_quiescent</a>(<a class="local col1 ref" href="#1dev" title='dev' data-ref="1dev" data-ref-filename="1dev">dev</a>);</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="104">104</th><td>}</td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><em>int</em> <dfn class="decl def fn" id="drm_unlock" title='drm_unlock' data-ref="drm_unlock" data-ref-filename="drm_unlock">drm_unlock</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_device" title='drm_device' data-ref="drm_device" data-ref-filename="drm_device">drm_device</a> *<dfn class="local col6 decl" id="6dev" title='dev' data-type='struct drm_device *' data-ref="6dev" data-ref-filename="6dev">dev</dfn>, <em>void</em> *<dfn class="local col7 decl" id="7data" title='data' data-type='void *' data-ref="7data" data-ref-filename="7data">data</dfn>, <b>struct</b> <a class="type" href="drmP.h.html#drm_file" title='drm_file' data-ref="drm_file" data-ref-filename="drm_file">drm_file</a> *<dfn class="local col8 decl" id="8file_priv" title='file_priv' data-type='struct drm_file *' data-ref="8file_priv" data-ref-filename="8file_priv">file_priv</dfn>)</td></tr>
+<tr><th id="107">107</th><td>{</td></tr>
+<tr><th id="108">108</th><td>	<b>struct</b> <a class="type" href="../shared-core/drm.h.html#drm_lock" title='drm_lock' data-ref="drm_lock" data-ref-filename="drm_lock">drm_lock</a> *<dfn class="local col9 decl" id="9lock" title='lock' data-type='struct drm_lock *' data-ref="9lock" data-ref-filename="9lock">lock</dfn> = <a class="local col7 ref" href="#7data" title='data' data-ref="7data" data-ref-filename="7data">data</a>;</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td>	<a class="macro" href="drmP.h.html#433" title="do { if (drm_debug_flag) printf(&quot;[&quot; &quot;drm&quot; &quot;:pid%d:%s] &quot; &quot;%d (pid %d) requests unlock (0x%08x), flags = 0x%08x\n&quot;, DRM_CURRENTPID, __func__ , lock-&gt;context, DRM_CURRENTPID, dev-&gt;lock.hw_lock-&gt;lock, lock-&gt;flags); } while (0)" data-ref="_M/DRM_DEBUG">DRM_DEBUG</a>(<q>"%d (pid %d) requests unlock (0x%08x), flags = 0x%08x\n"</q>,</td></tr>
+<tr><th id="111">111</th><td>	    lock-&gt;context, <span class='error' title="use of undeclared identifier &apos;DRM_CURRENTPID&apos;">DRM_CURRENTPID</span>, dev-&gt;lock.hw_lock-&gt;lock,</td></tr>
+<tr><th id="112">112</th><td>	    lock-&gt;flags);</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td>	<b>if</b> (<a class="local col9 ref" href="#9lock" title='lock' data-ref="9lock" data-ref-filename="9lock">lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_lock::context" title='drm_lock::context' data-ref="drm_lock::context" data-ref-filename="drm_lock..context">context</a> == <a class="macro" href="drmP.h.html#168" title="0" data-ref="_M/DRM_KERNEL_CONTEXT">DRM_KERNEL_CONTEXT</a>) {</td></tr>
+<tr><th id="115">115</th><td>		<a class="macro" href="drmP.h.html#427" title="printf(&quot;error: [&quot; &quot;drm&quot; &quot;:pid%d:%s] *ERROR* &quot; &quot;Process %d using kernel context %d\n&quot;, DRM_CURRENTPID, __func__ , DRM_CURRENTPID, lock-&gt;context)" data-ref="_M/DRM_ERROR">DRM_ERROR</a>(<q>"Process %d using kernel context %d\n"</q>,</td></tr>
+<tr><th id="116">116</th><td>		    <span class='error' title="use of undeclared identifier &apos;DRM_CURRENTPID&apos;">DRM_CURRENTPID</span>, lock-&gt;context);</td></tr>
+<tr><th id="117">117</th><td>		<b>return</b> <a class="macro" href="../../../../../sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="118">118</th><td>	}</td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td>	<a class="ref fn" href="#76" title='atomic_inc' data-ref="atomic_inc" data-ref-filename="atomic_inc">atomic_inc</a>(&amp;<a class="local col6 ref" href="#6dev" title='dev' data-ref="6dev" data-ref-filename="6dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::counts" title='drm_device::counts' data-ref="drm_device::counts" data-ref-filename="drm_device..counts">counts</a>[<a class="enum" href="../shared-core/drm.h.html#_DRM_STAT_UNLOCKS" title='_DRM_STAT_UNLOCKS' data-ref="_DRM_STAT_UNLOCKS" data-ref-filename="_DRM_STAT_UNLOCKS">_DRM_STAT_UNLOCKS</a>]);</td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td>	<a class="ref fn" href="#71" title='DRM_LOCK' data-ref="DRM_LOCK" data-ref-filename="DRM_LOCK">DRM_LOCK</a>();</td></tr>
+<tr><th id="123">123</th><td>	<a class="ref fn" href="#drm_lock_transfer" title='drm_lock_transfer' data-ref="drm_lock_transfer" data-ref-filename="drm_lock_transfer">drm_lock_transfer</a>(&amp;<a class="local col6 ref" href="#6dev" title='dev' data-ref="6dev" data-ref-filename="6dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::lock" title='drm_device::lock' data-ref="drm_device::lock" data-ref-filename="drm_device..lock">lock</a>, <a class="macro" href="drmP.h.html#168" title="0" data-ref="_M/DRM_KERNEL_CONTEXT">DRM_KERNEL_CONTEXT</a>);</td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td>	<b>if</b> (<a class="ref fn" href="#drm_lock_free" title='drm_lock_free' data-ref="drm_lock_free" data-ref-filename="drm_lock_free">drm_lock_free</a>(&amp;<a class="local col6 ref" href="#6dev" title='dev' data-ref="6dev" data-ref-filename="6dev">dev</a>-&gt;<a class="ref field" href="drmP.h.html#drm_device::lock" title='drm_device::lock' data-ref="drm_device::lock" data-ref-filename="drm_device..lock">lock</a>, <a class="macro" href="drmP.h.html#168" title="0" data-ref="_M/DRM_KERNEL_CONTEXT">DRM_KERNEL_CONTEXT</a>)) {</td></tr>
+<tr><th id="126">126</th><td>		<a class="macro" href="drmP.h.html#427" title="printf(&quot;error: [&quot; &quot;drm&quot; &quot;:pid%d:%s] *ERROR* &quot; &quot;\n&quot;, DRM_CURRENTPID, __func__)" data-ref="_M/DRM_ERROR">DRM_ERROR</a>(<q>"\n"</q>);</td></tr>
+<tr><th id="127">127</th><td>	}</td></tr>
+<tr><th id="128">128</th><td>	<a class="ref fn" href="#91" title='DRM_UNLOCK' data-ref="DRM_UNLOCK" data-ref-filename="DRM_UNLOCK">DRM_UNLOCK</a>();</td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="131">131</th><td>}</td></tr>
+<tr><th id="132">132</th><td></td></tr>
+<tr><th id="133">133</th><td><em>int</em> <dfn class="decl def fn" id="drm_lock_take" title='drm_lock_take' data-ref="drm_lock_take" data-ref-filename="drm_lock_take">drm_lock_take</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_lock_data" title='drm_lock_data' data-ref="drm_lock_data" data-ref-filename="drm_lock_data">drm_lock_data</a> *<dfn class="local col0 decl" id="10lock_data" title='lock_data' data-type='struct drm_lock_data *' data-ref="10lock_data" data-ref-filename="10lock_data">lock_data</dfn>, <em>unsigned</em> <em>int</em> <dfn class="local col1 decl" id="11context" title='context' data-type='unsigned int' data-ref="11context" data-ref-filename="11context">context</dfn>)</td></tr>
+<tr><th id="134">134</th><td>{</td></tr>
+<tr><th id="135">135</th><td>	<em>volatile</em> <em>unsigned</em> <em>int</em> *<dfn class="local col2 decl" id="12lock" title='lock' data-type='volatile unsigned int *' data-ref="12lock" data-ref-filename="12lock">lock</dfn> = &amp;<a class="local col0 ref" href="#10lock_data" title='lock_data' data-ref="10lock_data" data-ref-filename="10lock_data">lock_data</a>-&gt;<a class="ref field" href="drmP.h.html#drm_lock_data::hw_lock" title='drm_lock_data::hw_lock' data-ref="drm_lock_data::hw_lock" data-ref-filename="drm_lock_data..hw_lock">hw_lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_hw_lock::lock" title='drm_hw_lock::lock' data-ref="drm_hw_lock::lock" data-ref-filename="drm_hw_lock..lock">lock</a>;</td></tr>
+<tr><th id="136">136</th><td>	<em>unsigned</em> <em>int</em> <dfn class="local col3 decl" id="13old" title='old' data-type='unsigned int' data-ref="13old" data-ref-filename="13old">old</dfn>, <dfn class="local col4 decl" id="14new" title='new' data-type='unsigned int' data-ref="14new" data-ref-filename="14new">new</dfn>;</td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td>	<b>do</b> {</td></tr>
+<tr><th id="139">139</th><td>		<a class="local col3 ref" href="#13old" title='old' data-ref="13old" data-ref-filename="13old">old</a> = *<a class="local col2 ref" href="#12lock" title='lock' data-ref="12lock" data-ref-filename="12lock">lock</a>;</td></tr>
+<tr><th id="140">140</th><td>		<b>if</b> (<a class="local col3 ref" href="#13old" title='old' data-ref="13old" data-ref-filename="13old">old</a> &amp; <a class="macro" href="../shared-core/drm.h.html#114" title="0x80000000U" data-ref="_M/_DRM_LOCK_HELD">_DRM_LOCK_HELD</a>)</td></tr>
+<tr><th id="141">141</th><td>			<a class="local col4 ref" href="#14new" title='new' data-ref="14new" data-ref-filename="14new">new</a> = <a class="local col3 ref" href="#13old" title='old' data-ref="13old" data-ref-filename="13old">old</a> | <a class="macro" href="../shared-core/drm.h.html#115" title="0x40000000U" data-ref="_M/_DRM_LOCK_CONT">_DRM_LOCK_CONT</a>;</td></tr>
+<tr><th id="142">142</th><td>		<b>else</b></td></tr>
+<tr><th id="143">143</th><td>			<a class="local col4 ref" href="#14new" title='new' data-ref="14new" data-ref-filename="14new">new</a> = <a class="local col1 ref" href="#11context" title='context' data-ref="11context" data-ref-filename="11context">context</a> | <a class="macro" href="../shared-core/drm.h.html#114" title="0x80000000U" data-ref="_M/_DRM_LOCK_HELD">_DRM_LOCK_HELD</a>;</td></tr>
+<tr><th id="144">144</th><td>	} <b>while</b> (!<a class="ref fn" href="#144" title='atomic_cmpset_int' data-ref="atomic_cmpset_int" data-ref-filename="atomic_cmpset_int">atomic_cmpset_int</a>(<a class="local col2 ref" href="#12lock" title='lock' data-ref="12lock" data-ref-filename="12lock">lock</a>, <a class="local col3 ref" href="#13old" title='old' data-ref="13old" data-ref-filename="13old">old</a>, <a class="local col4 ref" href="#14new" title='new' data-ref="14new" data-ref-filename="14new">new</a>));</td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td>	<b>if</b> (<a class="macro" href="../shared-core/drm.h.html#118" title="((old) &amp; ~(0x80000000U|0x40000000U))" data-ref="_M/_DRM_LOCKING_CONTEXT">_DRM_LOCKING_CONTEXT</a>(<a class="local col3 ref" href="#13old" title='old' data-ref="13old" data-ref-filename="13old">old</a>) == <a class="local col1 ref" href="#11context" title='context' data-ref="11context" data-ref-filename="11context">context</a>) {</td></tr>
+<tr><th id="147">147</th><td>		<b>if</b> (<a class="local col3 ref" href="#13old" title='old' data-ref="13old" data-ref-filename="13old">old</a> &amp; <a class="macro" href="../shared-core/drm.h.html#114" title="0x80000000U" data-ref="_M/_DRM_LOCK_HELD">_DRM_LOCK_HELD</a>) {</td></tr>
+<tr><th id="148">148</th><td>			<b>if</b> (<a class="local col1 ref" href="#11context" title='context' data-ref="11context" data-ref-filename="11context">context</a> != <a class="macro" href="drmP.h.html#168" title="0" data-ref="_M/DRM_KERNEL_CONTEXT">DRM_KERNEL_CONTEXT</a>) {</td></tr>
+<tr><th id="149">149</th><td>				<a class="macro" href="drmP.h.html#427" title="printf(&quot;error: [&quot; &quot;drm&quot; &quot;:pid%d:%s] *ERROR* &quot; &quot;%d holds heavyweight lock\n&quot;, DRM_CURRENTPID, __func__ , context)" data-ref="_M/DRM_ERROR">DRM_ERROR</a>(<q>"%d holds heavyweight lock\n"</q>,</td></tr>
+<tr><th id="150">150</th><td>				    context);</td></tr>
+<tr><th id="151">151</th><td>			}</td></tr>
+<tr><th id="152">152</th><td>			<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="153">153</th><td>		}</td></tr>
+<tr><th id="154">154</th><td>	}</td></tr>
+<tr><th id="155">155</th><td>	<b>if</b> (<a class="local col4 ref" href="#14new" title='new' data-ref="14new" data-ref-filename="14new">new</a> == (<a class="local col1 ref" href="#11context" title='context' data-ref="11context" data-ref-filename="11context">context</a> | <a class="macro" href="../shared-core/drm.h.html#114" title="0x80000000U" data-ref="_M/_DRM_LOCK_HELD">_DRM_LOCK_HELD</a>)) {</td></tr>
+<tr><th id="156">156</th><td>		<i>/* Have lock */</i></td></tr>
+<tr><th id="157">157</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="158">158</th><td>	}</td></tr>
+<tr><th id="159">159</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="160">160</th><td>}</td></tr>
+<tr><th id="161">161</th><td></td></tr>
+<tr><th id="162">162</th><td><i>/* This takes a lock forcibly and hands it to context.	Should ONLY be used</i></td></tr>
+<tr><th id="163">163</th><td><i>   inside *_unlock to give lock to kernel before calling *_dma_schedule. */</i></td></tr>
+<tr><th id="164">164</th><td><em>int</em> <dfn class="decl def fn" id="drm_lock_transfer" title='drm_lock_transfer' data-ref="drm_lock_transfer" data-ref-filename="drm_lock_transfer">drm_lock_transfer</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_lock_data" title='drm_lock_data' data-ref="drm_lock_data" data-ref-filename="drm_lock_data">drm_lock_data</a> *<dfn class="local col5 decl" id="15lock_data" title='lock_data' data-type='struct drm_lock_data *' data-ref="15lock_data" data-ref-filename="15lock_data">lock_data</dfn>, <em>unsigned</em> <em>int</em> <dfn class="local col6 decl" id="16context" title='context' data-type='unsigned int' data-ref="16context" data-ref-filename="16context">context</dfn>)</td></tr>
+<tr><th id="165">165</th><td>{</td></tr>
+<tr><th id="166">166</th><td>	<em>volatile</em> <em>unsigned</em> <em>int</em> *<dfn class="local col7 decl" id="17lock" title='lock' data-type='volatile unsigned int *' data-ref="17lock" data-ref-filename="17lock">lock</dfn> = &amp;<a class="local col5 ref" href="#15lock_data" title='lock_data' data-ref="15lock_data" data-ref-filename="15lock_data">lock_data</a>-&gt;<a class="ref field" href="drmP.h.html#drm_lock_data::hw_lock" title='drm_lock_data::hw_lock' data-ref="drm_lock_data::hw_lock" data-ref-filename="drm_lock_data..hw_lock">hw_lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_hw_lock::lock" title='drm_hw_lock::lock' data-ref="drm_hw_lock::lock" data-ref-filename="drm_hw_lock..lock">lock</a>;</td></tr>
+<tr><th id="167">167</th><td>	<em>unsigned</em> <em>int</em> <dfn class="local col8 decl" id="18old" title='old' data-type='unsigned int' data-ref="18old" data-ref-filename="18old">old</dfn>, <dfn class="local col9 decl" id="19new" title='new' data-type='unsigned int' data-ref="19new" data-ref-filename="19new">new</dfn>;</td></tr>
+<tr><th id="168">168</th><td></td></tr>
+<tr><th id="169">169</th><td>	<a class="local col5 ref" href="#15lock_data" title='lock_data' data-ref="15lock_data" data-ref-filename="15lock_data">lock_data</a>-&gt;<a class="ref field" href="drmP.h.html#drm_lock_data::file_priv" title='drm_lock_data::file_priv' data-ref="drm_lock_data::file_priv" data-ref-filename="drm_lock_data..file_priv">file_priv</a> = <a class="macro" href="../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="170">170</th><td>	<b>do</b> {</td></tr>
+<tr><th id="171">171</th><td>		<a class="local col8 ref" href="#18old" title='old' data-ref="18old" data-ref-filename="18old">old</a> = *<a class="local col7 ref" href="#17lock" title='lock' data-ref="17lock" data-ref-filename="17lock">lock</a>;</td></tr>
+<tr><th id="172">172</th><td>		<a class="local col9 ref" href="#19new" title='new' data-ref="19new" data-ref-filename="19new">new</a> = <a class="local col6 ref" href="#16context" title='context' data-ref="16context" data-ref-filename="16context">context</a> | <a class="macro" href="../shared-core/drm.h.html#114" title="0x80000000U" data-ref="_M/_DRM_LOCK_HELD">_DRM_LOCK_HELD</a>;</td></tr>
+<tr><th id="173">173</th><td>	} <b>while</b> (!<a class="ref fn" href="#144" title='atomic_cmpset_int' data-ref="atomic_cmpset_int" data-ref-filename="atomic_cmpset_int">atomic_cmpset_int</a>(<a class="local col7 ref" href="#17lock" title='lock' data-ref="17lock" data-ref-filename="17lock">lock</a>, <a class="local col8 ref" href="#18old" title='old' data-ref="18old" data-ref-filename="18old">old</a>, <a class="local col9 ref" href="#19new" title='new' data-ref="19new" data-ref-filename="19new">new</a>));</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="176">176</th><td>}</td></tr>
+<tr><th id="177">177</th><td></td></tr>
+<tr><th id="178">178</th><td><em>int</em> <dfn class="decl def fn" id="drm_lock_free" title='drm_lock_free' data-ref="drm_lock_free" data-ref-filename="drm_lock_free">drm_lock_free</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_lock_data" title='drm_lock_data' data-ref="drm_lock_data" data-ref-filename="drm_lock_data">drm_lock_data</a> *<dfn class="local col0 decl" id="20lock_data" title='lock_data' data-type='struct drm_lock_data *' data-ref="20lock_data" data-ref-filename="20lock_data">lock_data</dfn>, <em>unsigned</em> <em>int</em> <dfn class="local col1 decl" id="21context" title='context' data-type='unsigned int' data-ref="21context" data-ref-filename="21context">context</dfn>)</td></tr>
+<tr><th id="179">179</th><td>{</td></tr>
+<tr><th id="180">180</th><td>	<em>volatile</em> <em>unsigned</em> <em>int</em> *<dfn class="local col2 decl" id="22lock" title='lock' data-type='volatile unsigned int *' data-ref="22lock" data-ref-filename="22lock">lock</dfn> = &amp;<a class="local col0 ref" href="#20lock_data" title='lock_data' data-ref="20lock_data" data-ref-filename="20lock_data">lock_data</a>-&gt;<a class="ref field" href="drmP.h.html#drm_lock_data::hw_lock" title='drm_lock_data::hw_lock' data-ref="drm_lock_data::hw_lock" data-ref-filename="drm_lock_data..hw_lock">hw_lock</a>-&gt;<a class="ref field" href="../shared-core/drm.h.html#drm_hw_lock::lock" title='drm_hw_lock::lock' data-ref="drm_hw_lock::lock" data-ref-filename="drm_hw_lock..lock">lock</a>;</td></tr>
+<tr><th id="181">181</th><td>	<em>unsigned</em> <em>int</em> <dfn class="local col3 decl" id="23old" title='old' data-type='unsigned int' data-ref="23old" data-ref-filename="23old">old</dfn>, <dfn class="local col4 decl" id="24new" title='new' data-type='unsigned int' data-ref="24new" data-ref-filename="24new">new</dfn>;</td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td>	<a class="local col0 ref" href="#20lock_data" title='lock_data' data-ref="20lock_data" data-ref-filename="20lock_data">lock_data</a>-&gt;<a class="ref field" href="drmP.h.html#drm_lock_data::file_priv" title='drm_lock_data::file_priv' data-ref="drm_lock_data::file_priv" data-ref-filename="drm_lock_data..file_priv">file_priv</a> = <a class="macro" href="../../../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="184">184</th><td>	<b>do</b> {</td></tr>
+<tr><th id="185">185</th><td>		<a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a> = *<a class="local col2 ref" href="#22lock" title='lock' data-ref="22lock" data-ref-filename="22lock">lock</a>;</td></tr>
+<tr><th id="186">186</th><td>		<a class="local col4 ref" href="#24new" title='new' data-ref="24new" data-ref-filename="24new">new</a> = <var>0</var>;</td></tr>
+<tr><th id="187">187</th><td>	} <b>while</b> (!<a class="ref fn" href="#144" title='atomic_cmpset_int' data-ref="atomic_cmpset_int" data-ref-filename="atomic_cmpset_int">atomic_cmpset_int</a>(<a class="local col2 ref" href="#22lock" title='lock' data-ref="22lock" data-ref-filename="22lock">lock</a>, <a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a>, <a class="local col4 ref" href="#24new" title='new' data-ref="24new" data-ref-filename="24new">new</a>));</td></tr>
+<tr><th id="188">188</th><td></td></tr>
+<tr><th id="189">189</th><td>	<b>if</b> (<a class="macro" href="../shared-core/drm.h.html#116" title="((old) &amp; 0x80000000U)" data-ref="_M/_DRM_LOCK_IS_HELD">_DRM_LOCK_IS_HELD</a>(<a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a>) &amp;&amp; <a class="macro" href="../shared-core/drm.h.html#118" title="((old) &amp; ~(0x80000000U|0x40000000U))" data-ref="_M/_DRM_LOCKING_CONTEXT">_DRM_LOCKING_CONTEXT</a>(<a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a>) != <a class="local col1 ref" href="#21context" title='context' data-ref="21context" data-ref-filename="21context">context</a>) {</td></tr>
+<tr><th id="190">190</th><td>		<a class="macro" href="drmP.h.html#427" title="printf(&quot;error: [&quot; &quot;drm&quot; &quot;:pid%d:%s] *ERROR* &quot; &quot;%d freed heavyweight lock held by %d\n&quot;, DRM_CURRENTPID, __func__ , context, ((old) &amp; ~(0x80000000U|0x40000000U)))" data-ref="_M/DRM_ERROR">DRM_ERROR</a>(<q>"%d freed heavyweight lock held by %d\n"</q>,</td></tr>
+<tr><th id="191">191</th><td>		    context, _DRM_LOCKING_CONTEXT(old));</td></tr>
+<tr><th id="192">192</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="193">193</th><td>	}</td></tr>
+<tr><th id="194">194</th><td>	<a class="macro" href="drmP.h.html#208" title="wakeup((void *)&amp;lock_data-&gt;lock_queue)" data-ref="_M/DRM_WAKEUP_INT">DRM_WAKEUP_INT</a>((<em>void</em> *)&amp;<a class="local col0 ref" href="#20lock_data" title='lock_data' data-ref="20lock_data" data-ref-filename="20lock_data">lock_data</a>-&gt;<a class="ref field" href="drmP.h.html#drm_lock_data::lock_queue" title='drm_lock_data::lock_queue' data-ref="drm_lock_data::lock_queue" data-ref-filename="drm_lock_data..lock_queue">lock_queue</a>);</td></tr>
+<tr><th id="195">195</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="196">196</th><td>}</td></tr>
+<tr><th id="197">197</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

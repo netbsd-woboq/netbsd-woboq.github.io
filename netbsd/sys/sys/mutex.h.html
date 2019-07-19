@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mutex.h source code [netbsd/sys/sys/mutex.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="kmutex_type_t "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/sys/mutex.h'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>sys</a>/<a href='mutex.h.html'>mutex.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: mutex.h,v 1.22 2017/09/16 23:25:35 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2002, 2006, 2007, 2008, 2009 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe and Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><u>#<span data-ppcond="32">ifndef</span> <span class="macro" data-ref="_M/_SYS_MUTEX_H_">_SYS_MUTEX_H_</span></u></td></tr>
+<tr><th id="33">33</th><td><u>#define	<dfn class="macro" id="_M/_SYS_MUTEX_H_" data-ref="_M/_SYS_MUTEX_H_">_SYS_MUTEX_H_</dfn></u></td></tr>
+<tr><th id="34">34</th><td></td></tr>
+<tr><th id="35">35</th><td><i>/*</i></td></tr>
+<tr><th id="36">36</th><td><i> * There are 2 types of mutexes:</i></td></tr>
+<tr><th id="37">37</th><td><i> *</i></td></tr>
+<tr><th id="38">38</th><td><i> *	* Adaptive -- If the lock is already held, the thread attempting</i></td></tr>
+<tr><th id="39">39</th><td><i> *	  to acquire the lock determines if the thread that holds it is</i></td></tr>
+<tr><th id="40">40</th><td><i> *	  currently running.  If so, it spins, else it sleeps.</i></td></tr>
+<tr><th id="41">41</th><td><i> *</i></td></tr>
+<tr><th id="42">42</th><td><i> *	* Spin -- If the lock is already held, the thread attempting to</i></td></tr>
+<tr><th id="43">43</th><td><i> *	  acquire the lock spins.  The IPL will be raised on entry.</i></td></tr>
+<tr><th id="44">44</th><td><i> *</i></td></tr>
+<tr><th id="45">45</th><td><i> * Machine dependent code must provide the following:</i></td></tr>
+<tr><th id="46">46</th><td><i> *</i></td></tr>
+<tr><th id="47">47</th><td><i> *	struct mutex</i></td></tr>
+<tr><th id="48">48</th><td><i> *		The actual mutex structure.  This structure is mostly</i></td></tr>
+<tr><th id="49">49</th><td><i> *		opaque to machine-independent code; most access are done</i></td></tr>
+<tr><th id="50">50</th><td><i> *		through macros.  However, machine-independent code must</i></td></tr>
+<tr><th id="51">51</th><td><i> *		be able to access the following members:</i></td></tr>
+<tr><th id="52">52</th><td><i> *</i></td></tr>
+<tr><th id="53">53</th><td><i> *		uintptr_t		mtx_owner</i></td></tr>
+<tr><th id="54">54</th><td><i> *		ipl_cookie_t		mtx_ipl</i></td></tr>
+<tr><th id="55">55</th><td><i> *		__cpu_simple_lock_t	mtx_lock</i></td></tr>
+<tr><th id="56">56</th><td><i> *</i></td></tr>
+<tr><th id="57">57</th><td><i> * If an architecture can be considered 'simple' (no interlock required in</i></td></tr>
+<tr><th id="58">58</th><td><i> * the MP case, or no MP) it need only define __HAVE_SIMPLE_MUTEXES and</i></td></tr>
+<tr><th id="59">59</th><td><i> * provide the following:</i></td></tr>
+<tr><th id="60">60</th><td><i> *</i></td></tr>
+<tr><th id="61">61</th><td><i> *	struct mutex</i></td></tr>
+<tr><th id="62">62</th><td><i> *</i></td></tr>
+<tr><th id="63">63</th><td><i> *		[additionally:]</i></td></tr>
+<tr><th id="64">64</th><td><i> *		volatile integer	mtx_id</i></td></tr>
+<tr><th id="65">65</th><td><i> *</i></td></tr>
+<tr><th id="66">66</th><td><i> *	MUTEX_RECEIVE(mtx)</i></td></tr>
+<tr><th id="67">67</th><td><i> *		Post a load fence after acquiring the mutex, if necessary.</i></td></tr>
+<tr><th id="68">68</th><td><i> *</i></td></tr>
+<tr><th id="69">69</th><td><i> *	MUTEX_GIVE(mtx)</i></td></tr>
+<tr><th id="70">70</th><td><i> *		Post a load/store fence after releasing the mutex, if</i></td></tr>
+<tr><th id="71">71</th><td><i> *		necessary.</i></td></tr>
+<tr><th id="72">72</th><td><i> *</i></td></tr>
+<tr><th id="73">73</th><td><i> * 	MUTEX_CAS(ptr, old, new)</i></td></tr>
+<tr><th id="74">74</th><td><i> *		Perform an atomic "compare and swap" operation and</i></td></tr>
+<tr><th id="75">75</th><td><i> *		evaluate to true or false according to the success</i></td></tr>
+<tr><th id="76">76</th><td><i> *</i></td></tr>
+<tr><th id="77">77</th><td><i> * Otherwise, the following must be defined:</i></td></tr>
+<tr><th id="78">78</th><td><i> *</i></td></tr>
+<tr><th id="79">79</th><td><i> *	MUTEX_INITIALIZE_SPIN(mtx, dodebug, minipl)</i></td></tr>
+<tr><th id="80">80</th><td><i> *		Initialize a spin mutex.</i></td></tr>
+<tr><th id="81">81</th><td><i> *</i></td></tr>
+<tr><th id="82">82</th><td><i> *	MUTEX_INITIALIZE_ADAPTIVE(mtx, dodebug)</i></td></tr>
+<tr><th id="83">83</th><td><i> *		Initialize an adaptive mutex.</i></td></tr>
+<tr><th id="84">84</th><td><i> *</i></td></tr>
+<tr><th id="85">85</th><td><i> *	MUTEX_DESTROY(mtx)</i></td></tr>
+<tr><th id="86">86</th><td><i> *		Tear down a mutex.</i></td></tr>
+<tr><th id="87">87</th><td><i> *</i></td></tr>
+<tr><th id="88">88</th><td><i> *	MUTEX_ADAPTIVE_P(mtx)</i></td></tr>
+<tr><th id="89">89</th><td><i> *		Evaluates to true if the mutex is an adaptive mutex.</i></td></tr>
+<tr><th id="90">90</th><td><i> *</i></td></tr>
+<tr><th id="91">91</th><td><i> *	MUTEX_SPIN_P(mtx)</i></td></tr>
+<tr><th id="92">92</th><td><i> *		Evaluates to true if the mutex is a spin mutex.</i></td></tr>
+<tr><th id="93">93</th><td><i> *</i></td></tr>
+<tr><th id="94">94</th><td><i> *	MUTEX_OWNER(owner)</i></td></tr>
+<tr><th id="95">95</th><td><i> *		Returns the owner of the adaptive mutex (LWP address).</i></td></tr>
+<tr><th id="96">96</th><td><i> *</i></td></tr>
+<tr><th id="97">97</th><td><i> *	MUTEX_OWNED(owner)</i></td></tr>
+<tr><th id="98">98</th><td><i> *		Returns non-zero if an adaptive mutex is currently</i></td></tr>
+<tr><th id="99">99</th><td><i> *		held by an LWP.</i></td></tr>
+<tr><th id="100">100</th><td><i> *</i></td></tr>
+<tr><th id="101">101</th><td><i> *	MUTEX_HAS_WAITERS(mtx)</i></td></tr>
+<tr><th id="102">102</th><td><i> *		Returns true if the mutex has waiters.</i></td></tr>
+<tr><th id="103">103</th><td><i> *</i></td></tr>
+<tr><th id="104">104</th><td><i> *	MUTEX_SET_WAITERS(mtx)</i></td></tr>
+<tr><th id="105">105</th><td><i> *		Mark the mutex has having waiters.</i></td></tr>
+<tr><th id="106">106</th><td><i> *</i></td></tr>
+<tr><th id="107">107</th><td><i> *	MUTEX_ACQUIRE(mtx, owner)</i></td></tr>
+<tr><th id="108">108</th><td><i> *		Try to acquire an adaptive mutex such that:</i></td></tr>
+<tr><th id="109">109</th><td><i> *			if (lock held OR waiters)</i></td></tr>
+<tr><th id="110">110</th><td><i> *				return 0;</i></td></tr>
+<tr><th id="111">111</th><td><i> *			else</i></td></tr>
+<tr><th id="112">112</th><td><i> *				return 1;</i></td></tr>
+<tr><th id="113">113</th><td><i> *		Must be MP/interrupt atomic.</i></td></tr>
+<tr><th id="114">114</th><td><i> *</i></td></tr>
+<tr><th id="115">115</th><td><i> *	MUTEX_RELEASE(mtx)</i></td></tr>
+<tr><th id="116">116</th><td><i> *		Release the lock and clear the "has waiters" indication.</i></td></tr>
+<tr><th id="117">117</th><td><i> *		Must be interrupt atomic, need not be MP safe.</i></td></tr>
+<tr><th id="118">118</th><td><i> *</i></td></tr>
+<tr><th id="119">119</th><td><i> *	MUTEX_DEBUG_P(mtx)</i></td></tr>
+<tr><th id="120">120</th><td><i> *		Evaluates to true if the mutex is initialized with</i></td></tr>
+<tr><th id="121">121</th><td><i> *		dodebug==true.  Only used in the LOCKDEBUG case.</i></td></tr>
+<tr><th id="122">122</th><td><i> *</i></td></tr>
+<tr><th id="123">123</th><td><i> * Machine dependent code may optionally provide stubs for the following</i></td></tr>
+<tr><th id="124">124</th><td><i> * functions to implement the easy (unlocked / no waiters) cases.  If</i></td></tr>
+<tr><th id="125">125</th><td><i> * these stubs are provided, __HAVE_MUTEX_STUBS should be defined.</i></td></tr>
+<tr><th id="126">126</th><td><i> *</i></td></tr>
+<tr><th id="127">127</th><td><i> *	mutex_enter()</i></td></tr>
+<tr><th id="128">128</th><td><i> *	mutex_exit()</i></td></tr>
+<tr><th id="129">129</th><td><i> *</i></td></tr>
+<tr><th id="130">130</th><td><i> * Two additional stubs may be implemented that handle only the spinlock</i></td></tr>
+<tr><th id="131">131</th><td><i> * case, primarily for the scheduler.  __HAVE_SPIN_MUTEX_STUBS should be</i></td></tr>
+<tr><th id="132">132</th><td><i> * defined if these are provided:</i></td></tr>
+<tr><th id="133">133</th><td><i> *</i></td></tr>
+<tr><th id="134">134</th><td><i> *	mutex_spin_enter()</i></td></tr>
+<tr><th id="135">135</th><td><i> *	mutex_spin_exit()</i></td></tr>
+<tr><th id="136">136</th><td><i> */</i></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><u>#<span data-ppcond="138">if</span> defined(<span class="macro" data-ref="_M/_KERNEL_OPT">_KERNEL_OPT</span>)</u></td></tr>
+<tr><th id="139">139</th><td><u>#include "opt_lockdebug.h"</u></td></tr>
+<tr><th id="140">140</th><td><u>#<span data-ppcond="138">endif</span></u></td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td><u>#<span data-ppcond="142">if</span> !defined(<span class="macro" data-ref="_M/_KERNEL">_KERNEL</span>)</u></td></tr>
+<tr><th id="143">143</th><td><u>#include <a href="types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="144">144</th><td><u>#include <a href="inttypes.h.html">&lt;sys/inttypes.h&gt;</a></u></td></tr>
+<tr><th id="145">145</th><td><u>#<span data-ppcond="142">endif</span></u></td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><b>typedef</b> <b>enum</b> <dfn class="type def" id="kmutex_type_t" title='kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t"><a class="type" href="#kmutex_type_t" title='kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a></dfn> {</td></tr>
+<tr><th id="148">148</th><td>	<dfn class="enum" id="MUTEX_SPIN" title='MUTEX_SPIN' data-ref="MUTEX_SPIN" data-ref-filename="MUTEX_SPIN">MUTEX_SPIN</dfn> = <var>0</var>,		<i>/* To get a spin mutex at IPL_NONE */</i></td></tr>
+<tr><th id="149">149</th><td>	<dfn class="enum" id="MUTEX_ADAPTIVE" title='MUTEX_ADAPTIVE' data-ref="MUTEX_ADAPTIVE" data-ref-filename="MUTEX_ADAPTIVE">MUTEX_ADAPTIVE</dfn> = <var>1</var>,	<i>/* For porting code written for Solaris */</i></td></tr>
+<tr><th id="150">150</th><td>	<dfn class="enum" id="MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</dfn> = <var>2</var>,	<i>/* The only native, endorsed type */</i></td></tr>
+<tr><th id="151">151</th><td>	<dfn class="enum" id="MUTEX_DRIVER" title='MUTEX_DRIVER' data-ref="MUTEX_DRIVER" data-ref-filename="MUTEX_DRIVER">MUTEX_DRIVER</dfn> = <var>3</var>,	<i>/* For porting code written for Solaris */</i></td></tr>
+<tr><th id="152">152</th><td>	<dfn class="enum" id="MUTEX_NODEBUG" title='MUTEX_NODEBUG' data-ref="MUTEX_NODEBUG" data-ref-filename="MUTEX_NODEBUG">MUTEX_NODEBUG</dfn> = <var>4</var>	<i>/* Disables LOCKDEBUG; use with care */</i></td></tr>
+<tr><th id="153">153</th><td>} <dfn class="typedef" id="kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</dfn>;</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td><b>typedef</b> <b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/x86/mutex.h.html#kmutex" title='kmutex' data-ref="kmutex" data-ref-filename="kmutex" id="kmutex"><a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/x86/mutex.h.html#kmutex" title='kmutex' data-ref="kmutex" data-ref-filename="kmutex">kmutex</a></a> <dfn class="typedef" id="kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</dfn>;</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td><u>#<span data-ppcond="157">if</span> defined(<span class="macro" data-ref="_M/__MUTEX_PRIVATE">__MUTEX_PRIVATE</span>)</u></td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><u>#define	MUTEX_THREAD			((uintptr_t)-16L)</u></td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td><u>#define	MUTEX_BIT_SPIN			0x01</u></td></tr>
+<tr><th id="162">162</th><td><u>#define	MUTEX_BIT_WAITERS		0x02</u></td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td><u>#if defined(LOCKDEBUG)</u></td></tr>
+<tr><th id="165">165</th><td><u>#define	MUTEX_BIT_NODEBUG		0x04	/* LOCKDEBUG disabled */</u></td></tr>
+<tr><th id="166">166</th><td><u>#else</u></td></tr>
+<tr><th id="167">167</th><td><u>#define	MUTEX_BIT_NODEBUG		0x00	/* do nothing */</u></td></tr>
+<tr><th id="168">168</th><td><u>#endif	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><u>#define	MUTEX_SPIN_IPL(mtx)		((mtx)-&gt;mtx_ipl)</u></td></tr>
+<tr><th id="171">171</th><td><u>#define	MUTEX_SPIN_OLDSPL(ci)		((ci)-&gt;ci_mtx_oldspl)</u></td></tr>
+<tr><th id="172">172</th><td></td></tr>
+<tr><th id="173">173</th><td><em>void</em>	mutex_vector_enter(kmutex_t *);</td></tr>
+<tr><th id="174">174</th><td><em>void</em>	mutex_vector_exit(kmutex_t *);</td></tr>
+<tr><th id="175">175</th><td><em>void</em>	mutex_spin_retry(kmutex_t *);</td></tr>
+<tr><th id="176">176</th><td><em>void</em>	mutex_wakeup(kmutex_t *);</td></tr>
+<tr><th id="177">177</th><td></td></tr>
+<tr><th id="178">178</th><td><u>#<span data-ppcond="157">endif</span>	/* __MUTEX_PRIVATE */</u></td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td><u>#<span data-ppcond="180">ifdef</span> <span class="macro" data-ref="_M/_KERNEL">_KERNEL</span></u></td></tr>
+<tr><th id="181">181</th><td><u>#include &lt;sys/intr.h&gt;</u></td></tr>
+<tr><th id="182">182</th><td><u>#<span data-ppcond="180">endif</span></u></td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/amd64/mutex.h.html">&lt;machine/mutex.h&gt;</a></u></td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td><i>/*</i></td></tr>
+<tr><th id="187">187</th><td><i> * Return true if no spin mutexes are held by the current CPU.</i></td></tr>
+<tr><th id="188">188</th><td><i> */</i></td></tr>
+<tr><th id="189">189</th><td><u>#<span data-ppcond="189">ifndef</span> <span class="macro" data-ref="_M/MUTEX_NO_SPIN_ACTIVE_P">MUTEX_NO_SPIN_ACTIVE_P</span></u></td></tr>
+<tr><th id="190">190</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_NO_SPIN_ACTIVE_P" data-ref="_M/MUTEX_NO_SPIN_ACTIVE_P">MUTEX_NO_SPIN_ACTIVE_P</dfn>(ci)	((ci)-&gt;ci_mtx_count == 0)</u></td></tr>
+<tr><th id="191">191</th><td><u>#<span data-ppcond="189">endif</span></u></td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td><u>#<span data-ppcond="193">ifdef</span> <span class="macro" data-ref="_M/_KERNEL">_KERNEL</span></u></td></tr>
+<tr><th id="194">194</th><td></td></tr>
+<tr><th id="195">195</th><td><em>void</em>	mutex_init(kmutex_t *, kmutex_type_t, <em>int</em>);</td></tr>
+<tr><th id="196">196</th><td><em>void</em>	mutex_destroy(kmutex_t *);</td></tr>
+<tr><th id="197">197</th><td></td></tr>
+<tr><th id="198">198</th><td><em>void</em>	mutex_enter(kmutex_t *);</td></tr>
+<tr><th id="199">199</th><td><em>void</em>	mutex_exit(kmutex_t *);</td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td><em>void</em>	mutex_spin_enter(kmutex_t *);</td></tr>
+<tr><th id="202">202</th><td><em>void</em>	mutex_spin_exit(kmutex_t *);</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td><em>int</em>	mutex_tryenter(kmutex_t *);</td></tr>
+<tr><th id="205">205</th><td></td></tr>
+<tr><th id="206">206</th><td><em>int</em>	mutex_owned(<em>const</em> kmutex_t *);</td></tr>
+<tr><th id="207">207</th><td><em>int</em>	mutex_ownable(<em>const</em> kmutex_t *);</td></tr>
+<tr><th id="208">208</th><td>lwp_t	*mutex_owner(<em>const</em> kmutex_t *);</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><em>void</em>	mutex_obj_init(<em>void</em>);</td></tr>
+<tr><th id="211">211</th><td>kmutex_t *mutex_obj_alloc(kmutex_type_t, <em>int</em>);</td></tr>
+<tr><th id="212">212</th><td><em>void</em>	mutex_obj_hold(kmutex_t *);</td></tr>
+<tr><th id="213">213</th><td>bool	mutex_obj_free(kmutex_t *);</td></tr>
+<tr><th id="214">214</th><td></td></tr>
+<tr><th id="215">215</th><td><u>#<span data-ppcond="193">endif</span> /* _KERNEL */</u></td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><u>#<span data-ppcond="32">endif</span> /* _SYS_MUTEX_H_ */</u></td></tr>
+<tr><th id="218">218</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../../common/lib/libc/gmon/mcount.c.html'>netbsd/common/lib/libc/gmon/mcount.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

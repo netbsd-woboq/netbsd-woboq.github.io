@@ -1,0 +1,716 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>rf_decluster.c source code [netbsd/sys/dev/raidframe/rf_decluster.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/dev/raidframe/rf_decluster.c'; var root_path = '../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../..'>netbsd</a>/<a href='../..'>sys</a>/<a href='..'>dev</a>/<a href='./'>raidframe</a>/<a href='rf_decluster.c.html'>rf_decluster.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: rf_decluster.c,v 1.26 2019/02/09 03:34:00 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td><i>/*</i></td></tr>
+<tr><th id="3">3</th><td><i> * Copyright (c) 1995 Carnegie-Mellon University.</i></td></tr>
+<tr><th id="4">4</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Author: Mark Holland</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> * Permission to use, copy, modify and distribute this software and</i></td></tr>
+<tr><th id="9">9</th><td><i> * its documentation is hereby granted, provided that both the copyright</i></td></tr>
+<tr><th id="10">10</th><td><i> * notice and this permission notice appear in all copies of the</i></td></tr>
+<tr><th id="11">11</th><td><i> * software, derivative works or modified versions, and any portions</i></td></tr>
+<tr><th id="12">12</th><td><i> * thereof, and that both notices appear in supporting documentation.</i></td></tr>
+<tr><th id="13">13</th><td><i> *</i></td></tr>
+<tr><th id="14">14</th><td><i> * CARNEGIE MELLON ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"</i></td></tr>
+<tr><th id="15">15</th><td><i> * CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF ANY KIND</i></td></tr>
+<tr><th id="16">16</th><td><i> * FOR ANY DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFTWARE.</i></td></tr>
+<tr><th id="17">17</th><td><i> *</i></td></tr>
+<tr><th id="18">18</th><td><i> * Carnegie Mellon requests users of this software to return to</i></td></tr>
+<tr><th id="19">19</th><td><i> *</i></td></tr>
+<tr><th id="20">20</th><td><i> *  Software Distribution Coordinator  or  Software.Distribution@CS.CMU.EDU</i></td></tr>
+<tr><th id="21">21</th><td><i> *  School of Computer Science</i></td></tr>
+<tr><th id="22">22</th><td><i> *  Carnegie Mellon University</i></td></tr>
+<tr><th id="23">23</th><td><i> *  Pittsburgh PA 15213-3890</i></td></tr>
+<tr><th id="24">24</th><td><i> *</i></td></tr>
+<tr><th id="25">25</th><td><i> * any improvements or extensions that they make and grant Carnegie the</i></td></tr>
+<tr><th id="26">26</th><td><i> * rights to redistribute these changes.</i></td></tr>
+<tr><th id="27">27</th><td><i> */</i></td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><i>/*----------------------------------------------------------------------</i></td></tr>
+<tr><th id="30">30</th><td><i> *</i></td></tr>
+<tr><th id="31">31</th><td><i> * rf_decluster.c -- code related to the declustered layout</i></td></tr>
+<tr><th id="32">32</th><td><i> *</i></td></tr>
+<tr><th id="33">33</th><td><i> * Created 10-21-92 (MCH)</i></td></tr>
+<tr><th id="34">34</th><td><i> *</i></td></tr>
+<tr><th id="35">35</th><td><i> * Nov 93:  adding support for distributed sparing.  This code is a little</i></td></tr>
+<tr><th id="36">36</th><td><i> *          complex:  the basic layout used is as follows:</i></td></tr>
+<tr><th id="37">37</th><td><i> *          let F = (v-1)/GCD(r,v-1).  The spare space for each set of</i></td></tr>
+<tr><th id="38">38</th><td><i> *          F consecutive fulltables is grouped together and placed after</i></td></tr>
+<tr><th id="39">39</th><td><i> *          that set of tables.</i></td></tr>
+<tr><th id="40">40</th><td><i> *                   +------------------------------+</i></td></tr>
+<tr><th id="41">41</th><td><i> *                   |        F fulltables          |</i></td></tr>
+<tr><th id="42">42</th><td><i> *                   |        Spare Space           |</i></td></tr>
+<tr><th id="43">43</th><td><i> *                   |        F fulltables          |</i></td></tr>
+<tr><th id="44">44</th><td><i> *                   |        Spare Space           |</i></td></tr>
+<tr><th id="45">45</th><td><i> *                   |            ...               |</i></td></tr>
+<tr><th id="46">46</th><td><i> *                   +------------------------------+</i></td></tr>
+<tr><th id="47">47</th><td><i> *</i></td></tr>
+<tr><th id="48">48</th><td><i> *--------------------------------------------------------------------*/</i></td></tr>
+<tr><th id="49">49</th><td></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><a class="macro" href="../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: rf_decluster.c,v 1.26 2019/02/09 03:34:00 christos Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: rf_decluster.c,v 1.26 2019/02/09 03:34:00 christos Exp $"</q>);</td></tr>
+<tr><th id="52">52</th><td></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="raidframevar.h.html">&lt;dev/raidframe/raidframevar.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="rf_archs.h.html">"rf_archs.h"</a></u></td></tr>
+<tr><th id="56">56</th><td><u>#include <a href="rf_raid.h.html">"rf_raid.h"</a></u></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="rf_decluster.h.html">"rf_decluster.h"</a></u></td></tr>
+<tr><th id="58">58</th><td><u>#include <a href="rf_debugMem.h.html">"rf_debugMem.h"</a></u></td></tr>
+<tr><th id="59">59</th><td><u>#include <a href="rf_utils.h.html">"rf_utils.h"</a></u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="rf_alloclist.h.html">"rf_alloclist.h"</a></u></td></tr>
+<tr><th id="61">61</th><td><u>#include <a href="rf_general.h.html">"rf_general.h"</a></u></td></tr>
+<tr><th id="62">62</th><td><u>#include <a href="rf_kintf.h.html">"rf_kintf.h"</a></u></td></tr>
+<tr><th id="63">63</th><td><u>#include <a href="rf_shutdown.h.html">"rf_shutdown.h"</a></u></td></tr>
+<tr><th id="64">64</th><td><u>#include <a href="rf_copyback.h.html">"rf_copyback.h"</a></u></td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td><u>#<span data-ppcond="66">if</span> (<a class="macro" href="rf_archs.h.html#72" title="0" data-ref="_M/RF_INCLUDE_PARITY_DECLUSTERING">RF_INCLUDE_PARITY_DECLUSTERING</a> &gt; 0) || (RF_INCLUDE_PARITY_DECLUSTERING_PQ &gt; 0)</u></td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td><i>/* configuration code */</i></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><em>int</em></td></tr>
+<tr><th id="71">71</th><td>rf_ConfigureDeclustered(RF_ShutdownList_t **listp, RF_Raid_t *raidPtr,</td></tr>
+<tr><th id="72">72</th><td>			RF_Config_t *cfgPtr)</td></tr>
+<tr><th id="73">73</th><td>{</td></tr>
+<tr><th id="74">74</th><td>	RF_RaidLayout_t *layoutPtr = &amp;(raidPtr-&gt;Layout);</td></tr>
+<tr><th id="75">75</th><td>	<em>int</em>     b, v, k, r, lambda;	<i>/* block design params */</i></td></tr>
+<tr><th id="76">76</th><td>	<em>int</em>     i, j;</td></tr>
+<tr><th id="77">77</th><td>	RF_RowCol_t *first_avail_slot;</td></tr>
+<tr><th id="78">78</th><td>	RF_StripeCount_t complete_FT_count, numCompleteFullTablesPerDisk;</td></tr>
+<tr><th id="79">79</th><td>	RF_DeclusteredConfigInfo_t *info;</td></tr>
+<tr><th id="80">80</th><td>	RF_StripeCount_t PUsPerDisk, spareRegionDepthInPUs, numCompleteSpareRegionsPerDisk,</td></tr>
+<tr><th id="81">81</th><td>	        extraPUsPerDisk;</td></tr>
+<tr><th id="82">82</th><td>	RF_StripeCount_t totSparePUsPerDisk;</td></tr>
+<tr><th id="83">83</th><td>	RF_SectorNum_t diskOffsetOfLastFullTableInSUs;</td></tr>
+<tr><th id="84">84</th><td>	RF_SectorCount_t SpareSpaceInSUs;</td></tr>
+<tr><th id="85">85</th><td>	<em>char</em>   *cfgBuf = (<em>char</em> *) (cfgPtr-&gt;layoutSpecific);</td></tr>
+<tr><th id="86">86</th><td>	RF_StripeNum_t l, SUID;</td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td>	SUID = l = <var>0</var>;</td></tr>
+<tr><th id="89">89</th><td>	numCompleteSpareRegionsPerDisk = <var>0</var>;</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td>	<i>/* 1. create layout specific structure */</i></td></tr>
+<tr><th id="92">92</th><td>	info = RF_MallocAndAdd(<b>sizeof</b>(*info), raidPtr-&gt;cleanupList);</td></tr>
+<tr><th id="93">93</th><td>	<b>if</b> (info == NULL)</td></tr>
+<tr><th id="94">94</th><td>		<b>return</b> (ENOMEM);</td></tr>
+<tr><th id="95">95</th><td>	layoutPtr-&gt;layoutSpecificInfo = (<em>void</em> *) info;</td></tr>
+<tr><th id="96">96</th><td>	info-&gt;SpareTable = NULL;</td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td>	<i>/* 2. extract parameters from the config structure */</i></td></tr>
+<tr><th id="99">99</th><td>	<b>if</b> (layoutPtr-&gt;map-&gt;flags &amp; RF_DISTRIBUTE_SPARE) {</td></tr>
+<tr><th id="100">100</th><td>		(<em>void</em>)memcpy(info-&gt;sparemap_fname, cfgBuf, RF_SPAREMAP_NAME_LEN);</td></tr>
+<tr><th id="101">101</th><td>	}</td></tr>
+<tr><th id="102">102</th><td>	cfgBuf += RF_SPAREMAP_NAME_LEN;</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td>	b = *((<em>int</em> *) cfgBuf);</td></tr>
+<tr><th id="105">105</th><td>	cfgBuf += <b>sizeof</b>(<em>int</em>);</td></tr>
+<tr><th id="106">106</th><td>	v = *((<em>int</em> *) cfgBuf);</td></tr>
+<tr><th id="107">107</th><td>	cfgBuf += <b>sizeof</b>(<em>int</em>);</td></tr>
+<tr><th id="108">108</th><td>	k = *((<em>int</em> *) cfgBuf);</td></tr>
+<tr><th id="109">109</th><td>	cfgBuf += <b>sizeof</b>(<em>int</em>);</td></tr>
+<tr><th id="110">110</th><td>	r = *((<em>int</em> *) cfgBuf);</td></tr>
+<tr><th id="111">111</th><td>	cfgBuf += <b>sizeof</b>(<em>int</em>);</td></tr>
+<tr><th id="112">112</th><td>	lambda = *((<em>int</em> *) cfgBuf);</td></tr>
+<tr><th id="113">113</th><td>	cfgBuf += <b>sizeof</b>(<em>int</em>);</td></tr>
+<tr><th id="114">114</th><td>	raidPtr-&gt;noRotate = *((<em>int</em> *) cfgBuf);</td></tr>
+<tr><th id="115">115</th><td>	cfgBuf += <b>sizeof</b>(<em>int</em>);</td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td>	<i>/* the sparemaps are generated assuming that parity is rotated, so we</i></td></tr>
+<tr><th id="118">118</th><td><i>	 * issue a warning if both distributed sparing and no-rotate are on at</i></td></tr>
+<tr><th id="119">119</th><td><i>	 * the same time */</i></td></tr>
+<tr><th id="120">120</th><td>	<b>if</b> ((layoutPtr-&gt;map-&gt;flags &amp; RF_DISTRIBUTE_SPARE) &amp;&amp; raidPtr-&gt;noRotate) {</td></tr>
+<tr><th id="121">121</th><td>		RF_ERRORMSG(<q>"Warning:  distributed sparing specified without parity rotation.\n"</q>);</td></tr>
+<tr><th id="122">122</th><td>	}</td></tr>
+<tr><th id="123">123</th><td>	<b>if</b> (raidPtr-&gt;numCol != v) {</td></tr>
+<tr><th id="124">124</th><td>		RF_ERRORMSG2(<q>"RAID: config error: table element count (%d) not equal to no. of cols (%d)\n"</q>, v, raidPtr-&gt;numCol);</td></tr>
+<tr><th id="125">125</th><td>		<b>return</b> (EINVAL);</td></tr>
+<tr><th id="126">126</th><td>	}</td></tr>
+<tr><th id="127">127</th><td>	<i>/* 3.  set up the values used in the mapping code */</i></td></tr>
+<tr><th id="128">128</th><td>	info-&gt;BlocksPerTable = b;</td></tr>
+<tr><th id="129">129</th><td>	info-&gt;Lambda = lambda;</td></tr>
+<tr><th id="130">130</th><td>	info-&gt;NumParityReps = info-&gt;groupSize = k;</td></tr>
+<tr><th id="131">131</th><td>	info-&gt;SUsPerTable = b * (k - <var>1</var>) * layoutPtr-&gt;SUsPerPU;	<i>/* b blks, k-1 SUs each */</i></td></tr>
+<tr><th id="132">132</th><td>	info-&gt;SUsPerFullTable = k * info-&gt;SUsPerTable;	<i>/* rot k times */</i></td></tr>
+<tr><th id="133">133</th><td>	info-&gt;PUsPerBlock = k - <var>1</var>;</td></tr>
+<tr><th id="134">134</th><td>	info-&gt;SUsPerBlock = info-&gt;PUsPerBlock * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="135">135</th><td>	info-&gt;TableDepthInPUs = (b * k) / v;</td></tr>
+<tr><th id="136">136</th><td>	info-&gt;FullTableDepthInPUs = info-&gt;TableDepthInPUs * k;	<i>/* k repetitions */</i></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td>	<i>/* used only in distributed sparing case */</i></td></tr>
+<tr><th id="139">139</th><td>	info-&gt;FullTablesPerSpareRegion = (v - <var>1</var>) / rf_gcd(r, v - <var>1</var>);	<i>/* (v-1)/gcd fulltables */</i></td></tr>
+<tr><th id="140">140</th><td>	info-&gt;TablesPerSpareRegion = k * info-&gt;FullTablesPerSpareRegion;</td></tr>
+<tr><th id="141">141</th><td>	info-&gt;SpareSpaceDepthPerRegionInSUs = (r * info-&gt;TablesPerSpareRegion / (v - <var>1</var>)) * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td>	<i>/* check to make sure the block design is sufficiently small */</i></td></tr>
+<tr><th id="144">144</th><td>	<b>if</b> ((raidPtr-&gt;Layout.map-&gt;flags &amp; RF_DISTRIBUTE_SPARE)) {</td></tr>
+<tr><th id="145">145</th><td>		<b>if</b> (info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU + info-&gt;SpareSpaceDepthPerRegionInSUs &gt; layoutPtr-&gt;stripeUnitsPerDisk) {</td></tr>
+<tr><th id="146">146</th><td>			RF_ERRORMSG3(<q>"RAID: config error: Full Table depth (%d) + Spare Space (%d) larger than disk size (%d) (BD too big)\n"</q>,</td></tr>
+<tr><th id="147">147</th><td>			    (<em>int</em>) info-&gt;FullTableDepthInPUs,</td></tr>
+<tr><th id="148">148</th><td>			    (<em>int</em>) info-&gt;SpareSpaceDepthPerRegionInSUs,</td></tr>
+<tr><th id="149">149</th><td>			    (<em>int</em>) layoutPtr-&gt;stripeUnitsPerDisk);</td></tr>
+<tr><th id="150">150</th><td>			<b>return</b> (EINVAL);</td></tr>
+<tr><th id="151">151</th><td>		}</td></tr>
+<tr><th id="152">152</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="153">153</th><td>		<b>if</b> (info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU &gt; layoutPtr-&gt;stripeUnitsPerDisk) {</td></tr>
+<tr><th id="154">154</th><td>			RF_ERRORMSG2(<q>"RAID: config error: Table depth (%d) larger than disk size (%d) (BD too big)\n"</q>,</td></tr>
+<tr><th id="155">155</th><td>			    (<em>int</em>) (info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU), \</td></tr>
+<tr><th id="156">156</th><td>			    (<em>int</em>) layoutPtr-&gt;stripeUnitsPerDisk);</td></tr>
+<tr><th id="157">157</th><td>			<b>return</b> (EINVAL);</td></tr>
+<tr><th id="158">158</th><td>		}</td></tr>
+<tr><th id="159">159</th><td>	}</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td></td></tr>
+<tr><th id="162">162</th><td>	<i>/* compute the size of each disk, and the number of tables in the last</i></td></tr>
+<tr><th id="163">163</th><td><i>	 * fulltable (which need not be complete) */</i></td></tr>
+<tr><th id="164">164</th><td>	<b>if</b> (raidPtr-&gt;Layout.map-&gt;flags &amp; RF_DISTRIBUTE_SPARE) {</td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td>		PUsPerDisk = layoutPtr-&gt;stripeUnitsPerDisk / layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="167">167</th><td>		spareRegionDepthInPUs = (info-&gt;TablesPerSpareRegion * info-&gt;TableDepthInPUs +</td></tr>
+<tr><th id="168">168</th><td>		    (info-&gt;TablesPerSpareRegion * info-&gt;TableDepthInPUs) / (v - <var>1</var>));</td></tr>
+<tr><th id="169">169</th><td>		info-&gt;SpareRegionDepthInSUs = spareRegionDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="170">170</th><td></td></tr>
+<tr><th id="171">171</th><td>		numCompleteSpareRegionsPerDisk = PUsPerDisk / spareRegionDepthInPUs;</td></tr>
+<tr><th id="172">172</th><td>		info-&gt;NumCompleteSRs = numCompleteSpareRegionsPerDisk;</td></tr>
+<tr><th id="173">173</th><td>		extraPUsPerDisk = PUsPerDisk % spareRegionDepthInPUs;</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td>		<i>/* assume conservatively that we need the full amount of spare</i></td></tr>
+<tr><th id="176">176</th><td><i>		 * space in one region in order to provide spares for the</i></td></tr>
+<tr><th id="177">177</th><td><i>		 * partial spare region at the end of the array.  We set "i"</i></td></tr>
+<tr><th id="178">178</th><td><i>		 * to the number of tables in the partial spare region.  This</i></td></tr>
+<tr><th id="179">179</th><td><i>		 * may actually include some fulltables. */</i></td></tr>
+<tr><th id="180">180</th><td>		extraPUsPerDisk -= (info-&gt;SpareSpaceDepthPerRegionInSUs / layoutPtr-&gt;SUsPerPU);</td></tr>
+<tr><th id="181">181</th><td>		<b>if</b> (extraPUsPerDisk &lt;= <var>0</var>)</td></tr>
+<tr><th id="182">182</th><td>			i = <var>0</var>;</td></tr>
+<tr><th id="183">183</th><td>		<b>else</b></td></tr>
+<tr><th id="184">184</th><td>			i = extraPUsPerDisk / info-&gt;TableDepthInPUs;</td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td>		complete_FT_count = (numCompleteSpareRegionsPerDisk * (info-&gt;TablesPerSpareRegion / k) + i / k);</td></tr>
+<tr><th id="187">187</th><td>		info-&gt;FullTableLimitSUID = complete_FT_count * info-&gt;SUsPerFullTable;</td></tr>
+<tr><th id="188">188</th><td>		info-&gt;ExtraTablesPerDisk = i % k;</td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>		<i>/* note that in the last spare region, the spare space is</i></td></tr>
+<tr><th id="191">191</th><td><i>		 * complete even though data/parity space is not */</i></td></tr>
+<tr><th id="192">192</th><td>		totSparePUsPerDisk = (numCompleteSpareRegionsPerDisk + <var>1</var>) * (info-&gt;SpareSpaceDepthPerRegionInSUs / layoutPtr-&gt;SUsPerPU);</td></tr>
+<tr><th id="193">193</th><td>		info-&gt;TotSparePUsPerDisk = totSparePUsPerDisk;</td></tr>
+<tr><th id="194">194</th><td></td></tr>
+<tr><th id="195">195</th><td>		layoutPtr-&gt;stripeUnitsPerDisk =</td></tr>
+<tr><th id="196">196</th><td>		    ((complete_FT_count) * info-&gt;FullTableDepthInPUs +	<i>/* data &amp; parity space */</i></td></tr>
+<tr><th id="197">197</th><td>		    info-&gt;ExtraTablesPerDisk * info-&gt;TableDepthInPUs +</td></tr>
+<tr><th id="198">198</th><td>		    totSparePUsPerDisk	<i>/* spare space */</i></td></tr>
+<tr><th id="199">199</th><td>		    ) * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="200">200</th><td>		layoutPtr-&gt;dataStripeUnitsPerDisk =</td></tr>
+<tr><th id="201">201</th><td>		    (complete_FT_count * info-&gt;FullTableDepthInPUs + info-&gt;ExtraTablesPerDisk * info-&gt;TableDepthInPUs)</td></tr>
+<tr><th id="202">202</th><td>		    * layoutPtr-&gt;SUsPerPU * (k - <var>1</var>) / k;</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="205">205</th><td>		<i>/* non-dist spare case:  force each disk to contain an</i></td></tr>
+<tr><th id="206">206</th><td><i>		 * integral number of tables */</i></td></tr>
+<tr><th id="207">207</th><td>		layoutPtr-&gt;stripeUnitsPerDisk /= (info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU);</td></tr>
+<tr><th id="208">208</th><td>		layoutPtr-&gt;stripeUnitsPerDisk *= (info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU);</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td>		<i>/* compute the number of tables in the last fulltable, which</i></td></tr>
+<tr><th id="211">211</th><td><i>		 * need not be complete */</i></td></tr>
+<tr><th id="212">212</th><td>		complete_FT_count =</td></tr>
+<tr><th id="213">213</th><td>		    ((layoutPtr-&gt;stripeUnitsPerDisk / layoutPtr-&gt;SUsPerPU) / info-&gt;FullTableDepthInPUs);</td></tr>
+<tr><th id="214">214</th><td></td></tr>
+<tr><th id="215">215</th><td>		info-&gt;FullTableLimitSUID = complete_FT_count * info-&gt;SUsPerFullTable;</td></tr>
+<tr><th id="216">216</th><td>		info-&gt;ExtraTablesPerDisk =</td></tr>
+<tr><th id="217">217</th><td>		    ((layoutPtr-&gt;stripeUnitsPerDisk / layoutPtr-&gt;SUsPerPU) / info-&gt;TableDepthInPUs) % k;</td></tr>
+<tr><th id="218">218</th><td>	}</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td>	raidPtr-&gt;sectorsPerDisk = layoutPtr-&gt;stripeUnitsPerDisk * layoutPtr-&gt;sectorsPerStripeUnit;</td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td>	<i>/* find the disk offset of the stripe unit where the last fulltable</i></td></tr>
+<tr><th id="223">223</th><td><i>	 * starts */</i></td></tr>
+<tr><th id="224">224</th><td>	numCompleteFullTablesPerDisk = complete_FT_count;</td></tr>
+<tr><th id="225">225</th><td>	diskOffsetOfLastFullTableInSUs = numCompleteFullTablesPerDisk * info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="226">226</th><td>	<b>if</b> (raidPtr-&gt;Layout.map-&gt;flags &amp; RF_DISTRIBUTE_SPARE) {</td></tr>
+<tr><th id="227">227</th><td>		SpareSpaceInSUs = numCompleteSpareRegionsPerDisk * info-&gt;SpareSpaceDepthPerRegionInSUs;</td></tr>
+<tr><th id="228">228</th><td>		diskOffsetOfLastFullTableInSUs += SpareSpaceInSUs;</td></tr>
+<tr><th id="229">229</th><td>		info-&gt;DiskOffsetOfLastSpareSpaceChunkInSUs =</td></tr>
+<tr><th id="230">230</th><td>		    diskOffsetOfLastFullTableInSUs + info-&gt;ExtraTablesPerDisk * info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="231">231</th><td>	}</td></tr>
+<tr><th id="232">232</th><td>	info-&gt;DiskOffsetOfLastFullTableInSUs = diskOffsetOfLastFullTableInSUs;</td></tr>
+<tr><th id="233">233</th><td>	info-&gt;numCompleteFullTablesPerDisk = numCompleteFullTablesPerDisk;</td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td>	<i>/* 4.  create and initialize the lookup tables */</i></td></tr>
+<tr><th id="236">236</th><td>	info-&gt;LayoutTable = rf_make_2d_array(b, k, raidPtr-&gt;cleanupList);</td></tr>
+<tr><th id="237">237</th><td>	<b>if</b> (info-&gt;LayoutTable == NULL)</td></tr>
+<tr><th id="238">238</th><td>		<b>return</b> (ENOMEM);</td></tr>
+<tr><th id="239">239</th><td>	info-&gt;OffsetTable = rf_make_2d_array(b, k, raidPtr-&gt;cleanupList);</td></tr>
+<tr><th id="240">240</th><td>	<b>if</b> (info-&gt;OffsetTable == NULL)</td></tr>
+<tr><th id="241">241</th><td>		<b>return</b> (ENOMEM);</td></tr>
+<tr><th id="242">242</th><td>	info-&gt;BlockTable = rf_make_2d_array(info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU, raidPtr-&gt;numCol, raidPtr-&gt;cleanupList);</td></tr>
+<tr><th id="243">243</th><td>	<b>if</b> (info-&gt;BlockTable == NULL)</td></tr>
+<tr><th id="244">244</th><td>		<b>return</b> (ENOMEM);</td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td>	first_avail_slot = rf_make_1d_array(v, NULL);</td></tr>
+<tr><th id="247">247</th><td>	<b>if</b> (first_avail_slot == NULL)</td></tr>
+<tr><th id="248">248</th><td>		<b>return</b> (ENOMEM);</td></tr>
+<tr><th id="249">249</th><td></td></tr>
+<tr><th id="250">250</th><td>	<b>for</b> (i = <var>0</var>; i &lt; b; i++)</td></tr>
+<tr><th id="251">251</th><td>		<b>for</b> (j = <var>0</var>; j &lt; k; j++)</td></tr>
+<tr><th id="252">252</th><td>			info-&gt;LayoutTable[i][j] = *cfgBuf++;</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>	<i>/* initialize offset table */</i></td></tr>
+<tr><th id="255">255</th><td>	<b>for</b> (i = <var>0</var>; i &lt; b; i++)</td></tr>
+<tr><th id="256">256</th><td>		<b>for</b> (j = <var>0</var>; j &lt; k; j++) {</td></tr>
+<tr><th id="257">257</th><td>			info-&gt;OffsetTable[i][j] = first_avail_slot[info-&gt;LayoutTable[i][j]];</td></tr>
+<tr><th id="258">258</th><td>			first_avail_slot[info-&gt;LayoutTable[i][j]]++;</td></tr>
+<tr><th id="259">259</th><td>		}</td></tr>
+<tr><th id="260">260</th><td></td></tr>
+<tr><th id="261">261</th><td>	<i>/* initialize block table */</i></td></tr>
+<tr><th id="262">262</th><td>	<b>for</b> (SUID = l = <var>0</var>; l &lt; layoutPtr-&gt;SUsPerPU; l++) {</td></tr>
+<tr><th id="263">263</th><td>		<b>for</b> (i = <var>0</var>; i &lt; b; i++) {</td></tr>
+<tr><th id="264">264</th><td>			<b>for</b> (j = <var>0</var>; j &lt; k; j++) {</td></tr>
+<tr><th id="265">265</th><td>				info-&gt;BlockTable[(info-&gt;OffsetTable[i][j] * layoutPtr-&gt;SUsPerPU) + l]</td></tr>
+<tr><th id="266">266</th><td>				    [info-&gt;LayoutTable[i][j]] = SUID;</td></tr>
+<tr><th id="267">267</th><td>			}</td></tr>
+<tr><th id="268">268</th><td>			SUID++;</td></tr>
+<tr><th id="269">269</th><td>		}</td></tr>
+<tr><th id="270">270</th><td>	}</td></tr>
+<tr><th id="271">271</th><td></td></tr>
+<tr><th id="272">272</th><td>	rf_free_1d_array(first_avail_slot, v);</td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td>	<i>/* 5.  set up the remaining redundant-but-useful parameters */</i></td></tr>
+<tr><th id="275">275</th><td></td></tr>
+<tr><th id="276">276</th><td>	raidPtr-&gt;totalSectors = (k * complete_FT_count + info-&gt;ExtraTablesPerDisk) *</td></tr>
+<tr><th id="277">277</th><td>	    info-&gt;SUsPerTable * layoutPtr-&gt;sectorsPerStripeUnit;</td></tr>
+<tr><th id="278">278</th><td>	layoutPtr-&gt;numStripe = (raidPtr-&gt;totalSectors / layoutPtr-&gt;sectorsPerStripeUnit) / (k - <var>1</var>);</td></tr>
+<tr><th id="279">279</th><td></td></tr>
+<tr><th id="280">280</th><td>	<i>/* strange evaluation order below to try and minimize overflow</i></td></tr>
+<tr><th id="281">281</th><td><i>	 * problems */</i></td></tr>
+<tr><th id="282">282</th><td></td></tr>
+<tr><th id="283">283</th><td>	layoutPtr-&gt;dataSectorsPerStripe = (k - <var>1</var>) * layoutPtr-&gt;sectorsPerStripeUnit;</td></tr>
+<tr><th id="284">284</th><td>	layoutPtr-&gt;numDataCol = k - <var>1</var>;</td></tr>
+<tr><th id="285">285</th><td>	layoutPtr-&gt;numParityCol = <var>1</var>;</td></tr>
+<tr><th id="286">286</th><td></td></tr>
+<tr><th id="287">287</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="288">288</th><td>}</td></tr>
+<tr><th id="289">289</th><td><i>/* declustering with distributed sparing */</i></td></tr>
+<tr><th id="290">290</th><td><em>static</em> <em>void</em> rf_ShutdownDeclusteredDS(RF_ThreadArg_t);</td></tr>
+<tr><th id="291">291</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="292">292</th><td>rf_ShutdownDeclusteredDS(RF_ThreadArg_t arg)</td></tr>
+<tr><th id="293">293</th><td>{</td></tr>
+<tr><th id="294">294</th><td>	RF_DeclusteredConfigInfo_t *info;</td></tr>
+<tr><th id="295">295</th><td>	RF_Raid_t *raidPtr;</td></tr>
+<tr><th id="296">296</th><td></td></tr>
+<tr><th id="297">297</th><td>	raidPtr = (RF_Raid_t *) arg;</td></tr>
+<tr><th id="298">298</th><td>	info = (RF_DeclusteredConfigInfo_t *) raidPtr-&gt;Layout.layoutSpecificInfo;</td></tr>
+<tr><th id="299">299</th><td>	<b>if</b> (info-&gt;SpareTable)</td></tr>
+<tr><th id="300">300</th><td>		rf_FreeSpareTable(raidPtr);</td></tr>
+<tr><th id="301">301</th><td>}</td></tr>
+<tr><th id="302">302</th><td></td></tr>
+<tr><th id="303">303</th><td><em>int</em></td></tr>
+<tr><th id="304">304</th><td>rf_ConfigureDeclusteredDS(RF_ShutdownList_t **listp, RF_Raid_t *raidPtr,</td></tr>
+<tr><th id="305">305</th><td>			  RF_Config_t *cfgPtr)</td></tr>
+<tr><th id="306">306</th><td>{</td></tr>
+<tr><th id="307">307</th><td>	<em>int</em>     rc;</td></tr>
+<tr><th id="308">308</th><td></td></tr>
+<tr><th id="309">309</th><td>	rc = rf_ConfigureDeclustered(listp, raidPtr, cfgPtr);</td></tr>
+<tr><th id="310">310</th><td>	<b>if</b> (rc)</td></tr>
+<tr><th id="311">311</th><td>		<b>return</b> (rc);</td></tr>
+<tr><th id="312">312</th><td>	rf_ShutdownCreate(listp, rf_ShutdownDeclusteredDS, raidPtr);</td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="315">315</th><td>}</td></tr>
+<tr><th id="316">316</th><td></td></tr>
+<tr><th id="317">317</th><td><em>void</em></td></tr>
+<tr><th id="318">318</th><td>rf_MapSectorDeclustered(RF_Raid_t *raidPtr, RF_RaidAddr_t raidSector,</td></tr>
+<tr><th id="319">319</th><td>			RF_RowCol_t *col,</td></tr>
+<tr><th id="320">320</th><td>			RF_SectorNum_t *diskSector, <em>int</em> remap)</td></tr>
+<tr><th id="321">321</th><td>{</td></tr>
+<tr><th id="322">322</th><td>	RF_RaidLayout_t *layoutPtr = &amp;(raidPtr-&gt;Layout);</td></tr>
+<tr><th id="323">323</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) layoutPtr-&gt;layoutSpecificInfo;</td></tr>
+<tr><th id="324">324</th><td>	RF_StripeNum_t SUID = raidSector / layoutPtr-&gt;sectorsPerStripeUnit;</td></tr>
+<tr><th id="325">325</th><td>	RF_StripeNum_t FullTableID, FullTableOffset, TableID, TableOffset;</td></tr>
+<tr><th id="326">326</th><td>	RF_StripeNum_t BlockID, BlockOffset, RepIndex;</td></tr>
+<tr><th id="327">327</th><td>	RF_StripeCount_t sus_per_fulltable = info-&gt;SUsPerFullTable;</td></tr>
+<tr><th id="328">328</th><td>	RF_StripeCount_t fulltable_depth = info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="329">329</th><td>	RF_StripeNum_t base_suid = <var>0</var>, outSU, SpareRegion = <var>0</var>, SpareSpace = <var>0</var>;</td></tr>
+<tr><th id="330">330</th><td></td></tr>
+<tr><th id="331">331</th><td>	rf_decluster_adjust_params(layoutPtr, &amp;SUID, &amp;sus_per_fulltable, &amp;fulltable_depth, &amp;base_suid);</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td>	FullTableID = SUID / sus_per_fulltable;	<i>/* fulltable ID within array</i></td></tr>
+<tr><th id="334">334</th><td><i>						 * (across rows) */</i></td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td>	<b>if</b> (raidPtr-&gt;Layout.map-&gt;flags &amp; RF_DISTRIBUTE_SPARE) {</td></tr>
+<tr><th id="337">337</th><td>		SpareRegion = FullTableID / info-&gt;FullTablesPerSpareRegion;</td></tr>
+<tr><th id="338">338</th><td>		SpareSpace = SpareRegion * info-&gt;SpareSpaceDepthPerRegionInSUs;</td></tr>
+<tr><th id="339">339</th><td>	}</td></tr>
+<tr><th id="340">340</th><td>	FullTableOffset = SUID % sus_per_fulltable;</td></tr>
+<tr><th id="341">341</th><td>	TableID = FullTableOffset / info-&gt;SUsPerTable;</td></tr>
+<tr><th id="342">342</th><td>	TableOffset = FullTableOffset - TableID * info-&gt;SUsPerTable;</td></tr>
+<tr><th id="343">343</th><td>	BlockID = TableOffset / info-&gt;PUsPerBlock;</td></tr>
+<tr><th id="344">344</th><td>	BlockOffset = TableOffset - BlockID * info-&gt;PUsPerBlock;</td></tr>
+<tr><th id="345">345</th><td>	BlockID %= info-&gt;BlocksPerTable;</td></tr>
+<tr><th id="346">346</th><td>	RepIndex = info-&gt;PUsPerBlock - TableID;</td></tr>
+<tr><th id="347">347</th><td>	<b>if</b> (!raidPtr-&gt;noRotate)</td></tr>
+<tr><th id="348">348</th><td>		BlockOffset += ((BlockOffset &gt;= RepIndex) ? <var>1</var> : <var>0</var>);</td></tr>
+<tr><th id="349">349</th><td>	*col = info-&gt;LayoutTable[BlockID][BlockOffset];</td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td>	<i>/* remap to distributed spare space if indicated */</i></td></tr>
+<tr><th id="352">352</th><td>	<b>if</b> (remap) {</td></tr>
+<tr><th id="353">353</th><td>		RF_ASSERT(raidPtr-&gt;Disks[*col].status == rf_ds_reconstructing || raidPtr-&gt;Disks[*col].status == rf_ds_dist_spared ||</td></tr>
+<tr><th id="354">354</th><td>		    (rf_copyback_in_progress &amp;&amp; raidPtr-&gt;Disks[*col].status == rf_ds_optimal));</td></tr>
+<tr><th id="355">355</th><td>		rf_remap_to_spare_space(layoutPtr, info, FullTableID, TableID, BlockID, (base_suid) ? <var>1</var> : <var>0</var>, SpareRegion, col, &amp;outSU);</td></tr>
+<tr><th id="356">356</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="357">357</th><td></td></tr>
+<tr><th id="358">358</th><td>		outSU = base_suid;</td></tr>
+<tr><th id="359">359</th><td>		outSU += FullTableID * fulltable_depth;	<i>/* offs to strt of FT */</i></td></tr>
+<tr><th id="360">360</th><td>		outSU += SpareSpace;	<i>/* skip rsvd spare space */</i></td></tr>
+<tr><th id="361">361</th><td>		outSU += TableID * info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU;	<i>/* offs to strt of tble */</i></td></tr>
+<tr><th id="362">362</th><td>		outSU += info-&gt;OffsetTable[BlockID][BlockOffset] * layoutPtr-&gt;SUsPerPU;	<i>/* offs to the PU */</i></td></tr>
+<tr><th id="363">363</th><td>	}</td></tr>
+<tr><th id="364">364</th><td>	outSU += TableOffset / (info-&gt;BlocksPerTable * info-&gt;PUsPerBlock);	<i>/* offs to the SU within</i></td></tr>
+<tr><th id="365">365</th><td><i>										 * a PU */</i></td></tr>
+<tr><th id="366">366</th><td></td></tr>
+<tr><th id="367">367</th><td>	<i>/* convert SUs to sectors, and, if not aligned to SU boundary, add in</i></td></tr>
+<tr><th id="368">368</th><td><i>	 * offset to sector.  */</i></td></tr>
+<tr><th id="369">369</th><td>	*diskSector = outSU * layoutPtr-&gt;sectorsPerStripeUnit + (raidSector % layoutPtr-&gt;sectorsPerStripeUnit);</td></tr>
+<tr><th id="370">370</th><td></td></tr>
+<tr><th id="371">371</th><td>	RF_ASSERT(*col != -<var>1</var>);</td></tr>
+<tr><th id="372">372</th><td>}</td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td></td></tr>
+<tr><th id="375">375</th><td><i>/* prototyping this inexplicably causes the compile of the layout table (rf_layout.c) to fail */</i></td></tr>
+<tr><th id="376">376</th><td><em>void</em></td></tr>
+<tr><th id="377">377</th><td>rf_MapParityDeclustered(RF_Raid_t *raidPtr, RF_RaidAddr_t raidSector,</td></tr>
+<tr><th id="378">378</th><td>			RF_RowCol_t *col,</td></tr>
+<tr><th id="379">379</th><td>			RF_SectorNum_t *diskSector, <em>int</em> remap)</td></tr>
+<tr><th id="380">380</th><td>{</td></tr>
+<tr><th id="381">381</th><td>	RF_RaidLayout_t *layoutPtr = &amp;(raidPtr-&gt;Layout);</td></tr>
+<tr><th id="382">382</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) layoutPtr-&gt;layoutSpecificInfo;</td></tr>
+<tr><th id="383">383</th><td>	RF_StripeNum_t SUID = raidSector / layoutPtr-&gt;sectorsPerStripeUnit;</td></tr>
+<tr><th id="384">384</th><td>	RF_StripeNum_t FullTableID, FullTableOffset, TableID, TableOffset;</td></tr>
+<tr><th id="385">385</th><td>	RF_StripeNum_t BlockID, RepIndex;</td></tr>
+<tr><th id="386">386</th><td>	RF_StripeCount_t sus_per_fulltable = info-&gt;SUsPerFullTable;</td></tr>
+<tr><th id="387">387</th><td>	RF_StripeCount_t fulltable_depth = info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="388">388</th><td>	RF_StripeNum_t base_suid = <var>0</var>, outSU, SpareRegion = <var>0</var>, SpareSpace = <var>0</var>;</td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td>	rf_decluster_adjust_params(layoutPtr, &amp;SUID, &amp;sus_per_fulltable, &amp;fulltable_depth, &amp;base_suid);</td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td>	<i>/* compute row &amp; (possibly) spare space exactly as before */</i></td></tr>
+<tr><th id="393">393</th><td>	FullTableID = SUID / sus_per_fulltable;</td></tr>
+<tr><th id="394">394</th><td></td></tr>
+<tr><th id="395">395</th><td>	<b>if</b> ((raidPtr-&gt;Layout.map-&gt;flags &amp; RF_DISTRIBUTE_SPARE)) {</td></tr>
+<tr><th id="396">396</th><td>		SpareRegion = FullTableID / info-&gt;FullTablesPerSpareRegion;</td></tr>
+<tr><th id="397">397</th><td>		SpareSpace = SpareRegion * info-&gt;SpareSpaceDepthPerRegionInSUs;</td></tr>
+<tr><th id="398">398</th><td>	}</td></tr>
+<tr><th id="399">399</th><td>	<i>/* compute BlockID and RepIndex exactly as before */</i></td></tr>
+<tr><th id="400">400</th><td>	FullTableOffset = SUID % sus_per_fulltable;</td></tr>
+<tr><th id="401">401</th><td>	TableID = FullTableOffset / info-&gt;SUsPerTable;</td></tr>
+<tr><th id="402">402</th><td>	TableOffset = FullTableOffset - TableID * info-&gt;SUsPerTable;</td></tr>
+<tr><th id="403">403</th><td>	<i>/* TableOffset     = FullTableOffset % info-&gt;SUsPerTable; */</i></td></tr>
+<tr><th id="404">404</th><td>	<i>/* BlockID         = (TableOffset / info-&gt;PUsPerBlock) %</i></td></tr>
+<tr><th id="405">405</th><td><i>	 * info-&gt;BlocksPerTable; */</i></td></tr>
+<tr><th id="406">406</th><td>	BlockID = TableOffset / info-&gt;PUsPerBlock;</td></tr>
+<tr><th id="407">407</th><td>	BlockID %= info-&gt;BlocksPerTable;</td></tr>
+<tr><th id="408">408</th><td></td></tr>
+<tr><th id="409">409</th><td>	<i>/* the parity block is in the position indicated by RepIndex */</i></td></tr>
+<tr><th id="410">410</th><td>	RepIndex = (raidPtr-&gt;noRotate) ? info-&gt;PUsPerBlock : info-&gt;PUsPerBlock - TableID;</td></tr>
+<tr><th id="411">411</th><td>	*col = info-&gt;LayoutTable[BlockID][RepIndex];</td></tr>
+<tr><th id="412">412</th><td></td></tr>
+<tr><th id="413">413</th><td>	<b>if</b> (remap) {</td></tr>
+<tr><th id="414">414</th><td>		RF_ASSERT(raidPtr-&gt;Disks[*col].status == rf_ds_reconstructing || raidPtr-&gt;Disks[*col].status == rf_ds_dist_spared ||</td></tr>
+<tr><th id="415">415</th><td>		    (rf_copyback_in_progress &amp;&amp; raidPtr-&gt;Disks[*col].status == rf_ds_optimal));</td></tr>
+<tr><th id="416">416</th><td>		rf_remap_to_spare_space(layoutPtr, info, FullTableID, TableID, BlockID, (base_suid) ? <var>1</var> : <var>0</var>, SpareRegion, col, &amp;outSU);</td></tr>
+<tr><th id="417">417</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="418">418</th><td></td></tr>
+<tr><th id="419">419</th><td>		<i>/* compute sector as before, except use RepIndex instead of</i></td></tr>
+<tr><th id="420">420</th><td><i>		 * BlockOffset */</i></td></tr>
+<tr><th id="421">421</th><td>		outSU = base_suid;</td></tr>
+<tr><th id="422">422</th><td>		outSU += FullTableID * fulltable_depth;</td></tr>
+<tr><th id="423">423</th><td>		outSU += SpareSpace;	<i>/* skip rsvd spare space */</i></td></tr>
+<tr><th id="424">424</th><td>		outSU += TableID * info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="425">425</th><td>		outSU += info-&gt;OffsetTable[BlockID][RepIndex] * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="426">426</th><td>	}</td></tr>
+<tr><th id="427">427</th><td></td></tr>
+<tr><th id="428">428</th><td>	outSU += TableOffset / (info-&gt;BlocksPerTable * info-&gt;PUsPerBlock);</td></tr>
+<tr><th id="429">429</th><td>	*diskSector = outSU * layoutPtr-&gt;sectorsPerStripeUnit + (raidSector % layoutPtr-&gt;sectorsPerStripeUnit);</td></tr>
+<tr><th id="430">430</th><td></td></tr>
+<tr><th id="431">431</th><td>	RF_ASSERT(*col != -<var>1</var>);</td></tr>
+<tr><th id="432">432</th><td>}</td></tr>
+<tr><th id="433">433</th><td><i>/* returns an array of ints identifying the disks that comprise the stripe containing the indicated address.</i></td></tr>
+<tr><th id="434">434</th><td><i> * the caller must _never_ attempt to modify this array.</i></td></tr>
+<tr><th id="435">435</th><td><i> */</i></td></tr>
+<tr><th id="436">436</th><td><em>void</em></td></tr>
+<tr><th id="437">437</th><td>rf_IdentifyStripeDeclustered(RF_Raid_t *raidPtr, RF_RaidAddr_t addr,</td></tr>
+<tr><th id="438">438</th><td>			     RF_RowCol_t **diskids)</td></tr>
+<tr><th id="439">439</th><td>{</td></tr>
+<tr><th id="440">440</th><td>	RF_RaidLayout_t *layoutPtr = &amp;(raidPtr-&gt;Layout);</td></tr>
+<tr><th id="441">441</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) layoutPtr-&gt;layoutSpecificInfo;</td></tr>
+<tr><th id="442">442</th><td>	RF_StripeCount_t sus_per_fulltable = info-&gt;SUsPerFullTable;</td></tr>
+<tr><th id="443">443</th><td>	RF_StripeCount_t fulltable_depth = info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="444">444</th><td>	RF_StripeNum_t base_suid = <var>0</var>;</td></tr>
+<tr><th id="445">445</th><td>	RF_StripeNum_t SUID = rf_RaidAddressToStripeUnitID(layoutPtr, addr);</td></tr>
+<tr><th id="446">446</th><td>	RF_StripeNum_t stripeID;</td></tr>
+<tr><th id="447">447</th><td>	<em>int</em>     tableOffset;</td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td>	rf_decluster_adjust_params(layoutPtr, &amp;SUID, &amp;sus_per_fulltable, &amp;fulltable_depth, &amp;base_suid);</td></tr>
+<tr><th id="450">450</th><td>	stripeID = rf_StripeUnitIDToStripeID(layoutPtr, SUID);	<i>/* find stripe offset</i></td></tr>
+<tr><th id="451">451</th><td><i>								 * into array */</i></td></tr>
+<tr><th id="452">452</th><td>	tableOffset = (stripeID % info-&gt;BlocksPerTable);	<i>/* find offset into</i></td></tr>
+<tr><th id="453">453</th><td><i>								 * block design table */</i></td></tr>
+<tr><th id="454">454</th><td>	*diskids = info-&gt;LayoutTable[tableOffset];</td></tr>
+<tr><th id="455">455</th><td>}</td></tr>
+<tr><th id="456">456</th><td><i>/* This returns the default head-separation limit, which is measured</i></td></tr>
+<tr><th id="457">457</th><td><i> * in "required units for reconstruction".  Each time a disk fetches</i></td></tr>
+<tr><th id="458">458</th><td><i> * a unit, it bumps a counter.  The head-sep code prohibits any disk</i></td></tr>
+<tr><th id="459">459</th><td><i> * from getting more than headSepLimit counter values ahead of any</i></td></tr>
+<tr><th id="460">460</th><td><i> * other.</i></td></tr>
+<tr><th id="461">461</th><td><i> *</i></td></tr>
+<tr><th id="462">462</th><td><i> * We assume here that the number of floating recon buffers is already</i></td></tr>
+<tr><th id="463">463</th><td><i> * set.  There are r stripes to be reconstructed in each table, and so</i></td></tr>
+<tr><th id="464">464</th><td><i> * if we have a total of B buffers, we can have at most B/r tables</i></td></tr>
+<tr><th id="465">465</th><td><i> * under recon at any one time.  In each table, lambda units are required</i></td></tr>
+<tr><th id="466">466</th><td><i> * from each disk, so given B buffers, the head sep limit has to be</i></td></tr>
+<tr><th id="467">467</th><td><i> * (lambda*B)/r units.  We subtract one to avoid weird boundary cases.</i></td></tr>
+<tr><th id="468">468</th><td><i> *</i></td></tr>
+<tr><th id="469">469</th><td><i> * for example, suppose were given 50 buffers, r=19, and lambda=4 as in</i></td></tr>
+<tr><th id="470">470</th><td><i> * the 20.5 design.  There are 19 stripes/table to be reconstructed, so</i></td></tr>
+<tr><th id="471">471</th><td><i> * we can have 50/19 tables concurrently under reconstruction, which means</i></td></tr>
+<tr><th id="472">472</th><td><i> * we can allow the fastest disk to get 50/19 tables ahead of the slower</i></td></tr>
+<tr><th id="473">473</th><td><i> * disk.  There are lambda "required units" for each disk, so the fastest</i></td></tr>
+<tr><th id="474">474</th><td><i> * disk can get 4*50/19 = 10 counter values ahead of the slowest.</i></td></tr>
+<tr><th id="475">475</th><td><i> *</i></td></tr>
+<tr><th id="476">476</th><td><i> * If numBufsToAccumulate is not 1, we need to limit the head sep further</i></td></tr>
+<tr><th id="477">477</th><td><i> * because multiple bufs will be required for each stripe under recon.</i></td></tr>
+<tr><th id="478">478</th><td><i> */</i></td></tr>
+<tr><th id="479">479</th><td>RF_HeadSepLimit_t</td></tr>
+<tr><th id="480">480</th><td>rf_GetDefaultHeadSepLimitDeclustered(RF_Raid_t *raidPtr)</td></tr>
+<tr><th id="481">481</th><td>{</td></tr>
+<tr><th id="482">482</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) raidPtr-&gt;Layout.layoutSpecificInfo;</td></tr>
+<tr><th id="483">483</th><td></td></tr>
+<tr><th id="484">484</th><td>	<b>return</b> (info-&gt;Lambda * raidPtr-&gt;numFloatingReconBufs / info-&gt;TableDepthInPUs / rf_numBufsToAccumulate);</td></tr>
+<tr><th id="485">485</th><td>}</td></tr>
+<tr><th id="486">486</th><td><i>/* returns the default number of recon buffers to use.  The value</i></td></tr>
+<tr><th id="487">487</th><td><i> * is somewhat arbitrary...it's intended to be large enough to allow</i></td></tr>
+<tr><th id="488">488</th><td><i> * for a reasonably large head-sep limit, but small enough that you</i></td></tr>
+<tr><th id="489">489</th><td><i> * don't use up all your system memory with buffers.</i></td></tr>
+<tr><th id="490">490</th><td><i> */</i></td></tr>
+<tr><th id="491">491</th><td><em>int</em></td></tr>
+<tr><th id="492">492</th><td>rf_GetDefaultNumFloatingReconBuffersDeclustered(RF_Raid_t * raidPtr)</td></tr>
+<tr><th id="493">493</th><td>{</td></tr>
+<tr><th id="494">494</th><td>	<b>return</b> (<var>100</var> * rf_numBufsToAccumulate);</td></tr>
+<tr><th id="495">495</th><td>}</td></tr>
+<tr><th id="496">496</th><td><i>/* sectors in the last fulltable of the array need to be handled</i></td></tr>
+<tr><th id="497">497</th><td><i> * specially since this fulltable can be incomplete.  this function</i></td></tr>
+<tr><th id="498">498</th><td><i> * changes the values of certain params to handle this.</i></td></tr>
+<tr><th id="499">499</th><td><i> *</i></td></tr>
+<tr><th id="500">500</th><td><i> * the idea here is that MapSector et. al. figure out which disk the</i></td></tr>
+<tr><th id="501">501</th><td><i> * addressed unit lives on by computing the modulos of the unit number</i></td></tr>
+<tr><th id="502">502</th><td><i> * with the number of units per fulltable, table, etc.  In the last</i></td></tr>
+<tr><th id="503">503</th><td><i> * fulltable, there are fewer units per fulltable, so we need to adjust</i></td></tr>
+<tr><th id="504">504</th><td><i> * the number of user data units per fulltable to reflect this.</i></td></tr>
+<tr><th id="505">505</th><td><i> *</i></td></tr>
+<tr><th id="506">506</th><td><i> * so, we (1) convert the fulltable size and depth parameters to</i></td></tr>
+<tr><th id="507">507</th><td><i> * the size of the partial fulltable at the end, (2) compute the</i></td></tr>
+<tr><th id="508">508</th><td><i> * disk sector offset where this fulltable starts, and (3) convert</i></td></tr>
+<tr><th id="509">509</th><td><i> * the users stripe unit number from an offset into the array to</i></td></tr>
+<tr><th id="510">510</th><td><i> * an offset into the last fulltable.</i></td></tr>
+<tr><th id="511">511</th><td><i> */</i></td></tr>
+<tr><th id="512">512</th><td><em>void</em></td></tr>
+<tr><th id="513">513</th><td>rf_decluster_adjust_params(RF_RaidLayout_t *layoutPtr,</td></tr>
+<tr><th id="514">514</th><td>			   RF_StripeNum_t *SUID,</td></tr>
+<tr><th id="515">515</th><td>			   RF_StripeCount_t *sus_per_fulltable,</td></tr>
+<tr><th id="516">516</th><td>			   RF_StripeCount_t *fulltable_depth,</td></tr>
+<tr><th id="517">517</th><td>			   RF_StripeNum_t *base_suid)</td></tr>
+<tr><th id="518">518</th><td>{</td></tr>
+<tr><th id="519">519</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) layoutPtr-&gt;layoutSpecificInfo;</td></tr>
+<tr><th id="520">520</th><td></td></tr>
+<tr><th id="521">521</th><td>	<b>if</b> (*SUID &gt;= info-&gt;FullTableLimitSUID) {</td></tr>
+<tr><th id="522">522</th><td>		<i>/* new full table size is size of last full table on disk */</i></td></tr>
+<tr><th id="523">523</th><td>		*sus_per_fulltable = info-&gt;ExtraTablesPerDisk * info-&gt;SUsPerTable;</td></tr>
+<tr><th id="524">524</th><td></td></tr>
+<tr><th id="525">525</th><td>		<i>/* new full table depth is corresponding depth */</i></td></tr>
+<tr><th id="526">526</th><td>		*fulltable_depth = info-&gt;ExtraTablesPerDisk * info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU;</td></tr>
+<tr><th id="527">527</th><td></td></tr>
+<tr><th id="528">528</th><td>		<i>/* set up the new base offset */</i></td></tr>
+<tr><th id="529">529</th><td>		*base_suid = info-&gt;DiskOffsetOfLastFullTableInSUs;</td></tr>
+<tr><th id="530">530</th><td></td></tr>
+<tr><th id="531">531</th><td>		<i>/* convert users array address to an offset into the last</i></td></tr>
+<tr><th id="532">532</th><td><i>		 * fulltable */</i></td></tr>
+<tr><th id="533">533</th><td>		*SUID -= info-&gt;FullTableLimitSUID;</td></tr>
+<tr><th id="534">534</th><td>	}</td></tr>
+<tr><th id="535">535</th><td>}</td></tr>
+<tr><th id="536">536</th><td><i>/*</i></td></tr>
+<tr><th id="537">537</th><td><i> * map a stripe ID to a parity stripe ID.</i></td></tr>
+<tr><th id="538">538</th><td><i> * See comment above RaidAddressToParityStripeID in layout.c.</i></td></tr>
+<tr><th id="539">539</th><td><i> */</i></td></tr>
+<tr><th id="540">540</th><td><em>void</em></td></tr>
+<tr><th id="541">541</th><td>rf_MapSIDToPSIDDeclustered(RF_RaidLayout_t *layoutPtr,</td></tr>
+<tr><th id="542">542</th><td>			   RF_StripeNum_t stripeID,</td></tr>
+<tr><th id="543">543</th><td>			   RF_StripeNum_t *psID,</td></tr>
+<tr><th id="544">544</th><td>			   RF_ReconUnitNum_t *which_ru)</td></tr>
+<tr><th id="545">545</th><td>{</td></tr>
+<tr><th id="546">546</th><td>	RF_DeclusteredConfigInfo_t *info;</td></tr>
+<tr><th id="547">547</th><td></td></tr>
+<tr><th id="548">548</th><td>	info = (RF_DeclusteredConfigInfo_t *) layoutPtr-&gt;layoutSpecificInfo;</td></tr>
+<tr><th id="549">549</th><td></td></tr>
+<tr><th id="550">550</th><td>	*psID = (stripeID / (layoutPtr-&gt;SUsPerPU * info-&gt;BlocksPerTable))</td></tr>
+<tr><th id="551">551</th><td>	    * info-&gt;BlocksPerTable + (stripeID % info-&gt;BlocksPerTable);</td></tr>
+<tr><th id="552">552</th><td>	*which_ru = (stripeID % (info-&gt;BlocksPerTable * layoutPtr-&gt;SUsPerPU))</td></tr>
+<tr><th id="553">553</th><td>	    / info-&gt;BlocksPerTable;</td></tr>
+<tr><th id="554">554</th><td>	RF_ASSERT((*which_ru) &lt; layoutPtr-&gt;SUsPerPU / layoutPtr-&gt;SUsPerRU);</td></tr>
+<tr><th id="555">555</th><td>}</td></tr>
+<tr><th id="556">556</th><td><i>/*</i></td></tr>
+<tr><th id="557">557</th><td><i> * Called from MapSector and MapParity to retarget an access at the spare unit.</i></td></tr>
+<tr><th id="558">558</th><td><i> * Modifies the "col" and "outSU" parameters only.</i></td></tr>
+<tr><th id="559">559</th><td><i> */</i></td></tr>
+<tr><th id="560">560</th><td><em>void</em></td></tr>
+<tr><th id="561">561</th><td>rf_remap_to_spare_space(RF_RaidLayout_t *layoutPtr,</td></tr>
+<tr><th id="562">562</th><td>			RF_DeclusteredConfigInfo_t *info,</td></tr>
+<tr><th id="563">563</th><td>			RF_StripeNum_t FullTableID,</td></tr>
+<tr><th id="564">564</th><td>			RF_StripeNum_t TableID,</td></tr>
+<tr><th id="565">565</th><td>			RF_SectorNum_t BlockID,</td></tr>
+<tr><th id="566">566</th><td>			RF_StripeNum_t base_suid,</td></tr>
+<tr><th id="567">567</th><td>			RF_StripeNum_t SpareRegion,</td></tr>
+<tr><th id="568">568</th><td>			RF_RowCol_t *outCol,</td></tr>
+<tr><th id="569">569</th><td>			RF_StripeNum_t *outSU)</td></tr>
+<tr><th id="570">570</th><td>{</td></tr>
+<tr><th id="571">571</th><td>	RF_StripeNum_t ftID, spareTableStartSU, TableInSpareRegion, lastSROffset,</td></tr>
+<tr><th id="572">572</th><td>	        which_ft;</td></tr>
+<tr><th id="573">573</th><td></td></tr>
+<tr><th id="574">574</th><td>	<i>/*</i></td></tr>
+<tr><th id="575">575</th><td><i>         * note that FullTableID and hence SpareRegion may have gotten</i></td></tr>
+<tr><th id="576">576</th><td><i>         * tweaked by rf_decluster_adjust_params. We detect this by</i></td></tr>
+<tr><th id="577">577</th><td><i>         * noticing that base_suid is not 0.</i></td></tr>
+<tr><th id="578">578</th><td><i>         */</i></td></tr>
+<tr><th id="579">579</th><td>	<b>if</b> (base_suid == <var>0</var>) {</td></tr>
+<tr><th id="580">580</th><td>		ftID = FullTableID;</td></tr>
+<tr><th id="581">581</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="582">582</th><td>		<i>/*</i></td></tr>
+<tr><th id="583">583</th><td><i>	         * There may be &gt; 1.0 full tables in the last (i.e. partial)</i></td></tr>
+<tr><th id="584">584</th><td><i>	         * spare region.  find out which of these we're in.</i></td></tr>
+<tr><th id="585">585</th><td><i>	         */</i></td></tr>
+<tr><th id="586">586</th><td>		lastSROffset = info-&gt;NumCompleteSRs * info-&gt;SpareRegionDepthInSUs;</td></tr>
+<tr><th id="587">587</th><td>		which_ft = (info-&gt;DiskOffsetOfLastFullTableInSUs - lastSROffset) / (info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU);</td></tr>
+<tr><th id="588">588</th><td></td></tr>
+<tr><th id="589">589</th><td>		<i>/* compute the actual full table ID */</i></td></tr>
+<tr><th id="590">590</th><td>		ftID = info-&gt;DiskOffsetOfLastFullTableInSUs / (info-&gt;FullTableDepthInPUs * layoutPtr-&gt;SUsPerPU) + which_ft;</td></tr>
+<tr><th id="591">591</th><td>		SpareRegion = info-&gt;NumCompleteSRs;</td></tr>
+<tr><th id="592">592</th><td>	}</td></tr>
+<tr><th id="593">593</th><td>	TableInSpareRegion = (ftID * info-&gt;NumParityReps + TableID) % info-&gt;TablesPerSpareRegion;</td></tr>
+<tr><th id="594">594</th><td></td></tr>
+<tr><th id="595">595</th><td>	*outCol = info-&gt;SpareTable[TableInSpareRegion][BlockID].spareDisk;</td></tr>
+<tr><th id="596">596</th><td>	RF_ASSERT(*outCol != -<var>1</var>);</td></tr>
+<tr><th id="597">597</th><td></td></tr>
+<tr><th id="598">598</th><td>	spareTableStartSU = (SpareRegion == info-&gt;NumCompleteSRs) ?</td></tr>
+<tr><th id="599">599</th><td>	    info-&gt;DiskOffsetOfLastFullTableInSUs + info-&gt;ExtraTablesPerDisk * info-&gt;TableDepthInPUs * layoutPtr-&gt;SUsPerPU :</td></tr>
+<tr><th id="600">600</th><td>	    (SpareRegion + <var>1</var>) * info-&gt;SpareRegionDepthInSUs - info-&gt;SpareSpaceDepthPerRegionInSUs;</td></tr>
+<tr><th id="601">601</th><td>	*outSU = spareTableStartSU + info-&gt;SpareTable[TableInSpareRegion][BlockID].spareBlockOffsetInSUs;</td></tr>
+<tr><th id="602">602</th><td>	<b>if</b> (*outSU &gt;= layoutPtr-&gt;stripeUnitsPerDisk) {</td></tr>
+<tr><th id="603">603</th><td>		printf(<q>"rf_remap_to_spare_space: invalid remapped disk SU offset %ld\n"</q>, (<em>long</em>) *outSU);</td></tr>
+<tr><th id="604">604</th><td>	}</td></tr>
+<tr><th id="605">605</th><td>}</td></tr>
+<tr><th id="606">606</th><td></td></tr>
+<tr><th id="607">607</th><td><u>#<span data-ppcond="66">endif</span> /* (RF_INCLUDE_PARITY_DECLUSTERING &gt; 0)  || (RF_INCLUDE_PARITY_DECLUSTERING_PQ &gt; 0) */</u></td></tr>
+<tr><th id="608">608</th><td></td></tr>
+<tr><th id="609">609</th><td><u>#<span data-ppcond="609">if</span> (<a class="macro" href="rf_archs.h.html#76" title="0" data-ref="_M/RF_INCLUDE_PARITY_DECLUSTERING_DS">RF_INCLUDE_PARITY_DECLUSTERING_DS</a> &gt; 0)</u></td></tr>
+<tr><th id="610">610</th><td><em>int</em></td></tr>
+<tr><th id="611">611</th><td>rf_InstallSpareTable(RF_Raid_t *raidPtr, RF_RowCol_t fcol)</td></tr>
+<tr><th id="612">612</th><td>{</td></tr>
+<tr><th id="613">613</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) raidPtr-&gt;Layout.layoutSpecificInfo;</td></tr>
+<tr><th id="614">614</th><td>	RF_SparetWait_t *req;</td></tr>
+<tr><th id="615">615</th><td>	<em>int</em>     retcode;</td></tr>
+<tr><th id="616">616</th><td></td></tr>
+<tr><th id="617">617</th><td>	req = RF_Malloc(<b>sizeof</b>(*req));</td></tr>
+<tr><th id="618">618</th><td>	req-&gt;C = raidPtr-&gt;numCol;</td></tr>
+<tr><th id="619">619</th><td>	req-&gt;G = raidPtr-&gt;Layout.numDataCol + raidPtr-&gt;Layout.numParityCol;</td></tr>
+<tr><th id="620">620</th><td>	req-&gt;fcol = fcol;</td></tr>
+<tr><th id="621">621</th><td>	req-&gt;SUsPerPU = raidPtr-&gt;Layout.SUsPerPU;</td></tr>
+<tr><th id="622">622</th><td>	req-&gt;TablesPerSpareRegion = info-&gt;TablesPerSpareRegion;</td></tr>
+<tr><th id="623">623</th><td>	req-&gt;BlocksPerTable = info-&gt;BlocksPerTable;</td></tr>
+<tr><th id="624">624</th><td>	req-&gt;TableDepthInPUs = info-&gt;TableDepthInPUs;</td></tr>
+<tr><th id="625">625</th><td>	req-&gt;SpareSpaceDepthPerRegionInSUs = info-&gt;SpareSpaceDepthPerRegionInSUs;</td></tr>
+<tr><th id="626">626</th><td></td></tr>
+<tr><th id="627">627</th><td>	retcode = rf_GetSpareTableFromDaemon(req);</td></tr>
+<tr><th id="628">628</th><td>	RF_ASSERT(!retcode);	<i>/* XXX -- fix this to recover gracefully --</i></td></tr>
+<tr><th id="629">629</th><td><i>				 * XXX */</i></td></tr>
+<tr><th id="630">630</th><td>	<b>return</b> (retcode);</td></tr>
+<tr><th id="631">631</th><td>}</td></tr>
+<tr><th id="632">632</th><td><u>#<span data-ppcond="609">endif</span></u></td></tr>
+<tr><th id="633">633</th><td><u>#<span data-ppcond="633">if</span> (<a class="macro" href="rf_archs.h.html#72" title="0" data-ref="_M/RF_INCLUDE_PARITY_DECLUSTERING">RF_INCLUDE_PARITY_DECLUSTERING</a> &gt; 0) || (RF_INCLUDE_PARITY_DECLUSTERING_PQ &gt; 0)</u></td></tr>
+<tr><th id="634">634</th><td><i>/*</i></td></tr>
+<tr><th id="635">635</th><td><i> * Invoked via ioctl to install a spare table in the kernel.</i></td></tr>
+<tr><th id="636">636</th><td><i> */</i></td></tr>
+<tr><th id="637">637</th><td><em>int</em></td></tr>
+<tr><th id="638">638</th><td>rf_SetSpareTable(RF_Raid_t *raidPtr, <em>void</em> *data)</td></tr>
+<tr><th id="639">639</th><td>{</td></tr>
+<tr><th id="640">640</th><td>	RF_DeclusteredConfigInfo_t *info = (RF_DeclusteredConfigInfo_t *) raidPtr-&gt;Layout.layoutSpecificInfo;</td></tr>
+<tr><th id="641">641</th><td>	RF_SpareTableEntry_t **ptrs;</td></tr>
+<tr><th id="642">642</th><td>	<em>int</em>     i, retcode;</td></tr>
+<tr><th id="643">643</th><td></td></tr>
+<tr><th id="644">644</th><td>	<i>/* what we need to copyin is a 2-d array, so first copyin the user</i></td></tr>
+<tr><th id="645">645</th><td><i>	 * pointers to the rows in the table */</i></td></tr>
+<tr><th id="646">646</th><td>	size_t ptrslen = info-&gt;TablesPerSpareRegion * <b>sizeof</b>(*ptrs);</td></tr>
+<tr><th id="647">647</th><td>	ptrs = RF_Malloc(ptrslen);</td></tr>
+<tr><th id="648">648</th><td>	retcode = copyin(data, ptrs, ptrslen);</td></tr>
+<tr><th id="649">649</th><td></td></tr>
+<tr><th id="650">650</th><td>	<b>if</b> (retcode)</td></tr>
+<tr><th id="651">651</th><td>		<b>return</b> (retcode);</td></tr>
+<tr><th id="652">652</th><td></td></tr>
+<tr><th id="653">653</th><td>	<i>/* now allocate kernel space for the row pointers */</i></td></tr>
+<tr><th id="654">654</th><td>	info-&gt;SpareTable = RF_Malloc(info-&gt;TablesPerSpareRegion *</td></tr>
+<tr><th id="655">655</th><td>	    <b>sizeof</b>(*info-&gt;SpareTable));</td></tr>
+<tr><th id="656">656</th><td></td></tr>
+<tr><th id="657">657</th><td>	<i>/* now allocate kernel space for each row in the table, and copy it in</i></td></tr>
+<tr><th id="658">658</th><td><i>	 * from user space */</i></td></tr>
+<tr><th id="659">659</th><td>	size_t len = info-&gt;BlocksPerTable * <b>sizeof</b>(**info-&gt;SpareTable);</td></tr>
+<tr><th id="660">660</th><td>	<b>for</b> (i = <var>0</var>; i &lt; info-&gt;TablesPerSpareRegion; i++) {</td></tr>
+<tr><th id="661">661</th><td>		info-&gt;SpareTable[i] = RF_Malloc(len);</td></tr>
+<tr><th id="662">662</th><td>		retcode = copyin(ptrs[i], info-&gt;SpareTable[i], len);</td></tr>
+<tr><th id="663">663</th><td>		<b>if</b> (retcode) {</td></tr>
+<tr><th id="664">664</th><td>			info-&gt;SpareTable = NULL;	<i>/* blow off the memory</i></td></tr>
+<tr><th id="665">665</th><td><i>							 * we've allocated */</i></td></tr>
+<tr><th id="666">666</th><td>			<b>return</b> (retcode);</td></tr>
+<tr><th id="667">667</th><td>		}</td></tr>
+<tr><th id="668">668</th><td>	}</td></tr>
+<tr><th id="669">669</th><td></td></tr>
+<tr><th id="670">670</th><td>	<i>/* free up the temporary array we used */</i></td></tr>
+<tr><th id="671">671</th><td>	RF_Free(ptrs, ptrslen);</td></tr>
+<tr><th id="672">672</th><td></td></tr>
+<tr><th id="673">673</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="674">674</th><td>}</td></tr>
+<tr><th id="675">675</th><td></td></tr>
+<tr><th id="676">676</th><td>RF_ReconUnitCount_t</td></tr>
+<tr><th id="677">677</th><td>rf_GetNumSpareRUsDeclustered(RF_Raid_t *raidPtr)</td></tr>
+<tr><th id="678">678</th><td>{</td></tr>
+<tr><th id="679">679</th><td>	RF_RaidLayout_t *layoutPtr = &amp;raidPtr-&gt;Layout;</td></tr>
+<tr><th id="680">680</th><td></td></tr>
+<tr><th id="681">681</th><td>	<b>return</b> (((RF_DeclusteredConfigInfo_t *) layoutPtr-&gt;layoutSpecificInfo)-&gt;TotSparePUsPerDisk);</td></tr>
+<tr><th id="682">682</th><td>}</td></tr>
+<tr><th id="683">683</th><td><u>#<span data-ppcond="633">endif</span> /* (RF_INCLUDE_PARITY_DECLUSTERING &gt; 0)  || (RF_INCLUDE_PARITY_DECLUSTERING_PQ &gt; 0) */</u></td></tr>
+<tr><th id="684">684</th><td></td></tr>
+<tr><th id="685">685</th><td><em>void</em></td></tr>
+<tr><th id="686">686</th><td><dfn class="decl def fn" id="rf_FreeSpareTable" title='rf_FreeSpareTable' data-ref="rf_FreeSpareTable" data-ref-filename="rf_FreeSpareTable">rf_FreeSpareTable</dfn>(<a class="typedef" href="raidframevar.h.html#RF_Raid_t" title='RF_Raid_t' data-type='struct RF_Raid_s' data-ref="RF_Raid_t" data-ref-filename="RF_Raid_t">RF_Raid_t</a> *<dfn class="local col1 decl" id="1raidPtr" title='raidPtr' data-type='RF_Raid_t *' data-ref="1raidPtr" data-ref-filename="1raidPtr">raidPtr</dfn>)</td></tr>
+<tr><th id="687">687</th><td>{</td></tr>
+<tr><th id="688">688</th><td>	<em>long</em>    <dfn class="local col2 decl" id="2i" title='i' data-type='long' data-ref="2i" data-ref-filename="2i">i</dfn>;</td></tr>
+<tr><th id="689">689</th><td>	<a class="typedef" href="raidframevar.h.html#RF_RaidLayout_t" title='RF_RaidLayout_t' data-type='struct RF_RaidLayout_s' data-ref="RF_RaidLayout_t" data-ref-filename="RF_RaidLayout_t">RF_RaidLayout_t</a> *<dfn class="local col3 decl" id="3layoutPtr" title='layoutPtr' data-type='RF_RaidLayout_t *' data-ref="3layoutPtr" data-ref-filename="3layoutPtr">layoutPtr</dfn> = &amp;<a class="local col1 ref" href="#1raidPtr" title='raidPtr' data-ref="1raidPtr" data-ref-filename="1raidPtr">raidPtr</a>-&gt;<a class="ref field" href="rf_raid.h.html#RF_Raid_s::Layout" title='RF_Raid_s::Layout' data-ref="RF_Raid_s::Layout" data-ref-filename="RF_Raid_s..Layout">Layout</a>;</td></tr>
+<tr><th id="690">690</th><td>	<a class="typedef" href="raidframevar.h.html#RF_DeclusteredConfigInfo_t" title='RF_DeclusteredConfigInfo_t' data-type='struct RF_DeclusteredConfigInfo_s' data-ref="RF_DeclusteredConfigInfo_t" data-ref-filename="RF_DeclusteredConfigInfo_t">RF_DeclusteredConfigInfo_t</a> *<dfn class="local col4 decl" id="4info" title='info' data-type='RF_DeclusteredConfigInfo_t *' data-ref="4info" data-ref-filename="4info">info</dfn> = (<a class="typedef" href="raidframevar.h.html#RF_DeclusteredConfigInfo_t" title='RF_DeclusteredConfigInfo_t' data-type='struct RF_DeclusteredConfigInfo_s' data-ref="RF_DeclusteredConfigInfo_t" data-ref-filename="RF_DeclusteredConfigInfo_t">RF_DeclusteredConfigInfo_t</a> *) <a class="local col3 ref" href="#3layoutPtr" title='layoutPtr' data-ref="3layoutPtr" data-ref-filename="3layoutPtr">layoutPtr</a>-&gt;<a class="ref field" href="rf_layout.h.html#RF_RaidLayout_s::layoutSpecificInfo" title='RF_RaidLayout_s::layoutSpecificInfo' data-ref="RF_RaidLayout_s::layoutSpecificInfo" data-ref-filename="RF_RaidLayout_s..layoutSpecificInfo">layoutSpecificInfo</a>;</td></tr>
+<tr><th id="691">691</th><td>	<a class="typedef" href="raidframevar.h.html#RF_SpareTableEntry_t" title='RF_SpareTableEntry_t' data-type='struct RF_SpareTableEntry_s' data-ref="RF_SpareTableEntry_t" data-ref-filename="RF_SpareTableEntry_t">RF_SpareTableEntry_t</a> **<dfn class="local col5 decl" id="5table" title='table' data-type='RF_SpareTableEntry_t **' data-ref="5table" data-ref-filename="5table">table</dfn> = <a class="local col4 ref" href="#4info" title='info' data-ref="4info" data-ref-filename="4info">info</a>-&gt;<a class="ref field" href="rf_decluster.h.html#RF_DeclusteredConfigInfo_s::SpareTable" title='RF_DeclusteredConfigInfo_s::SpareTable' data-ref="RF_DeclusteredConfigInfo_s::SpareTable" data-ref-filename="RF_DeclusteredConfigInfo_s..SpareTable">SpareTable</a>;</td></tr>
+<tr><th id="692">692</th><td></td></tr>
+<tr><th id="693">693</th><td>	<b>for</b> (<a class="local col2 ref" href="#2i" title='i' data-ref="2i" data-ref-filename="2i">i</a> = <var>0</var>; <a class="local col2 ref" href="#2i" title='i' data-ref="2i" data-ref-filename="2i">i</a> &lt; <a class="local col4 ref" href="#4info" title='info' data-ref="4info" data-ref-filename="4info">info</a>-&gt;<a class="ref field" href="rf_decluster.h.html#RF_DeclusteredConfigInfo_s::TablesPerSpareRegion" title='RF_DeclusteredConfigInfo_s::TablesPerSpareRegion' data-ref="RF_DeclusteredConfigInfo_s::TablesPerSpareRegion" data-ref-filename="RF_DeclusteredConfigInfo_s..TablesPerSpareRegion">TablesPerSpareRegion</a>; <a class="local col2 ref" href="#2i" title='i' data-ref="2i" data-ref-filename="2i">i</a>++) {</td></tr>
+<tr><th id="694">694</th><td>		<a class="macro" href="rf_debugMem.h.html#50" title="kern_free(table[i])" data-ref="_M/RF_Free">RF_Free</a>(<a class="local col5 ref" href="#5table" title='table' data-ref="5table" data-ref-filename="5table">table</a>[<a class="local col2 ref" href="#2i" title='i' data-ref="2i" data-ref-filename="2i">i</a>], info-&gt;BlocksPerTable * <b>sizeof</b>(RF_SpareTableEntry_t));</td></tr>
+<tr><th id="695">695</th><td>	}</td></tr>
+<tr><th id="696">696</th><td>	<a class="macro" href="rf_debugMem.h.html#50" title="kern_free(table)" data-ref="_M/RF_Free">RF_Free</a>(<a class="local col5 ref" href="#5table" title='table' data-ref="5table" data-ref-filename="5table">table</a>, info-&gt;TablesPerSpareRegion * <b>sizeof</b>(RF_SpareTableEntry_t *));</td></tr>
+<tr><th id="697">697</th><td>	<a class="local col4 ref" href="#4info" title='info' data-ref="4info" data-ref-filename="4info">info</a>-&gt;<a class="ref field" href="rf_decluster.h.html#RF_DeclusteredConfigInfo_s::SpareTable" title='RF_DeclusteredConfigInfo_s::SpareTable' data-ref="RF_DeclusteredConfigInfo_s::SpareTable" data-ref-filename="RF_DeclusteredConfigInfo_s..SpareTable">SpareTable</a> = <a class="macro" href="../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="698">698</th><td>}</td></tr>
+<tr><th id="699">699</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

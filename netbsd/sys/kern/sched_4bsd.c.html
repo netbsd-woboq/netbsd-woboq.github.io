@@ -1,0 +1,568 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>sched_4bsd.c source code [netbsd/sys/kern/sched_4bsd.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/sched_4bsd.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='sched_4bsd.c.html'>sched_4bsd.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: sched_4bsd.c,v 1.35 2018/09/03 16:29:35 riastradh Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 1999, 2000, 2004, 2006, 2007, 2008 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,</i></td></tr>
+<tr><th id="9">9</th><td><i> * NASA Ames Research Center, by Charles M. Hannum, Andrew Doran, and</i></td></tr>
+<tr><th id="10">10</th><td><i> * Daniel Sieger.</i></td></tr>
+<tr><th id="11">11</th><td><i> *</i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="13">13</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="14">14</th><td><i> * are met:</i></td></tr>
+<tr><th id="15">15</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="17">17</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="18">18</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="19">19</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="20">20</th><td><i> *</i></td></tr>
+<tr><th id="21">21</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="22">22</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="23">23</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="24">24</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="25">25</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="26">26</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="27">27</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="28">28</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="29">29</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="30">30</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="31">31</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="32">32</th><td><i> */</i></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/*</i></td></tr>
+<tr><th id="35">35</th><td><i> * Copyright (c) 1982, 1986, 1990, 1991, 1993</i></td></tr>
+<tr><th id="36">36</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="37">37</th><td><i> * (c) UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="38">38</th><td><i> * All or some portions of this file are derived from material licensed</i></td></tr>
+<tr><th id="39">39</th><td><i> * to the University of California by American Telephone and Telegraph</i></td></tr>
+<tr><th id="40">40</th><td><i> * Co. or Unix System Laboratories, Inc. and are reproduced herein with</i></td></tr>
+<tr><th id="41">41</th><td><i> * the permission of UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="42">42</th><td><i> *</i></td></tr>
+<tr><th id="43">43</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="44">44</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="45">45</th><td><i> * are met:</i></td></tr>
+<tr><th id="46">46</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="47">47</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="48">48</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="49">49</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="50">50</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="51">51</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="52">52</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="53">53</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="54">54</th><td><i> *</i></td></tr>
+<tr><th id="55">55</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="56">56</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="57">57</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="58">58</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="59">59</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="60">60</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="61">61</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="62">62</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="63">63</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="64">64</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="65">65</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="66">66</th><td><i> *</i></td></tr>
+<tr><th id="67">67</th><td><i> *	@(#)kern_synch.c	8.9 (Berkeley) 5/19/95</i></td></tr>
+<tr><th id="68">68</th><td><i> */</i></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="71">71</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: sched_4bsd.c,v 1.35 2018/09/03 16:29:35 riastradh Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: sched_4bsd.c,v 1.35 2018/09/03 16:29:35 riastradh Exp $"</q>);</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td><u>#include <a href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_ddb.h.html">"opt_ddb.h"</a></u></td></tr>
+<tr><th id="74">74</th><td><u>#include <a href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_lockdebug.h.html">"opt_lockdebug.h"</a></u></td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="77">77</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="78">78</th><td><u>#include <a href="../sys/callout.h.html">&lt;sys/callout.h&gt;</a></u></td></tr>
+<tr><th id="79">79</th><td><u>#include <a href="../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="80">80</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="81">81</th><td><u>#include <a href="../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="82">82</th><td><u>#include <a href="../sys/resourcevar.h.html">&lt;sys/resourcevar.h&gt;</a></u></td></tr>
+<tr><th id="83">83</th><td><u>#include <a href="../sys/sched.h.html">&lt;sys/sched.h&gt;</a></u></td></tr>
+<tr><th id="84">84</th><td><u>#include <a href="../sys/sysctl.h.html">&lt;sys/sysctl.h&gt;</a></u></td></tr>
+<tr><th id="85">85</th><td><u>#include <a href="../sys/lockdebug.h.html">&lt;sys/lockdebug.h&gt;</a></u></td></tr>
+<tr><th id="86">86</th><td><u>#include <a href="../sys/intr.h.html">&lt;sys/intr.h&gt;</a></u></td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><em>static</em> <em>void</em> <a class="tu decl fn" href="#updatepri" title='updatepri' data-type='void updatepri(struct lwp * )' data-ref="updatepri" data-ref-filename="updatepri">updatepri</a>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *);</td></tr>
+<tr><th id="89">89</th><td><em>static</em> <em>void</em> <a class="tu decl fn" href="#resetpriority" title='resetpriority' data-type='void resetpriority(struct lwp * )' data-ref="resetpriority" data-ref-filename="resetpriority">resetpriority</a>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *);</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td><b>extern</b> <em>unsigned</em> <em>int</em> <dfn class="decl" id="sched_pstats_ticks" title='sched_pstats_ticks' data-ref="sched_pstats_ticks" data-ref-filename="sched_pstats_ticks">sched_pstats_ticks</dfn>; <i>/* defined in kern_synch.c */</i></td></tr>
+<tr><th id="92">92</th><td></td></tr>
+<tr><th id="93">93</th><td><i  data-doc="rrticks">/* Number of hardclock ticks per sched_tick() */</i></td></tr>
+<tr><th id="94">94</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="rrticks" title='rrticks' data-type='int' data-ref="rrticks" data-ref-filename="rrticks">rrticks</dfn> <a class="macro" href="../sys/cdefs_elf.h.html#224" title="__attribute__((__section__(&quot;.data.read_mostly&quot;)))" data-ref="_M/__read_mostly">__read_mostly</a>;</td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td><i>/*</i></td></tr>
+<tr><th id="97">97</th><td><i> * Force switch among equal priority processes every 100ms.</i></td></tr>
+<tr><th id="98">98</th><td><i> * Called from hardclock every hz/10 == rrticks hardclock ticks.</i></td></tr>
+<tr><th id="99">99</th><td><i> *</i></td></tr>
+<tr><th id="100">100</th><td><i> * There's no need to lock anywhere in this routine, as it's</i></td></tr>
+<tr><th id="101">101</th><td><i> * CPU-local and runs at IPL_SCHED (called from clock interrupt).</i></td></tr>
+<tr><th id="102">102</th><td><i> */</i></td></tr>
+<tr><th id="103">103</th><td><i>/* ARGSUSED */</i></td></tr>
+<tr><th id="104">104</th><td><em>void</em></td></tr>
+<tr><th id="105">105</th><td><dfn class="decl def fn" id="sched_tick" title='sched_tick' data-ref="sched_tick" data-ref-filename="sched_tick">sched_tick</dfn>(<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col1 decl" id="1ci" title='ci' data-type='struct cpu_info *' data-ref="1ci" data-ref-filename="1ci">ci</dfn>)</td></tr>
+<tr><th id="106">106</th><td>{</td></tr>
+<tr><th id="107">107</th><td>	<b>struct</b> <a class="type" href="../sys/sched.h.html#schedstate_percpu" title='schedstate_percpu' data-ref="schedstate_percpu" data-ref-filename="schedstate_percpu">schedstate_percpu</a> *<dfn class="local col2 decl" id="2spc" title='spc' data-type='struct schedstate_percpu *' data-ref="2spc" data-ref-filename="2spc">spc</dfn> = &amp;<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>;</td></tr>
+<tr><th id="108">108</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col3 decl" id="3l" title='l' data-type='lwp_t *' data-ref="3l" data-ref-filename="3l">l</dfn>;</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td>	<a class="local col2 ref" href="#2spc" title='spc' data-ref="2spc" data-ref-filename="2spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_ticks" title='schedstate_percpu::spc_ticks' data-ref="schedstate_percpu::spc_ticks" data-ref-filename="schedstate_percpu..spc_ticks">spc_ticks</a> = <a class="tu ref" href="#rrticks" title='rrticks' data-use='r' data-ref="rrticks" data-ref-filename="rrticks">rrticks</a>;</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td>	<b>if</b> (<a class="ref fn" href="../sys/lwp.h.html#CURCPU_IDLE_P" title='CURCPU_IDLE_P' data-ref="CURCPU_IDLE_P" data-ref-filename="CURCPU_IDLE_P">CURCPU_IDLE_P</a>()) {</td></tr>
+<tr><th id="113">113</th><td>		<a class="ref fn" href="../sys/cpu.h.html#cpu_need_resched" title='cpu_need_resched' data-ref="cpu_need_resched" data-ref-filename="cpu_need_resched">cpu_need_resched</a>(<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>, <var>0</var>);</td></tr>
+<tr><th id="114">114</th><td>		<b>return</b>;</td></tr>
+<tr><th id="115">115</th><td>	}</td></tr>
+<tr><th id="116">116</th><td>	<a class="local col3 ref" href="#3l" title='l' data-ref="3l" data-ref-filename="3l">l</a> = <a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_data" title='cpu_info::ci_data' data-ref="cpu_info::ci_data" data-ref-filename="cpu_info..ci_data">ci_data</a>.<a class="ref field" href="../sys/cpu_data.h.html#cpu_data::cpu_onproc" title='cpu_data::cpu_onproc' data-ref="cpu_data::cpu_onproc" data-ref-filename="cpu_data..cpu_onproc">cpu_onproc</a>;</td></tr>
+<tr><th id="117">117</th><td>	<b>if</b> (<a class="local col3 ref" href="#3l" title='l' data-ref="3l" data-ref-filename="3l">l</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="118">118</th><td>		<b>return</b>;</td></tr>
+<tr><th id="119">119</th><td>	}</td></tr>
+<tr><th id="120">120</th><td>	<b>switch</b> (<a class="local col3 ref" href="#3l" title='l' data-ref="3l" data-ref-filename="3l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_class" title='lwp::l_class' data-ref="lwp::l_class" data-ref-filename="lwp..l_class">l_class</a>) {</td></tr>
+<tr><th id="121">121</th><td>	<b>case</b> <a class="macro" href="../sys/sched.h.html#89" title="1" data-ref="_M/SCHED_FIFO">SCHED_FIFO</a>:</td></tr>
+<tr><th id="122">122</th><td>		<i>/* No timeslicing for FIFO jobs. */</i></td></tr>
+<tr><th id="123">123</th><td>		<b>break</b>;</td></tr>
+<tr><th id="124">124</th><td>	<b>case</b> <a class="macro" href="../sys/sched.h.html#90" title="2" data-ref="_M/SCHED_RR">SCHED_RR</a>:</td></tr>
+<tr><th id="125">125</th><td>		<i>/* Force it into mi_switch() to look for other jobs to run. */</i></td></tr>
+<tr><th id="126">126</th><td>		<a class="ref fn" href="../sys/cpu.h.html#cpu_need_resched" title='cpu_need_resched' data-ref="cpu_need_resched" data-ref-filename="cpu_need_resched">cpu_need_resched</a>(<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>, <a class="macro" href="../sys/cpu.h.html#146" title="0x04" data-ref="_M/RESCHED_KPREEMPT">RESCHED_KPREEMPT</a>);</td></tr>
+<tr><th id="127">127</th><td>		<b>break</b>;</td></tr>
+<tr><th id="128">128</th><td>	<b>default</b>:</td></tr>
+<tr><th id="129">129</th><td>		<b>if</b> (<a class="local col2 ref" href="#2spc" title='spc' data-ref="2spc" data-ref-filename="2spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_flags" title='schedstate_percpu::spc_flags' data-ref="schedstate_percpu::spc_flags" data-ref-filename="schedstate_percpu..spc_flags">spc_flags</a> &amp; <a class="macro" href="../sys/sched.h.html#177" title="0x0002" data-ref="_M/SPCF_SHOULDYIELD">SPCF_SHOULDYIELD</a>) {</td></tr>
+<tr><th id="130">130</th><td>			<i>/*</i></td></tr>
+<tr><th id="131">131</th><td><i>			 * Process is stuck in kernel somewhere, probably</i></td></tr>
+<tr><th id="132">132</th><td><i>			 * due to buggy or inefficient code.  Force a</i></td></tr>
+<tr><th id="133">133</th><td><i>			 * kernel preemption.</i></td></tr>
+<tr><th id="134">134</th><td><i>			 */</i></td></tr>
+<tr><th id="135">135</th><td>			<a class="ref fn" href="../sys/cpu.h.html#cpu_need_resched" title='cpu_need_resched' data-ref="cpu_need_resched" data-ref-filename="cpu_need_resched">cpu_need_resched</a>(<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>, <a class="macro" href="../sys/cpu.h.html#146" title="0x04" data-ref="_M/RESCHED_KPREEMPT">RESCHED_KPREEMPT</a>);</td></tr>
+<tr><th id="136">136</th><td>		} <b>else</b> <b>if</b> (<a class="local col2 ref" href="#2spc" title='spc' data-ref="2spc" data-ref-filename="2spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_flags" title='schedstate_percpu::spc_flags' data-ref="schedstate_percpu::spc_flags" data-ref-filename="schedstate_percpu..spc_flags">spc_flags</a> &amp; <a class="macro" href="../sys/sched.h.html#176" title="0x0001" data-ref="_M/SPCF_SEENRR">SPCF_SEENRR</a>) {</td></tr>
+<tr><th id="137">137</th><td>			<i>/*</i></td></tr>
+<tr><th id="138">138</th><td><i>			 * The process has already been through a roundrobin</i></td></tr>
+<tr><th id="139">139</th><td><i>			 * without switching and may be hogging the CPU.</i></td></tr>
+<tr><th id="140">140</th><td><i>			 * Indicate that the process should yield.</i></td></tr>
+<tr><th id="141">141</th><td><i>			 */</i></td></tr>
+<tr><th id="142">142</th><td>			<a class="local col2 ref" href="#2spc" title='spc' data-ref="2spc" data-ref-filename="2spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_flags" title='schedstate_percpu::spc_flags' data-ref="schedstate_percpu::spc_flags" data-ref-filename="schedstate_percpu..spc_flags">spc_flags</a> |= <a class="macro" href="../sys/sched.h.html#177" title="0x0002" data-ref="_M/SPCF_SHOULDYIELD">SPCF_SHOULDYIELD</a>;</td></tr>
+<tr><th id="143">143</th><td>			<a class="ref fn" href="../sys/cpu.h.html#cpu_need_resched" title='cpu_need_resched' data-ref="cpu_need_resched" data-ref-filename="cpu_need_resched">cpu_need_resched</a>(<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>, <var>0</var>);</td></tr>
+<tr><th id="144">144</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="145">145</th><td>			<a class="local col2 ref" href="#2spc" title='spc' data-ref="2spc" data-ref-filename="2spc">spc</a>-&gt;<a class="ref field" href="../sys/sched.h.html#schedstate_percpu::spc_flags" title='schedstate_percpu::spc_flags' data-ref="schedstate_percpu::spc_flags" data-ref-filename="schedstate_percpu..spc_flags">spc_flags</a> |= <a class="macro" href="../sys/sched.h.html#176" title="0x0001" data-ref="_M/SPCF_SEENRR">SPCF_SEENRR</a>;</td></tr>
+<tr><th id="146">146</th><td>		}</td></tr>
+<tr><th id="147">147</th><td>		<b>break</b>;</td></tr>
+<tr><th id="148">148</th><td>	}</td></tr>
+<tr><th id="149">149</th><td>}</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td><i>/*</i></td></tr>
+<tr><th id="152">152</th><td><i> * Why PRIO_MAX - 2? From setpriority(2):</i></td></tr>
+<tr><th id="153">153</th><td><i> *</i></td></tr>
+<tr><th id="154">154</th><td><i> *	prio is a value in the range -20 to 20.  The default priority is</i></td></tr>
+<tr><th id="155">155</th><td><i> *	0; lower priorities cause more favorable scheduling.  A value of</i></td></tr>
+<tr><th id="156">156</th><td><i> *	19 or 20 will schedule a process only when nothing at priority &lt;=</i></td></tr>
+<tr><th id="157">157</th><td><i> *	0 is runnable.</i></td></tr>
+<tr><th id="158">158</th><td><i> *</i></td></tr>
+<tr><th id="159">159</th><td><i> * This gives estcpu influence over 18 priority levels, and leaves nice</i></td></tr>
+<tr><th id="160">160</th><td><i> * with 40 levels.  One way to think about it is that nice has 20 levels</i></td></tr>
+<tr><th id="161">161</th><td><i> * either side of estcpu's 18.</i></td></tr>
+<tr><th id="162">162</th><td><i> */</i></td></tr>
+<tr><th id="163">163</th><td><u>#define	<dfn class="macro" id="_M/ESTCPU_SHIFT" data-ref="_M/ESTCPU_SHIFT">ESTCPU_SHIFT</dfn>	11</u></td></tr>
+<tr><th id="164">164</th><td><u>#define	<dfn class="macro" id="_M/ESTCPU_MAX" data-ref="_M/ESTCPU_MAX">ESTCPU_MAX</dfn>	((PRIO_MAX - 2) &lt;&lt; ESTCPU_SHIFT)</u></td></tr>
+<tr><th id="165">165</th><td><u>#define	<dfn class="macro" id="_M/ESTCPU_ACCUM" data-ref="_M/ESTCPU_ACCUM">ESTCPU_ACCUM</dfn>	(1 &lt;&lt; (ESTCPU_SHIFT - 1))</u></td></tr>
+<tr><th id="166">166</th><td><u>#define	<dfn class="macro" id="_M/ESTCPULIM" data-ref="_M/ESTCPULIM">ESTCPULIM</dfn>(e)	<a class="ref fn" href="../lib/libkern/libkern.h.html#uimin" title='uimin' data-ref="uimin" data-ref-filename="uimin">uimin</a>((e), ESTCPU_MAX)</u></td></tr>
+<tr><th id="167">167</th><td></td></tr>
+<tr><th id="168">168</th><td><i>/*</i></td></tr>
+<tr><th id="169">169</th><td><i> * The main parameter used by this algorithm is 'l_estcpu'. It is an estimate</i></td></tr>
+<tr><th id="170">170</th><td><i> * of the recent CPU utilization of the thread.</i></td></tr>
+<tr><th id="171">171</th><td><i> *</i></td></tr>
+<tr><th id="172">172</th><td><i> * l_estcpu is:</i></td></tr>
+<tr><th id="173">173</th><td><i> *  - increased each time the hardclock ticks and the thread is found to</i></td></tr>
+<tr><th id="174">174</th><td><i> *    be executing, in sched_schedclock() called from hardclock()</i></td></tr>
+<tr><th id="175">175</th><td><i> *  - decreased (filtered) on each sched tick, in sched_pstats_hook()</i></td></tr>
+<tr><th id="176">176</th><td><i> * If the lwp is sleeping for more than a second, we don't touch l_estcpu: it</i></td></tr>
+<tr><th id="177">177</th><td><i> * will be updated in sched_setrunnable() when the lwp wakes up, in burst mode</i></td></tr>
+<tr><th id="178">178</th><td><i> * (ie, we decrease it n times).</i></td></tr>
+<tr><th id="179">179</th><td><i> *</i></td></tr>
+<tr><th id="180">180</th><td><i> * Note that hardclock updates l_estcpu and l_cpticks independently.</i></td></tr>
+<tr><th id="181">181</th><td><i> *</i></td></tr>
+<tr><th id="182">182</th><td><i> * -----------------------------------------------------------------------------</i></td></tr>
+<tr><th id="183">183</th><td><i> *</i></td></tr>
+<tr><th id="184">184</th><td><i> * Here we describe how l_estcpu is decreased.</i></td></tr>
+<tr><th id="185">185</th><td><i> *</i></td></tr>
+<tr><th id="186">186</th><td><i> * Constants for digital decay (filter):</i></td></tr>
+<tr><th id="187">187</th><td><i> *     90% of l_estcpu usage in (5 * loadavg) seconds</i></td></tr>
+<tr><th id="188">188</th><td><i> *</i></td></tr>
+<tr><th id="189">189</th><td><i> * We wish to decay away 90% of l_estcpu in (5 * loadavg) seconds. That is, we</i></td></tr>
+<tr><th id="190">190</th><td><i> * want to compute a value of decay such that the following loop:</i></td></tr>
+<tr><th id="191">191</th><td><i> *     for (i = 0; i &lt; (5 * loadavg); i++)</i></td></tr>
+<tr><th id="192">192</th><td><i> *         l_estcpu *= decay;</i></td></tr>
+<tr><th id="193">193</th><td><i> * will result in</i></td></tr>
+<tr><th id="194">194</th><td><i> *     l_estcpu *= 0.1;</i></td></tr>
+<tr><th id="195">195</th><td><i> * for all values of loadavg.</i></td></tr>
+<tr><th id="196">196</th><td><i> *</i></td></tr>
+<tr><th id="197">197</th><td><i> * Mathematically this loop can be expressed by saying:</i></td></tr>
+<tr><th id="198">198</th><td><i> *     decay ** (5 * loadavg) ~= .1</i></td></tr>
+<tr><th id="199">199</th><td><i> *</i></td></tr>
+<tr><th id="200">200</th><td><i> * And finally, the corresponding value of decay we're using is:</i></td></tr>
+<tr><th id="201">201</th><td><i> *     decay = (2 * loadavg) / (2 * loadavg + 1)</i></td></tr>
+<tr><th id="202">202</th><td><i> *</i></td></tr>
+<tr><th id="203">203</th><td><i> * -----------------------------------------------------------------------------</i></td></tr>
+<tr><th id="204">204</th><td><i> *</i></td></tr>
+<tr><th id="205">205</th><td><i> * Now, let's prove that the value of decay stated above will always fulfill</i></td></tr>
+<tr><th id="206">206</th><td><i> * the equation:</i></td></tr>
+<tr><th id="207">207</th><td><i> *     decay ** (5 * loadavg) ~= .1</i></td></tr>
+<tr><th id="208">208</th><td><i> *</i></td></tr>
+<tr><th id="209">209</th><td><i> * If we compute b as:</i></td></tr>
+<tr><th id="210">210</th><td><i> *     b = 2 * loadavg</i></td></tr>
+<tr><th id="211">211</th><td><i> * then</i></td></tr>
+<tr><th id="212">212</th><td><i> *     decay = b / (b + 1)</i></td></tr>
+<tr><th id="213">213</th><td><i> *</i></td></tr>
+<tr><th id="214">214</th><td><i> * We now need to prove two things:</i></td></tr>
+<tr><th id="215">215</th><td><i> *     1) Given [factor ** (5 * loadavg) =~ .1], prove [factor == b/(b+1)].</i></td></tr>
+<tr><th id="216">216</th><td><i> *     2) Given [b/(b+1) ** power =~ .1], prove [power == (5 * loadavg)].</i></td></tr>
+<tr><th id="217">217</th><td><i> *</i></td></tr>
+<tr><th id="218">218</th><td><i> * Facts:</i></td></tr>
+<tr><th id="219">219</th><td><i> *   * For x real: exp(x) = 0! + x**1/1! + x**2/2! + ...</i></td></tr>
+<tr><th id="220">220</th><td><i> *     Therefore, for x close to zero, exp(x) =~ 1 + x.</i></td></tr>
+<tr><th id="221">221</th><td><i> *     In turn, for b large enough, exp(-1/b) =~ 1 - (1/b) = (b-1)/b.</i></td></tr>
+<tr><th id="222">222</th><td><i> *</i></td></tr>
+<tr><th id="223">223</th><td><i> *   * For b large enough, (b-1)/b =~ b/(b+1).</i></td></tr>
+<tr><th id="224">224</th><td><i> *</i></td></tr>
+<tr><th id="225">225</th><td><i> *   * For x belonging to [-1;1[, ln(1-x) = - x - x**2/2 - x**3/3 - ...</i></td></tr>
+<tr><th id="226">226</th><td><i> *     Therefore ln(b/(b+1)) = ln(1 - 1/(b+1)) =~ -1/(b+1).</i></td></tr>
+<tr><th id="227">227</th><td><i> *</i></td></tr>
+<tr><th id="228">228</th><td><i> *   * ln(0.1) =~ -2.30</i></td></tr>
+<tr><th id="229">229</th><td><i> *</i></td></tr>
+<tr><th id="230">230</th><td><i> * Proof of (1):</i></td></tr>
+<tr><th id="231">231</th><td><i> *     factor ** (5 * loadavg) =~ 0.1</i></td></tr>
+<tr><th id="232">232</th><td><i> *  =&gt; ln(factor) =~ -2.30 / (5 * loadavg)</i></td></tr>
+<tr><th id="233">233</th><td><i> *  =&gt; factor =~ exp(-1 / ((5 / 2.30) * loadavg))</i></td></tr>
+<tr><th id="234">234</th><td><i> *            =~ exp(-1 / (2 * loadavg))</i></td></tr>
+<tr><th id="235">235</th><td><i> *            =~ exp(-1 / b)</i></td></tr>
+<tr><th id="236">236</th><td><i> *            =~ (b - 1) / b</i></td></tr>
+<tr><th id="237">237</th><td><i> *            =~ b / (b + 1)</i></td></tr>
+<tr><th id="238">238</th><td><i> *            =~ (2 * loadavg) / ((2 * loadavg) + 1)</i></td></tr>
+<tr><th id="239">239</th><td><i> *</i></td></tr>
+<tr><th id="240">240</th><td><i> * Proof of (2):</i></td></tr>
+<tr><th id="241">241</th><td><i> *     (b / (b + 1)) ** power =~ .1</i></td></tr>
+<tr><th id="242">242</th><td><i> *  =&gt; power * ln(b / (b + 1)) =~ -2.30</i></td></tr>
+<tr><th id="243">243</th><td><i> *  =&gt; power * (-1 / (b + 1)) =~ -2.30</i></td></tr>
+<tr><th id="244">244</th><td><i> *  =&gt; power =~ 2.30 * (b + 1)</i></td></tr>
+<tr><th id="245">245</th><td><i> *  =&gt; power =~ 4.60 * loadavg + 2.30</i></td></tr>
+<tr><th id="246">246</th><td><i> *  =&gt; power =~ 5 * loadavg</i></td></tr>
+<tr><th id="247">247</th><td><i> *</i></td></tr>
+<tr><th id="248">248</th><td><i> * Conclusion: decay = (2 * loadavg) / (2 * loadavg + 1)</i></td></tr>
+<tr><th id="249">249</th><td><i> */</i></td></tr>
+<tr><th id="250">250</th><td></td></tr>
+<tr><th id="251">251</th><td><i>/* See calculations above */</i></td></tr>
+<tr><th id="252">252</th><td><u>#define	<dfn class="macro" id="_M/loadfactor" data-ref="_M/loadfactor">loadfactor</dfn>(loadavg)  (2 * (loadavg))</u></td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a></td></tr>
+<tr><th id="255">255</th><td><dfn class="tu decl def fn" id="decay_cpu" title='decay_cpu' data-type='fixpt_t decay_cpu(fixpt_t loadfac, fixpt_t estcpu)' data-ref="decay_cpu" data-ref-filename="decay_cpu">decay_cpu</dfn>(<a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col4 decl" id="4loadfac" title='loadfac' data-type='fixpt_t' data-ref="4loadfac" data-ref-filename="4loadfac">loadfac</dfn>, <a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col5 decl" id="5estcpu" title='estcpu' data-type='fixpt_t' data-ref="5estcpu" data-ref-filename="5estcpu">estcpu</dfn>)</td></tr>
+<tr><th id="256">256</th><td>{</td></tr>
+<tr><th id="257">257</th><td></td></tr>
+<tr><th id="258">258</th><td>	<b>if</b> (<a class="local col5 ref" href="#5estcpu" title='estcpu' data-ref="5estcpu" data-ref-filename="5estcpu">estcpu</a> == <var>0</var>) {</td></tr>
+<tr><th id="259">259</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="260">260</th><td>	}</td></tr>
+<tr><th id="261">261</th><td></td></tr>
+<tr><th id="262">262</th><td><u>#<span data-ppcond="262">if</span> !defined(<span class="macro" data-ref="_M/_LP64">_LP64</span>)</u></td></tr>
+<tr><th id="263">263</th><td>	<i>/* avoid 64bit arithmetics. */</i></td></tr>
+<tr><th id="264">264</th><td><u>#define	FIXPT_MAX ((fixpt_t)((UINTMAX_C(1) &lt;&lt; sizeof(fixpt_t) * CHAR_BIT) - 1))</u></td></tr>
+<tr><th id="265">265</th><td>	<b>if</b> (__predict_true(loadfac &lt;= FIXPT_MAX / ESTCPU_MAX)) {</td></tr>
+<tr><th id="266">266</th><td>		<b>return</b> estcpu * loadfac / (loadfac + FSCALE);</td></tr>
+<tr><th id="267">267</th><td>	}</td></tr>
+<tr><th id="268">268</th><td><u>#<span data-ppcond="262">endif</span></u></td></tr>
+<tr><th id="269">269</th><td></td></tr>
+<tr><th id="270">270</th><td>	<b>return</b> (<a class="typedef" href="../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>)<a class="local col5 ref" href="#5estcpu" title='estcpu' data-ref="5estcpu" data-ref-filename="5estcpu">estcpu</a> * <a class="local col4 ref" href="#4loadfac" title='loadfac' data-ref="4loadfac" data-ref-filename="4loadfac">loadfac</a> / (<a class="local col4 ref" href="#4loadfac" title='loadfac' data-ref="4loadfac" data-ref-filename="4loadfac">loadfac</a> + <a class="macro" href="../sys/param.h.html#447" title="(1&lt;&lt;11)" data-ref="_M/FSCALE">FSCALE</a>);</td></tr>
+<tr><th id="271">271</th><td>}</td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a></td></tr>
+<tr><th id="274">274</th><td><dfn class="tu decl def fn" id="decay_cpu_batch" title='decay_cpu_batch' data-type='fixpt_t decay_cpu_batch(fixpt_t loadfac, fixpt_t estcpu, unsigned int n)' data-ref="decay_cpu_batch" data-ref-filename="decay_cpu_batch">decay_cpu_batch</dfn>(<a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col6 decl" id="6loadfac" title='loadfac' data-type='fixpt_t' data-ref="6loadfac" data-ref-filename="6loadfac">loadfac</dfn>, <a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col7 decl" id="7estcpu" title='estcpu' data-type='fixpt_t' data-ref="7estcpu" data-ref-filename="7estcpu">estcpu</dfn>, <em>unsigned</em> <em>int</em> <dfn class="local col8 decl" id="8n" title='n' data-type='unsigned int' data-ref="8n" data-ref-filename="8n">n</dfn>)</td></tr>
+<tr><th id="275">275</th><td>{</td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td>	<i>/*</i></td></tr>
+<tr><th id="278">278</th><td><i>	 * For all load averages &gt;= 1 and max l_estcpu of (255 &lt;&lt; ESTCPU_SHIFT),</i></td></tr>
+<tr><th id="279">279</th><td><i>	 * if we slept for at least seven times the loadfactor, we will decay</i></td></tr>
+<tr><th id="280">280</th><td><i>	 * l_estcpu to less than (1 &lt;&lt; ESTCPU_SHIFT), and therefore we can</i></td></tr>
+<tr><th id="281">281</th><td><i>	 * return zero directly.</i></td></tr>
+<tr><th id="282">282</th><td><i>	 *</i></td></tr>
+<tr><th id="283">283</th><td><i>	 * Note that our ESTCPU_MAX is actually much smaller than</i></td></tr>
+<tr><th id="284">284</th><td><i>	 * (255 &lt;&lt; ESTCPU_SHIFT).</i></td></tr>
+<tr><th id="285">285</th><td><i>	 */</i></td></tr>
+<tr><th id="286">286</th><td>	<b>if</b> ((<a class="local col8 ref" href="#8n" title='n' data-ref="8n" data-ref-filename="8n">n</a> &lt;&lt; <a class="macro" href="../sys/param.h.html#446" title="11" data-ref="_M/FSHIFT">FSHIFT</a>) &gt;= <var>7</var> * <a class="local col6 ref" href="#6loadfac" title='loadfac' data-ref="6loadfac" data-ref-filename="6loadfac">loadfac</a>) {</td></tr>
+<tr><th id="287">287</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="288">288</th><td>	}</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td>	<b>while</b> (<a class="local col7 ref" href="#7estcpu" title='estcpu' data-ref="7estcpu" data-ref-filename="7estcpu">estcpu</a> != <var>0</var> &amp;&amp; <a class="local col8 ref" href="#8n" title='n' data-ref="8n" data-ref-filename="8n">n</a> &gt; <var>1</var>) {</td></tr>
+<tr><th id="291">291</th><td>		<a class="local col7 ref" href="#7estcpu" title='estcpu' data-ref="7estcpu" data-ref-filename="7estcpu">estcpu</a> = <a class="tu ref fn" href="#decay_cpu" title='decay_cpu' data-use='c' data-ref="decay_cpu" data-ref-filename="decay_cpu">decay_cpu</a>(<a class="local col6 ref" href="#6loadfac" title='loadfac' data-ref="6loadfac" data-ref-filename="6loadfac">loadfac</a>, <a class="local col7 ref" href="#7estcpu" title='estcpu' data-ref="7estcpu" data-ref-filename="7estcpu">estcpu</a>);</td></tr>
+<tr><th id="292">292</th><td>		<a class="local col8 ref" href="#8n" title='n' data-ref="8n" data-ref-filename="8n">n</a>--;</td></tr>
+<tr><th id="293">293</th><td>	}</td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td>	<b>return</b> <a class="local col7 ref" href="#7estcpu" title='estcpu' data-ref="7estcpu" data-ref-filename="7estcpu">estcpu</a>;</td></tr>
+<tr><th id="296">296</th><td>}</td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td><i>/*</i></td></tr>
+<tr><th id="299">299</th><td><i> * sched_pstats_hook:</i></td></tr>
+<tr><th id="300">300</th><td><i> *</i></td></tr>
+<tr><th id="301">301</th><td><i> * Periodically called from sched_pstats(); used to recalculate priorities.</i></td></tr>
+<tr><th id="302">302</th><td><i> */</i></td></tr>
+<tr><th id="303">303</th><td><em>void</em></td></tr>
+<tr><th id="304">304</th><td><dfn class="decl def fn" id="sched_pstats_hook" title='sched_pstats_hook' data-ref="sched_pstats_hook" data-ref-filename="sched_pstats_hook">sched_pstats_hook</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col9 decl" id="9l" title='l' data-type='struct lwp *' data-ref="9l" data-ref-filename="9l">l</dfn>, <em>int</em> <dfn class="local col0 decl" id="10batch" title='batch' data-type='int' data-ref="10batch" data-ref-filename="10batch">batch</dfn>)</td></tr>
+<tr><th id="305">305</th><td>{</td></tr>
+<tr><th id="306">306</th><td>	<a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col1 decl" id="11loadfac" title='loadfac' data-type='fixpt_t' data-ref="11loadfac" data-ref-filename="11loadfac">loadfac</dfn>;</td></tr>
+<tr><th id="307">307</th><td></td></tr>
+<tr><th id="308">308</th><td>	<i>/*</i></td></tr>
+<tr><th id="309">309</th><td><i>	 * If the LWP has slept an entire second, stop recalculating</i></td></tr>
+<tr><th id="310">310</th><td><i>	 * its priority until it wakes up.</i></td></tr>
+<tr><th id="311">311</th><td><i>	 */</i></td></tr>
+<tr><th id="312">312</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((lwp_locked(l, ((void *)0)))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;lwp_locked(l, NULL)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 312))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/lwp.h.html#lwp_locked" title='lwp_locked' data-ref="lwp_locked" data-ref-filename="lwp_locked">lwp_locked</a>(<a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>));</td></tr>
+<tr><th id="313">313</th><td>	<b>if</b> (<a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> == <a class="macro" href="../sys/lwp.h.html#289" title="3" data-ref="_M/LSSLEEP">LSSLEEP</a> || <a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> == <a class="macro" href="../sys/lwp.h.html#290" title="4" data-ref="_M/LSSTOP">LSSTOP</a> ||</td></tr>
+<tr><th id="314">314</th><td>	    <a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> == <a class="macro" href="../sys/lwp.h.html#294" title="8" data-ref="_M/LSSUSPENDED">LSSUSPENDED</a>) {</td></tr>
+<tr><th id="315">315</th><td>		<b>if</b> (<a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_slptime" title='lwp::l_slptime' data-ref="lwp::l_slptime" data-ref-filename="lwp..l_slptime">l_slptime</a> &gt; <var>1</var>) {</td></tr>
+<tr><th id="316">316</th><td>			<b>return</b>;</td></tr>
+<tr><th id="317">317</th><td>		}</td></tr>
+<tr><th id="318">318</th><td>	}</td></tr>
+<tr><th id="319">319</th><td></td></tr>
+<tr><th id="320">320</th><td>	<a class="local col1 ref" href="#11loadfac" title='loadfac' data-ref="11loadfac" data-ref-filename="11loadfac">loadfac</a> = <a class="macro" href="#252" title="(2 * (averunnable.ldavg[0]))" data-ref="_M/loadfactor">loadfactor</a>(<a class="ref" href="../sys/resource.h.html#averunnable" title='averunnable' data-ref="averunnable" data-ref-filename="averunnable">averunnable</a>.<a class="ref field" href="../sys/resource.h.html#loadavg::ldavg" title='loadavg::ldavg' data-ref="loadavg::ldavg" data-ref-filename="loadavg..ldavg">ldavg</a>[<var>0</var>]);</td></tr>
+<tr><th id="321">321</th><td>	<a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> = <a class="tu ref fn" href="#decay_cpu" title='decay_cpu' data-use='c' data-ref="decay_cpu" data-ref-filename="decay_cpu">decay_cpu</a>(<a class="local col1 ref" href="#11loadfac" title='loadfac' data-ref="11loadfac" data-ref-filename="11loadfac">loadfac</a>, <a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a>);</td></tr>
+<tr><th id="322">322</th><td>	<a class="tu ref fn" href="#resetpriority" title='resetpriority' data-use='c' data-ref="resetpriority" data-ref-filename="resetpriority">resetpriority</a>(<a class="local col9 ref" href="#9l" title='l' data-ref="9l" data-ref-filename="9l">l</a>);</td></tr>
+<tr><th id="323">323</th><td>}</td></tr>
+<tr><th id="324">324</th><td></td></tr>
+<tr><th id="325">325</th><td><i  data-doc="updatepri">/*</i></td></tr>
+<tr><th id="326">326</th><td><i  data-doc="updatepri"> * Recalculate the priority of an LWP after it has slept for a while.</i></td></tr>
+<tr><th id="327">327</th><td><i  data-doc="updatepri"> */</i></td></tr>
+<tr><th id="328">328</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="329">329</th><td><dfn class="tu decl def fn" id="updatepri" title='updatepri' data-type='void updatepri(struct lwp * l)' data-ref="updatepri" data-ref-filename="updatepri">updatepri</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col2 decl" id="12l" title='l' data-type='struct lwp *' data-ref="12l" data-ref-filename="12l">l</dfn>)</td></tr>
+<tr><th id="330">330</th><td>{</td></tr>
+<tr><th id="331">331</th><td>	<a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col3 decl" id="13loadfac" title='loadfac' data-type='fixpt_t' data-ref="13loadfac" data-ref-filename="13loadfac">loadfac</dfn>;</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((lwp_locked(l, ((void *)0)))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;lwp_locked(l, NULL)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 333))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/lwp.h.html#lwp_locked" title='lwp_locked' data-ref="lwp_locked" data-ref-filename="lwp_locked">lwp_locked</a>(<a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>));</td></tr>
+<tr><th id="334">334</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((l-&gt;l_slptime &gt; 1)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;l-&gt;l_slptime &gt; 1&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 334))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_slptime" title='lwp::l_slptime' data-ref="lwp::l_slptime" data-ref-filename="lwp..l_slptime">l_slptime</a> &gt; <var>1</var>);</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td>	<a class="local col3 ref" href="#13loadfac" title='loadfac' data-ref="13loadfac" data-ref-filename="13loadfac">loadfac</a> = <a class="macro" href="#252" title="(2 * (averunnable.ldavg[0]))" data-ref="_M/loadfactor">loadfactor</a>(<a class="ref" href="../sys/resource.h.html#averunnable" title='averunnable' data-ref="averunnable" data-ref-filename="averunnable">averunnable</a>.<a class="ref field" href="../sys/resource.h.html#loadavg::ldavg" title='loadavg::ldavg' data-ref="loadavg::ldavg" data-ref-filename="loadavg..ldavg">ldavg</a>[<var>0</var>]);</td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td>	<a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_slptime" title='lwp::l_slptime' data-ref="lwp::l_slptime" data-ref-filename="lwp..l_slptime">l_slptime</a>--; <i>/* the first time was done in sched_pstats */</i></td></tr>
+<tr><th id="339">339</th><td>	<a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> = <a class="tu ref fn" href="#decay_cpu_batch" title='decay_cpu_batch' data-use='c' data-ref="decay_cpu_batch" data-ref-filename="decay_cpu_batch">decay_cpu_batch</a>(<a class="local col3 ref" href="#13loadfac" title='loadfac' data-ref="13loadfac" data-ref-filename="13loadfac">loadfac</a>, <a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a>, <a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_slptime" title='lwp::l_slptime' data-ref="lwp::l_slptime" data-ref-filename="lwp..l_slptime">l_slptime</a>);</td></tr>
+<tr><th id="340">340</th><td>	<a class="tu ref fn" href="#resetpriority" title='resetpriority' data-use='c' data-ref="resetpriority" data-ref-filename="resetpriority">resetpriority</a>(<a class="local col2 ref" href="#12l" title='l' data-ref="12l" data-ref-filename="12l">l</a>);</td></tr>
+<tr><th id="341">341</th><td>}</td></tr>
+<tr><th id="342">342</th><td></td></tr>
+<tr><th id="343">343</th><td><em>void</em></td></tr>
+<tr><th id="344">344</th><td><dfn class="decl def fn" id="sched_rqinit" title='sched_rqinit' data-ref="sched_rqinit" data-ref-filename="sched_rqinit">sched_rqinit</dfn>(<em>void</em>)</td></tr>
+<tr><th id="345">345</th><td>{</td></tr>
+<tr><th id="346">346</th><td></td></tr>
+<tr><th id="347">347</th><td>}</td></tr>
+<tr><th id="348">348</th><td></td></tr>
+<tr><th id="349">349</th><td><em>void</em></td></tr>
+<tr><th id="350">350</th><td><dfn class="decl def fn" id="sched_setrunnable" title='sched_setrunnable' data-ref="sched_setrunnable" data-ref-filename="sched_setrunnable">sched_setrunnable</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col4 decl" id="14l" title='l' data-type='struct lwp *' data-ref="14l" data-ref-filename="14l">l</dfn>)</td></tr>
+<tr><th id="351">351</th><td>{</td></tr>
+<tr><th id="352">352</th><td></td></tr>
+<tr><th id="353">353</th><td> 	<b>if</b> (<a class="local col4 ref" href="#14l" title='l' data-ref="14l" data-ref-filename="14l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_slptime" title='lwp::l_slptime' data-ref="lwp::l_slptime" data-ref-filename="lwp..l_slptime">l_slptime</a> &gt; <var>1</var>)</td></tr>
+<tr><th id="354">354</th><td> 		<a class="tu ref fn" href="#updatepri" title='updatepri' data-use='c' data-ref="updatepri" data-ref-filename="updatepri">updatepri</a>(<a class="local col4 ref" href="#14l" title='l' data-ref="14l" data-ref-filename="14l">l</a>);</td></tr>
+<tr><th id="355">355</th><td>}</td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td><em>void</em></td></tr>
+<tr><th id="358">358</th><td><dfn class="decl def fn" id="sched_nice" title='sched_nice' data-ref="sched_nice" data-ref-filename="sched_nice">sched_nice</dfn>(<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col5 decl" id="15p" title='p' data-type='struct proc *' data-ref="15p" data-ref-filename="15p">p</dfn>, <em>int</em> <dfn class="local col6 decl" id="16n" title='n' data-type='int' data-ref="16n" data-ref-filename="16n">n</dfn>)</td></tr>
+<tr><th id="359">359</th><td>{</td></tr>
+<tr><th id="360">360</th><td>	<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col7 decl" id="17l" title='l' data-type='struct lwp *' data-ref="17l" data-ref-filename="17l">l</dfn>;</td></tr>
+<tr><th id="361">361</th><td></td></tr>
+<tr><th id="362">362</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(p-&gt;p_lock))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(p-&gt;p_lock)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 362))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/mutex.h.html#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>));</td></tr>
+<tr><th id="363">363</th><td></td></tr>
+<tr><th id="364">364</th><td>	<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_nice" title='proc::p_nice' data-ref="proc::p_nice" data-ref-filename="proc..p_nice">p_nice</a> = <a class="local col6 ref" href="#16n" title='n' data-ref="16n" data-ref-filename="16n">n</a>;</td></tr>
+<tr><th id="365">365</th><td>	<a class="macro" href="../sys/queue.h.html#210" title="for ((l) = ((&amp;p-&gt;p_lwps)-&gt;lh_first); (l) != ((void *)0); (l) = ((l)-&gt;l_sibling.le_next))" data-ref="_M/LIST_FOREACH">LIST_FOREACH</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>, &amp;<a class="local col5 ref" href="#15p" title='p' data-ref="15p" data-ref-filename="15p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lwps" title='proc::p_lwps' data-ref="proc::p_lwps" data-ref-filename="proc..p_lwps">p_lwps</a>, <a class="ref field" href="../sys/lwp.h.html#lwp::l_sibling" title='lwp::l_sibling' data-ref="lwp::l_sibling" data-ref-filename="lwp..l_sibling">l_sibling</a>) {</td></tr>
+<tr><th id="366">366</th><td>		<a class="ref fn" href="../sys/lwp.h.html#lwp_lock" title='lwp_lock' data-ref="lwp_lock" data-ref-filename="lwp_lock">lwp_lock</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>);</td></tr>
+<tr><th id="367">367</th><td>		<a class="tu ref fn" href="#resetpriority" title='resetpriority' data-use='c' data-ref="resetpriority" data-ref-filename="resetpriority">resetpriority</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>);</td></tr>
+<tr><th id="368">368</th><td>		<a class="ref fn" href="../sys/lwp.h.html#lwp_unlock" title='lwp_unlock' data-ref="lwp_unlock" data-ref-filename="lwp_unlock">lwp_unlock</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>);</td></tr>
+<tr><th id="369">369</th><td>	}</td></tr>
+<tr><th id="370">370</th><td>}</td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td><i  data-doc="resetpriority">/*</i></td></tr>
+<tr><th id="373">373</th><td><i  data-doc="resetpriority"> * Recompute the priority of an LWP.  Arrange to reschedule if</i></td></tr>
+<tr><th id="374">374</th><td><i  data-doc="resetpriority"> * the resulting priority is better than that of the current LWP.</i></td></tr>
+<tr><th id="375">375</th><td><i  data-doc="resetpriority"> */</i></td></tr>
+<tr><th id="376">376</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="377">377</th><td><dfn class="tu decl def fn" id="resetpriority" title='resetpriority' data-type='void resetpriority(struct lwp * l)' data-ref="resetpriority" data-ref-filename="resetpriority">resetpriority</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col8 decl" id="18l" title='l' data-type='struct lwp *' data-ref="18l" data-ref-filename="18l">l</dfn>)</td></tr>
+<tr><th id="378">378</th><td>{</td></tr>
+<tr><th id="379">379</th><td>	<a class="typedef" href="../sys/types.h.html#pri_t" title='pri_t' data-type='int' data-ref="pri_t" data-ref-filename="pri_t">pri_t</a> <dfn class="local col9 decl" id="19pri" title='pri' data-type='pri_t' data-ref="19pri" data-ref-filename="19pri">pri</dfn>;</td></tr>
+<tr><th id="380">380</th><td>	<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col0 decl" id="20p" title='p' data-type='struct proc *' data-ref="20p" data-ref-filename="20p">p</dfn> = <a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_proc" title='lwp::l_proc' data-ref="lwp::l_proc" data-ref-filename="lwp..l_proc">l_proc</a>;</td></tr>
+<tr><th id="381">381</th><td></td></tr>
+<tr><th id="382">382</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((lwp_locked(l, ((void *)0)))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;lwp_locked(l, NULL)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 382))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/lwp.h.html#lwp_locked" title='lwp_locked' data-ref="lwp_locked" data-ref-filename="lwp_locked">lwp_locked</a>(<a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>));</td></tr>
+<tr><th id="383">383</th><td></td></tr>
+<tr><th id="384">384</th><td>	<b>if</b> (<a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_class" title='lwp::l_class' data-ref="lwp::l_class" data-ref-filename="lwp..l_class">l_class</a> != <a class="macro" href="../sys/sched.h.html#88" title="0" data-ref="_M/SCHED_OTHER">SCHED_OTHER</a>)</td></tr>
+<tr><th id="385">385</th><td>		<b>return</b>;</td></tr>
+<tr><th id="386">386</th><td></td></tr>
+<tr><th id="387">387</th><td>	<i>/* See comments above ESTCPU_SHIFT definition. */</i></td></tr>
+<tr><th id="388">388</th><td>	<a class="local col9 ref" href="#19pri" title='pri' data-ref="19pri" data-ref-filename="19pri">pri</a> = (<a class="macro" href="../sys/param.h.html#307" title="64" data-ref="_M/PRI_KERNEL">PRI_KERNEL</a> - <var>1</var>) - (<a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> &gt;&gt; <a class="macro" href="#163" title="11" data-ref="_M/ESTCPU_SHIFT">ESTCPU_SHIFT</a>) - <a class="local col0 ref" href="#20p" title='p' data-ref="20p" data-ref-filename="20p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_nice" title='proc::p_nice' data-ref="proc::p_nice" data-ref-filename="proc..p_nice">p_nice</a>;</td></tr>
+<tr><th id="389">389</th><td>	<a class="local col9 ref" href="#19pri" title='pri' data-ref="19pri" data-ref-filename="19pri">pri</a> = <a class="ref fn" href="../lib/libkern/libkern.h.html#imax" title='imax' data-ref="imax" data-ref-filename="imax">imax</a>(<a class="local col9 ref" href="#19pri" title='pri' data-ref="19pri" data-ref-filename="19pri">pri</a>, <var>0</var>);</td></tr>
+<tr><th id="390">390</th><td>	<b>if</b> (<a class="local col9 ref" href="#19pri" title='pri' data-ref="19pri" data-ref-filename="19pri">pri</a> != <a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_priority" title='lwp::l_priority' data-ref="lwp::l_priority" data-ref-filename="lwp..l_priority">l_priority</a>)</td></tr>
+<tr><th id="391">391</th><td>		<a class="ref fn" href="../sys/lwp.h.html#lwp_changepri" title='lwp_changepri' data-ref="lwp_changepri" data-ref-filename="lwp_changepri">lwp_changepri</a>(<a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>, <a class="local col9 ref" href="#19pri" title='pri' data-ref="19pri" data-ref-filename="19pri">pri</a>);</td></tr>
+<tr><th id="392">392</th><td>}</td></tr>
+<tr><th id="393">393</th><td></td></tr>
+<tr><th id="394">394</th><td><i>/*</i></td></tr>
+<tr><th id="395">395</th><td><i> * We adjust the priority of the current LWP.  The priority of a LWP</i></td></tr>
+<tr><th id="396">396</th><td><i> * gets worse as it accumulates CPU time.  The CPU usage estimator (l_estcpu)</i></td></tr>
+<tr><th id="397">397</th><td><i> * is increased here.  The formula for computing priorities will compute a</i></td></tr>
+<tr><th id="398">398</th><td><i> * different value each time l_estcpu increases. This can cause a switch,</i></td></tr>
+<tr><th id="399">399</th><td><i> * but unless the priority crosses a PPQ boundary the actual queue will not</i></td></tr>
+<tr><th id="400">400</th><td><i> * change.  The CPU usage estimator ramps up quite quickly when the process</i></td></tr>
+<tr><th id="401">401</th><td><i> * is running (linearly), and decays away exponentially, at a rate which is</i></td></tr>
+<tr><th id="402">402</th><td><i> * proportionally slower when the system is busy.  The basic principle is</i></td></tr>
+<tr><th id="403">403</th><td><i> * that the system will 90% forget that the process used a lot of CPU time</i></td></tr>
+<tr><th id="404">404</th><td><i> * in (5 * loadavg) seconds.  This causes the system to favor processes which</i></td></tr>
+<tr><th id="405">405</th><td><i> * haven't run much recently, and to round-robin among other processes.</i></td></tr>
+<tr><th id="406">406</th><td><i> */</i></td></tr>
+<tr><th id="407">407</th><td><em>void</em></td></tr>
+<tr><th id="408">408</th><td><dfn class="decl def fn" id="sched_schedclock" title='sched_schedclock' data-ref="sched_schedclock" data-ref-filename="sched_schedclock">sched_schedclock</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col1 decl" id="21l" title='l' data-type='struct lwp *' data-ref="21l" data-ref-filename="21l">l</dfn>)</td></tr>
+<tr><th id="409">409</th><td>{</td></tr>
+<tr><th id="410">410</th><td></td></tr>
+<tr><th id="411">411</th><td>	<b>if</b> (<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_class" title='lwp::l_class' data-ref="lwp::l_class" data-ref-filename="lwp..l_class">l_class</a> != <a class="macro" href="../sys/sched.h.html#88" title="0" data-ref="_M/SCHED_OTHER">SCHED_OTHER</a>)</td></tr>
+<tr><th id="412">412</th><td>		<b>return</b>;</td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((!CURCPU_IDLE_P())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;!CURCPU_IDLE_P()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 414))" data-ref="_M/KASSERT">KASSERT</a>(!<a class="ref fn" href="../sys/lwp.h.html#CURCPU_IDLE_P" title='CURCPU_IDLE_P' data-ref="CURCPU_IDLE_P" data-ref-filename="CURCPU_IDLE_P">CURCPU_IDLE_P</a>());</td></tr>
+<tr><th id="415">415</th><td>	<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> = <a class="macro" href="#166" title="uimin((l-&gt;l_estcpu + (1 &lt;&lt; (11 - 1))), ((20 - 2) &lt;&lt; 11))" data-ref="_M/ESTCPULIM">ESTCPULIM</a>(<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> + <a class="macro" href="#165" title="(1 &lt;&lt; (11 - 1))" data-ref="_M/ESTCPU_ACCUM">ESTCPU_ACCUM</a>);</td></tr>
+<tr><th id="416">416</th><td>	<a class="ref fn" href="../sys/lwp.h.html#lwp_lock" title='lwp_lock' data-ref="lwp_lock" data-ref-filename="lwp_lock">lwp_lock</a>(<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>);</td></tr>
+<tr><th id="417">417</th><td>	<a class="tu ref fn" href="#resetpriority" title='resetpriority' data-use='c' data-ref="resetpriority" data-ref-filename="resetpriority">resetpriority</a>(<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>);</td></tr>
+<tr><th id="418">418</th><td>	<a class="ref fn" href="../sys/lwp.h.html#lwp_unlock" title='lwp_unlock' data-ref="lwp_unlock" data-ref-filename="lwp_unlock">lwp_unlock</a>(<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>);</td></tr>
+<tr><th id="419">419</th><td>}</td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td><i>/*</i></td></tr>
+<tr><th id="422">422</th><td><i> * sched_proc_fork:</i></td></tr>
+<tr><th id="423">423</th><td><i> *</i></td></tr>
+<tr><th id="424">424</th><td><i> *	Inherit the parent's scheduler history.</i></td></tr>
+<tr><th id="425">425</th><td><i> */</i></td></tr>
+<tr><th id="426">426</th><td><em>void</em></td></tr>
+<tr><th id="427">427</th><td><dfn class="decl def fn" id="sched_proc_fork" title='sched_proc_fork' data-ref="sched_proc_fork" data-ref-filename="sched_proc_fork">sched_proc_fork</dfn>(<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col2 decl" id="22parent" title='parent' data-type='struct proc *' data-ref="22parent" data-ref-filename="22parent">parent</dfn>, <b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col3 decl" id="23child" title='child' data-type='struct proc *' data-ref="23child" data-ref-filename="23child">child</dfn>)</td></tr>
+<tr><th id="428">428</th><td>{</td></tr>
+<tr><th id="429">429</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col4 decl" id="24pl" title='pl' data-type='lwp_t *' data-ref="24pl" data-ref-filename="24pl">pl</dfn>;</td></tr>
+<tr><th id="430">430</th><td></td></tr>
+<tr><th id="431">431</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(parent-&gt;p_lock))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(parent-&gt;p_lock)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/sched_4bsd.c&quot;, 431))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/mutex.h.html#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(<a class="local col2 ref" href="#22parent" title='parent' data-ref="22parent" data-ref-filename="22parent">parent</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>));</td></tr>
+<tr><th id="432">432</th><td></td></tr>
+<tr><th id="433">433</th><td>	<a class="local col4 ref" href="#24pl" title='pl' data-ref="24pl" data-ref-filename="24pl">pl</a> = <a class="macro" href="../sys/queue.h.html#205" title="((&amp;parent-&gt;p_lwps)-&gt;lh_first)" data-ref="_M/LIST_FIRST">LIST_FIRST</a>(&amp;<a class="local col2 ref" href="#22parent" title='parent' data-ref="22parent" data-ref-filename="22parent">parent</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lwps" title='proc::p_lwps' data-ref="proc::p_lwps" data-ref-filename="proc..p_lwps">p_lwps</a>);</td></tr>
+<tr><th id="434">434</th><td>	<a class="local col3 ref" href="#23child" title='child' data-ref="23child" data-ref-filename="23child">child</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_estcpu_inherited" title='proc::p_estcpu_inherited' data-ref="proc::p_estcpu_inherited" data-ref-filename="proc..p_estcpu_inherited">p_estcpu_inherited</a> = <a class="local col4 ref" href="#24pl" title='pl' data-ref="24pl" data-ref-filename="24pl">pl</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a>;</td></tr>
+<tr><th id="435">435</th><td>	<a class="local col3 ref" href="#23child" title='child' data-ref="23child" data-ref-filename="23child">child</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_forktime" title='proc::p_forktime' data-ref="proc::p_forktime" data-ref-filename="proc..p_forktime">p_forktime</a> = <a class="ref" href="#sched_pstats_ticks" title='sched_pstats_ticks' data-ref="sched_pstats_ticks" data-ref-filename="sched_pstats_ticks">sched_pstats_ticks</a>;</td></tr>
+<tr><th id="436">436</th><td>}</td></tr>
+<tr><th id="437">437</th><td></td></tr>
+<tr><th id="438">438</th><td><i>/*</i></td></tr>
+<tr><th id="439">439</th><td><i> * sched_proc_exit:</i></td></tr>
+<tr><th id="440">440</th><td><i> *</i></td></tr>
+<tr><th id="441">441</th><td><i> *	Chargeback parents for the sins of their children.</i></td></tr>
+<tr><th id="442">442</th><td><i> */</i></td></tr>
+<tr><th id="443">443</th><td><em>void</em></td></tr>
+<tr><th id="444">444</th><td><dfn class="decl def fn" id="sched_proc_exit" title='sched_proc_exit' data-ref="sched_proc_exit" data-ref-filename="sched_proc_exit">sched_proc_exit</dfn>(<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col5 decl" id="25parent" title='parent' data-type='struct proc *' data-ref="25parent" data-ref-filename="25parent">parent</dfn>, <b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col6 decl" id="26child" title='child' data-type='struct proc *' data-ref="26child" data-ref-filename="26child">child</dfn>)</td></tr>
+<tr><th id="445">445</th><td>{</td></tr>
+<tr><th id="446">446</th><td>	<a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col7 decl" id="27loadfac" title='loadfac' data-type='fixpt_t' data-ref="27loadfac" data-ref-filename="27loadfac">loadfac</dfn> = <a class="macro" href="#252" title="(2 * (averunnable.ldavg[0]))" data-ref="_M/loadfactor">loadfactor</a>(<a class="ref" href="../sys/resource.h.html#averunnable" title='averunnable' data-ref="averunnable" data-ref-filename="averunnable">averunnable</a>.<a class="ref field" href="../sys/resource.h.html#loadavg::ldavg" title='loadavg::ldavg' data-ref="loadavg::ldavg" data-ref-filename="loadavg..ldavg">ldavg</a>[<var>0</var>]);</td></tr>
+<tr><th id="447">447</th><td>	<a class="typedef" href="../sys/types.h.html#fixpt_t" title='fixpt_t' data-type='uint32_t' data-ref="fixpt_t" data-ref-filename="fixpt_t">fixpt_t</a> <dfn class="local col8 decl" id="28estcpu" title='estcpu' data-type='fixpt_t' data-ref="28estcpu" data-ref-filename="28estcpu">estcpu</dfn>;</td></tr>
+<tr><th id="448">448</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col9 decl" id="29pl" title='pl' data-type='lwp_t *' data-ref="29pl" data-ref-filename="29pl">pl</dfn>, *<dfn class="local col0 decl" id="30cl" title='cl' data-type='lwp_t *' data-ref="30cl" data-ref-filename="30cl">cl</dfn>;</td></tr>
+<tr><th id="449">449</th><td></td></tr>
+<tr><th id="450">450</th><td>	<i>/* XXX Only if parent != init?? */</i></td></tr>
+<tr><th id="451">451</th><td></td></tr>
+<tr><th id="452">452</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="local col5 ref" href="#25parent" title='parent' data-ref="25parent" data-ref-filename="25parent">parent</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="453">453</th><td>	<a class="local col9 ref" href="#29pl" title='pl' data-ref="29pl" data-ref-filename="29pl">pl</a> = <a class="macro" href="../sys/queue.h.html#205" title="((&amp;parent-&gt;p_lwps)-&gt;lh_first)" data-ref="_M/LIST_FIRST">LIST_FIRST</a>(&amp;<a class="local col5 ref" href="#25parent" title='parent' data-ref="25parent" data-ref-filename="25parent">parent</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lwps" title='proc::p_lwps' data-ref="proc::p_lwps" data-ref-filename="proc..p_lwps">p_lwps</a>);</td></tr>
+<tr><th id="454">454</th><td>	<a class="local col0 ref" href="#30cl" title='cl' data-ref="30cl" data-ref-filename="30cl">cl</a> = <a class="macro" href="../sys/queue.h.html#205" title="((&amp;child-&gt;p_lwps)-&gt;lh_first)" data-ref="_M/LIST_FIRST">LIST_FIRST</a>(&amp;<a class="local col6 ref" href="#26child" title='child' data-ref="26child" data-ref-filename="26child">child</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lwps" title='proc::p_lwps' data-ref="proc::p_lwps" data-ref-filename="proc..p_lwps">p_lwps</a>);</td></tr>
+<tr><th id="455">455</th><td>	<a class="local col8 ref" href="#28estcpu" title='estcpu' data-ref="28estcpu" data-ref-filename="28estcpu">estcpu</a> = <a class="tu ref fn" href="#decay_cpu_batch" title='decay_cpu_batch' data-use='c' data-ref="decay_cpu_batch" data-ref-filename="decay_cpu_batch">decay_cpu_batch</a>(<a class="local col7 ref" href="#27loadfac" title='loadfac' data-ref="27loadfac" data-ref-filename="27loadfac">loadfac</a>, <a class="local col6 ref" href="#26child" title='child' data-ref="26child" data-ref-filename="26child">child</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_estcpu_inherited" title='proc::p_estcpu_inherited' data-ref="proc::p_estcpu_inherited" data-ref-filename="proc..p_estcpu_inherited">p_estcpu_inherited</a>,</td></tr>
+<tr><th id="456">456</th><td>	    <a class="ref" href="#sched_pstats_ticks" title='sched_pstats_ticks' data-ref="sched_pstats_ticks" data-ref-filename="sched_pstats_ticks">sched_pstats_ticks</a> - <a class="local col6 ref" href="#26child" title='child' data-ref="26child" data-ref-filename="26child">child</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_forktime" title='proc::p_forktime' data-ref="proc::p_forktime" data-ref-filename="proc..p_forktime">p_forktime</a>);</td></tr>
+<tr><th id="457">457</th><td>	<b>if</b> (<a class="local col0 ref" href="#30cl" title='cl' data-ref="30cl" data-ref-filename="30cl">cl</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> &gt; <a class="local col8 ref" href="#28estcpu" title='estcpu' data-ref="28estcpu" data-ref-filename="28estcpu">estcpu</a>) {</td></tr>
+<tr><th id="458">458</th><td>		<a class="ref fn" href="../sys/lwp.h.html#lwp_lock" title='lwp_lock' data-ref="lwp_lock" data-ref-filename="lwp_lock">lwp_lock</a>(<a class="local col9 ref" href="#29pl" title='pl' data-ref="29pl" data-ref-filename="29pl">pl</a>);</td></tr>
+<tr><th id="459">459</th><td>		<a class="local col9 ref" href="#29pl" title='pl' data-ref="29pl" data-ref-filename="29pl">pl</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> = <a class="macro" href="#166" title="uimin((pl-&gt;l_estcpu + cl-&gt;l_estcpu - estcpu), ((20 - 2) &lt;&lt; 11))" data-ref="_M/ESTCPULIM">ESTCPULIM</a>(<a class="local col9 ref" href="#29pl" title='pl' data-ref="29pl" data-ref-filename="29pl">pl</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> + <a class="local col0 ref" href="#30cl" title='cl' data-ref="30cl" data-ref-filename="30cl">cl</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> - <a class="local col8 ref" href="#28estcpu" title='estcpu' data-ref="28estcpu" data-ref-filename="28estcpu">estcpu</a>);</td></tr>
+<tr><th id="460">460</th><td>		<a class="ref fn" href="../sys/lwp.h.html#lwp_unlock" title='lwp_unlock' data-ref="lwp_unlock" data-ref-filename="lwp_unlock">lwp_unlock</a>(<a class="local col9 ref" href="#29pl" title='pl' data-ref="29pl" data-ref-filename="29pl">pl</a>);</td></tr>
+<tr><th id="461">461</th><td>	}</td></tr>
+<tr><th id="462">462</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col5 ref" href="#25parent" title='parent' data-ref="25parent" data-ref-filename="25parent">parent</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="463">463</th><td>}</td></tr>
+<tr><th id="464">464</th><td></td></tr>
+<tr><th id="465">465</th><td><em>void</em></td></tr>
+<tr><th id="466">466</th><td><dfn class="decl def fn" id="sched_wakeup" title='sched_wakeup' data-ref="sched_wakeup" data-ref-filename="sched_wakeup">sched_wakeup</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col1 decl" id="31l" title='l' data-type='struct lwp *' data-ref="31l" data-ref-filename="31l">l</dfn>)</td></tr>
+<tr><th id="467">467</th><td>{</td></tr>
+<tr><th id="468">468</th><td></td></tr>
+<tr><th id="469">469</th><td>}</td></tr>
+<tr><th id="470">470</th><td></td></tr>
+<tr><th id="471">471</th><td><em>void</em></td></tr>
+<tr><th id="472">472</th><td><dfn class="decl def fn" id="sched_slept" title='sched_slept' data-ref="sched_slept" data-ref-filename="sched_slept">sched_slept</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col2 decl" id="32l" title='l' data-type='struct lwp *' data-ref="32l" data-ref-filename="32l">l</dfn>)</td></tr>
+<tr><th id="473">473</th><td>{</td></tr>
+<tr><th id="474">474</th><td></td></tr>
+<tr><th id="475">475</th><td>}</td></tr>
+<tr><th id="476">476</th><td></td></tr>
+<tr><th id="477">477</th><td><em>void</em></td></tr>
+<tr><th id="478">478</th><td><dfn class="decl def fn" id="sched_lwp_fork" title='sched_lwp_fork' data-ref="sched_lwp_fork" data-ref-filename="sched_lwp_fork">sched_lwp_fork</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col3 decl" id="33l1" title='l1' data-type='struct lwp *' data-ref="33l1" data-ref-filename="33l1">l1</dfn>, <b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col4 decl" id="34l2" title='l2' data-type='struct lwp *' data-ref="34l2" data-ref-filename="34l2">l2</dfn>)</td></tr>
+<tr><th id="479">479</th><td>{</td></tr>
+<tr><th id="480">480</th><td></td></tr>
+<tr><th id="481">481</th><td>	<a class="local col4 ref" href="#34l2" title='l2' data-ref="34l2" data-ref-filename="34l2">l2</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> = <a class="local col3 ref" href="#33l1" title='l1' data-ref="33l1" data-ref-filename="33l1">l1</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a>;</td></tr>
+<tr><th id="482">482</th><td>}</td></tr>
+<tr><th id="483">483</th><td></td></tr>
+<tr><th id="484">484</th><td><em>void</em></td></tr>
+<tr><th id="485">485</th><td><dfn class="decl def fn" id="sched_lwp_collect" title='sched_lwp_collect' data-ref="sched_lwp_collect" data-ref-filename="sched_lwp_collect">sched_lwp_collect</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col5 decl" id="35t" title='t' data-type='struct lwp *' data-ref="35t" data-ref-filename="35t">t</dfn>)</td></tr>
+<tr><th id="486">486</th><td>{</td></tr>
+<tr><th id="487">487</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col6 decl" id="36l" title='l' data-type='lwp_t *' data-ref="36l" data-ref-filename="36l">l</dfn>;</td></tr>
+<tr><th id="488">488</th><td></td></tr>
+<tr><th id="489">489</th><td>	<i>/* Absorb estcpu value of collected LWP. */</i></td></tr>
+<tr><th id="490">490</th><td>	<a class="local col6 ref" href="#36l" title='l' data-ref="36l" data-ref-filename="36l">l</a> = <a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="491">491</th><td>	<a class="ref fn" href="../sys/lwp.h.html#lwp_lock" title='lwp_lock' data-ref="lwp_lock" data-ref-filename="lwp_lock">lwp_lock</a>(<a class="local col6 ref" href="#36l" title='l' data-ref="36l" data-ref-filename="36l">l</a>);</td></tr>
+<tr><th id="492">492</th><td>	<a class="local col6 ref" href="#36l" title='l' data-ref="36l" data-ref-filename="36l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a> += <a class="local col5 ref" href="#35t" title='t' data-ref="35t" data-ref-filename="35t">t</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_estcpu" title='lwp::l_estcpu' data-ref="lwp::l_estcpu" data-ref-filename="lwp..l_estcpu">l_estcpu</a>;</td></tr>
+<tr><th id="493">493</th><td>	<a class="ref fn" href="../sys/lwp.h.html#lwp_unlock" title='lwp_unlock' data-ref="lwp_unlock" data-ref-filename="lwp_unlock">lwp_unlock</a>(<a class="local col6 ref" href="#36l" title='l' data-ref="36l" data-ref-filename="36l">l</a>);</td></tr>
+<tr><th id="494">494</th><td>}</td></tr>
+<tr><th id="495">495</th><td></td></tr>
+<tr><th id="496">496</th><td><em>void</em></td></tr>
+<tr><th id="497">497</th><td><dfn class="decl def fn" id="sched_oncpu" title='sched_oncpu' data-ref="sched_oncpu" data-ref-filename="sched_oncpu">sched_oncpu</dfn>(<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col7 decl" id="37l" title='l' data-type='lwp_t *' data-ref="37l" data-ref-filename="37l">l</dfn>)</td></tr>
+<tr><th id="498">498</th><td>{</td></tr>
+<tr><th id="499">499</th><td></td></tr>
+<tr><th id="500">500</th><td>}</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td><em>void</em></td></tr>
+<tr><th id="503">503</th><td><dfn class="decl def fn" id="sched_newts" title='sched_newts' data-ref="sched_newts" data-ref-filename="sched_newts">sched_newts</dfn>(<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col8 decl" id="38l" title='l' data-type='lwp_t *' data-ref="38l" data-ref-filename="38l">l</dfn>)</td></tr>
+<tr><th id="504">504</th><td>{</td></tr>
+<tr><th id="505">505</th><td></td></tr>
+<tr><th id="506">506</th><td>}</td></tr>
+<tr><th id="507">507</th><td></td></tr>
+<tr><th id="508">508</th><td><i  data-doc="sysctl_sched_rtts">/*</i></td></tr>
+<tr><th id="509">509</th><td><i  data-doc="sysctl_sched_rtts"> * Sysctl nodes and initialization.</i></td></tr>
+<tr><th id="510">510</th><td><i  data-doc="sysctl_sched_rtts"> */</i></td></tr>
+<tr><th id="511">511</th><td></td></tr>
+<tr><th id="512">512</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="513">513</th><td><dfn class="tu decl def fn" id="sysctl_sched_rtts" title='sysctl_sched_rtts' data-type='int sysctl_sched_rtts(const int * name, u_int namelen, void * oldp, size_t * oldlenp, const void * newp, size_t newlen, const int * oname, struct lwp * l, const struct sysctlnode * rnode)' data-ref="sysctl_sched_rtts" data-ref-filename="sysctl_sched_rtts">sysctl_sched_rtts</dfn>(<a class="macro" href="../sys/sysctl.h.html#957" title="const int *name, u_int namelen, void *oldp, size_t *oldlenp, const void *newp, size_t newlen, const int *oname, struct lwp *l, const struct sysctlnode *rnode" data-ref="_M/SYSCTLFN_ARGS">SYSCTLFN_ARGS</a>)</td></tr>
+<tr><th id="514">514</th><td>{</td></tr>
+<tr><th id="515">515</th><td>	<b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctlnode" title='sysctlnode' data-ref="sysctlnode" data-ref-filename="sysctlnode">sysctlnode</a> <dfn class="local col9 decl" id="39node" title='node' data-type='struct sysctlnode' data-ref="39node" data-ref-filename="39node">node</dfn>;</td></tr>
+<tr><th id="516">516</th><td>	<em>int</em> <dfn class="local col0 decl" id="40rttsms" title='rttsms' data-type='int' data-ref="40rttsms" data-ref-filename="40rttsms">rttsms</dfn> = <a class="macro" href="../sys/param.h.html#486" title="(__builtin_expect(((rrticks) &gt;= 0x20000) != 0, 0) ? ((rrticks +0u) / hz) * 1000u : ((rrticks +0u) * 1000u) / hz)" data-ref="_M/hztoms">hztoms</a>(<a class="tu ref" href="#rrticks" title='rrticks' data-use='r' data-ref="rrticks" data-ref-filename="rrticks">rrticks</a>);</td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td>	<a class="local col9 ref" href="#39node" title='node' data-ref="39node" data-ref-filename="39node">node</a> = *<a class="local col1 ref" href="#513" title='rnode' data-ref="41rnode" data-ref-filename="41rnode">rnode</a>;</td></tr>
+<tr><th id="519">519</th><td>	<a class="local col9 ref" href="#39node" title='node' data-ref="39node" data-ref-filename="39node">node</a>.<a class="macro" href="../sys/sysctl.h.html#1255" title="sysctl_un.scu_data._sud_data.__sysc_ustr.__sysc_sdatum" data-ref="_M/sysctl_data">sysctl_data</a> = &amp;<a class="local col0 ref" href="#40rttsms" title='rttsms' data-ref="40rttsms" data-ref-filename="40rttsms">rttsms</a>;</td></tr>
+<tr><th id="520">520</th><td>	<b>return</b> <a class="ref fn" href="../sys/sysctl.h.html#sysctl_lookup" title='sysctl_lookup' data-ref="sysctl_lookup" data-ref-filename="sysctl_lookup">sysctl_lookup</a>(<a class="macro" href="../sys/sysctl.h.html#962" title="name, namelen, oldp, oldlenp, newp, newlen, oname, l, &amp;node" data-ref="_M/SYSCTLFN_CALL">SYSCTLFN_CALL</a>(&amp;<a class="local col9 ref" href="#39node" title='node' data-ref="39node" data-ref-filename="39node">node</a>));</td></tr>
+<tr><th id="521">521</th><td>}</td></tr>
+<tr><th id="522">522</th><td></td></tr>
+<tr><th id="523">523</th><td><a class="macro" href="../sys/sysctl.h.html#1034" title="static void sysctl_sched_4bsd_setup(struct sysctllog **); static void const * const __link_set_sysctl_funcs_sym_sysctl_sched_4bsd_setup __attribute__((__section__(&quot;link_set_&quot; &quot;sysctl_funcs&quot;))) __attribute__((__used__)) = (const void *)&amp;sysctl_sched_4bsd_setup;; static void sysctl_sched_4bsd_setup(struct sysctllog **clog)" data-ref="_M/SYSCTL_SETUP">SYSCTL_SETUP</a>(<a class="decl fn" href="#523" title='sysctl_sched_4bsd_setup' data-ref="sysctl_sched_4bsd_setup" data-ref-filename="sysctl_sched_4bsd_setup"><a class="ref fn" href="#523" title='sysctl_sched_4bsd_setup' data-ref="sysctl_sched_4bsd_setup" data-ref-filename="sysctl_sched_4bsd_setup"><dfn class="decl def fn" id="sysctl_sched_4bsd_setup" title='sysctl_sched_4bsd_setup' data-ref="sysctl_sched_4bsd_setup" data-ref-filename="sysctl_sched_4bsd_setup">sysctl_sched_4bsd_setup</dfn></a></a>, <q>"sysctl sched setup"</q>)</td></tr>
+<tr><th id="524">524</th><td>{</td></tr>
+<tr><th id="525">525</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../sys/sysctl.h.html#sysctlnode" title='sysctlnode' data-ref="sysctlnode" data-ref-filename="sysctlnode">sysctlnode</a> *<dfn class="local col2 decl" id="42node" title='node' data-type='const struct sysctlnode *' data-ref="42node" data-ref-filename="42node">node</dfn> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="526">526</th><td></td></tr>
+<tr><th id="527">527</th><td>	<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(clog, 0, ((void *)0), &amp;node, 0x00000200, 1, &quot;sched&quot;, &quot;Scheduler options&quot;, ((void *)0), 0, __sysctl_verify_CTLTYPE_NODE_arg(((void *)0)), 0, 1, (-3), (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(<a class="local col3 ref" href="#523" title='clog' data-ref="43clog" data-ref-filename="43clog">clog</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, &amp;<a class="local col2 ref" href="#42node" title='node' data-ref="42node" data-ref-filename="42node">node</a>,</td></tr>
+<tr><th id="528">528</th><td>		<a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="529">529</th><td>		<a class="macro" href="../sys/sysctl.h.html#92" title="1" data-ref="_M/CTLTYPE_NODE">CTLTYPE_NODE</a>, <q>"sched"</q>,</td></tr>
+<tr><th id="530">530</th><td>		<a class="macro" href="../sys/sysctl.h.html#1126" title="&quot;Scheduler options&quot;" data-ref="_M/SYSCTL_DESCR">SYSCTL_DESCR</a>(<q>"Scheduler options"</q>),</td></tr>
+<tr><th id="531">531</th><td>		<a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>,</td></tr>
+<tr><th id="532">532</th><td>		<a class="macro" href="../sys/sysctl.h.html#170" title="1" data-ref="_M/CTL_KERN">CTL_KERN</a>, <a class="macro" href="../sys/sysctl.h.html#160" title="(-3)" data-ref="_M/CTL_CREATE">CTL_CREATE</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="533">533</th><td></td></tr>
+<tr><th id="534">534</th><td>	<b>if</b> (<a class="local col2 ref" href="#42node" title='node' data-ref="42node" data-ref-filename="42node">node</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="535">535</th><td>		<b>return</b>;</td></tr>
+<tr><th id="536">536</th><td></td></tr>
+<tr><th id="537">537</th><td>	<a class="tu ref" href="#rrticks" title='rrticks' data-use='w' data-ref="rrticks" data-ref-filename="rrticks">rrticks</a> = <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a> / <var>10</var>;</td></tr>
+<tr><th id="538">538</th><td></td></tr>
+<tr><th id="539">539</th><td>	<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(((void *)0), 0, &amp;node, ((void *)0), 0x00000200, 3, &quot;name&quot;, ((void *)0), ((void *)0), 0, __sysctl_verify_CTLTYPE_STRING_arg(((void *)(unsigned long)(const void *)(&quot;4.4BSD&quot;))), 0, (-3), (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(<a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>, &amp;<a class="local col2 ref" href="#42node" title='node' data-ref="42node" data-ref-filename="42node">node</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="540">540</th><td>		<a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="541">541</th><td>		<a class="macro" href="../sys/sysctl.h.html#94" title="3" data-ref="_M/CTLTYPE_STRING">CTLTYPE_STRING</a>, <q>"name"</q>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="542">542</th><td>		<a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>, <a class="macro" href="../sys/cdefs.h.html#169" title="((void *)(unsigned long)(const void *)(&quot;4.4BSD&quot;))" data-ref="_M/__UNCONST">__UNCONST</a>(<q>"4.4BSD"</q>), <var>0</var>,</td></tr>
+<tr><th id="543">543</th><td>		<a class="macro" href="../sys/sysctl.h.html#160" title="(-3)" data-ref="_M/CTL_CREATE">CTL_CREATE</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="544">544</th><td>	<a class="macro" href="../sys/sysctl.h.html#1113" title="sysctl_createv(((void *)0), 0, &amp;node, ((void *)0), 0x00000200, 2, &quot;rtts&quot;, &quot;Round-robin time quantum (in milliseconds)&quot;, sysctl_sched_rtts, 0, __sysctl_verify_CTLTYPE_INT_arg(((void *)0)), 0, (-3), (-1))" data-ref="_M/sysctl_createv">sysctl_createv</a>(<a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>, &amp;<a class="local col2 ref" href="#42node" title='node' data-ref="42node" data-ref-filename="42node">node</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="545">545</th><td>		<a class="macro" href="../sys/sysctl.h.html#115" title="0x00000200" data-ref="_M/CTLFLAG_PERMANENT">CTLFLAG_PERMANENT</a>,</td></tr>
+<tr><th id="546">546</th><td>		<a class="macro" href="../sys/sysctl.h.html#93" title="2" data-ref="_M/CTLTYPE_INT">CTLTYPE_INT</a>, <q>"rtts"</q>,</td></tr>
+<tr><th id="547">547</th><td>		<a class="macro" href="../sys/sysctl.h.html#1126" title="&quot;Round-robin time quantum (in milliseconds)&quot;" data-ref="_M/SYSCTL_DESCR">SYSCTL_DESCR</a>(<q>"Round-robin time quantum (in milliseconds)"</q>),</td></tr>
+<tr><th id="548">548</th><td>		<a class="tu ref fn" href="#sysctl_sched_rtts" title='sysctl_sched_rtts' data-use='r' data-ref="sysctl_sched_rtts" data-ref-filename="sysctl_sched_rtts">sysctl_sched_rtts</a>, <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var>,</td></tr>
+<tr><th id="549">549</th><td>		<a class="macro" href="../sys/sysctl.h.html#160" title="(-3)" data-ref="_M/CTL_CREATE">CTL_CREATE</a>, <a class="macro" href="../sys/sysctl.h.html#158" title="(-1)" data-ref="_M/CTL_EOL">CTL_EOL</a>);</td></tr>
+<tr><th id="550">550</th><td>}</td></tr>
+<tr><th id="551">551</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

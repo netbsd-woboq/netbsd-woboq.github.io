@@ -1,0 +1,339 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>buf.h source code [netbsd/sys/sys/buf.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="buf,cluster_save "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/sys/buf.h'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>sys</a>/<a href='buf.h.html'>buf.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*     $NetBSD: buf.h,v 1.130 2019/06/28 14:56:45 jmcneill Exp $ */</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 1999, 2000, 2007, 2008 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,</i></td></tr>
+<tr><th id="9">9</th><td><i> * NASA Ames Research Center, and by Andrew Doran.</i></td></tr>
+<tr><th id="10">10</th><td><i> *</i></td></tr>
+<tr><th id="11">11</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="12">12</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="13">13</th><td><i> * are met:</i></td></tr>
+<tr><th id="14">14</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="15">15</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="16">16</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="17">17</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="18">18</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="19">19</th><td><i> *</i></td></tr>
+<tr><th id="20">20</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="21">21</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="22">22</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="23">23</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="24">24</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="25">25</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="26">26</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="27">27</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="28">28</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="29">29</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="30">30</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="31">31</th><td><i> */</i></td></tr>
+<tr><th id="32">32</th><td></td></tr>
+<tr><th id="33">33</th><td><i>/*</i></td></tr>
+<tr><th id="34">34</th><td><i> * Copyright (c) 1982, 1986, 1989, 1993</i></td></tr>
+<tr><th id="35">35</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="36">36</th><td><i> * (c) UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="37">37</th><td><i> * All or some portions of this file are derived from material licensed</i></td></tr>
+<tr><th id="38">38</th><td><i> * to the University of California by American Telephone and Telegraph</i></td></tr>
+<tr><th id="39">39</th><td><i> * Co. or Unix System Laboratories, Inc. and are reproduced herein with</i></td></tr>
+<tr><th id="40">40</th><td><i> * the permission of UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="41">41</th><td><i> *</i></td></tr>
+<tr><th id="42">42</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="43">43</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="44">44</th><td><i> * are met:</i></td></tr>
+<tr><th id="45">45</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="46">46</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="47">47</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="48">48</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="49">49</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="50">50</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="51">51</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="52">52</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="53">53</th><td><i> *</i></td></tr>
+<tr><th id="54">54</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="55">55</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="56">56</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="57">57</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="58">58</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="59">59</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="60">60</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="61">61</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="62">62</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="63">63</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="64">64</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="65">65</th><td><i> *</i></td></tr>
+<tr><th id="66">66</th><td><i> *	@(#)buf.h	8.9 (Berkeley) 3/30/95</i></td></tr>
+<tr><th id="67">67</th><td><i> */</i></td></tr>
+<tr><th id="68">68</th><td></td></tr>
+<tr><th id="69">69</th><td><u>#<span data-ppcond="69">ifndef</span> <span class="macro" data-ref="_M/_SYS_BUF_H_">_SYS_BUF_H_</span></u></td></tr>
+<tr><th id="70">70</th><td><u>#define	<dfn class="macro" id="_M/_SYS_BUF_H_" data-ref="_M/_SYS_BUF_H_">_SYS_BUF_H_</dfn></u></td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td><u>#include <a href="pool.h.html">&lt;sys/pool.h&gt;</a></u></td></tr>
+<tr><th id="73">73</th><td><u>#include <a href="queue.h.html">&lt;sys/queue.h&gt;</a></u></td></tr>
+<tr><th id="74">74</th><td><u>#include <a href="mutex.h.html">&lt;sys/mutex.h&gt;</a></u></td></tr>
+<tr><th id="75">75</th><td><u>#include <a href="condvar.h.html">&lt;sys/condvar.h&gt;</a></u></td></tr>
+<tr><th id="76">76</th><td><u>#include <a href="rbtree.h.html">&lt;sys/rbtree.h&gt;</a></u></td></tr>
+<tr><th id="77">77</th><td><u>#<span data-ppcond="77">if</span> defined(<a class="macro" href="../rump/include/opt/opt_rumpkernel.h.html#7" data-ref="_M/_KERNEL">_KERNEL</a>)</u></td></tr>
+<tr><th id="78">78</th><td><u>#include <a href="workqueue.h.html">&lt;sys/workqueue.h&gt;</a></u></td></tr>
+<tr><th id="79">79</th><td><u>#<span data-ppcond="77">endif</span> /* defined(_KERNEL) */</u></td></tr>
+<tr><th id="80">80</th><td></td></tr>
+<tr><th id="81">81</th><td><b>struct</b> <a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>;</td></tr>
+<tr><th id="82">82</th><td><b>struct</b> <dfn class="type" id="mount" title='mount' data-ref="mount" data-ref-filename="mount">mount</dfn>;</td></tr>
+<tr><th id="83">83</th><td><b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode" id="vnode">vnode</a>;</td></tr>
+<tr><th id="84">84</th><td><b>struct</b> <a class="type" href="types.h.html#kauth_cred" title='kauth_cred' data-ref="kauth_cred" data-ref-filename="kauth_cred" id="kauth_cred">kauth_cred</a>;</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><u>#define <dfn class="macro" id="_M/NOLIST" data-ref="_M/NOLIST">NOLIST</dfn> ((struct buf *)0x87654321)</u></td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><b>extern</b> <a class="typedef" href="mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl" id="bufcache_lock" title='bufcache_lock' data-ref="bufcache_lock" data-ref-filename="bufcache_lock">bufcache_lock</dfn>;</td></tr>
+<tr><th id="89">89</th><td><b>extern</b> <a class="typedef" href="mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl" id="buffer_lock" title='buffer_lock' data-ref="buffer_lock" data-ref-filename="buffer_lock">buffer_lock</dfn>;</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td><u>#<span data-ppcond="91">if</span> defined(<a class="macro" href="../rump/include/opt/opt_rumpkernel.h.html#7" data-ref="_M/_KERNEL">_KERNEL</a>)</u></td></tr>
+<tr><th id="92">92</th><td><b>extern</b> <em>void</em> (*<dfn class="decl" id="biodone_vfs" title='biodone_vfs' data-ref="biodone_vfs" data-ref-filename="biodone_vfs">biodone_vfs</dfn>)(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="93">93</th><td><u>#<span data-ppcond="91">endif</span></u></td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><i>/*</i></td></tr>
+<tr><th id="96">96</th><td><i> * The buffer header describes an I/O operation in the kernel.</i></td></tr>
+<tr><th id="97">97</th><td><i> *</i></td></tr>
+<tr><th id="98">98</th><td><i> * Field markings and the corresponding locks:</i></td></tr>
+<tr><th id="99">99</th><td><i> *</i></td></tr>
+<tr><th id="100">100</th><td><i> * b	thread of execution that holds BC_BUSY, does not correspond</i></td></tr>
+<tr><th id="101">101</th><td><i> *	  directly to any particular LWP</i></td></tr>
+<tr><th id="102">102</th><td><i> * c	bufcache_lock</i></td></tr>
+<tr><th id="103">103</th><td><i> * o	b_objlock</i></td></tr>
+<tr><th id="104">104</th><td><i> *</i></td></tr>
+<tr><th id="105">105</th><td><i> * For buffers associated with a vnode, b_objlock points to vp-&gt;v_interlock.</i></td></tr>
+<tr><th id="106">106</th><td><i> * If not associated with a vnode, it points to the generic buffer_lock.</i></td></tr>
+<tr><th id="107">107</th><td><i> */</i></td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td><i>/* required for the conditional union member below to be ~safe */</i></td></tr>
+<tr><th id="110">110</th><td><u>#<span data-ppcond="110">if</span> defined(<a class="macro" href="../rump/include/opt/opt_rumpkernel.h.html#7" data-ref="_M/_KERNEL">_KERNEL</a>)</u></td></tr>
+<tr><th id="111">111</th><td><a class="macro" href="cdefs.h.html#151" title="typedef char __ctassert10[ (sizeof(struct work) &lt;= sizeof(struct { struct buf *tqe_next; struct buf * *tqe_prev; })) ? 1 : -1] __attribute__((__unused__))" data-ref="_M/__CTASSERT">__CTASSERT</a>(<b>sizeof</b>(<b>struct</b> <a class="type" href="workqueue.h.html#work" title='work' data-ref="work" data-ref-filename="work">work</a>) &lt;= <b>sizeof</b>(<a class="macro" href="queue.h.html#423" title="struct { struct buf *tqe_next; struct buf * *tqe_prev; }" data-ref="_M/TAILQ_ENTRY">TAILQ_ENTRY</a>(<a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>)));</td></tr>
+<tr><th id="112">112</th><td><u>#<span data-ppcond="110">endif</span></u></td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td><b>struct</b> <dfn class="type def" id="buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</dfn> {</td></tr>
+<tr><th id="115">115</th><td>	<b>union</b> {</td></tr>
+<tr><th id="116">116</th><td>		<a class="macro" href="queue.h.html#423" title="struct { struct buf *tqe_next; struct buf * *tqe_prev; }" data-ref="_M/TAILQ_ENTRY">TAILQ_ENTRY</a>(<a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>) <dfn class="decl field" id="buf::(anonymous)::u_actq" title='buf::(anonymous union)::u_actq' data-ref="buf::(anonymous)::u_actq" data-ref-filename="buf..(anonymous)..u_actq">u_actq</dfn>;</td></tr>
+<tr><th id="117">117</th><td>		<a class="typedef" href="rbtree.h.html#rb_node_t" title='rb_node_t' data-type='struct rb_node' data-ref="rb_node_t" data-ref-filename="rb_node_t">rb_node_t</a> <dfn class="decl field" id="buf::(anonymous)::u_rbnode" title='buf::(anonymous union)::u_rbnode' data-ref="buf::(anonymous)::u_rbnode" data-ref-filename="buf..(anonymous)..u_rbnode">u_rbnode</dfn>;</td></tr>
+<tr><th id="118">118</th><td><u>#<span data-ppcond="118">if</span> defined(<a class="macro" href="../rump/include/opt/opt_rumpkernel.h.html#7" data-ref="_M/_KERNEL">_KERNEL</a>)</u></td></tr>
+<tr><th id="119">119</th><td>		<i>/* u_work is smaller than u_actq */</i></td></tr>
+<tr><th id="120">120</th><td>		<b>struct</b> <a class="type" href="workqueue.h.html#work" title='work' data-ref="work" data-ref-filename="work">work</a> <dfn class="decl field" id="buf::(anonymous)::u_work" title='buf::(anonymous union)::u_work' data-ref="buf::(anonymous)::u_work" data-ref-filename="buf..(anonymous)..u_work">u_work</dfn>;</td></tr>
+<tr><th id="121">121</th><td><u>#<span data-ppcond="118">endif</span></u></td></tr>
+<tr><th id="122">122</th><td>	} <dfn class="decl field" id="buf::b_u" title='buf::b_u' data-ref="buf::b_u" data-ref-filename="buf..b_u">b_u</dfn>;					<i>/* b: device driver queue */</i></td></tr>
+<tr><th id="123">123</th><td><u>#define	<dfn class="macro" id="_M/b_actq" data-ref="_M/b_actq">b_actq</dfn>	b_u.u_actq</u></td></tr>
+<tr><th id="124">124</th><td><u>#define	<dfn class="macro" id="_M/b_work" data-ref="_M/b_work">b_work</dfn>	b_u.u_work</u></td></tr>
+<tr><th id="125">125</th><td>	<em>void</em>			(*<dfn class="decl field" id="buf::b_iodone" title='buf::b_iodone' data-ref="buf::b_iodone" data-ref-filename="buf..b_iodone">b_iodone</dfn>)(<b>struct</b> <a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *);<i>/* b: call when done */</i></td></tr>
+<tr><th id="126">126</th><td>	<em>int</em>			<dfn class="decl field" id="buf::b_error" title='buf::b_error' data-ref="buf::b_error" data-ref-filename="buf..b_error">b_error</dfn>;	<i>/* b: errno value. */</i></td></tr>
+<tr><th id="127">127</th><td>	<em>int</em>			<dfn class="decl field" id="buf::b_resid" title='buf::b_resid' data-ref="buf::b_resid" data-ref-filename="buf..b_resid">b_resid</dfn>;	<i>/* b: remaining I/O. */</i></td></tr>
+<tr><th id="128">128</th><td>	<a class="typedef" href="types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>			<dfn class="decl field" id="buf::b_flags" title='buf::b_flags' data-ref="buf::b_flags" data-ref-filename="buf..b_flags">b_flags</dfn>;	<i>/* b: B_* flags */</i></td></tr>
+<tr><th id="129">129</th><td>	<em>int</em>			<dfn class="decl field" id="buf::b_prio" title='buf::b_prio' data-ref="buf::b_prio" data-ref-filename="buf..b_prio">b_prio</dfn>;		<i>/* b: priority for queue */</i></td></tr>
+<tr><th id="130">130</th><td>	<em>int</em>			<dfn class="decl field" id="buf::b_bufsize" title='buf::b_bufsize' data-ref="buf::b_bufsize" data-ref-filename="buf..b_bufsize">b_bufsize</dfn>;	<i>/* b: allocated size */</i></td></tr>
+<tr><th id="131">131</th><td>	<em>int</em>			<dfn class="decl field" id="buf::b_bcount" title='buf::b_bcount' data-ref="buf::b_bcount" data-ref-filename="buf..b_bcount">b_bcount</dfn>;	<i>/* b: valid bytes in buffer */</i></td></tr>
+<tr><th id="132">132</th><td>	<a class="typedef" href="types.h.html#dev_t" title='dev_t' data-type='uint64_t' data-ref="dev_t" data-ref-filename="dev_t">dev_t</a>			<dfn class="decl field" id="buf::b_dev" title='buf::b_dev' data-ref="buf::b_dev" data-ref-filename="buf..b_dev">b_dev</dfn>;		<i>/* b: associated device */</i></td></tr>
+<tr><th id="133">133</th><td>	<em>void</em>			*<dfn class="decl field" id="buf::b_data" title='buf::b_data' data-ref="buf::b_data" data-ref-filename="buf..b_data">b_data</dfn>;	<i>/* b: fs private data */</i></td></tr>
+<tr><th id="134">134</th><td>	<a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>			<dfn class="decl field" id="buf::b_blkno" title='buf::b_blkno' data-ref="buf::b_blkno" data-ref-filename="buf..b_blkno">b_blkno</dfn>;	<i>/* b: physical block number</i></td></tr>
+<tr><th id="135">135</th><td><i>						      (partition relative) */</i></td></tr>
+<tr><th id="136">136</th><td>	<a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>			<dfn class="decl field" id="buf::b_rawblkno" title='buf::b_rawblkno' data-ref="buf::b_rawblkno" data-ref-filename="buf..b_rawblkno">b_rawblkno</dfn>;	<i>/* b: raw physical block number</i></td></tr>
+<tr><th id="137">137</th><td><i>						      (volume relative) */</i></td></tr>
+<tr><th id="138">138</th><td>	<b>struct</b> <a class="type" href="proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a>		*<dfn class="decl field" id="buf::b_proc" title='buf::b_proc' data-ref="buf::b_proc" data-ref-filename="buf..b_proc">b_proc</dfn>;	<i>/* b: proc if BB_PHYS */</i></td></tr>
+<tr><th id="139">139</th><td>	<em>void</em>			*<dfn class="decl field" id="buf::b_saveaddr" title='buf::b_saveaddr' data-ref="buf::b_saveaddr" data-ref-filename="buf..b_saveaddr">b_saveaddr</dfn>;	<i>/* b: saved b_data for physio */</i></td></tr>
+<tr><th id="140">140</th><td>	<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a>		*<dfn class="decl field" id="buf::b_ci" title='buf::b_ci' data-ref="buf::b_ci" data-ref-filename="buf..b_ci">b_ci</dfn>;		<i>/* b: originating CPU */</i></td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td>	<i>/*</i></td></tr>
+<tr><th id="143">143</th><td><i>	 * b: private data for owner.</i></td></tr>
+<tr><th id="144">144</th><td><i>	 *  - buffer cache buffers are owned by corresponding filesystem.</i></td></tr>
+<tr><th id="145">145</th><td><i>	 *  - non-buffer cache buffers are owned by subsystem which</i></td></tr>
+<tr><th id="146">146</th><td><i>	 *    allocated them. (filesystem, disk driver, etc)</i></td></tr>
+<tr><th id="147">147</th><td><i>	 */</i></td></tr>
+<tr><th id="148">148</th><td>	<em>void</em>	*<dfn class="decl field" id="buf::b_private" title='buf::b_private' data-ref="buf::b_private" data-ref-filename="buf..b_private">b_private</dfn>;</td></tr>
+<tr><th id="149">149</th><td>	<a class="macro" href="types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>	<dfn class="decl field" id="buf::b_dcookie" title='buf::b_dcookie' data-ref="buf::b_dcookie" data-ref-filename="buf..b_dcookie">b_dcookie</dfn>;		<i>/* NFS: Offset cookie if dir block */</i></td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td>	<a class="typedef" href="condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a>		<dfn class="decl field" id="buf::b_busy" title='buf::b_busy' data-ref="buf::b_busy" data-ref-filename="buf..b_busy">b_busy</dfn>;		<i>/* c: threads waiting on buf */</i></td></tr>
+<tr><th id="152">152</th><td>	<a class="typedef" href="types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>			<dfn class="decl field" id="buf::b_refcnt" title='buf::b_refcnt' data-ref="buf::b_refcnt" data-ref-filename="buf..b_refcnt">b_refcnt</dfn>;	<i>/* c: refcount for b_busy */</i></td></tr>
+<tr><th id="153">153</th><td>	<em>void</em>			*<dfn class="decl field" id="buf::b_unused" title='buf::b_unused' data-ref="buf::b_unused" data-ref-filename="buf..b_unused">b_unused</dfn>;	<i>/*  : unused */</i></td></tr>
+<tr><th id="154">154</th><td>	<a class="macro" href="queue.h.html#196" title="struct { struct buf *le_next; struct buf **le_prev; }" data-ref="_M/LIST_ENTRY">LIST_ENTRY</a>(<a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>)		<dfn class="decl field" id="buf::b_hash" title='buf::b_hash' data-ref="buf::b_hash" data-ref-filename="buf..b_hash">b_hash</dfn>;		<i>/* c: hash chain */</i></td></tr>
+<tr><th id="155">155</th><td>	<a class="macro" href="queue.h.html#196" title="struct { struct buf *le_next; struct buf **le_prev; }" data-ref="_M/LIST_ENTRY">LIST_ENTRY</a>(<a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>)		<dfn class="decl field" id="buf::b_vnbufs" title='buf::b_vnbufs' data-ref="buf::b_vnbufs" data-ref-filename="buf..b_vnbufs">b_vnbufs</dfn>;	<i>/* c: associated vnode */</i></td></tr>
+<tr><th id="156">156</th><td>	<a class="macro" href="queue.h.html#423" title="struct { struct buf *tqe_next; struct buf * *tqe_prev; }" data-ref="_M/TAILQ_ENTRY">TAILQ_ENTRY</a>(<a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>)	<dfn class="decl field" id="buf::b_freelist" title='buf::b_freelist' data-ref="buf::b_freelist" data-ref-filename="buf..b_freelist">b_freelist</dfn>;	<i>/* c: position if not active */</i></td></tr>
+<tr><th id="157">157</th><td>	<a class="macro" href="queue.h.html#423" title="struct { struct buf *tqe_next; struct buf * *tqe_prev; }" data-ref="_M/TAILQ_ENTRY">TAILQ_ENTRY</a>(<a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>)	<dfn class="decl field" id="buf::b_wapbllist" title='buf::b_wapbllist' data-ref="buf::b_wapbllist" data-ref-filename="buf..b_wapbllist">b_wapbllist</dfn>;	<i>/* c: transaction buffer list */</i></td></tr>
+<tr><th id="158">158</th><td>	<a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>			<dfn class="decl field" id="buf::b_lblkno" title='buf::b_lblkno' data-ref="buf::b_lblkno" data-ref-filename="buf..b_lblkno">b_lblkno</dfn>;	<i>/* c: logical block number */</i></td></tr>
+<tr><th id="159">159</th><td>	<em>int</em>			<dfn class="decl field" id="buf::b_freelistindex" title='buf::b_freelistindex' data-ref="buf::b_freelistindex" data-ref-filename="buf..b_freelistindex">b_freelistindex</dfn>;<i>/* c: free list index (BQ_) */</i></td></tr>
+<tr><th id="160">160</th><td>	<a class="typedef" href="types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>			<dfn class="decl field" id="buf::b_cflags" title='buf::b_cflags' data-ref="buf::b_cflags" data-ref-filename="buf..b_cflags">b_cflags</dfn>;	<i>/* c: BC_* flags */</i></td></tr>
+<tr><th id="161">161</th><td>	<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a>		*<dfn class="decl field" id="buf::b_vp" title='buf::b_vp' data-ref="buf::b_vp" data-ref-filename="buf..b_vp">b_vp</dfn>;		<i>/* c: file vnode */</i></td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td>	<a class="typedef" href="condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a>		<dfn class="decl field" id="buf::b_done" title='buf::b_done' data-ref="buf::b_done" data-ref-filename="buf..b_done">b_done</dfn>;		<i>/* o: waiting on completion */</i></td></tr>
+<tr><th id="164">164</th><td>	<a class="typedef" href="types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>			<dfn class="decl field" id="buf::b_oflags" title='buf::b_oflags' data-ref="buf::b_oflags" data-ref-filename="buf..b_oflags">b_oflags</dfn>;	<i>/* o: BO_* flags */</i></td></tr>
+<tr><th id="165">165</th><td>	<a class="typedef" href="mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a>		*<dfn class="decl field" id="buf::b_objlock" title='buf::b_objlock' data-ref="buf::b_objlock" data-ref-filename="buf..b_objlock">b_objlock</dfn>;	<i>/* o: completion lock */</i></td></tr>
+<tr><th id="166">166</th><td>};</td></tr>
+<tr><th id="167">167</th><td></td></tr>
+<tr><th id="168">168</th><td><i>/*</i></td></tr>
+<tr><th id="169">169</th><td><i> * For portability with historic industry practice, the cylinder number has</i></td></tr>
+<tr><th id="170">170</th><td><i> * to be maintained in the `b_resid' field.</i></td></tr>
+<tr><th id="171">171</th><td><i> */</i></td></tr>
+<tr><th id="172">172</th><td><u>#define	<dfn class="macro" id="_M/b_cylinder" data-ref="_M/b_cylinder">b_cylinder</dfn> b_resid		/* Cylinder number for disksort(). */</u></td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td><i>/*</i></td></tr>
+<tr><th id="175">175</th><td><i> * These flags are kept in b_cflags (owned by buffer cache).</i></td></tr>
+<tr><th id="176">176</th><td><i> */</i></td></tr>
+<tr><th id="177">177</th><td><u>#define	<dfn class="macro" id="_M/BC_AGE" data-ref="_M/BC_AGE">BC_AGE</dfn>		0x00000001	/* Move to age queue when I/O done. */</u></td></tr>
+<tr><th id="178">178</th><td><u>#define	<dfn class="macro" id="_M/BC_BUSY" data-ref="_M/BC_BUSY">BC_BUSY</dfn>		0x00000010	/* I/O in progress. */</u></td></tr>
+<tr><th id="179">179</th><td><u>#define	<dfn class="macro" id="_M/BC_INVAL" data-ref="_M/BC_INVAL">BC_INVAL</dfn>	0x00002000	/* Does not contain valid info. */</u></td></tr>
+<tr><th id="180">180</th><td><u>#define	<dfn class="macro" id="_M/BC_NOCACHE" data-ref="_M/BC_NOCACHE">BC_NOCACHE</dfn>	0x00008000	/* Do not cache block after use. */</u></td></tr>
+<tr><th id="181">181</th><td><u>#define	<dfn class="macro" id="_M/BC_WANTED" data-ref="_M/BC_WANTED">BC_WANTED</dfn>	0x00800000	/* Process wants this buffer. */</u></td></tr>
+<tr><th id="182">182</th><td><u>#define	<dfn class="macro" id="_M/BC_VFLUSH" data-ref="_M/BC_VFLUSH">BC_VFLUSH</dfn>	0x04000000	/* Buffer is being synced. */</u></td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><i>/*</i></td></tr>
+<tr><th id="185">185</th><td><i> * These flags are kept in b_oflags (owned by associated object).</i></td></tr>
+<tr><th id="186">186</th><td><i> */</i></td></tr>
+<tr><th id="187">187</th><td><u>#define	<dfn class="macro" id="_M/BO_DELWRI" data-ref="_M/BO_DELWRI">BO_DELWRI</dfn>	0x00000080	/* Delay I/O until buffer reused. */</u></td></tr>
+<tr><th id="188">188</th><td><u>#define	<dfn class="macro" id="_M/BO_DONE" data-ref="_M/BO_DONE">BO_DONE</dfn>		0x00000200	/* I/O completed. */</u></td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td><i>/*</i></td></tr>
+<tr><th id="191">191</th><td><i> * These flags are kept in b_flags (owned by buffer holder).</i></td></tr>
+<tr><th id="192">192</th><td><i> */</i></td></tr>
+<tr><th id="193">193</th><td><u>#define	<dfn class="macro" id="_M/B_WRITE" data-ref="_M/B_WRITE">B_WRITE</dfn>		0x00000000	/* Write buffer (pseudo flag). */</u></td></tr>
+<tr><th id="194">194</th><td><u>#define	<dfn class="macro" id="_M/B_ASYNC" data-ref="_M/B_ASYNC">B_ASYNC</dfn>		0x00000004	/* Start I/O, do not wait. */</u></td></tr>
+<tr><th id="195">195</th><td><u>#define	<dfn class="macro" id="_M/B_COWDONE" data-ref="_M/B_COWDONE">B_COWDONE</dfn>	0x00000400	/* Copy-on-write already done. */</u></td></tr>
+<tr><th id="196">196</th><td><u>#define	<dfn class="macro" id="_M/B_GATHERED" data-ref="_M/B_GATHERED">B_GATHERED</dfn>	0x00001000	/* LFS: already in a segment. */</u></td></tr>
+<tr><th id="197">197</th><td><u>#define	<dfn class="macro" id="_M/B_LOCKED" data-ref="_M/B_LOCKED">B_LOCKED</dfn>	0x00004000	/* Locked in core (not reusable). */</u></td></tr>
+<tr><th id="198">198</th><td><u>#define	<dfn class="macro" id="_M/B_PHYS" data-ref="_M/B_PHYS">B_PHYS</dfn>		0x00040000	/* I/O to user memory. */</u></td></tr>
+<tr><th id="199">199</th><td><u>#define	<dfn class="macro" id="_M/B_RAW" data-ref="_M/B_RAW">B_RAW</dfn>		0x00080000	/* Set by physio for raw transfers. */</u></td></tr>
+<tr><th id="200">200</th><td><u>#define	<dfn class="macro" id="_M/B_READ" data-ref="_M/B_READ">B_READ</dfn>		0x00100000	/* Read buffer. */</u></td></tr>
+<tr><th id="201">201</th><td><u>#define	<dfn class="macro" id="_M/B_DEVPRIVATE" data-ref="_M/B_DEVPRIVATE">B_DEVPRIVATE</dfn>	0x02000000	/* Device driver private flag. */</u></td></tr>
+<tr><th id="202">202</th><td><u>#define	<dfn class="macro" id="_M/B_MEDIA_FUA" data-ref="_M/B_MEDIA_FUA">B_MEDIA_FUA</dfn>	0x08000000	/* Set Force Unit Access for media. */</u></td></tr>
+<tr><th id="203">203</th><td><u>#define	<dfn class="macro" id="_M/B_MEDIA_DPO" data-ref="_M/B_MEDIA_DPO">B_MEDIA_DPO</dfn>	0x10000000	/* Set Disable Page Out for media. */</u></td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td><u>#define <dfn class="macro" id="_M/BUF_FLAGBITS" data-ref="_M/BUF_FLAGBITS">BUF_FLAGBITS</dfn> \</u></td></tr>
+<tr><th id="206">206</th><td><u>    "\20\1AGE\3ASYNC\4BAD\5BUSY\10DELWRI" \</u></td></tr>
+<tr><th id="207">207</th><td><u>    "\12DONE\13COWDONE\15GATHERED\16INVAL\17LOCKED\20NOCACHE" \</u></td></tr>
+<tr><th id="208">208</th><td><u>    "\23PHYS\24RAW\25READ\32DEVPRIVATE\33VFLUSH\34MEDIA_FUA\35MEDIA_DPO"</u></td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><i>/* Avoid weird code due to B_WRITE being a "pseudo flag" */</i></td></tr>
+<tr><th id="211">211</th><td><u>#define <dfn class="macro" id="_M/BUF_ISREAD" data-ref="_M/BUF_ISREAD">BUF_ISREAD</dfn>(bp)	(((bp)-&gt;b_flags &amp; B_READ) == B_READ)</u></td></tr>
+<tr><th id="212">212</th><td><u>#define <dfn class="macro" id="_M/BUF_ISWRITE" data-ref="_M/BUF_ISWRITE">BUF_ISWRITE</dfn>(bp)	(((bp)-&gt;b_flags &amp; B_READ) == B_WRITE)</u></td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td><i>/* Media flags, to be passed for nested I/O */</i></td></tr>
+<tr><th id="215">215</th><td><u>#define <dfn class="macro" id="_M/B_MEDIA_FLAGS" data-ref="_M/B_MEDIA_FLAGS">B_MEDIA_FLAGS</dfn>	(B_MEDIA_FUA|B_MEDIA_DPO)</u></td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><i>/*</i></td></tr>
+<tr><th id="218">218</th><td><i> * This structure describes a clustered I/O.  It is stored in the b_saveaddr</i></td></tr>
+<tr><th id="219">219</th><td><i> * field of the buffer on which I/O is done.  At I/O completion, cluster</i></td></tr>
+<tr><th id="220">220</th><td><i> * callback uses the structure to parcel I/O's to individual buffers, and</i></td></tr>
+<tr><th id="221">221</th><td><i> * then free's this structure.</i></td></tr>
+<tr><th id="222">222</th><td><i> */</i></td></tr>
+<tr><th id="223">223</th><td><b>struct</b> <dfn class="type def" id="cluster_save" title='cluster_save' data-ref="cluster_save" data-ref-filename="cluster_save">cluster_save</dfn> {</td></tr>
+<tr><th id="224">224</th><td>	<em>long</em>	<dfn class="decl field" id="cluster_save::bs_bcount" title='cluster_save::bs_bcount' data-ref="cluster_save::bs_bcount" data-ref-filename="cluster_save..bs_bcount">bs_bcount</dfn>;		<i>/* Saved b_bcount. */</i></td></tr>
+<tr><th id="225">225</th><td>	<em>long</em>	<dfn class="decl field" id="cluster_save::bs_bufsize" title='cluster_save::bs_bufsize' data-ref="cluster_save::bs_bufsize" data-ref-filename="cluster_save..bs_bufsize">bs_bufsize</dfn>;		<i>/* Saved b_bufsize. */</i></td></tr>
+<tr><th id="226">226</th><td>	<em>void</em>	*<dfn class="decl field" id="cluster_save::bs_saveaddr" title='cluster_save::bs_saveaddr' data-ref="cluster_save::bs_saveaddr" data-ref-filename="cluster_save..bs_saveaddr">bs_saveaddr</dfn>;		<i>/* Saved b_addr. */</i></td></tr>
+<tr><th id="227">227</th><td>	<em>int</em>	<dfn class="decl field" id="cluster_save::bs_nchildren" title='cluster_save::bs_nchildren' data-ref="cluster_save::bs_nchildren" data-ref-filename="cluster_save..bs_nchildren">bs_nchildren</dfn>;		<i>/* Number of associated buffers. */</i></td></tr>
+<tr><th id="228">228</th><td>	<b>struct</b> <a class="type" href="#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="decl field" id="cluster_save::bs_children" title='cluster_save::bs_children' data-ref="cluster_save::bs_children" data-ref-filename="cluster_save..bs_children">bs_children</dfn>;	<i>/* List of associated buffers. */</i></td></tr>
+<tr><th id="229">229</th><td>};</td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td><i>/*</i></td></tr>
+<tr><th id="232">232</th><td><i> * Zero out the buffer's data area.</i></td></tr>
+<tr><th id="233">233</th><td><i> */</i></td></tr>
+<tr><th id="234">234</th><td><u>#define	<dfn class="macro" id="_M/clrbuf" data-ref="_M/clrbuf">clrbuf</dfn>(bp)							\</u></td></tr>
+<tr><th id="235">235</th><td><u>do {									\</u></td></tr>
+<tr><th id="236">236</th><td><u>	memset((bp)-&gt;b_data, 0, (u_int)(bp)-&gt;b_bcount);			\</u></td></tr>
+<tr><th id="237">237</th><td><u>	(bp)-&gt;b_resid = 0;						\</u></td></tr>
+<tr><th id="238">238</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="239">239</th><td></td></tr>
+<tr><th id="240">240</th><td><i>/* Flags to low-level allocation routines. */</i></td></tr>
+<tr><th id="241">241</th><td><u>#define <dfn class="macro" id="_M/B_CLRBUF" data-ref="_M/B_CLRBUF">B_CLRBUF</dfn>	0x01	/* Request allocated buffer be cleared. */</u></td></tr>
+<tr><th id="242">242</th><td><u>#define <dfn class="macro" id="_M/B_SYNC" data-ref="_M/B_SYNC">B_SYNC</dfn>		0x02	/* Do all allocations synchronously. */</u></td></tr>
+<tr><th id="243">243</th><td><u>#define <dfn class="macro" id="_M/B_METAONLY" data-ref="_M/B_METAONLY">B_METAONLY</dfn>	0x04	/* Return indirect block buffer. */</u></td></tr>
+<tr><th id="244">244</th><td><u>#define <dfn class="macro" id="_M/B_CONTIG" data-ref="_M/B_CONTIG">B_CONTIG</dfn>	0x08	/* Allocate file contiguously. */</u></td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td><i>/* Flags to bread() and breadn(). */</i></td></tr>
+<tr><th id="247">247</th><td><u>#define <dfn class="macro" id="_M/B_MODIFY" data-ref="_M/B_MODIFY">B_MODIFY</dfn>	0x01	/* Hint: caller might modify buffer */</u></td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><u>#<span data-ppcond="249">ifdef</span> <a class="macro" href="../rump/include/opt/opt_rumpkernel.h.html#7" data-ref="_M/_KERNEL">_KERNEL</a></u></td></tr>
+<tr><th id="250">250</th><td></td></tr>
+<tr><th id="251">251</th><td><u>#define	<dfn class="macro" id="_M/BIO_GETPRIO" data-ref="_M/BIO_GETPRIO">BIO_GETPRIO</dfn>(bp)		((bp)-&gt;b_prio)</u></td></tr>
+<tr><th id="252">252</th><td><u>#define	<dfn class="macro" id="_M/BIO_SETPRIO" data-ref="_M/BIO_SETPRIO">BIO_SETPRIO</dfn>(bp, prio)	(bp)-&gt;b_prio = (prio)</u></td></tr>
+<tr><th id="253">253</th><td><u>#define	<dfn class="macro" id="_M/BIO_COPYPRIO" data-ref="_M/BIO_COPYPRIO">BIO_COPYPRIO</dfn>(bp1, bp2)	BIO_SETPRIO(bp1, BIO_GETPRIO(bp2))</u></td></tr>
+<tr><th id="254">254</th><td></td></tr>
+<tr><th id="255">255</th><td><u>#define	<dfn class="macro" id="_M/BPRIO_NPRIO" data-ref="_M/BPRIO_NPRIO">BPRIO_NPRIO</dfn>		3</u></td></tr>
+<tr><th id="256">256</th><td><u>#define	<dfn class="macro" id="_M/BPRIO_TIMECRITICAL" data-ref="_M/BPRIO_TIMECRITICAL">BPRIO_TIMECRITICAL</dfn>	2</u></td></tr>
+<tr><th id="257">257</th><td><u>#define	<dfn class="macro" id="_M/BPRIO_TIMELIMITED" data-ref="_M/BPRIO_TIMELIMITED">BPRIO_TIMELIMITED</dfn>	1</u></td></tr>
+<tr><th id="258">258</th><td><u>#define	<dfn class="macro" id="_M/BPRIO_TIMENONCRITICAL" data-ref="_M/BPRIO_TIMENONCRITICAL">BPRIO_TIMENONCRITICAL</dfn>	0</u></td></tr>
+<tr><th id="259">259</th><td><u>#define	<dfn class="macro" id="_M/BPRIO_DEFAULT" data-ref="_M/BPRIO_DEFAULT">BPRIO_DEFAULT</dfn>		BPRIO_TIMELIMITED</u></td></tr>
+<tr><th id="260">260</th><td></td></tr>
+<tr><th id="261">261</th><td><a class="macro" href="cdefs.h.html#365" title="" data-ref="_M/__BEGIN_DECLS">__BEGIN_DECLS</a></td></tr>
+<tr><th id="262">262</th><td><i>/*</i></td></tr>
+<tr><th id="263">263</th><td><i> * bufferio(9) ops</i></td></tr>
+<tr><th id="264">264</th><td><i> */</i></td></tr>
+<tr><th id="265">265</th><td><em>void</em>	<dfn class="decl fn" id="biodone" title='biodone' data-ref="biodone" data-ref-filename="biodone">biodone</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="266">266</th><td><em>int</em>	<dfn class="decl fn" id="biowait" title='biowait' data-ref="biowait" data-ref-filename="biowait">biowait</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="267">267</th><td><a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a>	*<dfn class="decl fn" id="getiobuf" title='getiobuf' data-ref="getiobuf" data-ref-filename="getiobuf">getiobuf</dfn>(<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *, <a class="macro" href="stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a>);</td></tr>
+<tr><th id="268">268</th><td><em>void</em>	<dfn class="decl fn" id="putiobuf" title='putiobuf' data-ref="putiobuf" data-ref-filename="putiobuf">putiobuf</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="269">269</th><td><em>void</em>	<dfn class="decl fn" id="nestiobuf_setup" title='nestiobuf_setup' data-ref="nestiobuf_setup" data-ref-filename="nestiobuf_setup">nestiobuf_setup</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <em>int</em>, <a class="typedef" href="types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a>);</td></tr>
+<tr><th id="270">270</th><td><em>void</em>	<dfn class="decl fn" id="nestiobuf_done" title='nestiobuf_done' data-ref="nestiobuf_done" data-ref-filename="nestiobuf_done">nestiobuf_done</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <em>int</em>, <em>int</em>);</td></tr>
+<tr><th id="271">271</th><td></td></tr>
+<tr><th id="272">272</th><td><em>void</em>	<dfn class="decl fn" id="nestiobuf_iodone" title='nestiobuf_iodone' data-ref="nestiobuf_iodone" data-ref-filename="nestiobuf_iodone">nestiobuf_iodone</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="273">273</th><td><em>int</em>	<dfn class="decl fn" id="physio" title='physio' data-ref="physio" data-ref-filename="physio">physio</dfn>(<em>void</em> (*)(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *), <a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <a class="typedef" href="types.h.html#dev_t" title='dev_t' data-type='uint64_t' data-ref="dev_t" data-ref-filename="dev_t">dev_t</a>, <em>int</em>,</td></tr>
+<tr><th id="274">274</th><td>	       <em>void</em> (*)(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *), <b>struct</b> <a class="type" href="uio.h.html#uio" title='uio' data-ref="uio" data-ref-filename="uio">uio</a> *);</td></tr>
+<tr><th id="275">275</th><td></td></tr>
+<tr><th id="276">276</th><td><i>/*</i></td></tr>
+<tr><th id="277">277</th><td><i> * buffercache(9) ops</i></td></tr>
+<tr><th id="278">278</th><td><i> */</i></td></tr>
+<tr><th id="279">279</th><td><em>int</em>	<dfn class="decl fn" id="bread" title='bread' data-ref="bread" data-ref-filename="bread">bread</dfn>(<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *, <a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>, <em>int</em>, <em>int</em>, <a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> **);</td></tr>
+<tr><th id="280">280</th><td><em>int</em>	<dfn class="decl fn" id="breadn" title='breadn' data-ref="breadn" data-ref-filename="breadn">breadn</dfn>(<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *, <a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>, <em>int</em>, <a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a> *, <em>int</em> *, <em>int</em>,</td></tr>
+<tr><th id="281">281</th><td>	       <em>int</em>, <a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> **);</td></tr>
+<tr><th id="282">282</th><td><em>int</em>	<dfn class="decl fn" id="bwrite" title='bwrite' data-ref="bwrite" data-ref-filename="bwrite">bwrite</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="283">283</th><td><em>void</em>	<dfn class="decl fn" id="bawrite" title='bawrite' data-ref="bawrite" data-ref-filename="bawrite">bawrite</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="284">284</th><td><em>void</em>	<dfn class="decl fn" id="bdwrite" title='bdwrite' data-ref="bdwrite" data-ref-filename="bdwrite">bdwrite</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="285">285</th><td><a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a>	*<dfn class="decl fn" id="getblk" title='getblk' data-ref="getblk" data-ref-filename="getblk">getblk</dfn>(<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *, <a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>, <em>int</em>, <em>int</em>, <em>int</em>);</td></tr>
+<tr><th id="286">286</th><td><a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a>	*<dfn class="decl fn" id="geteblk" title='geteblk' data-ref="geteblk" data-ref-filename="geteblk">geteblk</dfn>(<em>int</em>);</td></tr>
+<tr><th id="287">287</th><td><a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a>	*<dfn class="decl fn" id="incore" title='incore' data-ref="incore" data-ref-filename="incore">incore</dfn>(<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *, <a class="typedef" href="types.h.html#daddr_t" title='daddr_t' data-type='int64_t' data-ref="daddr_t" data-ref-filename="daddr_t">daddr_t</a>);</td></tr>
+<tr><th id="288">288</th><td><em>int</em>	<dfn class="decl fn" id="allocbuf" title='allocbuf' data-ref="allocbuf" data-ref-filename="allocbuf">allocbuf</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <em>int</em>, <em>int</em>);</td></tr>
+<tr><th id="289">289</th><td><em>void</em>	<dfn class="decl fn" id="brelsel" title='brelsel' data-ref="brelsel" data-ref-filename="brelsel">brelsel</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <em>int</em>);</td></tr>
+<tr><th id="290">290</th><td><em>void</em>	<dfn class="decl fn" id="brelse" title='brelse' data-ref="brelse" data-ref-filename="brelse">brelse</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <em>int</em>);</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td><i>/*</i></td></tr>
+<tr><th id="293">293</th><td><i> * So-far indeterminate ops that might belong to either</i></td></tr>
+<tr><th id="294">294</th><td><i> * bufferio(9) or buffercache(9).</i></td></tr>
+<tr><th id="295">295</th><td><i> */</i></td></tr>
+<tr><th id="296">296</th><td><em>void</em>	<dfn class="decl fn" id="bremfree" title='bremfree' data-ref="bremfree" data-ref-filename="bremfree">bremfree</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="297">297</th><td><em>void</em>	<dfn class="decl fn" id="bufinit" title='bufinit' data-ref="bufinit" data-ref-filename="bufinit">bufinit</dfn>(<em>void</em>);</td></tr>
+<tr><th id="298">298</th><td><em>void</em>	<dfn class="decl fn" id="bufinit2" title='bufinit2' data-ref="bufinit2" data-ref-filename="bufinit2">bufinit2</dfn>(<em>void</em>);</td></tr>
+<tr><th id="299">299</th><td><em>void</em>	<dfn class="decl fn" id="minphys" title='minphys' data-ref="minphys" data-ref-filename="minphys">minphys</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="300">300</th><td><em>void</em>	<dfn class="decl fn" id="brelvp" title='brelvp' data-ref="brelvp" data-ref-filename="brelvp">brelvp</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="301">301</th><td><em>void</em>	<dfn class="decl fn" id="reassignbuf" title='reassignbuf' data-ref="reassignbuf" data-ref-filename="reassignbuf">reassignbuf</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *);</td></tr>
+<tr><th id="302">302</th><td><em>void</em>	<dfn class="decl fn" id="bgetvp" title='bgetvp' data-ref="bgetvp" data-ref-filename="bgetvp">bgetvp</dfn>(<b>struct</b> <a class="type" href="systm.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *, <a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="303">303</th><td><em>int</em>	<dfn class="decl fn" id="buf_syncwait" title='buf_syncwait' data-ref="buf_syncwait" data-ref-filename="buf_syncwait">buf_syncwait</dfn>(<em>void</em>);</td></tr>
+<tr><th id="304">304</th><td><a class="typedef" href="types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a>	<dfn class="decl fn" id="buf_memcalc" title='buf_memcalc' data-ref="buf_memcalc" data-ref-filename="buf_memcalc">buf_memcalc</dfn>(<em>void</em>);</td></tr>
+<tr><th id="305">305</th><td><em>int</em>	<dfn class="decl fn" id="buf_drain" title='buf_drain' data-ref="buf_drain" data-ref-filename="buf_drain">buf_drain</dfn>(<em>int</em>);</td></tr>
+<tr><th id="306">306</th><td><em>int</em>	<dfn class="decl fn" id="buf_setvalimit" title='buf_setvalimit' data-ref="buf_setvalimit" data-ref-filename="buf_setvalimit">buf_setvalimit</dfn>(<a class="typedef" href="../arch/i386/include/types.h.html#vsize_t" title='vsize_t' data-type='unsigned long' data-ref="vsize_t" data-ref-filename="vsize_t">vsize_t</a>);</td></tr>
+<tr><th id="307">307</th><td><u>#<span data-ppcond="307">if</span> defined(<span class="macro" data-ref="_M/DDB">DDB</span>) || defined(<a class="macro" href="../rump/include/opt/opt_rumpkernel.h.html#14" data-ref="_M/DEBUGPRINT">DEBUGPRINT</a>)</u></td></tr>
+<tr><th id="308">308</th><td><em>void</em>	<dfn class="decl fn" id="vfs_buf_print" title='vfs_buf_print' data-ref="vfs_buf_print" data-ref-filename="vfs_buf_print">vfs_buf_print</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <em>int</em>, <em>void</em> (*)(<em>const</em> <em>char</em> *, ...)</td></tr>
+<tr><th id="309">309</th><td>    <a class="macro" href="cdefs.h.html#501" title="__attribute__((__format__ (__printf__, 1, 2)))" data-ref="_M/__printflike">__printflike</a>(<var>1</var>, <var>2</var>));</td></tr>
+<tr><th id="310">310</th><td><u>#<span data-ppcond="307">endif</span></u></td></tr>
+<tr><th id="311">311</th><td><em>void</em>	<dfn class="decl fn" id="buf_init" title='buf_init' data-ref="buf_init" data-ref-filename="buf_init">buf_init</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="312">312</th><td><em>void</em>	<dfn class="decl fn" id="buf_destroy" title='buf_destroy' data-ref="buf_destroy" data-ref-filename="buf_destroy">buf_destroy</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *);</td></tr>
+<tr><th id="313">313</th><td><em>int</em>	<dfn class="decl fn" id="bbusy" title='bbusy' data-ref="bbusy" data-ref-filename="bbusy">bbusy</dfn>(<a class="typedef" href="types.h.html#buf_t" title='buf_t' data-type='struct buf' data-ref="buf_t" data-ref-filename="buf_t">buf_t</a> *, <a class="macro" href="stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a>, <em>int</em>, <a class="typedef" href="mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *);</td></tr>
+<tr><th id="314">314</th><td><em>int</em>	<dfn class="decl fn" id="buf_nbuf" title='buf_nbuf' data-ref="buf_nbuf" data-ref-filename="buf_nbuf">buf_nbuf</dfn>(<em>void</em>);</td></tr>
+<tr><th id="315">315</th><td></td></tr>
+<tr><th id="316">316</th><td><em>void</em>	<dfn class="decl fn" id="biohist_init" title='biohist_init' data-ref="biohist_init" data-ref-filename="biohist_init">biohist_init</dfn>(<em>void</em>);</td></tr>
+<tr><th id="317">317</th><td></td></tr>
+<tr><th id="318">318</th><td><a class="macro" href="cdefs.h.html#366" title="" data-ref="_M/__END_DECLS">__END_DECLS</a></td></tr>
+<tr><th id="319">319</th><td><u>#<span data-ppcond="249">endif</span> /* _KERNEL */</u></td></tr>
+<tr><th id="320">320</th><td><u>#<span data-ppcond="69">endif</span> /* !_SYS_BUF_H_ */</u></td></tr>
+<tr><th id="321">321</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../kern/kern_proc.c.html'>netbsd/sys/kern/kern_proc.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

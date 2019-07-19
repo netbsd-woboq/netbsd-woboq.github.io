@@ -1,0 +1,237 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>refclock_local.c source code [netbsd/external/bsd/ntp/dist/ntpd/refclock_local.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/refclock_local.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='refclock_local.c.html'>refclock_local.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: refclock_local.c,v 1.5 2016/01/08 21:35:39 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td></td></tr>
+<tr><th id="4">4</th><td><i>/*</i></td></tr>
+<tr><th id="5">5</th><td><i> * refclock_local - local pseudo-clock driver</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * wjm 17-aug-1995: add a hook for special treatment of VMS_LOCALUNIT</i></td></tr>
+<tr><th id="8">8</th><td><i> */</i></td></tr>
+<tr><th id="9">9</th><td><u>#<span data-ppcond="9">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="10">10</th><td><u>#include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="11">11</th><td><u>#<span data-ppcond="9">endif</span></u></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#<span data-ppcond="13">ifdef</span> <a class="macro" href="../../include/config.h.html#1519" data-ref="_M/REFCLOCK">REFCLOCK</a></u></td></tr>
+<tr><th id="14">14</th><td></td></tr>
+<tr><th id="15">15</th><td><u>#include <a href="../include/ntpd.h.html">"ntpd.h"</a></u></td></tr>
+<tr><th id="16">16</th><td><u>#include <a href="../include/ntp_refclock.h.html">"ntp_refclock.h"</a></u></td></tr>
+<tr><th id="17">17</th><td><u>#include <a href="../include/ntp_stdlib.h.html">"ntp_stdlib.h"</a></u></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="20">20</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/ctype.h.html">&lt;ctype.h&gt;</a></u></td></tr>
+<tr><th id="21">21</th><td></td></tr>
+<tr><th id="22">22</th><td><u>#<span data-ppcond="22">ifdef</span> <a class="macro" href="../../include/config.h.html#1353" data-ref="_M/KERNEL_PLL">KERNEL_PLL</a></u></td></tr>
+<tr><th id="23">23</th><td><u>#include <a href="../include/ntp_syscall.h.html">"ntp_syscall.h"</a></u></td></tr>
+<tr><th id="24">24</th><td><u>#<span data-ppcond="22">endif</span></u></td></tr>
+<tr><th id="25">25</th><td></td></tr>
+<tr><th id="26">26</th><td><i>/*</i></td></tr>
+<tr><th id="27">27</th><td><i> * This is a hack to allow a machine to use its own system clock as a</i></td></tr>
+<tr><th id="28">28</th><td><i> * reference clock, i.e., to free-run using no outside clock discipline</i></td></tr>
+<tr><th id="29">29</th><td><i> * source. Note that the clock selection algorithm will not select this</i></td></tr>
+<tr><th id="30">30</th><td><i> * driver unless all other sources of synchronization have been lost.</i></td></tr>
+<tr><th id="31">31</th><td><i> * This is useful if you want to use NTP in an isolated environment</i></td></tr>
+<tr><th id="32">32</th><td><i> * with no radio clock or NIST modem available. Pick a machine that you</i></td></tr>
+<tr><th id="33">33</th><td><i> * figure has a good clock oscillator and configure it with this</i></td></tr>
+<tr><th id="34">34</th><td><i> * driver. Set the clock using the best means available, like</i></td></tr>
+<tr><th id="35">35</th><td><i> * eyeball-and-wristwatch. Then, point all the other machines at this</i></td></tr>
+<tr><th id="36">36</th><td><i> * one or use broadcast (not multicast) mode to distribute time.</i></td></tr>
+<tr><th id="37">37</th><td><i> *</i></td></tr>
+<tr><th id="38">38</th><td><i> * Another application for this driver is if you want to use a</i></td></tr>
+<tr><th id="39">39</th><td><i> * particular server's clock as the clock of last resort when all other</i></td></tr>
+<tr><th id="40">40</th><td><i> * normal synchronization sources have gone away. This is especially</i></td></tr>
+<tr><th id="41">41</th><td><i> * useful if that server has an ovenized oscillator. However, the</i></td></tr>
+<tr><th id="42">42</th><td><i> * preferred was to do this is using orphan mode. See the documentation.</i></td></tr>
+<tr><th id="43">43</th><td><i> *</i></td></tr>
+<tr><th id="44">44</th><td><i> * A third application for this driver is when an external discipline</i></td></tr>
+<tr><th id="45">45</th><td><i> * source is available, such as the NIST "lockclock" program, which</i></td></tr>
+<tr><th id="46">46</th><td><i> * synchronizes the local clock via a telephone modem and the NIST</i></td></tr>
+<tr><th id="47">47</th><td><i> * Automated Computer Time Service (ACTS), or the Digital Time</i></td></tr>
+<tr><th id="48">48</th><td><i> * Synchronization Service (DTSS), which runs on DCE machines. In this</i></td></tr>
+<tr><th id="49">49</th><td><i> * case the stratum should be set at zero, indicating a bona fide</i></td></tr>
+<tr><th id="50">50</th><td><i> * stratum-1 source. Exercise some caution with this, since there is no</i></td></tr>
+<tr><th id="51">51</th><td><i> * easy way to telegraph via NTP that something might be wrong in the</i></td></tr>
+<tr><th id="52">52</th><td><i> * discipline source itself. In the case of DTSS, the local clock can</i></td></tr>
+<tr><th id="53">53</th><td><i> * have a rather large jitter, depending on the interval between</i></td></tr>
+<tr><th id="54">54</th><td><i> * corrections and the intrinsic frequency error of the clock</i></td></tr>
+<tr><th id="55">55</th><td><i> * oscillator. In extreme cases, this can cause clients to exceed the</i></td></tr>
+<tr><th id="56">56</th><td><i> * 128-ms slew window and drop off the NTP subnet.</i></td></tr>
+<tr><th id="57">57</th><td><i> *</i></td></tr>
+<tr><th id="58">58</th><td><i> * Fudge Factors</i></td></tr>
+<tr><th id="59">59</th><td><i> *</i></td></tr>
+<tr><th id="60">60</th><td><i> * None currently supported.</i></td></tr>
+<tr><th id="61">61</th><td><i> */</i></td></tr>
+<tr><th id="62">62</th><td><i>/*</i></td></tr>
+<tr><th id="63">63</th><td><i> * Local interface definitions</i></td></tr>
+<tr><th id="64">64</th><td><i> */</i></td></tr>
+<tr><th id="65">65</th><td><u>#define <dfn class="macro" id="_M/PRECISION" data-ref="_M/PRECISION">PRECISION</dfn>	(-7)	/* about 10 ms precision */</u></td></tr>
+<tr><th id="66">66</th><td><u>#define <dfn class="macro" id="_M/DESCRIPTION" data-ref="_M/DESCRIPTION">DESCRIPTION</dfn> "Undisciplined local clock" /* WRU */</u></td></tr>
+<tr><th id="67">67</th><td><u>#define <dfn class="macro" id="_M/STRATUM" data-ref="_M/STRATUM">STRATUM</dfn> 	5	/* default stratum */</u></td></tr>
+<tr><th id="68">68</th><td><u>#define <dfn class="macro" id="_M/DISPERSION" data-ref="_M/DISPERSION">DISPERSION</dfn>	.01	/* default dispersion (10 ms) */</u></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><i>/*</i></td></tr>
+<tr><th id="71">71</th><td><i> * Imported from the timer module</i></td></tr>
+<tr><th id="72">72</th><td><i> */</i></td></tr>
+<tr><th id="73">73</th><td><b>extern</b> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <a class="decl" href="../include/ntpd.h.html#current_time" title='current_time' data-ref="current_time" data-ref-filename="current_time" id="current_time">current_time</a>;</td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td><i>/*</i></td></tr>
+<tr><th id="76">76</th><td><i> * Imported from ntp_proto</i></td></tr>
+<tr><th id="77">77</th><td><i> */</i></td></tr>
+<tr><th id="78">78</th><td><b>extern</b> <a class="typedef" href="../include/ntp.h.html#s_char" title='s_char' data-type='signed char' data-ref="s_char" data-ref-filename="s_char">s_char</a> <a class="decl" href="../include/ntpd.h.html#sys_precision" title='sys_precision' data-ref="sys_precision" data-ref-filename="sys_precision" id="sys_precision">sys_precision</a>;</td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><i  data-doc="local_start">/*</i></td></tr>
+<tr><th id="81">81</th><td><i  data-doc="local_start"> * Function prototypes</i></td></tr>
+<tr><th id="82">82</th><td><i  data-doc="local_start"> */</i></td></tr>
+<tr><th id="83">83</th><td><em>static</em>	<em>int</em> <a class="tu decl fn" href="#local_start" title='local_start' data-type='int local_start(int , struct peer * )' data-ref="local_start" data-ref-filename="local_start">local_start</a> (<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="84">84</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#local_poll" title='local_poll' data-type='void local_poll(int , struct peer * )' data-ref="local_poll" data-ref-filename="local_poll">local_poll</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><i  data-doc="poll_time">/*</i></td></tr>
+<tr><th id="87">87</th><td><i  data-doc="poll_time"> * Local variables</i></td></tr>
+<tr><th id="88">88</th><td><i  data-doc="poll_time"> */</i></td></tr>
+<tr><th id="89">89</th><td><em>static</em>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <dfn class="tu decl def" id="poll_time" title='poll_time' data-type='u_long' data-ref="poll_time" data-ref-filename="poll_time">poll_time</dfn>;	<i  data-doc="poll_time">/* last time polled */</i></td></tr>
+<tr><th id="90">90</th><td>	</td></tr>
+<tr><th id="91">91</th><td><i>/*</i></td></tr>
+<tr><th id="92">92</th><td><i> * Transfer vector</i></td></tr>
+<tr><th id="93">93</th><td><i> */</i></td></tr>
+<tr><th id="94">94</th><td><b>struct</b>	<a class="type" href="../include/ntp_refclock.h.html#refclock" title='refclock' data-ref="refclock" data-ref-filename="refclock">refclock</a> <dfn class="decl def" id="refclock_local" title='refclock_local' data-ref="refclock_local" data-ref-filename="refclock_local">refclock_local</dfn> = {</td></tr>
+<tr><th id="95">95</th><td>	<a class="tu ref fn" href="#local_start" title='local_start' data-use='r' data-ref="local_start" data-ref-filename="local_start">local_start</a>,		<i>/* start up driver */</i></td></tr>
+<tr><th id="96">96</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* shut down driver (not used) */</i></td></tr>
+<tr><th id="97">97</th><td>	<a class="tu ref fn" href="#local_poll" title='local_poll' data-use='r' data-ref="local_poll" data-ref-filename="local_poll">local_poll</a>,	 	<i>/* transmit poll message */</i></td></tr>
+<tr><th id="98">98</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* not used (old lcl_control) */</i></td></tr>
+<tr><th id="99">99</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* initialize driver (not used) */</i></td></tr>
+<tr><th id="100">100</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* not used (old lcl_buginfo) */</i></td></tr>
+<tr><th id="101">101</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#201" title="0" data-ref="_M/NOFLAGS">NOFLAGS</a> 		<i>/* not used */</i></td></tr>
+<tr><th id="102">102</th><td>};</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td><i  data-doc="local_start">/*</i></td></tr>
+<tr><th id="106">106</th><td><i  data-doc="local_start"> * local_start - start up the clock</i></td></tr>
+<tr><th id="107">107</th><td><i  data-doc="local_start"> */</i></td></tr>
+<tr><th id="108">108</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="109">109</th><td><dfn class="tu decl def fn" id="local_start" title='local_start' data-type='int local_start(int unit, struct peer * peer)' data-ref="local_start" data-ref-filename="local_start">local_start</dfn>(</td></tr>
+<tr><th id="110">110</th><td>	<em>int</em> <dfn class="local col1 decl" id="1unit" title='unit' data-type='int' data-ref="1unit" data-ref-filename="1unit">unit</dfn>,</td></tr>
+<tr><th id="111">111</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col2 decl" id="2peer" title='peer' data-type='struct peer *' data-ref="2peer" data-ref-filename="2peer">peer</dfn></td></tr>
+<tr><th id="112">112</th><td>	)</td></tr>
+<tr><th id="113">113</th><td>{</td></tr>
+<tr><th id="114">114</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col3 decl" id="3pp" title='pp' data-type='struct refclockproc *' data-ref="3pp" data-ref-filename="3pp">pp</dfn>;</td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="117">117</th><td></td></tr>
+<tr><th id="118">118</th><td>	<i>/*</i></td></tr>
+<tr><th id="119">119</th><td><i>	 * Initialize miscellaneous variables</i></td></tr>
+<tr><th id="120">120</th><td><i>	 */</i></td></tr>
+<tr><th id="121">121</th><td>	<a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::precision" title='peer::precision' data-ref="peer::precision" data-ref-filename="peer..precision">precision</a> = <a class="ref" href="../include/ntpd.h.html#sys_precision" title='sys_precision' data-ref="sys_precision" data-ref-filename="sys_precision">sys_precision</a>;</td></tr>
+<tr><th id="122">122</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#417" title="0x3" data-ref="_M/LEAP_NOTINSYNC">LEAP_NOTINSYNC</a>;</td></tr>
+<tr><th id="123">123</th><td>	<a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::stratum" title='peer::stratum' data-ref="peer::stratum" data-ref-filename="peer..stratum">stratum</a> = <a class="macro" href="#67" title="5" data-ref="_M/STRATUM">STRATUM</a>;</td></tr>
+<tr><th id="124">124</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::stratum" title='refclockproc::stratum' data-ref="refclockproc::stratum" data-ref-filename="refclockproc..stratum">stratum</a> = <a class="macro" href="#67" title="5" data-ref="_M/STRATUM">STRATUM</a>;</td></tr>
+<tr><th id="125">125</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::clockdesc" title='refclockproc::clockdesc' data-ref="refclockproc::clockdesc" data-ref-filename="refclockproc..clockdesc">clockdesc</a> = <a class="macro" href="#66" title="&quot;Undisciplined local clock&quot;" data-ref="_M/DESCRIPTION">DESCRIPTION</a>;</td></tr>
+<tr><th id="126">126</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(&amp;<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::refid" title='refclockproc::refid' data-ref="refclockproc::refid" data-ref-filename="refclockproc..refid">refid</a>, <q>"LOCL"</q>, <var>4</var>);</td></tr>
+<tr><th id="127">127</th><td>	<a class="tu ref" href="#poll_time" title='poll_time' data-use='w' data-ref="poll_time" data-ref-filename="poll_time">poll_time</a> = <a class="ref" href="../include/ntpd.h.html#current_time" title='current_time' data-ref="current_time" data-ref-filename="current_time">current_time</a>;</td></tr>
+<tr><th id="128">128</th><td>	<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="129">129</th><td>}</td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td><i  data-doc="local_poll">/*</i></td></tr>
+<tr><th id="133">133</th><td><i  data-doc="local_poll"> * local_poll - called by the transmit procedure</i></td></tr>
+<tr><th id="134">134</th><td><i  data-doc="local_poll"> *</i></td></tr>
+<tr><th id="135">135</th><td><i  data-doc="local_poll"> * LOCKCLOCK: If the kernel supports the nanokernel or microkernel</i></td></tr>
+<tr><th id="136">136</th><td><i  data-doc="local_poll"> * system calls, the leap bits are extracted from the kernel. If there</i></td></tr>
+<tr><th id="137">137</th><td><i  data-doc="local_poll"> * is a kernel error or the kernel leap bits are set to 11, the NTP leap</i></td></tr>
+<tr><th id="138">138</th><td><i  data-doc="local_poll"> * bits are set to 11 and the stratum is set to infinity. Otherwise, the</i></td></tr>
+<tr><th id="139">139</th><td><i  data-doc="local_poll"> * NTP leap bits are set to the kernel leap bits and the stratum is set</i></td></tr>
+<tr><th id="140">140</th><td><i  data-doc="local_poll"> * as fudged. This behavior does not faithfully follow the</i></td></tr>
+<tr><th id="141">141</th><td><i  data-doc="local_poll"> * specification, but is probably more appropriate in a multiple-server</i></td></tr>
+<tr><th id="142">142</th><td><i  data-doc="local_poll"> * national laboratory network.</i></td></tr>
+<tr><th id="143">143</th><td><i  data-doc="local_poll"> */</i></td></tr>
+<tr><th id="144">144</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="145">145</th><td><dfn class="tu decl def fn" id="local_poll" title='local_poll' data-type='void local_poll(int unit, struct peer * peer)' data-ref="local_poll" data-ref-filename="local_poll">local_poll</dfn>(</td></tr>
+<tr><th id="146">146</th><td>	<em>int</em> <dfn class="local col4 decl" id="4unit" title='unit' data-type='int' data-ref="4unit" data-ref-filename="4unit">unit</dfn>,</td></tr>
+<tr><th id="147">147</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col5 decl" id="5peer" title='peer' data-type='struct peer *' data-ref="5peer" data-ref-filename="5peer">peer</dfn></td></tr>
+<tr><th id="148">148</th><td>	)</td></tr>
+<tr><th id="149">149</th><td>{</td></tr>
+<tr><th id="150">150</th><td><u>#<span data-ppcond="150">if</span> defined(<a class="macro" href="../../include/config.h.html#1353" data-ref="_M/KERNEL_PLL">KERNEL_PLL</a>) &amp;&amp; defined(<span class="macro" data-ref="_M/LOCKCLOCK">LOCKCLOCK</span>)</u></td></tr>
+<tr><th id="151">151</th><td>	<b>struct</b> timex ntv;</td></tr>
+<tr><th id="152">152</th><td><u>#<span data-ppcond="150">endif</span> /* KERNEL_PLL LOCKCLOCK */</u></td></tr>
+<tr><th id="153">153</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col6 decl" id="6pp" title='pp' data-type='struct refclockproc *' data-ref="6pp" data-ref-filename="6pp">pp</dfn>;</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td>	<i>/*</i></td></tr>
+<tr><th id="156">156</th><td><i>	 * Do no evil unless the house is dark or lit with our own lamp.</i></td></tr>
+<tr><th id="157">157</th><td><i>	 */</i></td></tr>
+<tr><th id="158">158</th><td>	<b>if</b> (!(<a class="ref" href="../include/ntpd.h.html#sys_peer" title='sys_peer' data-ref="sys_peer" data-ref-filename="sys_peer">sys_peer</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> || <a class="ref" href="../include/ntpd.h.html#sys_peer" title='sys_peer' data-ref="sys_peer" data-ref-filename="sys_peer">sys_peer</a> == <a class="local col5 ref" href="#5peer" title='peer' data-ref="5peer" data-ref-filename="5peer">peer</a>))</td></tr>
+<tr><th id="159">159</th><td>		<b>return</b>;</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td><u>#<span data-ppcond="161">if</span> defined(<span class="macro" data-ref="_M/VMS">VMS</span>) &amp;&amp; defined(<span class="macro" data-ref="_M/VMS_LOCALUNIT">VMS_LOCALUNIT</span>)</u></td></tr>
+<tr><th id="162">162</th><td>	<b>if</b> (unit == VMS_LOCALUNIT) {</td></tr>
+<tr><th id="163">163</th><td>		<b>extern</b> <em>void</em> vms_local_poll(<b>struct</b> peer *);</td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td>		vms_local_poll(peer);</td></tr>
+<tr><th id="166">166</th><td>		<b>return</b>;</td></tr>
+<tr><th id="167">167</th><td>	}</td></tr>
+<tr><th id="168">168</th><td><u>#<span data-ppcond="161">endif</span> /* VMS &amp;&amp; VMS_LOCALUNIT */</u></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>	<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a> = <a class="local col5 ref" href="#5peer" title='peer' data-ref="5peer" data-ref-filename="5peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="171">171</th><td>	<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::polls" title='refclockproc::polls' data-ref="refclockproc::polls" data-ref-filename="refclockproc..polls">polls</a>++;</td></tr>
+<tr><th id="172">172</th><td></td></tr>
+<tr><th id="173">173</th><td>	<i>/*</i></td></tr>
+<tr><th id="174">174</th><td><i>	 * Ramble through the usual filtering and grooming code, which</i></td></tr>
+<tr><th id="175">175</th><td><i>	 * is essentially a no-op and included mostly for pretty</i></td></tr>
+<tr><th id="176">176</th><td><i>	 * billboards.</i></td></tr>
+<tr><th id="177">177</th><td><i>	 */</i></td></tr>
+<tr><th id="178">178</th><td>	<a class="tu ref" href="#poll_time" title='poll_time' data-use='w' data-ref="poll_time" data-ref-filename="poll_time">poll_time</a> = <a class="ref" href="../include/ntpd.h.html#current_time" title='current_time' data-ref="current_time" data-ref-filename="current_time">current_time</a>;</td></tr>
+<tr><th id="179">179</th><td>	<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_process_offset" title='refclock_process_offset' data-ref="refclock_process_offset" data-ref-filename="refclock_process_offset">refclock_process_offset</a>(<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>, <a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>, <a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>, <var>0</var>);</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>	<i>/*</i></td></tr>
+<tr><th id="182">182</th><td><i>	 * If another process is disciplining the system clock, we set</i></td></tr>
+<tr><th id="183">183</th><td><i>	 * the leap bits and quality indicators from the kernel.</i></td></tr>
+<tr><th id="184">184</th><td><i>	 */</i></td></tr>
+<tr><th id="185">185</th><td><u>#<span data-ppcond="185">if</span> defined(<a class="macro" href="../../include/config.h.html#1353" data-ref="_M/KERNEL_PLL">KERNEL_PLL</a>) &amp;&amp; defined(<span class="macro" data-ref="_M/LOCKCLOCK">LOCKCLOCK</span>)</u></td></tr>
+<tr><th id="186">186</th><td>	memset(&amp;ntv,  <var>0</var>, <b>sizeof</b> ntv);</td></tr>
+<tr><th id="187">187</th><td>	<b>switch</b> (ntp_adjtime(&amp;ntv)) {</td></tr>
+<tr><th id="188">188</th><td>	<b>case</b> TIME_OK:</td></tr>
+<tr><th id="189">189</th><td>		pp-&gt;leap = LEAP_NOWARNING;</td></tr>
+<tr><th id="190">190</th><td>		peer-&gt;stratum = pp-&gt;stratum;</td></tr>
+<tr><th id="191">191</th><td>		<b>break</b>;</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td>	<b>case</b> TIME_INS:</td></tr>
+<tr><th id="194">194</th><td>		pp-&gt;leap = LEAP_ADDSECOND;</td></tr>
+<tr><th id="195">195</th><td>		peer-&gt;stratum = pp-&gt;stratum;</td></tr>
+<tr><th id="196">196</th><td>		<b>break</b>;</td></tr>
+<tr><th id="197">197</th><td></td></tr>
+<tr><th id="198">198</th><td>	<b>case</b> TIME_DEL:</td></tr>
+<tr><th id="199">199</th><td>		pp-&gt;leap = LEAP_DELSECOND;</td></tr>
+<tr><th id="200">200</th><td>		peer-&gt;stratum = pp-&gt;stratum;</td></tr>
+<tr><th id="201">201</th><td>		<b>break</b>;</td></tr>
+<tr><th id="202">202</th><td></td></tr>
+<tr><th id="203">203</th><td>	<b>default</b>:</td></tr>
+<tr><th id="204">204</th><td>		pp-&gt;leap = LEAP_NOTINSYNC;</td></tr>
+<tr><th id="205">205</th><td>		peer-&gt;stratum = STRATUM_UNSPEC;</td></tr>
+<tr><th id="206">206</th><td>	}</td></tr>
+<tr><th id="207">207</th><td>	pp-&gt;disp = <var>0</var>;</td></tr>
+<tr><th id="208">208</th><td>	pp-&gt;jitter = <var>0</var>;</td></tr>
+<tr><th id="209">209</th><td><u>#<span data-ppcond="185">else</span> /* KERNEL_PLL LOCKCLOCK */</u></td></tr>
+<tr><th id="210">210</th><td>	<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#414" title="0x0" data-ref="_M/LEAP_NOWARNING">LEAP_NOWARNING</a>;</td></tr>
+<tr><th id="211">211</th><td>	<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <a class="macro" href="#68" title=".01" data-ref="_M/DISPERSION">DISPERSION</a>;</td></tr>
+<tr><th id="212">212</th><td>	<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::jitter" title='refclockproc::jitter' data-ref="refclockproc::jitter" data-ref-filename="refclockproc..jitter">jitter</a> = <var>0</var>;</td></tr>
+<tr><th id="213">213</th><td><u>#<span data-ppcond="185">endif</span> /* KERNEL_PLL LOCKCLOCK */</u></td></tr>
+<tr><th id="214">214</th><td>	<a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastref" title='refclockproc::lastref' data-ref="refclockproc::lastref" data-ref-filename="refclockproc..lastref">lastref</a> = <a class="local col6 ref" href="#6pp" title='pp' data-ref="6pp" data-ref-filename="6pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>;</td></tr>
+<tr><th id="215">215</th><td>	<a class="ref fn" href="../include/ntpd.h.html#refclock_receive" title='refclock_receive' data-ref="refclock_receive" data-ref-filename="refclock_receive">refclock_receive</a>(<a class="local col5 ref" href="#5peer" title='peer' data-ref="5peer" data-ref-filename="5peer">peer</a>);</td></tr>
+<tr><th id="216">216</th><td>}</td></tr>
+<tr><th id="217">217</th><td><u>#<span data-ppcond="13">else</span></u></td></tr>
+<tr><th id="218">218</th><td><em>int</em> refclock_local_bs;</td></tr>
+<tr><th id="219">219</th><td><u>#<span data-ppcond="13">endif</span> /* REFCLOCK */</u></td></tr>
+<tr><th id="220">220</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

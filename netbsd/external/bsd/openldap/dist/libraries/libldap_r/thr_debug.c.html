@@ -1,0 +1,1315 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>thr_debug.c source code [netbsd/external/bsd/openldap/dist/libraries/libldap_r/thr_debug.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/openldap/dist/libraries/libldap_r/thr_debug.c'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>external</a>/<a href='../../../..'>bsd</a>/<a href='../../..'>openldap</a>/<a href='../..'>dist</a>/<a href='..'>libraries</a>/<a href='./'>libldap_r</a>/<a href='thr_debug.c.html'>thr_debug.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: thr_debug.c,v 1.1.1.6 2018/02/06 01:53:08 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/* thr_debug.c - wrapper around the chosen thread wrapper, for debugging. */</i></td></tr>
+<tr><th id="4">4</th><td><i>/* $OpenLDAP$ */</i></td></tr>
+<tr><th id="5">5</th><td><i>/* This work is part of OpenLDAP Software &lt;<a href="http://www.openldap.org/">http://www.openldap.org/</a>&gt;.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * Copyright 2005-2017 The OpenLDAP Foundation.</i></td></tr>
+<tr><th id="8">8</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted only as authorized by the OpenLDAP</i></td></tr>
+<tr><th id="12">12</th><td><i> * Public License.</i></td></tr>
+<tr><th id="13">13</th><td><i> *</i></td></tr>
+<tr><th id="14">14</th><td><i> * A copy of this license is available in file LICENSE in the</i></td></tr>
+<tr><th id="15">15</th><td><i> * top-level directory of the distribution or, alternatively, at</i></td></tr>
+<tr><th id="16">16</th><td><i> * &lt;<a href="http://www.OpenLDAP.org/license.html">http://www.OpenLDAP.org/license.html</a>&gt;.</i></td></tr>
+<tr><th id="17">17</th><td><i> */</i></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><i>/*</i></td></tr>
+<tr><th id="20">20</th><td><i> * This package provides several types of thread operation debugging:</i></td></tr>
+<tr><th id="21">21</th><td><i> *</i></td></tr>
+<tr><th id="22">22</th><td><i> * - Check the results of operations on threads, mutexes, condition</i></td></tr>
+<tr><th id="23">23</th><td><i> *   variables and read/write locks.  Also check some thread pool</i></td></tr>
+<tr><th id="24">24</th><td><i> *   operations, but not those for which failure can happen in normal</i></td></tr>
+<tr><th id="25">25</th><td><i> *   slapd operation.</i></td></tr>
+<tr><th id="26">26</th><td><i> *</i></td></tr>
+<tr><th id="27">27</th><td><i> * - Wrap those types except threads and pools in structs with state</i></td></tr>
+<tr><th id="28">28</th><td><i> *   information, and check that on all operations:</i></td></tr>
+<tr><th id="29">29</th><td><i> *</i></td></tr>
+<tr><th id="30">30</th><td><i> *   + Check that the resources are initialized and are only used at</i></td></tr>
+<tr><th id="31">31</th><td><i> *     their original address (i.e. not realloced or copied).</i></td></tr>
+<tr><th id="32">32</th><td><i> *</i></td></tr>
+<tr><th id="33">33</th><td><i> *   + Check the owner (thread ID) on mutex operations.</i></td></tr>
+<tr><th id="34">34</th><td><i> *</i></td></tr>
+<tr><th id="35">35</th><td><i> *   + Optionally allocate a reference to a byte of dummy memory.</i></td></tr>
+<tr><th id="36">36</th><td><i> *     This lets malloc debuggers see some incorrect use as memory</i></td></tr>
+<tr><th id="37">37</th><td><i> *     leaks, access to freed memory, etc.</i></td></tr>
+<tr><th id="38">38</th><td><i> *</i></td></tr>
+<tr><th id="39">39</th><td><i> * - Print an error message and by default abort() upon errors.</i></td></tr>
+<tr><th id="40">40</th><td><i> *</i></td></tr>
+<tr><th id="41">41</th><td><i> * - Print a count of leaked thread resources after cleanup.</i></td></tr>
+<tr><th id="42">42</th><td><i> *</i></td></tr>
+<tr><th id="43">43</th><td><i> * Compile-time (./configure) setup:  Macros defined in CPPFLAGS.</i></td></tr>
+<tr><th id="44">44</th><td><i> *</i></td></tr>
+<tr><th id="45">45</th><td><i> *   LDAP_THREAD_DEBUG or LDAP_THREAD_DEBUG=2</i></td></tr>
+<tr><th id="46">46</th><td><i> *      Enables debugging, but value &amp; 2 turns off type wrapping.</i></td></tr>
+<tr><th id="47">47</th><td><i> *</i></td></tr>
+<tr><th id="48">48</th><td><i> *   LDAP_UINTPTR_T=integer type to hold pointers, preferably unsigned.</i></td></tr>
+<tr><th id="49">49</th><td><i> *      Used by dummy memory option "scramble". Default = unsigned long.</i></td></tr>
+<tr><th id="50">50</th><td><i> *</i></td></tr>
+<tr><th id="51">51</th><td><i> *   LDAP_DEBUG_THREAD_NONE = initializer for a "no thread" thread ID.</i></td></tr>
+<tr><th id="52">52</th><td><i> *</i></td></tr>
+<tr><th id="53">53</th><td><i> *   In addition, you may need to set up an implementation-specific way</i></td></tr>
+<tr><th id="54">54</th><td><i> *      to enable whatever error checking your thread library provides.</i></td></tr>
+<tr><th id="55">55</th><td><i> *      Currently only implemented for Posix threads (pthreads), where</i></td></tr>
+<tr><th id="56">56</th><td><i> *      you may need to define LDAP_INT_THREAD_MUTEXATTR.  The default</i></td></tr>
+<tr><th id="57">57</th><td><i> *      is PTHREAD_MUTEX_ERRORCHECK, or PTHREAD_MUTEX_ERRORCHECK_NP for</i></td></tr>
+<tr><th id="58">58</th><td><i> *      Linux threads.  See pthread_mutexattr_settype(3).</i></td></tr>
+<tr><th id="59">59</th><td><i> *</i></td></tr>
+<tr><th id="60">60</th><td><i> * Run-time configuration:</i></td></tr>
+<tr><th id="61">61</th><td><i> *</i></td></tr>
+<tr><th id="62">62</th><td><i> *  Memory debugging tools:</i></td></tr>
+<tr><th id="63">63</th><td><i> *   Tools that report uninitialized memory accesses should disable</i></td></tr>
+<tr><th id="64">64</th><td><i> *   such warnings about the function debug_already_initialized().</i></td></tr>
+<tr><th id="65">65</th><td><i> *   Alternatively, include "noreinit" (below) in $LDAP_THREAD_DEBUG.</i></td></tr>
+<tr><th id="66">66</th><td><i> *</i></td></tr>
+<tr><th id="67">67</th><td><i> *  Environment variable $LDAP_THREAD_DEBUG:</i></td></tr>
+<tr><th id="68">68</th><td><i> *   The variable may contain a comma- or space-separated option list.</i></td></tr>
+<tr><th id="69">69</th><td><i> *   Options:</i></td></tr>
+<tr><th id="70">70</th><td><i> *      off      - Disable this package.  (It still slows things down).</i></td></tr>
+<tr><th id="71">71</th><td><i> *      tracethreads - Report create/join/exit/kill of threads.</i></td></tr>
+<tr><th id="72">72</th><td><i> *      noabort  - Do not abort() on errors.</i></td></tr>
+<tr><th id="73">73</th><td><i> *      noerror  - Do not report errors.  Implies noabort.</i></td></tr>
+<tr><th id="74">74</th><td><i> *      nocount  - Do not report counts of unreleased resources.</i></td></tr>
+<tr><th id="75">75</th><td><i> *      nosync   - Disable tests that use synchronizaion and thus</i></td></tr>
+<tr><th id="76">76</th><td><i> *                 clearly affect thread scheduling:</i></td></tr>
+<tr><th id="77">77</th><td><i> *                 Implies nocount, and cancels threadID if that is set.</i></td></tr>
+<tr><th id="78">78</th><td><i> *                 Note that if you turn on tracethreads or malloc</i></td></tr>
+<tr><th id="79">79</th><td><i> *                 debugging, these also use library calls which may</i></td></tr>
+<tr><th id="80">80</th><td><i> *                 affect thread scheduling (fprintf and malloc).</i></td></tr>
+<tr><th id="81">81</th><td><i> *   The following options do not apply if type wrapping is disabled:</i></td></tr>
+<tr><th id="82">82</th><td><i> *      nomem    - Do not check memory operations.</i></td></tr>
+<tr><th id="83">83</th><td><i> *                 Implies noreinit,noalloc.</i></td></tr>
+<tr><th id="84">84</th><td><i> *      noreinit - Do not catch reinitialization of existing resources.</i></td></tr>
+<tr><th id="85">85</th><td><i> *                 (That test accesses uninitialized memory).</i></td></tr>
+<tr><th id="86">86</th><td><i> *      threadID - Trace thread IDs.  Currently mostly useless.</i></td></tr>
+<tr><th id="87">87</th><td><i> *     Malloc debugging -- allocate dummy memory for initialized</i></td></tr>
+<tr><th id="88">88</th><td><i> *     resources, so malloc debuggers will report them as memory leaks:</i></td></tr>
+<tr><th id="89">89</th><td><i> *      noalloc  - Default.  Do not allocate dummy memory.</i></td></tr>
+<tr><th id="90">90</th><td><i> *      alloc    - Store a pointer to dummy memory.   However, leak</i></td></tr>
+<tr><th id="91">91</th><td><i> *                 detectors might not catch unreleased resources in</i></td></tr>
+<tr><th id="92">92</th><td><i> *                 global variables.</i></td></tr>
+<tr><th id="93">93</th><td><i> *      scramble - Store bitwise complement of dummy memory pointer.</i></td></tr>
+<tr><th id="94">94</th><td><i> *                 That never escapes memory leak detectors -</i></td></tr>
+<tr><th id="95">95</th><td><i> *                 but detection while the program is running will</i></td></tr>
+<tr><th id="96">96</th><td><i> *                 report active resources as leaks.  Do not</i></td></tr>
+<tr><th id="97">97</th><td><i> *                 use this if a garbage collector is in use:-)</i></td></tr>
+<tr><th id="98">98</th><td><i> *      adjptr   - Point to end of dummy memory.</i></td></tr>
+<tr><th id="99">99</th><td><i> *                 Purify reports these as "potential leaks" (PLK).</i></td></tr>
+<tr><th id="100">100</th><td><i> *                 I have not checked other malloc debuggers.</i></td></tr>
+<tr><th id="101">101</th><td><i> */</i></td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><u>#include <a href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="104">104</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: thr_debug.c,v 1.1.1.6 2018/02/06 01:53:08 christos Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: thr_debug.c,v 1.1.1.6 2018/02/06 01:53:08 christos Exp $"</q>);</td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><u>#include <a href="../../../include/portable.h.html">"portable.h"</a></u></td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td><u>#<span data-ppcond="108">if</span> defined( <span class="macro" data-ref="_M/LDAP_THREAD_DEBUG">LDAP_THREAD_DEBUG</span> )</u></td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td><u>#include &lt;stdio.h&gt;</u></td></tr>
+<tr><th id="111">111</th><td><u>#include &lt;ac/errno.h&gt;</u></td></tr>
+<tr><th id="112">112</th><td><u>#include &lt;ac/stdlib.h&gt;</u></td></tr>
+<tr><th id="113">113</th><td><u>#include &lt;ac/string.h&gt;</u></td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td><u>#include "ldap_pvt_thread.h" /* Get the thread interface */</u></td></tr>
+<tr><th id="116">116</th><td><u>#define LDAP_THREAD_IMPLEMENTATION</u></td></tr>
+<tr><th id="117">117</th><td><u>#define LDAP_THREAD_DEBUG_IMPLEMENTATION</u></td></tr>
+<tr><th id="118">118</th><td><u>#define LDAP_THREAD_RDWR_IMPLEMENTATION</u></td></tr>
+<tr><th id="119">119</th><td><u>#define LDAP_THREAD_POOL_IMPLEMENTATION</u></td></tr>
+<tr><th id="120">120</th><td><u>#include "ldap_thr_debug.h"  /* Get the underlying implementation */</u></td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td><u>#ifndef LDAP_THREAD_DEBUG_WRAP</u></td></tr>
+<tr><th id="123">123</th><td><u>#undef	LDAP_THREAD_DEBUG_THREAD_ID</u></td></tr>
+<tr><th id="124">124</th><td><u>#elif !defined LDAP_THREAD_DEBUG_THREAD_ID</u></td></tr>
+<tr><th id="125">125</th><td><u>#define	LDAP_THREAD_DEBUG_THREAD_ID 1</u></td></tr>
+<tr><th id="126">126</th><td><u>#endif</u></td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><i>/* Use native malloc - the OpenLDAP wrappers may defeat malloc debuggers */</i></td></tr>
+<tr><th id="129">129</th><td><u>#undef malloc</u></td></tr>
+<tr><th id="130">130</th><td><u>#undef calloc</u></td></tr>
+<tr><th id="131">131</th><td><u>#undef realloc</u></td></tr>
+<tr><th id="132">132</th><td><u>#undef free</u></td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td><i>/* Options from environment variable $LDAP_THREAD_DEBUG */</i></td></tr>
+<tr><th id="136">136</th><td><b>enum</b> { Count_no = <var>0</var>, Count_yes, Count_reported, Count_reported_more };</td></tr>
+<tr><th id="137">137</th><td><em>static</em> <em>int</em> count = Count_yes;</td></tr>
+<tr><th id="138">138</th><td><u>#ifdef LDAP_THREAD_DEBUG_WRAP</u></td></tr>
+<tr><th id="139">139</th><td><b>enum</b> { Wrap_noalloc, Wrap_alloc, Wrap_scramble, Wrap_adjptr };</td></tr>
+<tr><th id="140">140</th><td><em>static</em> <em>int</em> wraptype = Wrap_noalloc, wrap_offset, unwrap_offset;</td></tr>
+<tr><th id="141">141</th><td><em>static</em> <em>int</em> nomem, noreinit;</td></tr>
+<tr><th id="142">142</th><td><u>#endif</u></td></tr>
+<tr><th id="143">143</th><td><u>#if LDAP_THREAD_DEBUG_THREAD_ID +0</u></td></tr>
+<tr><th id="144">144</th><td><em>static</em> <em>int</em> threadID;</td></tr>
+<tr><th id="145">145</th><td><u>#else</u></td></tr>
+<tr><th id="146">146</th><td><b>enum</b> { threadID = <var>0</var> };</td></tr>
+<tr><th id="147">147</th><td><u>#endif</u></td></tr>
+<tr><th id="148">148</th><td><em>static</em> <em>int</em> nodebug, noabort, noerror, nosync, tracethreads;</td></tr>
+<tr><th id="149">149</th><td><em>static</em> <em>int</em> wrap_threads;</td></tr>
+<tr><th id="150">150</th><td><em>static</em> <em>int</em> options_done;</td></tr>
+<tr><th id="151">151</th><td></td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td><i>/* ldap_pvt_thread_initialize() called, ldap_pvt_thread_destroy() not called */</i></td></tr>
+<tr><th id="154">154</th><td><em>static</em> <em>int</em> threading_enabled;</td></tr>
+<tr><th id="155">155</th><td></td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td><i>/* Resource counts */</i></td></tr>
+<tr><th id="158">158</th><td><b>enum</b> {</td></tr>
+<tr><th id="159">159</th><td>	Idx_unexited_thread, Idx_unjoined_thread, Idx_locked_mutex,</td></tr>
+<tr><th id="160">160</th><td>	Idx_mutex, Idx_cond, Idx_rdwr, Idx_tpool, Idx_max</td></tr>
+<tr><th id="161">161</th><td>};</td></tr>
+<tr><th id="162">162</th><td><em>static</em> <em>int</em> resource_counts[Idx_max];</td></tr>
+<tr><th id="163">163</th><td><em>static</em> <em>const</em> <em>char</em> *<em>const</em> resource_names[] = {</td></tr>
+<tr><th id="164">164</th><td>	<q>"unexited threads"</q>, <q>"unjoined threads"</q>, <q>"locked mutexes"</q>,</td></tr>
+<tr><th id="165">165</th><td>	<q>"mutexes"</q>, <q>"conds"</q>, <q>"rdwrs"</q>, <q>"thread pools"</q></td></tr>
+<tr><th id="166">166</th><td>};</td></tr>
+<tr><th id="167">167</th><td><em>static</em> ldap_int_thread_mutex_t resource_mutexes[Idx_max];</td></tr>
+<tr><th id="168">168</th><td></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><i>/* Hide pointers from malloc debuggers. */</i></td></tr>
+<tr><th id="171">171</th><td><u>#define SCRAMBLE(ptr) (~(LDAP_UINTPTR_T) (ptr))</u></td></tr>
+<tr><th id="172">172</th><td><u>#define UNSCRAMBLE_usagep(num) ((ldap_debug_usage_info_t *) ~(num))</u></td></tr>
+<tr><th id="173">173</th><td><u>#define UNSCRAMBLE_dummyp(num) ((unsigned char *) ~(num))</u></td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td></td></tr>
+<tr><th id="176">176</th><td><u>#define WARN(var, msg)   (warn (__FILE__, __LINE__, (msg), #var, (var)))</u></td></tr>
+<tr><th id="177">177</th><td><u>#define WARN_IF(rc, msg) {if (rc) warn (__FILE__, __LINE__, (msg), #rc, (rc));}</u></td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td><u>#define ERROR(var, msg) { \</u></td></tr>
+<tr><th id="180">180</th><td><u>	if (!noerror) { \</u></td></tr>
+<tr><th id="181">181</th><td><u>		errmsg(__FILE__, __LINE__, (msg), #var, (var)); \</u></td></tr>
+<tr><th id="182">182</th><td><u>		if( !noabort ) abort(); \</u></td></tr>
+<tr><th id="183">183</th><td><u>	} \</u></td></tr>
+<tr><th id="184">184</th><td><u>}</u></td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td><u>#define ERROR_IF(rc, msg) { \</u></td></tr>
+<tr><th id="187">187</th><td><u>	if (!noerror) { \</u></td></tr>
+<tr><th id="188">188</th><td><u>		int rc_ = (rc); \</u></td></tr>
+<tr><th id="189">189</th><td><u>		if (rc_) { \</u></td></tr>
+<tr><th id="190">190</th><td><u>			errmsg(__FILE__, __LINE__, (msg), #rc, rc_); \</u></td></tr>
+<tr><th id="191">191</th><td><u>			if( !noabort ) abort(); \</u></td></tr>
+<tr><th id="192">192</th><td><u>		} \</u></td></tr>
+<tr><th id="193">193</th><td><u>	} \</u></td></tr>
+<tr><th id="194">194</th><td><u>}</u></td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td><u>#ifdef LDAP_THREAD_DEBUG_WRAP</u></td></tr>
+<tr><th id="197">197</th><td><u>#define MEMERROR_IF(rc, msg, mem_act) { \</u></td></tr>
+<tr><th id="198">198</th><td><u>	if (!noerror) { \</u></td></tr>
+<tr><th id="199">199</th><td><u>		int rc_ = (rc); \</u></td></tr>
+<tr><th id="200">200</th><td><u>		if (rc_) { \</u></td></tr>
+<tr><th id="201">201</th><td><u>			errmsg(__FILE__, __LINE__, (msg), #rc, rc_); \</u></td></tr>
+<tr><th id="202">202</th><td><u>			if( wraptype != Wrap_noalloc ) { mem_act; } \</u></td></tr>
+<tr><th id="203">203</th><td><u>			if( !noabort ) abort(); \</u></td></tr>
+<tr><th id="204">204</th><td><u>		} \</u></td></tr>
+<tr><th id="205">205</th><td><u>	} \</u></td></tr>
+<tr><th id="206">206</th><td><u>}</u></td></tr>
+<tr><th id="207">207</th><td><u>#endif /* LDAP_THREAD_DEBUG_WRAP */</u></td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td><u>#if 0</u></td></tr>
+<tr><th id="210">210</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="211">211</th><td>warn( <em>const</em> <em>char</em> *file, <em>int</em> line, <em>const</em> <em>char</em> *msg, <em>const</em> <em>char</em> *var, <em>int</em> val )</td></tr>
+<tr><th id="212">212</th><td>{</td></tr>
+<tr><th id="213">213</th><td>	fprintf( stderr,</td></tr>
+<tr><th id="214">214</th><td>		(strpbrk( var, <q>"!="</q> )</td></tr>
+<tr><th id="215">215</th><td>		 ? <q>"%s:%d: %s warning: %s\n"</q></td></tr>
+<tr><th id="216">216</th><td>		 : <q>"%s:%d: %s warning: %s is %d\n"</q>),</td></tr>
+<tr><th id="217">217</th><td>		file, line, msg, var, val );</td></tr>
+<tr><th id="218">218</th><td>}</td></tr>
+<tr><th id="219">219</th><td><u>#endif</u></td></tr>
+<tr><th id="220">220</th><td></td></tr>
+<tr><th id="221">221</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="222">222</th><td>errmsg( <em>const</em> <em>char</em> *file, <em>int</em> line, <em>const</em> <em>char</em> *msg, <em>const</em> <em>char</em> *var, <em>int</em> val )</td></tr>
+<tr><th id="223">223</th><td>{</td></tr>
+<tr><th id="224">224</th><td>	fprintf( stderr,</td></tr>
+<tr><th id="225">225</th><td>		(strpbrk( var, <q>"!="</q> )</td></tr>
+<tr><th id="226">226</th><td>		 ? <q>"%s:%d: %s error: %s\n"</q></td></tr>
+<tr><th id="227">227</th><td>		 : <q>"%s:%d: %s error: %s is %d\n"</q>),</td></tr>
+<tr><th id="228">228</th><td>		file, line, msg, var, val );</td></tr>
+<tr><th id="229">229</th><td>}</td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="232">232</th><td>count_resource_leaks( <em>void</em> )</td></tr>
+<tr><th id="233">233</th><td>{</td></tr>
+<tr><th id="234">234</th><td>	<em>int</em> i, j;</td></tr>
+<tr><th id="235">235</th><td>	<em>char</em> errbuf[<var>200</var>];</td></tr>
+<tr><th id="236">236</th><td>	<b>if</b>( count == Count_yes ) {</td></tr>
+<tr><th id="237">237</th><td>		count = Count_reported;</td></tr>
+<tr><th id="238">238</th><td><u>#if 0 /* Could break if there are still threads after atexit */</u></td></tr>
+<tr><th id="239">239</th><td>		<b>for</b>( i = j = <var>0</var>; i &lt; Idx_max; i++ )</td></tr>
+<tr><th id="240">240</th><td>			j |= ldap_int_thread_mutex_destroy( &amp;resource_mutexes[i] );</td></tr>
+<tr><th id="241">241</th><td>		WARN_IF( j, <q>"ldap_debug_thread_destroy:mutexes"</q> );</td></tr>
+<tr><th id="242">242</th><td><u>#endif</u></td></tr>
+<tr><th id="243">243</th><td>		<b>for</b>( i = j = <var>0</var>; i &lt; Idx_max; i++ )</td></tr>
+<tr><th id="244">244</th><td>			<b>if</b>( resource_counts[i] )</td></tr>
+<tr><th id="245">245</th><td>				j += sprintf( errbuf + j, <q>", %d %s"</q>,</td></tr>
+<tr><th id="246">246</th><td>					resource_counts[i], resource_names[i] );</td></tr>
+<tr><th id="247">247</th><td>		<b>if</b>( j )</td></tr>
+<tr><th id="248">248</th><td>			fprintf( stderr, <q>"== thr_debug: Leaked%s. ==\n"</q>, errbuf + <var>1</var> );</td></tr>
+<tr><th id="249">249</th><td>	}</td></tr>
+<tr><th id="250">250</th><td>}</td></tr>
+<tr><th id="251">251</th><td></td></tr>
+<tr><th id="252">252</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="253">253</th><td>get_options( <em>void</em> )</td></tr>
+<tr><th id="254">254</th><td>{</td></tr>
+<tr><th id="255">255</th><td>	<em>static</em> <em>const</em> <b>struct</b> option_info_s {</td></tr>
+<tr><th id="256">256</th><td>		<em>const</em> <em>char</em>	*name;</td></tr>
+<tr><th id="257">257</th><td>		<em>int</em>       	*var, val;</td></tr>
+<tr><th id="258">258</th><td>	} option_info[] = {</td></tr>
+<tr><th id="259">259</th><td>		{ <q>"off"</q>,        &amp;nodebug,  <var>1</var> },</td></tr>
+<tr><th id="260">260</th><td>		{ <q>"noabort"</q>,    &amp;noabort,  <var>1</var> },</td></tr>
+<tr><th id="261">261</th><td>		{ <q>"noerror"</q>,    &amp;noerror,  <var>1</var> },</td></tr>
+<tr><th id="262">262</th><td>		{ <q>"nocount"</q>,    &amp;count,    Count_no },</td></tr>
+<tr><th id="263">263</th><td>		{ <q>"nosync"</q>,     &amp;nosync,   <var>1</var> },</td></tr>
+<tr><th id="264">264</th><td><u>#if LDAP_THREAD_DEBUG_THREAD_ID +0</u></td></tr>
+<tr><th id="265">265</th><td>		{ <q>"threadID"</q>,   &amp;threadID, <var>1</var> },</td></tr>
+<tr><th id="266">266</th><td><u>#endif</u></td></tr>
+<tr><th id="267">267</th><td><u>#ifdef LDAP_THREAD_DEBUG_WRAP</u></td></tr>
+<tr><th id="268">268</th><td>		{ <q>"nomem"</q>,      &amp;nomem,    <var>1</var> },</td></tr>
+<tr><th id="269">269</th><td>		{ <q>"noreinit"</q>,   &amp;noreinit, <var>1</var> },</td></tr>
+<tr><th id="270">270</th><td>		{ <q>"noalloc"</q>,    &amp;wraptype, Wrap_noalloc },</td></tr>
+<tr><th id="271">271</th><td>		{ <q>"alloc"</q>,      &amp;wraptype, Wrap_alloc },</td></tr>
+<tr><th id="272">272</th><td>		{ <q>"adjptr"</q>,     &amp;wraptype, Wrap_adjptr },</td></tr>
+<tr><th id="273">273</th><td>		{ <q>"scramble"</q>,	&amp;wraptype, Wrap_scramble },</td></tr>
+<tr><th id="274">274</th><td><u>#endif</u></td></tr>
+<tr><th id="275">275</th><td>		{ <q>"tracethreads"</q>, &amp;tracethreads, <var>1</var> },</td></tr>
+<tr><th id="276">276</th><td>		{ NULL, NULL, <var>0</var> }</td></tr>
+<tr><th id="277">277</th><td>	};</td></tr>
+<tr><th id="278">278</th><td>	<em>const</em> <em>char</em> *s = getenv( <q>"LDAP_THREAD_DEBUG"</q> );</td></tr>
+<tr><th id="279">279</th><td>	<b>if</b>( s != NULL ) {</td></tr>
+<tr><th id="280">280</th><td>		<b>while</b>( *(s += strspn( s, <q>", \t\r\n"</q> )) != <kbd>'\0'</kbd> ) {</td></tr>
+<tr><th id="281">281</th><td>			size_t optlen = strcspn( s, <q>", \t\r\n"</q> );</td></tr>
+<tr><th id="282">282</th><td>			<em>const</em> <b>struct</b> option_info_s *oi = option_info;</td></tr>
+<tr><th id="283">283</th><td>			<b>while</b>( oi-&gt;name &amp;&amp;</td></tr>
+<tr><th id="284">284</th><td>				   (strncasecmp( oi-&gt;name, s, optlen ) || oi-&gt;name[optlen]) )</td></tr>
+<tr><th id="285">285</th><td>				oi++;</td></tr>
+<tr><th id="286">286</th><td>			<b>if</b>( oi-&gt;name )</td></tr>
+<tr><th id="287">287</th><td>				*oi-&gt;var = oi-&gt;val;</td></tr>
+<tr><th id="288">288</th><td>			<b>else</b></td></tr>
+<tr><th id="289">289</th><td>				fprintf( stderr,</td></tr>
+<tr><th id="290">290</th><td>					<q>"== thr_debug: Unknown $%s option '%.*s' ==\n"</q>,</td></tr>
+<tr><th id="291">291</th><td>					<q>"LDAP_THREAD_DEBUG"</q>, (<em>int</em>) optlen, s );</td></tr>
+<tr><th id="292">292</th><td>			s += optlen;</td></tr>
+<tr><th id="293">293</th><td>		}</td></tr>
+<tr><th id="294">294</th><td>	}</td></tr>
+<tr><th id="295">295</th><td>	<b>if</b>( nodebug ) {</td></tr>
+<tr><th id="296">296</th><td>		tracethreads = <var>0</var>;</td></tr>
+<tr><th id="297">297</th><td>		nosync = noerror = <var>1</var>;</td></tr>
+<tr><th id="298">298</th><td>	}</td></tr>
+<tr><th id="299">299</th><td>	<b>if</b>( nosync )</td></tr>
+<tr><th id="300">300</th><td>		count = Count_no;</td></tr>
+<tr><th id="301">301</th><td>	<b>if</b>( noerror )</td></tr>
+<tr><th id="302">302</th><td>		noabort = <var>1</var>;</td></tr>
+<tr><th id="303">303</th><td><u>#if LDAP_THREAD_DEBUG_THREAD_ID +0</u></td></tr>
+<tr><th id="304">304</th><td>	<b>if</b>( nosync )</td></tr>
+<tr><th id="305">305</th><td>		threadID = <var>0</var>;</td></tr>
+<tr><th id="306">306</th><td><u>#endif</u></td></tr>
+<tr><th id="307">307</th><td><u>#ifdef LDAP_THREAD_DEBUG_WRAP</u></td></tr>
+<tr><th id="308">308</th><td>	<b>if</b>( noerror )</td></tr>
+<tr><th id="309">309</th><td>		nomem = <var>1</var>;</td></tr>
+<tr><th id="310">310</th><td>	<b>if</b>( !nomem ) {</td></tr>
+<tr><th id="311">311</th><td>		<em>static</em> <em>const</em> ldap_debug_usage_info_t usage;</td></tr>
+<tr><th id="312">312</th><td>		<b>if</b>( <b>sizeof</b>(LDAP_UINTPTR_T) &lt; <b>sizeof</b>(<em>unsigned</em> <em>char</em> *)</td></tr>
+<tr><th id="313">313</th><td>			|| <b>sizeof</b>(LDAP_UINTPTR_T) &lt; <b>sizeof</b>(ldap_debug_usage_info_t *)</td></tr>
+<tr><th id="314">314</th><td>			|| UNSCRAMBLE_usagep( SCRAMBLE( &amp;usage ) ) != &amp;usage</td></tr>
+<tr><th id="315">315</th><td>			|| UNSCRAMBLE_dummyp( SCRAMBLE( (<em>unsigned</em> <em>char</em> *) <var>0</var> ) ) )</td></tr>
+<tr><th id="316">316</th><td>		{</td></tr>
+<tr><th id="317">317</th><td>			fputs( <q>"== thr_debug: Memory checks unsupported, "</q></td></tr>
+<tr><th id="318">318</th><td>				<q>"adding nomem to $LDAP_THREAD_DEBUG ==\n"</q>, stderr );</td></tr>
+<tr><th id="319">319</th><td>			nomem = <var>1</var>;</td></tr>
+<tr><th id="320">320</th><td>		}</td></tr>
+<tr><th id="321">321</th><td>	}</td></tr>
+<tr><th id="322">322</th><td>	<b>if</b>( nomem ) {</td></tr>
+<tr><th id="323">323</th><td>		noreinit = <var>1</var>;</td></tr>
+<tr><th id="324">324</th><td>		wraptype = Wrap_noalloc;</td></tr>
+<tr><th id="325">325</th><td>	}</td></tr>
+<tr><th id="326">326</th><td>	unwrap_offset = -(wrap_offset = (wraptype == Wrap_adjptr));</td></tr>
+<tr><th id="327">327</th><td><u>#endif</u></td></tr>
+<tr><th id="328">328</th><td>	wrap_threads = (tracethreads || threadID || count);</td></tr>
+<tr><th id="329">329</th><td>	options_done = <var>1</var>;</td></tr>
+<tr><th id="330">330</th><td>}</td></tr>
+<tr><th id="331">331</th><td></td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td><u>#ifndef LDAP_THREAD_DEBUG_WRAP</u></td></tr>
+<tr><th id="334">334</th><td></td></tr>
+<tr><th id="335">335</th><td><u>#define	WRAPPED(ptr)			(ptr)</u></td></tr>
+<tr><th id="336">336</th><td><u>#define	GET_OWNER(ptr)			0</u></td></tr>
+<tr><th id="337">337</th><td><u>#define	SET_OWNER(ptr, thread)	((void) 0)</u></td></tr>
+<tr><th id="338">338</th><td><u>#define	RESET_OWNER(ptr)		((void) 0)</u></td></tr>
+<tr><th id="339">339</th><td><u>#define	ASSERT_OWNER(ptr, msg)	((void) 0)</u></td></tr>
+<tr><th id="340">340</th><td><u>#define	ASSERT_NO_OWNER(ptr, msg) ((void) 0)</u></td></tr>
+<tr><th id="341">341</th><td></td></tr>
+<tr><th id="342">342</th><td><u>#define init_usage(ptr, msg)	((void) 0)</u></td></tr>
+<tr><th id="343">343</th><td><u>#define check_usage(ptr, msg)	((void) 0)</u></td></tr>
+<tr><th id="344">344</th><td><u>#define destroy_usage(ptr)		((void) 0)</u></td></tr>
+<tr><th id="345">345</th><td></td></tr>
+<tr><th id="346">346</th><td><u>#else /* LDAP_THREAD_DEBUG_WRAP */</u></td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td><i>/* Specialize this if the initializer is not appropriate. */</i></td></tr>
+<tr><th id="349">349</th><td><i>/* The ASSERT_NO_OWNER() definition may also need an override. */</i></td></tr>
+<tr><th id="350">350</th><td><u>#ifndef LDAP_DEBUG_THREAD_NONE</u></td></tr>
+<tr><th id="351">351</th><td><u>#define	LDAP_DEBUG_THREAD_NONE { -1 } /* "no thread" ldap_int_thread_t value */</u></td></tr>
+<tr><th id="352">352</th><td><u>#endif</u></td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td><em>static</em> <em>const</em> ldap_int_thread_t ldap_debug_thread_none = LDAP_DEBUG_THREAD_NONE;</td></tr>
+<tr><th id="355">355</th><td></td></tr>
+<tr><th id="356">356</th><td><u>#define THREAD_MUTEX_OWNER(mutex) \</u></td></tr>
+<tr><th id="357">357</th><td><u>	ldap_int_thread_equal( (mutex)-&gt;owner, ldap_int_thread_self() )</u></td></tr>
+<tr><th id="358">358</th><td></td></tr>
+<tr><th id="359">359</th><td><em>void</em></td></tr>
+<tr><th id="360">360</th><td>ldap_debug_thread_assert_mutex_owner(</td></tr>
+<tr><th id="361">361</th><td>	<em>const</em> <em>char</em> *file,</td></tr>
+<tr><th id="362">362</th><td>	<em>int</em> line,</td></tr>
+<tr><th id="363">363</th><td>	<em>const</em> <em>char</em> *msg,</td></tr>
+<tr><th id="364">364</th><td>	ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="365">365</th><td>{</td></tr>
+<tr><th id="366">366</th><td>	<b>if</b>( !(noerror || THREAD_MUTEX_OWNER( mutex )) ) {</td></tr>
+<tr><th id="367">367</th><td>		errmsg( file, line, msg, <q>"ASSERT_MUTEX_OWNER"</q>, <var>0</var> );</td></tr>
+<tr><th id="368">368</th><td>		<b>if</b>( !noabort ) abort();</td></tr>
+<tr><th id="369">369</th><td>	}</td></tr>
+<tr><th id="370">370</th><td>}</td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td><u>#define	WRAPPED(ptr)			(&amp;(ptr)-&gt;wrapped)</u></td></tr>
+<tr><th id="373">373</th><td><u>#define	GET_OWNER(ptr)			((ptr)-&gt;owner)</u></td></tr>
+<tr><th id="374">374</th><td><u>#define	SET_OWNER(ptr, thread)	((ptr)-&gt;owner = (thread))</u></td></tr>
+<tr><th id="375">375</th><td><u>#define	RESET_OWNER(ptr)		((ptr)-&gt;owner = ldap_debug_thread_none)</u></td></tr>
+<tr><th id="376">376</th><td><u>#define	ASSERT_OWNER(ptr, msg)	ERROR_IF( !THREAD_MUTEX_OWNER( ptr ), msg )</u></td></tr>
+<tr><th id="377">377</th><td><u>#ifndef	ASSERT_NO_OWNER</u></td></tr>
+<tr><th id="378">378</th><td><u>#define	ASSERT_NO_OWNER(ptr, msg) ERROR_IF( \</u></td></tr>
+<tr><th id="379">379</th><td><u>	!ldap_int_thread_equal( (ptr)-&gt;owner, ldap_debug_thread_none ), msg )</u></td></tr>
+<tr><th id="380">380</th><td><u>#endif</u></td></tr>
+<tr><th id="381">381</th><td></td></tr>
+<tr><th id="382">382</th><td><i>/* Try to provoke memory access error (for malloc debuggers) */</i></td></tr>
+<tr><th id="383">383</th><td><u>#define PEEK(mem) {if (-*(volatile const unsigned char *)(mem)) debug_noop();}</u></td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td><em>static</em> <em>void</em> debug_noop( <em>void</em> );</td></tr>
+<tr><th id="386">386</th><td><em>static</em> <em>int</em> debug_already_initialized( <em>const</em> ldap_debug_usage_info_t *usage );</td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td><i>/* Name used for clearer error message */</i></td></tr>
+<tr><th id="389">389</th><td><u>#define IS_COPY_OR_MOVED(usage) ((usage)-&gt;self != SCRAMBLE( usage ))</u></td></tr>
+<tr><th id="390">390</th><td></td></tr>
+<tr><th id="391">391</th><td><u>#define DUMMY_ADDR(usage) \</u></td></tr>
+<tr><th id="392">392</th><td><u>	(wraptype == Wrap_scramble \</u></td></tr>
+<tr><th id="393">393</th><td><u>	 ? UNSCRAMBLE_dummyp( (usage)-&gt;mem.num ) \</u></td></tr>
+<tr><th id="394">394</th><td><u>	 : (usage)-&gt;mem.ptr + unwrap_offset)</u></td></tr>
+<tr><th id="395">395</th><td></td></tr>
+<tr><th id="396">396</th><td><i>/* Mark resource as initialized */</i></td></tr>
+<tr><th id="397">397</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="398">398</th><td>init_usage( ldap_debug_usage_info_t *usage, <em>const</em> <em>char</em> *msg )</td></tr>
+<tr><th id="399">399</th><td>{</td></tr>
+<tr><th id="400">400</th><td>	<b>if</b>( !options_done )</td></tr>
+<tr><th id="401">401</th><td>		get_options();</td></tr>
+<tr><th id="402">402</th><td>	<b>if</b>( !nomem ) {</td></tr>
+<tr><th id="403">403</th><td>		<b>if</b>( !noreinit ) {</td></tr>
+<tr><th id="404">404</th><td>			MEMERROR_IF( debug_already_initialized( usage ), msg, {</td></tr>
+<tr><th id="405">405</th><td>				<i>/* Provoke malloc debuggers */</i></td></tr>
+<tr><th id="406">406</th><td>				<em>unsigned</em> <em>char</em> *dummy = DUMMY_ADDR( usage );</td></tr>
+<tr><th id="407">407</th><td>				PEEK( dummy );</td></tr>
+<tr><th id="408">408</th><td>				free( dummy );</td></tr>
+<tr><th id="409">409</th><td>				free( dummy );</td></tr>
+<tr><th id="410">410</th><td>			} );</td></tr>
+<tr><th id="411">411</th><td>		}</td></tr>
+<tr><th id="412">412</th><td>		<b>if</b>( wraptype != Wrap_noalloc ) {</td></tr>
+<tr><th id="413">413</th><td>			<em>unsigned</em> <em>char</em> *dummy = malloc( <var>1</var> );</td></tr>
+<tr><th id="414">414</th><td>			assert( dummy != NULL );</td></tr>
+<tr><th id="415">415</th><td>			<b>if</b>( wraptype == Wrap_scramble ) {</td></tr>
+<tr><th id="416">416</th><td>				usage-&gt;mem.num = SCRAMBLE( dummy );</td></tr>
+<tr><th id="417">417</th><td>				<i>/* Verify that ptr&lt;-&gt;integer casts work on this host */</i></td></tr>
+<tr><th id="418">418</th><td>				assert( UNSCRAMBLE_dummyp( usage-&gt;mem.num ) == dummy );</td></tr>
+<tr><th id="419">419</th><td>			} <b>else</b> {</td></tr>
+<tr><th id="420">420</th><td>				usage-&gt;mem.ptr = dummy + wrap_offset;</td></tr>
+<tr><th id="421">421</th><td>			}</td></tr>
+<tr><th id="422">422</th><td>		}</td></tr>
+<tr><th id="423">423</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="424">424</th><td>		<i>/* Unused, but set for readability in debugger */</i></td></tr>
+<tr><th id="425">425</th><td>		usage-&gt;mem.ptr = NULL;</td></tr>
+<tr><th id="426">426</th><td>	}</td></tr>
+<tr><th id="427">427</th><td>	usage-&gt;self = SCRAMBLE( usage );	<i>/* If nomem, only for debugger */</i></td></tr>
+<tr><th id="428">428</th><td>	usage-&gt;magic = ldap_debug_magic;</td></tr>
+<tr><th id="429">429</th><td>	usage-&gt;state = ldap_debug_state_inited;</td></tr>
+<tr><th id="430">430</th><td>}</td></tr>
+<tr><th id="431">431</th><td></td></tr>
+<tr><th id="432">432</th><td><i>/* Check that resource is initialized and not copied/realloced */</i></td></tr>
+<tr><th id="433">433</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="434">434</th><td>check_usage( <em>const</em> ldap_debug_usage_info_t *usage, <em>const</em> <em>char</em> *msg )</td></tr>
+<tr><th id="435">435</th><td>{</td></tr>
+<tr><th id="436">436</th><td>	<b>enum</b> { Is_destroyed = <var>1</var> };	<i>/* Name used for clearer error message */</i></td></tr>
+<tr><th id="437">437</th><td></td></tr>
+<tr><th id="438">438</th><td>	<b>if</b>( usage-&gt;magic != ldap_debug_magic ) {</td></tr>
+<tr><th id="439">439</th><td>		ERROR( usage-&gt;magic, msg );</td></tr>
+<tr><th id="440">440</th><td>		<b>return</b>;</td></tr>
+<tr><th id="441">441</th><td>	}</td></tr>
+<tr><th id="442">442</th><td>	<b>switch</b>( usage-&gt;state ) {</td></tr>
+<tr><th id="443">443</th><td>	<b>case</b> ldap_debug_state_destroyed:</td></tr>
+<tr><th id="444">444</th><td>		MEMERROR_IF( Is_destroyed, msg, {</td></tr>
+<tr><th id="445">445</th><td>			PEEK( DUMMY_ADDR( usage ) );</td></tr>
+<tr><th id="446">446</th><td>		} );</td></tr>
+<tr><th id="447">447</th><td>		<b>break</b>;</td></tr>
+<tr><th id="448">448</th><td>	<b>default</b>:</td></tr>
+<tr><th id="449">449</th><td>		ERROR( usage-&gt;state, msg );</td></tr>
+<tr><th id="450">450</th><td>		<b>break</b>;</td></tr>
+<tr><th id="451">451</th><td>	<b>case</b> ldap_debug_state_inited:</td></tr>
+<tr><th id="452">452</th><td>		<b>if</b>( !nomem ) {</td></tr>
+<tr><th id="453">453</th><td>			MEMERROR_IF( IS_COPY_OR_MOVED( usage ), msg, {</td></tr>
+<tr><th id="454">454</th><td>				PEEK( DUMMY_ADDR( usage ) );</td></tr>
+<tr><th id="455">455</th><td>				PEEK( UNSCRAMBLE_usagep( usage-&gt;self ) );</td></tr>
+<tr><th id="456">456</th><td>			} );</td></tr>
+<tr><th id="457">457</th><td>		}</td></tr>
+<tr><th id="458">458</th><td>		<b>break</b>;</td></tr>
+<tr><th id="459">459</th><td>	}</td></tr>
+<tr><th id="460">460</th><td>}</td></tr>
+<tr><th id="461">461</th><td></td></tr>
+<tr><th id="462">462</th><td><i>/* Mark resource as destroyed. */</i></td></tr>
+<tr><th id="463">463</th><td><i>/* Does not check for errors, call check_usage()/init_usage() first. */</i></td></tr>
+<tr><th id="464">464</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="465">465</th><td>destroy_usage( ldap_debug_usage_info_t *usage )</td></tr>
+<tr><th id="466">466</th><td>{</td></tr>
+<tr><th id="467">467</th><td>	<b>if</b>( usage-&gt;state == ldap_debug_state_inited ) {</td></tr>
+<tr><th id="468">468</th><td>		<b>if</b>( wraptype != Wrap_noalloc ) {</td></tr>
+<tr><th id="469">469</th><td>			free( DUMMY_ADDR( usage ) );</td></tr>
+<tr><th id="470">470</th><td>			<i>/* Do not reset the DUMMY_ADDR, leave it for malloc debuggers</i></td></tr>
+<tr><th id="471">471</th><td><i>			 * in case the resource is used after it is freed. */</i></td></tr>
+<tr><th id="472">472</th><td>		}</td></tr>
+<tr><th id="473">473</th><td>		usage-&gt;state = ldap_debug_state_destroyed;</td></tr>
+<tr><th id="474">474</th><td>	}</td></tr>
+<tr><th id="475">475</th><td>}</td></tr>
+<tr><th id="476">476</th><td></td></tr>
+<tr><th id="477">477</th><td><i>/* Define these after they are used, so they are hopefully not inlined */</i></td></tr>
+<tr><th id="478">478</th><td></td></tr>
+<tr><th id="479">479</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="480">480</th><td>debug_noop( <em>void</em> )</td></tr>
+<tr><th id="481">481</th><td>{</td></tr>
+<tr><th id="482">482</th><td>}</td></tr>
+<tr><th id="483">483</th><td></td></tr>
+<tr><th id="484">484</th><td><i>/*</i></td></tr>
+<tr><th id="485">485</th><td><i> * Valid programs access uninitialized memory here unless "noreinit".</i></td></tr>
+<tr><th id="486">486</th><td><i> *</i></td></tr>
+<tr><th id="487">487</th><td><i> * Returns true if the resource is initialized and not copied/realloced.</i></td></tr>
+<tr><th id="488">488</th><td><i> */</i></td></tr>
+<tr><th id="489">489</th><td>LDAP_GCCATTR((noinline))</td></tr>
+<tr><th id="490">490</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="491">491</th><td>debug_already_initialized( <em>const</em> ldap_debug_usage_info_t *usage )</td></tr>
+<tr><th id="492">492</th><td>{</td></tr>
+<tr><th id="493">493</th><td>	<i>/*</i></td></tr>
+<tr><th id="494">494</th><td><i>	 * 'ret' keeps the Valgrind warning "Conditional jump or move</i></td></tr>
+<tr><th id="495">495</th><td><i>	 * depends on uninitialised value(s)" _inside_ this function.</i></td></tr>
+<tr><th id="496">496</th><td><i>	 */</i></td></tr>
+<tr><th id="497">497</th><td>	<em>volatile</em> <em>int</em> ret = <var>0</var>;</td></tr>
+<tr><th id="498">498</th><td>	<b>if</b>( usage-&gt;state == ldap_debug_state_inited )</td></tr>
+<tr><th id="499">499</th><td>		<b>if</b>( !IS_COPY_OR_MOVED( usage ) )</td></tr>
+<tr><th id="500">500</th><td>	        <b>if</b>( usage-&gt;magic == ldap_debug_magic )</td></tr>
+<tr><th id="501">501</th><td>				ret = <var>1</var>;</td></tr>
+<tr><th id="502">502</th><td>	<b>return</b> ret;</td></tr>
+<tr><th id="503">503</th><td>}</td></tr>
+<tr><th id="504">504</th><td></td></tr>
+<tr><th id="505">505</th><td><u>#endif /* LDAP_THREAD_DEBUG_WRAP */</u></td></tr>
+<tr><th id="506">506</th><td></td></tr>
+<tr><th id="507">507</th><td></td></tr>
+<tr><th id="508">508</th><td><u>#if !(LDAP_THREAD_DEBUG_THREAD_ID +0)</u></td></tr>
+<tr><th id="509">509</th><td></td></tr>
+<tr><th id="510">510</th><td><b>typedef</b> <em>void</em> ldap_debug_thread_t;</td></tr>
+<tr><th id="511">511</th><td><u>#define init_thread_info()	{}</u></td></tr>
+<tr><th id="512">512</th><td><u>#define with_thread_info_lock(statements) { statements; }</u></td></tr>
+<tr><th id="513">513</th><td><u>#define thread_info_detached(t)	0</u></td></tr>
+<tr><th id="514">514</th><td><u>#define add_thread_info(msg, thr, det)	((void) 0)</u></td></tr>
+<tr><th id="515">515</th><td><u>#define remove_thread_info(tinfo, msg)	((void) 0)</u></td></tr>
+<tr><th id="516">516</th><td><u>#define get_thread_info(thread, msg)	NULL</u></td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td><u>#else /* LDAP_THREAD_DEBUG_THREAD_ID */</u></td></tr>
+<tr><th id="519">519</th><td></td></tr>
+<tr><th id="520">520</th><td><i>/*</i></td></tr>
+<tr><th id="521">521</th><td><i> * Thread ID tracking.  Currently acieves little.</i></td></tr>
+<tr><th id="522">522</th><td><i> * Should be either expanded or deleted.</i></td></tr>
+<tr><th id="523">523</th><td><i> */</i></td></tr>
+<tr><th id="524">524</th><td></td></tr>
+<tr><th id="525">525</th><td><i>/*</i></td></tr>
+<tr><th id="526">526</th><td><i> * Array of threads.  Used instead of making ldap_pvt_thread_t a wrapper</i></td></tr>
+<tr><th id="527">527</th><td><i> * around ldap_int_thread_t, which would slow down ldap_pvt_thread_self().</i></td></tr>
+<tr><th id="528">528</th><td><i> */</i></td></tr>
+<tr><th id="529">529</th><td><b>typedef</b> <b>struct</b> {</td></tr>
+<tr><th id="530">530</th><td>	ldap_pvt_thread_t           wrapped;</td></tr>
+<tr><th id="531">531</th><td>	ldap_debug_usage_info_t     usage;</td></tr>
+<tr><th id="532">532</th><td>	<em>int</em>                         detached;</td></tr>
+<tr><th id="533">533</th><td>	<em>int</em>                         idx;</td></tr>
+<tr><th id="534">534</th><td>} ldap_debug_thread_t;</td></tr>
+<tr><th id="535">535</th><td></td></tr>
+<tr><th id="536">536</th><td><em>static</em> ldap_debug_thread_t      **thread_info;</td></tr>
+<tr><th id="537">537</th><td><em>static</em> <em>unsigned</em> <em>int</em>             thread_info_size, thread_info_used;</td></tr>
+<tr><th id="538">538</th><td><em>static</em> ldap_int_thread_mutex_t  thread_info_mutex;</td></tr>
+<tr><th id="539">539</th><td></td></tr>
+<tr><th id="540">540</th><td><u>#define init_thread_info() { \</u></td></tr>
+<tr><th id="541">541</th><td><u>	if( threadID ) { \</u></td></tr>
+<tr><th id="542">542</th><td><u>		int mutex_init_rc = ldap_int_thread_mutex_init( &amp;thread_info_mutex ); \</u></td></tr>
+<tr><th id="543">543</th><td><u>		assert( mutex_init_rc == 0 ); \</u></td></tr>
+<tr><th id="544">544</th><td><u>	} \</u></td></tr>
+<tr><th id="545">545</th><td><u>}</u></td></tr>
+<tr><th id="546">546</th><td></td></tr>
+<tr><th id="547">547</th><td><u>#define with_thread_info_lock(statements) { \</u></td></tr>
+<tr><th id="548">548</th><td><u>	int rc_wtl_ = ldap_int_thread_mutex_lock( &amp;thread_info_mutex ); \</u></td></tr>
+<tr><th id="549">549</th><td><u>	assert( rc_wtl_ == 0 ); \</u></td></tr>
+<tr><th id="550">550</th><td><u>	{ statements; } \</u></td></tr>
+<tr><th id="551">551</th><td><u>	rc_wtl_ = ldap_int_thread_mutex_unlock( &amp;thread_info_mutex ); \</u></td></tr>
+<tr><th id="552">552</th><td><u>	assert( rc_wtl_ == 0 ); \</u></td></tr>
+<tr><th id="553">553</th><td><u>}</u></td></tr>
+<tr><th id="554">554</th><td></td></tr>
+<tr><th id="555">555</th><td><u>#define thread_info_detached(t) ((t)-&gt;detached)</u></td></tr>
+<tr><th id="556">556</th><td></td></tr>
+<tr><th id="557">557</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="558">558</th><td>add_thread_info(</td></tr>
+<tr><th id="559">559</th><td>	<em>const</em> <em>char</em> *msg,</td></tr>
+<tr><th id="560">560</th><td>	<em>const</em> ldap_pvt_thread_t *thread,</td></tr>
+<tr><th id="561">561</th><td>	<em>int</em> detached )</td></tr>
+<tr><th id="562">562</th><td>{</td></tr>
+<tr><th id="563">563</th><td>	ldap_debug_thread_t *t;</td></tr>
+<tr><th id="564">564</th><td></td></tr>
+<tr><th id="565">565</th><td>	<b>if</b>( thread_info_used &gt;= thread_info_size ) {</td></tr>
+<tr><th id="566">566</th><td>		<em>unsigned</em> <em>int</em> more = thread_info_size + <var>8</var>;</td></tr>
+<tr><th id="567">567</th><td>		<em>unsigned</em> <em>int</em> new_size = thread_info_size + more;</td></tr>
+<tr><th id="568">568</th><td></td></tr>
+<tr><th id="569">569</th><td>		t = calloc( more, <b>sizeof</b>(ldap_debug_thread_t) );</td></tr>
+<tr><th id="570">570</th><td>		assert( t != NULL );</td></tr>
+<tr><th id="571">571</th><td>		thread_info = realloc( thread_info, new_size * <b>sizeof</b>(*thread_info) );</td></tr>
+<tr><th id="572">572</th><td>		assert( thread_info != NULL );</td></tr>
+<tr><th id="573">573</th><td>		<b>do</b> {</td></tr>
+<tr><th id="574">574</th><td>			t-&gt;idx = thread_info_size;</td></tr>
+<tr><th id="575">575</th><td>			thread_info[thread_info_size++] = t++;</td></tr>
+<tr><th id="576">576</th><td>		} <b>while</b>( thread_info_size &lt; new_size );</td></tr>
+<tr><th id="577">577</th><td>	}</td></tr>
+<tr><th id="578">578</th><td></td></tr>
+<tr><th id="579">579</th><td>	t = thread_info[thread_info_used];</td></tr>
+<tr><th id="580">580</th><td>	init_usage( &amp;t-&gt;usage, msg );</td></tr>
+<tr><th id="581">581</th><td>	t-&gt;wrapped = *thread;</td></tr>
+<tr><th id="582">582</th><td>	t-&gt;detached = detached;</td></tr>
+<tr><th id="583">583</th><td>	thread_info_used++;</td></tr>
+<tr><th id="584">584</th><td>}</td></tr>
+<tr><th id="585">585</th><td></td></tr>
+<tr><th id="586">586</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="587">587</th><td>remove_thread_info( ldap_debug_thread_t *t, <em>const</em> <em>char</em> *msg )</td></tr>
+<tr><th id="588">588</th><td>{</td></tr>
+<tr><th id="589">589</th><td>		ldap_debug_thread_t *last;</td></tr>
+<tr><th id="590">590</th><td>		<em>int</em> idx;</td></tr>
+<tr><th id="591">591</th><td>		check_usage( &amp;t-&gt;usage, msg );</td></tr>
+<tr><th id="592">592</th><td>		destroy_usage( &amp;t-&gt;usage );</td></tr>
+<tr><th id="593">593</th><td>		idx = t-&gt;idx;</td></tr>
+<tr><th id="594">594</th><td>		assert( thread_info[idx] == t );</td></tr>
+<tr><th id="595">595</th><td>		last = thread_info[--thread_info_used];</td></tr>
+<tr><th id="596">596</th><td>		assert( last-&gt;idx == thread_info_used );</td></tr>
+<tr><th id="597">597</th><td>		(thread_info[idx]              = last)-&gt;idx = idx;</td></tr>
+<tr><th id="598">598</th><td>		(thread_info[thread_info_used] = t   )-&gt;idx = thread_info_used;</td></tr>
+<tr><th id="599">599</th><td>}</td></tr>
+<tr><th id="600">600</th><td></td></tr>
+<tr><th id="601">601</th><td><em>static</em> ldap_debug_thread_t *</td></tr>
+<tr><th id="602">602</th><td>get_thread_info( ldap_pvt_thread_t thread, <em>const</em> <em>char</em> *msg )</td></tr>
+<tr><th id="603">603</th><td>{</td></tr>
+<tr><th id="604">604</th><td>	<em>unsigned</em> <em>int</em> i;</td></tr>
+<tr><th id="605">605</th><td>	ldap_debug_thread_t *t;</td></tr>
+<tr><th id="606">606</th><td>	<b>for</b>( i = <var>0</var>; i &lt; thread_info_used; i++ ) {</td></tr>
+<tr><th id="607">607</th><td>		<b>if</b>( ldap_pvt_thread_equal( thread, thread_info[i]-&gt;wrapped ) )</td></tr>
+<tr><th id="608">608</th><td>			<b>break</b>;</td></tr>
+<tr><th id="609">609</th><td>	}</td></tr>
+<tr><th id="610">610</th><td>	ERROR_IF( i == thread_info_used, msg );</td></tr>
+<tr><th id="611">611</th><td>	t = thread_info[i];</td></tr>
+<tr><th id="612">612</th><td>	check_usage( &amp;t-&gt;usage, msg );</td></tr>
+<tr><th id="613">613</th><td>	<b>return</b> t;</td></tr>
+<tr><th id="614">614</th><td>}</td></tr>
+<tr><th id="615">615</th><td></td></tr>
+<tr><th id="616">616</th><td><u>#endif /* LDAP_THREAD_DEBUG_THREAD_ID */</u></td></tr>
+<tr><th id="617">617</th><td></td></tr>
+<tr><th id="618">618</th><td></td></tr>
+<tr><th id="619">619</th><td><em>static</em> <em>char</em> *</td></tr>
+<tr><th id="620">620</th><td>thread_name( <em>char</em> *buf, <em>int</em> bufsize, ldap_pvt_thread_t thread )</td></tr>
+<tr><th id="621">621</th><td>{</td></tr>
+<tr><th id="622">622</th><td>	<em>int</em> i;</td></tr>
+<tr><th id="623">623</th><td>	--bufsize;</td></tr>
+<tr><th id="624">624</th><td>	<b>if</b>( bufsize &gt; <var>2</var>*<b>sizeof</b>(thread) )</td></tr>
+<tr><th id="625">625</th><td>		bufsize = <var>2</var>*<b>sizeof</b>(thread);</td></tr>
+<tr><th id="626">626</th><td>	<b>for</b>( i = <var>0</var>; i &lt; bufsize; i += <var>2</var> )</td></tr>
+<tr><th id="627">627</th><td>		snprintf( buf+i, <var>3</var>, <q>"%02x"</q>, ((<em>unsigned</em> <em>char</em> *)&amp;thread)[i/<var>2</var>] );</td></tr>
+<tr><th id="628">628</th><td>	<b>return</b> buf;</td></tr>
+<tr><th id="629">629</th><td>}</td></tr>
+<tr><th id="630">630</th><td></td></tr>
+<tr><th id="631">631</th><td></td></tr>
+<tr><th id="632">632</th><td><i>/* Add &lt;adjust&gt; (+/-1) to resource count &lt;which&gt; unless "nocount". */</i></td></tr>
+<tr><th id="633">633</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="634">634</th><td>adjust_count( <em>int</em> which, <em>int</em> adjust )</td></tr>
+<tr><th id="635">635</th><td>{</td></tr>
+<tr><th id="636">636</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="637">637</th><td>	<b>switch</b>( count ) {</td></tr>
+<tr><th id="638">638</th><td>	<b>case</b> Count_no:</td></tr>
+<tr><th id="639">639</th><td>		<b>break</b>;</td></tr>
+<tr><th id="640">640</th><td>	<b>case</b> Count_yes:</td></tr>
+<tr><th id="641">641</th><td>		rc = ldap_int_thread_mutex_lock( &amp;resource_mutexes[which] );</td></tr>
+<tr><th id="642">642</th><td>		assert( rc == <var>0</var> );</td></tr>
+<tr><th id="643">643</th><td>		resource_counts[which] += adjust;</td></tr>
+<tr><th id="644">644</th><td>		rc = ldap_int_thread_mutex_unlock( &amp;resource_mutexes[which] );</td></tr>
+<tr><th id="645">645</th><td>		assert( rc == <var>0</var> );</td></tr>
+<tr><th id="646">646</th><td>		<b>break</b>;</td></tr>
+<tr><th id="647">647</th><td>	<b>case</b> Count_reported:</td></tr>
+<tr><th id="648">648</th><td>		fputs( <q>"== thr_debug: More thread activity after exit ==\n"</q>, stderr );</td></tr>
+<tr><th id="649">649</th><td>		count = Count_reported_more;</td></tr>
+<tr><th id="650">650</th><td>		<i>/* FALL THROUGH */</i></td></tr>
+<tr><th id="651">651</th><td>	<b>case</b> Count_reported_more:</td></tr>
+<tr><th id="652">652</th><td>		<i>/* Not used, but result might be inspected with debugger */</i></td></tr>
+<tr><th id="653">653</th><td>		<i>/* (Hopefully threading is disabled by now...) */</i></td></tr>
+<tr><th id="654">654</th><td>		resource_counts[which] += adjust;</td></tr>
+<tr><th id="655">655</th><td>		<b>break</b>;</td></tr>
+<tr><th id="656">656</th><td>	}</td></tr>
+<tr><th id="657">657</th><td>}</td></tr>
+<tr><th id="658">658</th><td></td></tr>
+<tr><th id="659">659</th><td></td></tr>
+<tr><th id="660">660</th><td><i>/* Wrappers for LDAP_THREAD_IMPLEMENTATION: */</i></td></tr>
+<tr><th id="661">661</th><td></td></tr>
+<tr><th id="662">662</th><td><i>/* Used instead of ldap_int_thread_initialize by ldap_pvt_thread_initialize */</i></td></tr>
+<tr><th id="663">663</th><td><em>int</em></td></tr>
+<tr><th id="664">664</th><td>ldap_debug_thread_initialize( <em>void</em> )</td></tr>
+<tr><th id="665">665</th><td>{</td></tr>
+<tr><th id="666">666</th><td>	<em>int</em> i, rc, rc2;</td></tr>
+<tr><th id="667">667</th><td>	<b>if</b>( !options_done )</td></tr>
+<tr><th id="668">668</th><td>		get_options();</td></tr>
+<tr><th id="669">669</th><td>	ERROR_IF( threading_enabled, <q>"ldap_debug_thread_initialize"</q> );</td></tr>
+<tr><th id="670">670</th><td>	threading_enabled = <var>1</var>;</td></tr>
+<tr><th id="671">671</th><td>	rc = ldap_int_thread_initialize();</td></tr>
+<tr><th id="672">672</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="673">673</th><td>		ERROR( rc, <q>"ldap_debug_thread_initialize:threads"</q> );</td></tr>
+<tr><th id="674">674</th><td>		threading_enabled = <var>0</var>;</td></tr>
+<tr><th id="675">675</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="676">676</th><td>		init_thread_info();</td></tr>
+<tr><th id="677">677</th><td>		<b>if</b>( count != Count_no ) {</td></tr>
+<tr><th id="678">678</th><td>			<b>for</b>( i = rc2 = <var>0</var>; i &lt; Idx_max; i++ )</td></tr>
+<tr><th id="679">679</th><td>				rc2 |= ldap_int_thread_mutex_init( &amp;resource_mutexes[i] );</td></tr>
+<tr><th id="680">680</th><td>			assert( rc2 == <var>0</var> );</td></tr>
+<tr><th id="681">681</th><td>			<i>/* FIXME: Only for static libldap_r as in init.c? If so, why? */</i></td></tr>
+<tr><th id="682">682</th><td>			atexit( count_resource_leaks );</td></tr>
+<tr><th id="683">683</th><td>		}</td></tr>
+<tr><th id="684">684</th><td>	}</td></tr>
+<tr><th id="685">685</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="686">686</th><td>}</td></tr>
+<tr><th id="687">687</th><td></td></tr>
+<tr><th id="688">688</th><td><i>/* Used instead of ldap_int_thread_destroy by ldap_pvt_thread_destroy */</i></td></tr>
+<tr><th id="689">689</th><td><em>int</em></td></tr>
+<tr><th id="690">690</th><td>ldap_debug_thread_destroy( <em>void</em> )</td></tr>
+<tr><th id="691">691</th><td>{</td></tr>
+<tr><th id="692">692</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="693">693</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_debug_thread_destroy"</q> );</td></tr>
+<tr><th id="694">694</th><td>	<i>/* sleep(1) -- need to wait for thread pool to finish? */</i></td></tr>
+<tr><th id="695">695</th><td>	rc = ldap_int_thread_destroy();</td></tr>
+<tr><th id="696">696</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="697">697</th><td>		ERROR( rc, <q>"ldap_debug_thread_destroy:threads"</q> );</td></tr>
+<tr><th id="698">698</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="699">699</th><td>		threading_enabled = <var>0</var>;</td></tr>
+<tr><th id="700">700</th><td>	}</td></tr>
+<tr><th id="701">701</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="702">702</th><td>}</td></tr>
+<tr><th id="703">703</th><td></td></tr>
+<tr><th id="704">704</th><td><em>int</em></td></tr>
+<tr><th id="705">705</th><td>ldap_pvt_thread_set_concurrency( <em>int</em> n )</td></tr>
+<tr><th id="706">706</th><td>{</td></tr>
+<tr><th id="707">707</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="708">708</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_set_concurrency"</q> );</td></tr>
+<tr><th id="709">709</th><td>	rc = ldap_int_thread_set_concurrency( n );</td></tr>
+<tr><th id="710">710</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_set_concurrency"</q> );</td></tr>
+<tr><th id="711">711</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="712">712</th><td>}</td></tr>
+<tr><th id="713">713</th><td></td></tr>
+<tr><th id="714">714</th><td><em>int</em></td></tr>
+<tr><th id="715">715</th><td>ldap_pvt_thread_get_concurrency( <em>void</em> )</td></tr>
+<tr><th id="716">716</th><td>{</td></tr>
+<tr><th id="717">717</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="718">718</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_get_concurrency"</q> );</td></tr>
+<tr><th id="719">719</th><td>	rc = ldap_int_thread_get_concurrency();</td></tr>
+<tr><th id="720">720</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_get_concurrency"</q> );</td></tr>
+<tr><th id="721">721</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="722">722</th><td>}</td></tr>
+<tr><th id="723">723</th><td></td></tr>
+<tr><th id="724">724</th><td><em>unsigned</em> <em>int</em></td></tr>
+<tr><th id="725">725</th><td>ldap_pvt_thread_sleep( <em>unsigned</em> <em>int</em> interval )</td></tr>
+<tr><th id="726">726</th><td>{</td></tr>
+<tr><th id="727">727</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="728">728</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_sleep"</q> );</td></tr>
+<tr><th id="729">729</th><td>	rc = ldap_int_thread_sleep( interval );</td></tr>
+<tr><th id="730">730</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_sleep"</q> );</td></tr>
+<tr><th id="731">731</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="732">732</th><td>}</td></tr>
+<tr><th id="733">733</th><td></td></tr>
+<tr><th id="734">734</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="735">735</th><td>thread_exiting( <em>const</em> <em>char</em> *how, <em>const</em> <em>char</em> *msg )</td></tr>
+<tr><th id="736">736</th><td>{</td></tr>
+<tr><th id="737">737</th><td>	ldap_pvt_thread_t thread;</td></tr>
+<tr><th id="738">738</th><td><u>#if 0 /* Detached threads may exit after ldap_debug_thread_destroy(). */</u></td></tr>
+<tr><th id="739">739</th><td>	ERROR_IF( !threading_enabled, msg );</td></tr>
+<tr><th id="740">740</th><td><u>#endif</u></td></tr>
+<tr><th id="741">741</th><td>	thread = ldap_pvt_thread_self();</td></tr>
+<tr><th id="742">742</th><td>	<b>if</b>( tracethreads ) {</td></tr>
+<tr><th id="743">743</th><td>		<em>char</em> buf[<var>40</var>];</td></tr>
+<tr><th id="744">744</th><td>		fprintf( stderr, <q>"== thr_debug: %s thread %s ==\n"</q>,</td></tr>
+<tr><th id="745">745</th><td>			how, thread_name( buf, <b>sizeof</b>(buf), thread ) );</td></tr>
+<tr><th id="746">746</th><td>	}</td></tr>
+<tr><th id="747">747</th><td>	<b>if</b>( threadID ) {</td></tr>
+<tr><th id="748">748</th><td>		with_thread_info_lock({</td></tr>
+<tr><th id="749">749</th><td>			ldap_debug_thread_t *t = get_thread_info( thread, msg );</td></tr>
+<tr><th id="750">750</th><td>			<b>if</b>( thread_info_detached( t ) )</td></tr>
+<tr><th id="751">751</th><td>				remove_thread_info( t, msg );</td></tr>
+<tr><th id="752">752</th><td>		});</td></tr>
+<tr><th id="753">753</th><td>	}</td></tr>
+<tr><th id="754">754</th><td>	adjust_count( Idx_unexited_thread, -<var>1</var> );</td></tr>
+<tr><th id="755">755</th><td>}</td></tr>
+<tr><th id="756">756</th><td></td></tr>
+<tr><th id="757">757</th><td><em>void</em></td></tr>
+<tr><th id="758">758</th><td>ldap_pvt_thread_exit( <em>void</em> *retval )</td></tr>
+<tr><th id="759">759</th><td>{</td></tr>
+<tr><th id="760">760</th><td>	thread_exiting( <q>"Exiting"</q>, <q>"ldap_pvt_thread_exit"</q> );</td></tr>
+<tr><th id="761">761</th><td>	ldap_int_thread_exit( retval );</td></tr>
+<tr><th id="762">762</th><td>}</td></tr>
+<tr><th id="763">763</th><td></td></tr>
+<tr><th id="764">764</th><td><b>typedef</b> <b>struct</b> {</td></tr>
+<tr><th id="765">765</th><td>	<em>void</em> *(*start_routine)( <em>void</em> * );</td></tr>
+<tr><th id="766">766</th><td>	<em>void</em> *arg;</td></tr>
+<tr><th id="767">767</th><td>} ldap_debug_thread_call_t;</td></tr>
+<tr><th id="768">768</th><td></td></tr>
+<tr><th id="769">769</th><td><em>static</em> <em>void</em> *</td></tr>
+<tr><th id="770">770</th><td>ldap_debug_thread_wrapper( <em>void</em> *arg )</td></tr>
+<tr><th id="771">771</th><td>{</td></tr>
+<tr><th id="772">772</th><td>	<em>void</em> *ret;</td></tr>
+<tr><th id="773">773</th><td>	ldap_debug_thread_call_t call = *(ldap_debug_thread_call_t *)arg;</td></tr>
+<tr><th id="774">774</th><td>	free( arg );</td></tr>
+<tr><th id="775">775</th><td>	ret = call.start_routine( call.arg );</td></tr>
+<tr><th id="776">776</th><td>	thread_exiting( <q>"Returning from"</q>, <q>"ldap_debug_thread_wrapper"</q> );</td></tr>
+<tr><th id="777">777</th><td>	<b>return</b> ret;</td></tr>
+<tr><th id="778">778</th><td>}</td></tr>
+<tr><th id="779">779</th><td></td></tr>
+<tr><th id="780">780</th><td><em>int</em></td></tr>
+<tr><th id="781">781</th><td>ldap_pvt_thread_create(</td></tr>
+<tr><th id="782">782</th><td>	ldap_pvt_thread_t *thread,</td></tr>
+<tr><th id="783">783</th><td>	<em>int</em> detach,</td></tr>
+<tr><th id="784">784</th><td>	<em>void</em> *(*start_routine)( <em>void</em> * ),</td></tr>
+<tr><th id="785">785</th><td>	<em>void</em> *arg )</td></tr>
+<tr><th id="786">786</th><td>{</td></tr>
+<tr><th id="787">787</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="788">788</th><td>	<b>if</b>( !options_done )</td></tr>
+<tr><th id="789">789</th><td>		get_options();</td></tr>
+<tr><th id="790">790</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_create"</q> );</td></tr>
+<tr><th id="791">791</th><td></td></tr>
+<tr><th id="792">792</th><td>	<b>if</b>( wrap_threads ) {</td></tr>
+<tr><th id="793">793</th><td>		ldap_debug_thread_call_t *call = malloc(</td></tr>
+<tr><th id="794">794</th><td>			<b>sizeof</b>( ldap_debug_thread_call_t ) );</td></tr>
+<tr><th id="795">795</th><td>		assert( call != NULL );</td></tr>
+<tr><th id="796">796</th><td>		call-&gt;start_routine = start_routine;</td></tr>
+<tr><th id="797">797</th><td>		call-&gt;arg = arg;</td></tr>
+<tr><th id="798">798</th><td>		start_routine = ldap_debug_thread_wrapper;</td></tr>
+<tr><th id="799">799</th><td>		arg = call;</td></tr>
+<tr><th id="800">800</th><td>	}</td></tr>
+<tr><th id="801">801</th><td>	<b>if</b>( threadID ) {</td></tr>
+<tr><th id="802">802</th><td>		with_thread_info_lock({</td></tr>
+<tr><th id="803">803</th><td>			rc = ldap_int_thread_create( thread, detach, start_routine, arg );</td></tr>
+<tr><th id="804">804</th><td>			<b>if</b>( rc == <var>0</var> )</td></tr>
+<tr><th id="805">805</th><td>				add_thread_info( <q>"ldap_pvt_thread_create"</q>, thread, detach );</td></tr>
+<tr><th id="806">806</th><td>		});</td></tr>
+<tr><th id="807">807</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="808">808</th><td>		rc = ldap_int_thread_create( thread, detach, start_routine, arg );</td></tr>
+<tr><th id="809">809</th><td>	}</td></tr>
+<tr><th id="810">810</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="811">811</th><td>		ERROR( rc, <q>"ldap_pvt_thread_create"</q> );</td></tr>
+<tr><th id="812">812</th><td>		<b>if</b>( wrap_threads )</td></tr>
+<tr><th id="813">813</th><td>			free( arg );</td></tr>
+<tr><th id="814">814</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="815">815</th><td>		<b>if</b>( tracethreads ) {</td></tr>
+<tr><th id="816">816</th><td>			<em>char</em> buf[<var>40</var>], buf2[<var>40</var>];</td></tr>
+<tr><th id="817">817</th><td>			fprintf( stderr,</td></tr>
+<tr><th id="818">818</th><td>				<q>"== thr_debug: Created thread %s%s from thread %s ==\n"</q>,</td></tr>
+<tr><th id="819">819</th><td>				thread_name( buf, <b>sizeof</b>(buf), *thread ),</td></tr>
+<tr><th id="820">820</th><td>				detach ? <q>" (detached)"</q> : <q>""</q>,</td></tr>
+<tr><th id="821">821</th><td>				thread_name( buf2, <b>sizeof</b>(buf2), ldap_pvt_thread_self() ) );</td></tr>
+<tr><th id="822">822</th><td>		}</td></tr>
+<tr><th id="823">823</th><td>		adjust_count( Idx_unexited_thread, +<var>1</var> );</td></tr>
+<tr><th id="824">824</th><td>		<b>if</b>( !detach )</td></tr>
+<tr><th id="825">825</th><td>			adjust_count( Idx_unjoined_thread, +<var>1</var> );</td></tr>
+<tr><th id="826">826</th><td>	}</td></tr>
+<tr><th id="827">827</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="828">828</th><td>}</td></tr>
+<tr><th id="829">829</th><td></td></tr>
+<tr><th id="830">830</th><td><em>int</em></td></tr>
+<tr><th id="831">831</th><td>ldap_pvt_thread_join( ldap_pvt_thread_t thread, <em>void</em> **thread_return )</td></tr>
+<tr><th id="832">832</th><td>{</td></tr>
+<tr><th id="833">833</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="834">834</th><td>	ldap_debug_thread_t *t = NULL;</td></tr>
+<tr><th id="835">835</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_join"</q> );</td></tr>
+<tr><th id="836">836</th><td>	<b>if</b>( tracethreads ) {</td></tr>
+<tr><th id="837">837</th><td>		<em>char</em> buf[<var>40</var>], buf2[<var>40</var>];</td></tr>
+<tr><th id="838">838</th><td>		fprintf( stderr, <q>"== thr_debug: Joining thread %s in thread %s ==\n"</q>,</td></tr>
+<tr><th id="839">839</th><td>			thread_name( buf, <b>sizeof</b>(buf), thread ),</td></tr>
+<tr><th id="840">840</th><td>			thread_name( buf2, <b>sizeof</b>(buf2), ldap_pvt_thread_self() ) );</td></tr>
+<tr><th id="841">841</th><td>	}</td></tr>
+<tr><th id="842">842</th><td>	<b>if</b>( threadID )</td></tr>
+<tr><th id="843">843</th><td>		with_thread_info_lock( {</td></tr>
+<tr><th id="844">844</th><td>			t = get_thread_info( thread, <q>"ldap_pvt_thread_join"</q> );</td></tr>
+<tr><th id="845">845</th><td>			ERROR_IF( thread_info_detached( t ), <q>"ldap_pvt_thread_join"</q> );</td></tr>
+<tr><th id="846">846</th><td>		} );</td></tr>
+<tr><th id="847">847</th><td>	rc = ldap_int_thread_join( thread, thread_return );</td></tr>
+<tr><th id="848">848</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="849">849</th><td>		ERROR( rc, <q>"ldap_pvt_thread_join"</q> );</td></tr>
+<tr><th id="850">850</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="851">851</th><td>		<b>if</b>( threadID )</td></tr>
+<tr><th id="852">852</th><td>			with_thread_info_lock(</td></tr>
+<tr><th id="853">853</th><td>				remove_thread_info( t, <q>"ldap_pvt_thread_join"</q> ) );</td></tr>
+<tr><th id="854">854</th><td>		adjust_count( Idx_unjoined_thread, -<var>1</var> );</td></tr>
+<tr><th id="855">855</th><td>	}</td></tr>
+<tr><th id="856">856</th><td></td></tr>
+<tr><th id="857">857</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="858">858</th><td>}</td></tr>
+<tr><th id="859">859</th><td></td></tr>
+<tr><th id="860">860</th><td><em>int</em></td></tr>
+<tr><th id="861">861</th><td>ldap_pvt_thread_kill( ldap_pvt_thread_t thread, <em>int</em> signo )</td></tr>
+<tr><th id="862">862</th><td>{</td></tr>
+<tr><th id="863">863</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="864">864</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_kill"</q> );</td></tr>
+<tr><th id="865">865</th><td>	<b>if</b>( tracethreads ) {</td></tr>
+<tr><th id="866">866</th><td>		<em>char</em> buf[<var>40</var>], buf2[<var>40</var>];</td></tr>
+<tr><th id="867">867</th><td>		fprintf( stderr,</td></tr>
+<tr><th id="868">868</th><td>			<q>"== thr_debug: Killing thread %s (sig %i) from thread %s ==\n"</q>,</td></tr>
+<tr><th id="869">869</th><td>			thread_name( buf, <b>sizeof</b>(buf), thread ), signo,</td></tr>
+<tr><th id="870">870</th><td>			thread_name( buf2, <b>sizeof</b>(buf2), ldap_pvt_thread_self() ) );</td></tr>
+<tr><th id="871">871</th><td>	}</td></tr>
+<tr><th id="872">872</th><td>	rc = ldap_int_thread_kill( thread, signo );</td></tr>
+<tr><th id="873">873</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_kill"</q> );</td></tr>
+<tr><th id="874">874</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="875">875</th><td>}</td></tr>
+<tr><th id="876">876</th><td></td></tr>
+<tr><th id="877">877</th><td><em>int</em></td></tr>
+<tr><th id="878">878</th><td>ldap_pvt_thread_yield( <em>void</em> )</td></tr>
+<tr><th id="879">879</th><td>{</td></tr>
+<tr><th id="880">880</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="881">881</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_yield"</q> );</td></tr>
+<tr><th id="882">882</th><td>	rc = ldap_int_thread_yield();</td></tr>
+<tr><th id="883">883</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_yield"</q> );</td></tr>
+<tr><th id="884">884</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="885">885</th><td>}</td></tr>
+<tr><th id="886">886</th><td></td></tr>
+<tr><th id="887">887</th><td>ldap_pvt_thread_t</td></tr>
+<tr><th id="888">888</th><td>ldap_pvt_thread_self( <em>void</em> )</td></tr>
+<tr><th id="889">889</th><td>{</td></tr>
+<tr><th id="890">890</th><td><u>#if 0 /* Function is used by ch_free() via slap_sl_contxt() in slapd */</u></td></tr>
+<tr><th id="891">891</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_self"</q> );</td></tr>
+<tr><th id="892">892</th><td><u>#endif</u></td></tr>
+<tr><th id="893">893</th><td>	<b>return</b> ldap_int_thread_self();</td></tr>
+<tr><th id="894">894</th><td>}</td></tr>
+<tr><th id="895">895</th><td></td></tr>
+<tr><th id="896">896</th><td><em>int</em></td></tr>
+<tr><th id="897">897</th><td>ldap_pvt_thread_cond_init( ldap_pvt_thread_cond_t *cond )</td></tr>
+<tr><th id="898">898</th><td>{</td></tr>
+<tr><th id="899">899</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="900">900</th><td>	init_usage( &amp;cond-&gt;usage, <q>"ldap_pvt_thread_cond_init"</q> );</td></tr>
+<tr><th id="901">901</th><td>	rc = ldap_int_thread_cond_init( WRAPPED( cond ) );</td></tr>
+<tr><th id="902">902</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="903">903</th><td>		ERROR( rc, <q>"ldap_pvt_thread_cond_init"</q> );</td></tr>
+<tr><th id="904">904</th><td>		destroy_usage( &amp;cond-&gt;usage );</td></tr>
+<tr><th id="905">905</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="906">906</th><td>		adjust_count( Idx_cond, +<var>1</var> );</td></tr>
+<tr><th id="907">907</th><td>	}</td></tr>
+<tr><th id="908">908</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="909">909</th><td>}</td></tr>
+<tr><th id="910">910</th><td></td></tr>
+<tr><th id="911">911</th><td><em>int</em></td></tr>
+<tr><th id="912">912</th><td>ldap_pvt_thread_cond_destroy( ldap_pvt_thread_cond_t *cond )</td></tr>
+<tr><th id="913">913</th><td>{</td></tr>
+<tr><th id="914">914</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="915">915</th><td>	check_usage( &amp;cond-&gt;usage, <q>"ldap_pvt_thread_cond_destroy"</q> );</td></tr>
+<tr><th id="916">916</th><td>	rc = ldap_int_thread_cond_destroy( WRAPPED( cond ) );</td></tr>
+<tr><th id="917">917</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="918">918</th><td>		ERROR( rc, <q>"ldap_pvt_thread_cond_destroy"</q> );</td></tr>
+<tr><th id="919">919</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="920">920</th><td>		destroy_usage( &amp;cond-&gt;usage );</td></tr>
+<tr><th id="921">921</th><td>		adjust_count( Idx_cond, -<var>1</var> );</td></tr>
+<tr><th id="922">922</th><td>	}</td></tr>
+<tr><th id="923">923</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="924">924</th><td>}</td></tr>
+<tr><th id="925">925</th><td></td></tr>
+<tr><th id="926">926</th><td><em>int</em></td></tr>
+<tr><th id="927">927</th><td>ldap_pvt_thread_cond_signal( ldap_pvt_thread_cond_t *cond )</td></tr>
+<tr><th id="928">928</th><td>{</td></tr>
+<tr><th id="929">929</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="930">930</th><td>	check_usage( &amp;cond-&gt;usage, <q>"ldap_pvt_thread_cond_signal"</q> );</td></tr>
+<tr><th id="931">931</th><td>	rc = ldap_int_thread_cond_signal( WRAPPED( cond ) );</td></tr>
+<tr><th id="932">932</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_cond_signal"</q> );</td></tr>
+<tr><th id="933">933</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="934">934</th><td>}</td></tr>
+<tr><th id="935">935</th><td></td></tr>
+<tr><th id="936">936</th><td><em>int</em></td></tr>
+<tr><th id="937">937</th><td>ldap_pvt_thread_cond_broadcast( ldap_pvt_thread_cond_t *cond )</td></tr>
+<tr><th id="938">938</th><td>{</td></tr>
+<tr><th id="939">939</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="940">940</th><td>	check_usage( &amp;cond-&gt;usage, <q>"ldap_pvt_thread_cond_broadcast"</q> );</td></tr>
+<tr><th id="941">941</th><td>	rc = ldap_int_thread_cond_broadcast( WRAPPED( cond ) );</td></tr>
+<tr><th id="942">942</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_cond_broadcast"</q> );</td></tr>
+<tr><th id="943">943</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="944">944</th><td>}</td></tr>
+<tr><th id="945">945</th><td></td></tr>
+<tr><th id="946">946</th><td><em>int</em></td></tr>
+<tr><th id="947">947</th><td>ldap_pvt_thread_cond_wait(</td></tr>
+<tr><th id="948">948</th><td>	ldap_pvt_thread_cond_t *cond,</td></tr>
+<tr><th id="949">949</th><td>	ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="950">950</th><td>{</td></tr>
+<tr><th id="951">951</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="952">952</th><td>	ldap_int_thread_t owner;</td></tr>
+<tr><th id="953">953</th><td>	check_usage( &amp;cond-&gt;usage, <q>"ldap_pvt_thread_cond_wait:cond"</q> );</td></tr>
+<tr><th id="954">954</th><td>	check_usage( &amp;mutex-&gt;usage, <q>"ldap_pvt_thread_cond_wait:mutex"</q> );</td></tr>
+<tr><th id="955">955</th><td>	adjust_count( Idx_locked_mutex, -<var>1</var> );</td></tr>
+<tr><th id="956">956</th><td>	owner = GET_OWNER( mutex );</td></tr>
+<tr><th id="957">957</th><td>	ASSERT_OWNER( mutex, <q>"ldap_pvt_thread_cond_wait"</q> );</td></tr>
+<tr><th id="958">958</th><td>	RESET_OWNER( mutex );</td></tr>
+<tr><th id="959">959</th><td>	rc = ldap_int_thread_cond_wait( WRAPPED( cond ), WRAPPED( mutex ) );</td></tr>
+<tr><th id="960">960</th><td>	ASSERT_NO_OWNER( mutex, <q>"ldap_pvt_thread_cond_wait"</q> );</td></tr>
+<tr><th id="961">961</th><td>	SET_OWNER( mutex, rc ? owner : ldap_int_thread_self() );</td></tr>
+<tr><th id="962">962</th><td>	adjust_count( Idx_locked_mutex, +<var>1</var> );</td></tr>
+<tr><th id="963">963</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_cond_wait"</q> );</td></tr>
+<tr><th id="964">964</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="965">965</th><td>}</td></tr>
+<tr><th id="966">966</th><td></td></tr>
+<tr><th id="967">967</th><td><em>int</em></td></tr>
+<tr><th id="968">968</th><td>ldap_pvt_thread_mutex_init( ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="969">969</th><td>{</td></tr>
+<tr><th id="970">970</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="971">971</th><td>	init_usage( &amp;mutex-&gt;usage, <q>"ldap_pvt_thread_mutex_init"</q> );</td></tr>
+<tr><th id="972">972</th><td>	rc = ldap_int_thread_mutex_init( WRAPPED( mutex ) );</td></tr>
+<tr><th id="973">973</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="974">974</th><td>		ERROR( rc, <q>"ldap_pvt_thread_mutex_init"</q> );</td></tr>
+<tr><th id="975">975</th><td>		destroy_usage( &amp;mutex-&gt;usage );</td></tr>
+<tr><th id="976">976</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="977">977</th><td>		RESET_OWNER( mutex );</td></tr>
+<tr><th id="978">978</th><td>		adjust_count( Idx_mutex, +<var>1</var> );</td></tr>
+<tr><th id="979">979</th><td>	}</td></tr>
+<tr><th id="980">980</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="981">981</th><td>}</td></tr>
+<tr><th id="982">982</th><td></td></tr>
+<tr><th id="983">983</th><td><em>int</em></td></tr>
+<tr><th id="984">984</th><td>ldap_pvt_thread_mutex_destroy( ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="985">985</th><td>{</td></tr>
+<tr><th id="986">986</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="987">987</th><td>	check_usage( &amp;mutex-&gt;usage, <q>"ldap_pvt_thread_mutex_destroy"</q> );</td></tr>
+<tr><th id="988">988</th><td>	ASSERT_NO_OWNER( mutex, <q>"ldap_pvt_thread_mutex_destroy"</q> );</td></tr>
+<tr><th id="989">989</th><td>	rc = ldap_int_thread_mutex_destroy( WRAPPED( mutex ) );</td></tr>
+<tr><th id="990">990</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="991">991</th><td>		ERROR( rc, <q>"ldap_pvt_thread_mutex_destroy"</q> );</td></tr>
+<tr><th id="992">992</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="993">993</th><td>		destroy_usage( &amp;mutex-&gt;usage );</td></tr>
+<tr><th id="994">994</th><td>		RESET_OWNER( mutex );</td></tr>
+<tr><th id="995">995</th><td>		adjust_count( Idx_mutex, -<var>1</var> );</td></tr>
+<tr><th id="996">996</th><td>	}</td></tr>
+<tr><th id="997">997</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="998">998</th><td>}</td></tr>
+<tr><th id="999">999</th><td></td></tr>
+<tr><th id="1000">1000</th><td><em>int</em></td></tr>
+<tr><th id="1001">1001</th><td>ldap_pvt_thread_mutex_lock( ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="1002">1002</th><td>{</td></tr>
+<tr><th id="1003">1003</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1004">1004</th><td>	check_usage( &amp;mutex-&gt;usage, <q>"ldap_pvt_thread_mutex_lock"</q> );</td></tr>
+<tr><th id="1005">1005</th><td>	rc = ldap_int_thread_mutex_lock( WRAPPED( mutex ) );</td></tr>
+<tr><th id="1006">1006</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="1007">1007</th><td>		ERROR_IF( rc, <q>"ldap_pvt_thread_mutex_lock"</q> );</td></tr>
+<tr><th id="1008">1008</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="1009">1009</th><td>		ASSERT_NO_OWNER( mutex, <q>"ldap_pvt_thread_mutex_lock"</q> );</td></tr>
+<tr><th id="1010">1010</th><td>		SET_OWNER( mutex, ldap_int_thread_self() );</td></tr>
+<tr><th id="1011">1011</th><td>		adjust_count( Idx_locked_mutex, +<var>1</var> );</td></tr>
+<tr><th id="1012">1012</th><td>	}</td></tr>
+<tr><th id="1013">1013</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1014">1014</th><td>}</td></tr>
+<tr><th id="1015">1015</th><td></td></tr>
+<tr><th id="1016">1016</th><td><em>int</em></td></tr>
+<tr><th id="1017">1017</th><td>ldap_pvt_thread_mutex_trylock( ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="1018">1018</th><td>{</td></tr>
+<tr><th id="1019">1019</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1020">1020</th><td>	check_usage( &amp;mutex-&gt;usage, <q>"ldap_pvt_thread_mutex_trylock"</q> );</td></tr>
+<tr><th id="1021">1021</th><td>	rc = ldap_int_thread_mutex_trylock( WRAPPED( mutex ) );</td></tr>
+<tr><th id="1022">1022</th><td>	<b>if</b>( rc == <var>0</var> ) {</td></tr>
+<tr><th id="1023">1023</th><td>		ASSERT_NO_OWNER( mutex, <q>"ldap_pvt_thread_mutex_trylock"</q> );</td></tr>
+<tr><th id="1024">1024</th><td>		SET_OWNER( mutex, ldap_int_thread_self() );</td></tr>
+<tr><th id="1025">1025</th><td>		adjust_count( Idx_locked_mutex, +<var>1</var> );</td></tr>
+<tr><th id="1026">1026</th><td>	}</td></tr>
+<tr><th id="1027">1027</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1028">1028</th><td>}</td></tr>
+<tr><th id="1029">1029</th><td></td></tr>
+<tr><th id="1030">1030</th><td><em>int</em></td></tr>
+<tr><th id="1031">1031</th><td>ldap_pvt_thread_mutex_unlock( ldap_pvt_thread_mutex_t *mutex )</td></tr>
+<tr><th id="1032">1032</th><td>{</td></tr>
+<tr><th id="1033">1033</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1034">1034</th><td>	check_usage( &amp;mutex-&gt;usage, <q>"ldap_pvt_thread_mutex_unlock"</q> );</td></tr>
+<tr><th id="1035">1035</th><td>	ASSERT_OWNER( mutex, <q>"ldap_pvt_thread_mutex_unlock"</q> );</td></tr>
+<tr><th id="1036">1036</th><td>	RESET_OWNER( mutex ); <i>/* Breaks if this thread did not own the mutex */</i></td></tr>
+<tr><th id="1037">1037</th><td>	rc = ldap_int_thread_mutex_unlock( WRAPPED( mutex ) );</td></tr>
+<tr><th id="1038">1038</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="1039">1039</th><td>		ERROR_IF( rc, <q>"ldap_pvt_thread_mutex_unlock"</q> );</td></tr>
+<tr><th id="1040">1040</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="1041">1041</th><td>		adjust_count( Idx_locked_mutex, -<var>1</var> );</td></tr>
+<tr><th id="1042">1042</th><td>	}</td></tr>
+<tr><th id="1043">1043</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1044">1044</th><td>}</td></tr>
+<tr><th id="1045">1045</th><td></td></tr>
+<tr><th id="1046">1046</th><td></td></tr>
+<tr><th id="1047">1047</th><td><i>/* Wrappers for LDAP_THREAD_RDWR_IMPLEMENTATION: */</i></td></tr>
+<tr><th id="1048">1048</th><td></td></tr>
+<tr><th id="1049">1049</th><td><em>int</em></td></tr>
+<tr><th id="1050">1050</th><td>ldap_pvt_thread_rdwr_init( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1051">1051</th><td>{</td></tr>
+<tr><th id="1052">1052</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1053">1053</th><td>	init_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_init"</q> );</td></tr>
+<tr><th id="1054">1054</th><td>	rc = ldap_int_thread_rdwr_init( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1055">1055</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="1056">1056</th><td>		ERROR( rc, <q>"ldap_pvt_thread_rdwr_init"</q> );</td></tr>
+<tr><th id="1057">1057</th><td>		destroy_usage( &amp;rwlock-&gt;usage );</td></tr>
+<tr><th id="1058">1058</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="1059">1059</th><td>		adjust_count( Idx_rdwr, +<var>1</var> );</td></tr>
+<tr><th id="1060">1060</th><td>	}</td></tr>
+<tr><th id="1061">1061</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1062">1062</th><td>}</td></tr>
+<tr><th id="1063">1063</th><td></td></tr>
+<tr><th id="1064">1064</th><td><em>int</em></td></tr>
+<tr><th id="1065">1065</th><td>ldap_pvt_thread_rdwr_destroy( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1066">1066</th><td>{</td></tr>
+<tr><th id="1067">1067</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1068">1068</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_destroy"</q> );</td></tr>
+<tr><th id="1069">1069</th><td>	rc = ldap_int_thread_rdwr_destroy( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1070">1070</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="1071">1071</th><td>		ERROR( rc, <q>"ldap_pvt_thread_rdwr_destroy"</q> );</td></tr>
+<tr><th id="1072">1072</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="1073">1073</th><td>		destroy_usage( &amp;rwlock-&gt;usage );</td></tr>
+<tr><th id="1074">1074</th><td>		adjust_count( Idx_rdwr, -<var>1</var> );</td></tr>
+<tr><th id="1075">1075</th><td>	}</td></tr>
+<tr><th id="1076">1076</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1077">1077</th><td>}</td></tr>
+<tr><th id="1078">1078</th><td></td></tr>
+<tr><th id="1079">1079</th><td><em>int</em></td></tr>
+<tr><th id="1080">1080</th><td>ldap_pvt_thread_rdwr_rlock( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1081">1081</th><td>{</td></tr>
+<tr><th id="1082">1082</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1083">1083</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_rlock"</q> );</td></tr>
+<tr><th id="1084">1084</th><td>	rc = ldap_int_thread_rdwr_rlock( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1085">1085</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_rdwr_rlock"</q> );</td></tr>
+<tr><th id="1086">1086</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1087">1087</th><td>}</td></tr>
+<tr><th id="1088">1088</th><td></td></tr>
+<tr><th id="1089">1089</th><td><em>int</em></td></tr>
+<tr><th id="1090">1090</th><td>ldap_pvt_thread_rdwr_rtrylock( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1091">1091</th><td>{</td></tr>
+<tr><th id="1092">1092</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_rtrylock"</q> );</td></tr>
+<tr><th id="1093">1093</th><td>	<b>return</b> ldap_int_thread_rdwr_rtrylock( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1094">1094</th><td>}</td></tr>
+<tr><th id="1095">1095</th><td></td></tr>
+<tr><th id="1096">1096</th><td><em>int</em></td></tr>
+<tr><th id="1097">1097</th><td>ldap_pvt_thread_rdwr_runlock( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1098">1098</th><td>{</td></tr>
+<tr><th id="1099">1099</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1100">1100</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_runlock"</q> );</td></tr>
+<tr><th id="1101">1101</th><td>	rc = ldap_int_thread_rdwr_runlock( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1102">1102</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_rdwr_runlock"</q> );</td></tr>
+<tr><th id="1103">1103</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1104">1104</th><td>}</td></tr>
+<tr><th id="1105">1105</th><td></td></tr>
+<tr><th id="1106">1106</th><td><em>int</em></td></tr>
+<tr><th id="1107">1107</th><td>ldap_pvt_thread_rdwr_wlock( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1108">1108</th><td>{</td></tr>
+<tr><th id="1109">1109</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1110">1110</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_wlock"</q> );</td></tr>
+<tr><th id="1111">1111</th><td>	rc = ldap_int_thread_rdwr_wlock( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1112">1112</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_rdwr_wlock"</q> );</td></tr>
+<tr><th id="1113">1113</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1114">1114</th><td>}</td></tr>
+<tr><th id="1115">1115</th><td></td></tr>
+<tr><th id="1116">1116</th><td><em>int</em></td></tr>
+<tr><th id="1117">1117</th><td>ldap_pvt_thread_rdwr_wtrylock( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1118">1118</th><td>{</td></tr>
+<tr><th id="1119">1119</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_wtrylock"</q> );</td></tr>
+<tr><th id="1120">1120</th><td>	<b>return</b> ldap_int_thread_rdwr_wtrylock( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1121">1121</th><td>}</td></tr>
+<tr><th id="1122">1122</th><td></td></tr>
+<tr><th id="1123">1123</th><td><em>int</em></td></tr>
+<tr><th id="1124">1124</th><td>ldap_pvt_thread_rdwr_wunlock( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1125">1125</th><td>{</td></tr>
+<tr><th id="1126">1126</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1127">1127</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_wunlock"</q> );</td></tr>
+<tr><th id="1128">1128</th><td>	rc = ldap_int_thread_rdwr_wunlock( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1129">1129</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_rdwr_wunlock"</q> );</td></tr>
+<tr><th id="1130">1130</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1131">1131</th><td>}</td></tr>
+<tr><th id="1132">1132</th><td></td></tr>
+<tr><th id="1133">1133</th><td><u>#if defined(LDAP_RDWR_DEBUG) &amp;&amp; !defined(LDAP_THREAD_HAVE_RDWR)</u></td></tr>
+<tr><th id="1134">1134</th><td></td></tr>
+<tr><th id="1135">1135</th><td><em>int</em></td></tr>
+<tr><th id="1136">1136</th><td>ldap_pvt_thread_rdwr_readers( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1137">1137</th><td>{</td></tr>
+<tr><th id="1138">1138</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_readers"</q> );</td></tr>
+<tr><th id="1139">1139</th><td>	<b>return</b> ldap_int_thread_rdwr_readers( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1140">1140</th><td>}</td></tr>
+<tr><th id="1141">1141</th><td></td></tr>
+<tr><th id="1142">1142</th><td><em>int</em></td></tr>
+<tr><th id="1143">1143</th><td>ldap_pvt_thread_rdwr_writers( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1144">1144</th><td>{</td></tr>
+<tr><th id="1145">1145</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_writers"</q> );</td></tr>
+<tr><th id="1146">1146</th><td>	<b>return</b> ldap_int_thread_rdwr_writers( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1147">1147</th><td>}</td></tr>
+<tr><th id="1148">1148</th><td></td></tr>
+<tr><th id="1149">1149</th><td><em>int</em></td></tr>
+<tr><th id="1150">1150</th><td>ldap_pvt_thread_rdwr_active( ldap_pvt_thread_rdwr_t *rwlock )</td></tr>
+<tr><th id="1151">1151</th><td>{</td></tr>
+<tr><th id="1152">1152</th><td>	check_usage( &amp;rwlock-&gt;usage, <q>"ldap_pvt_thread_rdwr_active"</q> );</td></tr>
+<tr><th id="1153">1153</th><td>	<b>return</b> ldap_int_thread_rdwr_active( WRAPPED( rwlock ) );</td></tr>
+<tr><th id="1154">1154</th><td>}</td></tr>
+<tr><th id="1155">1155</th><td></td></tr>
+<tr><th id="1156">1156</th><td><u>#endif /* LDAP_RDWR_DEBUG &amp;&amp; !LDAP_THREAD_HAVE_RDWR */</u></td></tr>
+<tr><th id="1157">1157</th><td></td></tr>
+<tr><th id="1158">1158</th><td></td></tr>
+<tr><th id="1159">1159</th><td><i>/* Some wrappers for LDAP_THREAD_POOL_IMPLEMENTATION: */</i></td></tr>
+<tr><th id="1160">1160</th><td><u>#ifdef LDAP_THREAD_POOL_IMPLEMENTATION</u></td></tr>
+<tr><th id="1161">1161</th><td></td></tr>
+<tr><th id="1162">1162</th><td><em>int</em></td></tr>
+<tr><th id="1163">1163</th><td>ldap_pvt_thread_pool_init(</td></tr>
+<tr><th id="1164">1164</th><td>	ldap_pvt_thread_pool_t *tpool,</td></tr>
+<tr><th id="1165">1165</th><td>	<em>int</em> max_threads,</td></tr>
+<tr><th id="1166">1166</th><td>	<em>int</em> max_pending )</td></tr>
+<tr><th id="1167">1167</th><td>{</td></tr>
+<tr><th id="1168">1168</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1169">1169</th><td>	<b>if</b>( !options_done )</td></tr>
+<tr><th id="1170">1170</th><td>		get_options();</td></tr>
+<tr><th id="1171">1171</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_init"</q> );</td></tr>
+<tr><th id="1172">1172</th><td>	rc = ldap_int_thread_pool_init( tpool, max_threads, max_pending );</td></tr>
+<tr><th id="1173">1173</th><td>	<b>if</b>( rc ) {</td></tr>
+<tr><th id="1174">1174</th><td>		ERROR( rc, <q>"ldap_pvt_thread_pool_init"</q> );</td></tr>
+<tr><th id="1175">1175</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="1176">1176</th><td>		adjust_count( Idx_tpool, +<var>1</var> );</td></tr>
+<tr><th id="1177">1177</th><td>	}</td></tr>
+<tr><th id="1178">1178</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1179">1179</th><td>}</td></tr>
+<tr><th id="1180">1180</th><td></td></tr>
+<tr><th id="1181">1181</th><td><em>int</em></td></tr>
+<tr><th id="1182">1182</th><td>ldap_pvt_thread_pool_submit(</td></tr>
+<tr><th id="1183">1183</th><td>	ldap_pvt_thread_pool_t *tpool,</td></tr>
+<tr><th id="1184">1184</th><td>	ldap_pvt_thread_start_t *start_routine, <em>void</em> *arg )</td></tr>
+<tr><th id="1185">1185</th><td>{</td></tr>
+<tr><th id="1186">1186</th><td>	<em>int</em> rc, has_pool;</td></tr>
+<tr><th id="1187">1187</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_submit"</q> );</td></tr>
+<tr><th id="1188">1188</th><td>	has_pool = (tpool &amp;&amp; *tpool);</td></tr>
+<tr><th id="1189">1189</th><td>	rc = ldap_int_thread_pool_submit( tpool, start_routine, arg );</td></tr>
+<tr><th id="1190">1190</th><td>	<b>if</b>( has_pool )</td></tr>
+<tr><th id="1191">1191</th><td>		ERROR_IF( rc, <q>"ldap_pvt_thread_pool_submit"</q> );</td></tr>
+<tr><th id="1192">1192</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1193">1193</th><td>}</td></tr>
+<tr><th id="1194">1194</th><td></td></tr>
+<tr><th id="1195">1195</th><td><em>int</em></td></tr>
+<tr><th id="1196">1196</th><td>ldap_pvt_thread_pool_maxthreads(</td></tr>
+<tr><th id="1197">1197</th><td>	ldap_pvt_thread_pool_t *tpool,</td></tr>
+<tr><th id="1198">1198</th><td>	<em>int</em> max_threads )</td></tr>
+<tr><th id="1199">1199</th><td>{</td></tr>
+<tr><th id="1200">1200</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_maxthreads"</q> );</td></tr>
+<tr><th id="1201">1201</th><td>	<b>return</b> ldap_int_thread_pool_maxthreads(	tpool, max_threads );</td></tr>
+<tr><th id="1202">1202</th><td>}</td></tr>
+<tr><th id="1203">1203</th><td></td></tr>
+<tr><th id="1204">1204</th><td><em>int</em></td></tr>
+<tr><th id="1205">1205</th><td>ldap_pvt_thread_pool_backload( ldap_pvt_thread_pool_t *tpool )</td></tr>
+<tr><th id="1206">1206</th><td>{</td></tr>
+<tr><th id="1207">1207</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_backload"</q> );</td></tr>
+<tr><th id="1208">1208</th><td>	<b>return</b> ldap_int_thread_pool_backload( tpool );</td></tr>
+<tr><th id="1209">1209</th><td>}</td></tr>
+<tr><th id="1210">1210</th><td></td></tr>
+<tr><th id="1211">1211</th><td><em>int</em></td></tr>
+<tr><th id="1212">1212</th><td>ldap_pvt_thread_pool_destroy( ldap_pvt_thread_pool_t *tpool, <em>int</em> run_pending )</td></tr>
+<tr><th id="1213">1213</th><td>{</td></tr>
+<tr><th id="1214">1214</th><td>	<em>int</em> rc, has_pool;</td></tr>
+<tr><th id="1215">1215</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_destroy"</q> );</td></tr>
+<tr><th id="1216">1216</th><td>	has_pool = (tpool &amp;&amp; *tpool);</td></tr>
+<tr><th id="1217">1217</th><td>	rc = ldap_int_thread_pool_destroy( tpool, run_pending );</td></tr>
+<tr><th id="1218">1218</th><td>	<b>if</b>( has_pool ) {</td></tr>
+<tr><th id="1219">1219</th><td>		<b>if</b>( rc ) {</td></tr>
+<tr><th id="1220">1220</th><td>			ERROR( rc, <q>"ldap_pvt_thread_pool_destroy"</q> );</td></tr>
+<tr><th id="1221">1221</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="1222">1222</th><td>			adjust_count( Idx_tpool, -<var>1</var> );</td></tr>
+<tr><th id="1223">1223</th><td>		}</td></tr>
+<tr><th id="1224">1224</th><td>	}</td></tr>
+<tr><th id="1225">1225</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1226">1226</th><td>}</td></tr>
+<tr><th id="1227">1227</th><td></td></tr>
+<tr><th id="1228">1228</th><td><em>int</em></td></tr>
+<tr><th id="1229">1229</th><td>ldap_pvt_thread_pool_pause( ldap_pvt_thread_pool_t *tpool )</td></tr>
+<tr><th id="1230">1230</th><td>{</td></tr>
+<tr><th id="1231">1231</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_pause"</q> );</td></tr>
+<tr><th id="1232">1232</th><td>	<b>return</b> ldap_int_thread_pool_pause( tpool );</td></tr>
+<tr><th id="1233">1233</th><td>}</td></tr>
+<tr><th id="1234">1234</th><td></td></tr>
+<tr><th id="1235">1235</th><td><em>int</em></td></tr>
+<tr><th id="1236">1236</th><td>ldap_pvt_thread_pool_resume( ldap_pvt_thread_pool_t *tpool )</td></tr>
+<tr><th id="1237">1237</th><td>{</td></tr>
+<tr><th id="1238">1238</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_resume"</q> );</td></tr>
+<tr><th id="1239">1239</th><td>	<b>return</b> ldap_int_thread_pool_resume( tpool );</td></tr>
+<tr><th id="1240">1240</th><td>}</td></tr>
+<tr><th id="1241">1241</th><td></td></tr>
+<tr><th id="1242">1242</th><td><em>int</em></td></tr>
+<tr><th id="1243">1243</th><td>ldap_pvt_thread_pool_getkey(</td></tr>
+<tr><th id="1244">1244</th><td>	<em>void</em> *xctx,</td></tr>
+<tr><th id="1245">1245</th><td>	<em>void</em> *key,</td></tr>
+<tr><th id="1246">1246</th><td>	<em>void</em> **data,</td></tr>
+<tr><th id="1247">1247</th><td>	ldap_pvt_thread_pool_keyfree_t **kfree )</td></tr>
+<tr><th id="1248">1248</th><td>{</td></tr>
+<tr><th id="1249">1249</th><td><u>#if 0 /* Function is used by ch_free() via slap_sl_contxt() in slapd */</u></td></tr>
+<tr><th id="1250">1250</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_getkey"</q> );</td></tr>
+<tr><th id="1251">1251</th><td><u>#endif</u></td></tr>
+<tr><th id="1252">1252</th><td>	<b>return</b> ldap_int_thread_pool_getkey( xctx, key, data, kfree );</td></tr>
+<tr><th id="1253">1253</th><td>}</td></tr>
+<tr><th id="1254">1254</th><td></td></tr>
+<tr><th id="1255">1255</th><td><em>int</em></td></tr>
+<tr><th id="1256">1256</th><td>ldap_pvt_thread_pool_setkey(</td></tr>
+<tr><th id="1257">1257</th><td>	<em>void</em> *xctx,</td></tr>
+<tr><th id="1258">1258</th><td>	<em>void</em> *key,</td></tr>
+<tr><th id="1259">1259</th><td>	<em>void</em> *data,</td></tr>
+<tr><th id="1260">1260</th><td>	ldap_pvt_thread_pool_keyfree_t *kfree,</td></tr>
+<tr><th id="1261">1261</th><td>	<em>void</em> **olddatap,</td></tr>
+<tr><th id="1262">1262</th><td>	ldap_pvt_thread_pool_keyfree_t **oldkfreep )</td></tr>
+<tr><th id="1263">1263</th><td>{</td></tr>
+<tr><th id="1264">1264</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="1265">1265</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_setkey"</q> );</td></tr>
+<tr><th id="1266">1266</th><td>	rc = ldap_int_thread_pool_setkey(</td></tr>
+<tr><th id="1267">1267</th><td>		xctx, key, data, kfree, olddatap, oldkfreep );</td></tr>
+<tr><th id="1268">1268</th><td>	ERROR_IF( rc, <q>"ldap_pvt_thread_pool_setkey"</q> );</td></tr>
+<tr><th id="1269">1269</th><td>	<b>return</b> rc;</td></tr>
+<tr><th id="1270">1270</th><td>}</td></tr>
+<tr><th id="1271">1271</th><td></td></tr>
+<tr><th id="1272">1272</th><td><em>void</em></td></tr>
+<tr><th id="1273">1273</th><td>ldap_pvt_thread_pool_purgekey( <em>void</em> *key )</td></tr>
+<tr><th id="1274">1274</th><td>{</td></tr>
+<tr><th id="1275">1275</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_purgekey"</q> );</td></tr>
+<tr><th id="1276">1276</th><td>	ldap_int_thread_pool_purgekey( key );</td></tr>
+<tr><th id="1277">1277</th><td>}</td></tr>
+<tr><th id="1278">1278</th><td></td></tr>
+<tr><th id="1279">1279</th><td><em>void</em> *</td></tr>
+<tr><th id="1280">1280</th><td>ldap_pvt_thread_pool_context( <em>void</em> )</td></tr>
+<tr><th id="1281">1281</th><td>{</td></tr>
+<tr><th id="1282">1282</th><td><u>#if 0 /* Function is used by ch_free() via slap_sl_contxt() in slapd */</u></td></tr>
+<tr><th id="1283">1283</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_context"</q> );</td></tr>
+<tr><th id="1284">1284</th><td><u>#endif</u></td></tr>
+<tr><th id="1285">1285</th><td>	<b>return</b> ldap_int_thread_pool_context();</td></tr>
+<tr><th id="1286">1286</th><td>}</td></tr>
+<tr><th id="1287">1287</th><td></td></tr>
+<tr><th id="1288">1288</th><td><em>void</em></td></tr>
+<tr><th id="1289">1289</th><td>ldap_pvt_thread_pool_context_reset( <em>void</em> *vctx )</td></tr>
+<tr><th id="1290">1290</th><td>{</td></tr>
+<tr><th id="1291">1291</th><td>	ERROR_IF( !threading_enabled, <q>"ldap_pvt_thread_pool_context_reset"</q> );</td></tr>
+<tr><th id="1292">1292</th><td>	ldap_int_thread_pool_context_reset( vctx );</td></tr>
+<tr><th id="1293">1293</th><td>}</td></tr>
+<tr><th id="1294">1294</th><td></td></tr>
+<tr><th id="1295">1295</th><td><u>#endif /* LDAP_THREAD_POOL_IMPLEMENTATION */</u></td></tr>
+<tr><th id="1296">1296</th><td></td></tr>
+<tr><th id="1297">1297</th><td><u>#<span data-ppcond="108">endif</span> /* LDAP_THREAD_DEBUG */</u></td></tr>
+<tr><th id="1298">1298</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

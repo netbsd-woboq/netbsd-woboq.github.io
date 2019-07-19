@@ -1,0 +1,282 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>locks.c source code [netbsd/external/bsd/unbound/dist/util/locks.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/unbound/dist/util/locks.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>unbound</a>/<a href='..'>dist</a>/<a href='./'>util</a>/<a href='locks.c.html'>locks.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="2">2</th><td><i class="doc"> * util/locks.c - unbound locking primitives</i></td></tr>
+<tr><th id="3">3</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="4">4</th><td><i class="doc"> * Copyright (c) 2007, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i class="doc"> * </i></td></tr>
+<tr><th id="6">6</th><td><i class="doc"> * This software is open source.</i></td></tr>
+<tr><th id="7">7</th><td><i class="doc"> * </i></td></tr>
+<tr><th id="8">8</th><td><i class="doc"> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="9">9</th><td><i class="doc"> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="10">10</th><td><i class="doc"> * are met:</i></td></tr>
+<tr><th id="11">11</th><td><i class="doc"> * </i></td></tr>
+<tr><th id="12">12</th><td><i class="doc"> * Redistributions of source code must retain the above copyright notice,</i></td></tr>
+<tr><th id="13">13</th><td><i class="doc"> * this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="14">14</th><td><i class="doc"> * </i></td></tr>
+<tr><th id="15">15</th><td><i class="doc"> * Redistributions in binary form must reproduce the above copyright notice,</i></td></tr>
+<tr><th id="16">16</th><td><i class="doc"> * this list of conditions and the following disclaimer in the documentation</i></td></tr>
+<tr><th id="17">17</th><td><i class="doc"> * and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i class="doc"> * </i></td></tr>
+<tr><th id="19">19</th><td><i class="doc"> * Neither the name of the NLNET LABS nor the names of its contributors may</i></td></tr>
+<tr><th id="20">20</th><td><i class="doc"> * be used to endorse or promote products derived from this software without</i></td></tr>
+<tr><th id="21">21</th><td><i class="doc"> * specific prior written permission.</i></td></tr>
+<tr><th id="22">22</th><td><i class="doc"> * </i></td></tr>
+<tr><th id="23">23</th><td><i class="doc"> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="24">24</th><td><i class="doc"> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="25">25</th><td><i class="doc"> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="26">26</th><td><i class="doc"> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="27">27</th><td><i class="doc"> * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="28">28</th><td><i class="doc"> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="29">29</th><td><i class="doc"> * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR</i></td></tr>
+<tr><th id="30">30</th><td><i class="doc"> * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF</i></td></tr>
+<tr><th id="31">31</th><td><i class="doc"> * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING</i></td></tr>
+<tr><th id="32">32</th><td><i class="doc"> * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS</i></td></tr>
+<tr><th id="33">33</th><td><i class="doc"> * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="34">34</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> *<span class="command"> \file</span></i></td></tr>
+<tr><th id="38">38</th><td><i class="doc"> * Implementation of locking and threading support.</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> * A place for locking debug code since most locking functions are macros.</i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../../include/config.h.html">"config.h"</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="locks.h.html">"util/locks.h"</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/signal.h.html">&lt;signal.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#<span data-ppcond="45">ifdef</span> <a class="macro" href="../../include/config.h.html#568" data-ref="_M/HAVE_SYS_WAIT_H">HAVE_SYS_WAIT_H</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/wait.h.html">&lt;sys/wait.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#<span data-ppcond="45">endif</span></u></td></tr>
+<tr><th id="48">48</th><td></td></tr>
+<tr><th id="49">49</th><td><i class="doc">/** block all signals, masks them away. */</i></td></tr>
+<tr><th id="50">50</th><td><em>void</em> </td></tr>
+<tr><th id="51">51</th><td><dfn class="decl def fn" id="ub_thread_blocksigs" title='ub_thread_blocksigs' data-ref="ub_thread_blocksigs" data-ref-filename="ub_thread_blocksigs">ub_thread_blocksigs</dfn>(<em>void</em>)</td></tr>
+<tr><th id="52">52</th><td>{</td></tr>
+<tr><th id="53">53</th><td><u>#<span data-ppcond="53">if</span> defined(<a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a>) || defined(<span class="macro" data-ref="_M/HAVE_SOLARIS_THREADS">HAVE_SOLARIS_THREADS</span>) || defined(<a class="macro" href="../../include/config.h.html#447" data-ref="_M/HAVE_SIGPROCMASK">HAVE_SIGPROCMASK</a>)</u></td></tr>
+<tr><th id="54">54</th><td><u>#  <span data-ppcond="54">if</span> defined(<a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a>) || defined(<span class="macro" data-ref="_M/HAVE_SOLARIS_THREADS">HAVE_SOLARIS_THREADS</span>)</u></td></tr>
+<tr><th id="55">55</th><td>	<em>int</em> <dfn class="local col1 decl" id="1err" title='err' data-type='int' data-ref="1err" data-ref-filename="1err">err</dfn>;</td></tr>
+<tr><th id="56">56</th><td><u>#  <span data-ppcond="54">endif</span></u></td></tr>
+<tr><th id="57">57</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/sigtypes.h.html#sigset_t" title='sigset_t' data-type='struct sigset_t' data-ref="sigset_t" data-ref-filename="sigset_t">sigset_t</a> <dfn class="local col2 decl" id="2sigset" title='sigset' data-type='sigset_t' data-ref="2sigset" data-ref-filename="2sigset">sigset</dfn>;</td></tr>
+<tr><th id="58">58</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/signal.h.html#__sigfillset14" title='sigfillset' data-ref="__sigfillset14" data-ref-filename="__sigfillset14">sigfillset</a>(&amp;<a class="local col2 ref" href="#2sigset" title='sigset' data-ref="2sigset" data-ref-filename="2sigset">sigset</a>);</td></tr>
+<tr><th id="59">59</th><td><u>#<span data-ppcond="59">ifdef</span> <a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a></u></td></tr>
+<tr><th id="60">60</th><td>	<b>if</b>((<a class="local col1 ref" href="#1err" title='err' data-ref="1err" data-ref-filename="1err">err</a>=<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/signal.h.html#80" title="__libc_thr_sigsetmask" data-ref="_M/pthread_sigmask">pthread_sigmask</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#169" title="3" data-ref="_M/SIG_SETMASK">SIG_SETMASK</a>, &amp;<a class="local col2 ref" href="#2sigset" title='sigset' data-ref="2sigset" data-ref-filename="2sigset">sigset</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)))</td></tr>
+<tr><th id="61">61</th><td>		<a class="ref fn" href="log.h.html#fatal_exit" title='fatal_exit' data-ref="fatal_exit" data-ref-filename="fatal_exit">fatal_exit</a>(<q>"pthread_sigmask: %s"</q>, <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="local col1 ref" href="#1err" title='err' data-ref="1err" data-ref-filename="1err">err</a>));</td></tr>
+<tr><th id="62">62</th><td><u>#<span data-ppcond="59">else</span></u></td></tr>
+<tr><th id="63">63</th><td><u>#  ifdef HAVE_SOLARIS_THREADS</u></td></tr>
+<tr><th id="64">64</th><td>	<b>if</b>((err=thr_sigsetmask(SIG_SETMASK, &amp;sigset, NULL)))</td></tr>
+<tr><th id="65">65</th><td>		fatal_exit(<q>"thr_sigsetmask: %s"</q>, strerror(err));</td></tr>
+<tr><th id="66">66</th><td><u>#  else</u> </td></tr>
+<tr><th id="67">67</th><td>	<i>/* have nothing, do single process signal mask */</i></td></tr>
+<tr><th id="68">68</th><td>	<b>if</b>(sigprocmask(SIG_SETMASK, &amp;sigset, NULL))</td></tr>
+<tr><th id="69">69</th><td>		fatal_exit(<q>"sigprocmask: %s"</q>, strerror(errno));</td></tr>
+<tr><th id="70">70</th><td><u>#  endif /* HAVE_SOLARIS_THREADS */</u></td></tr>
+<tr><th id="71">71</th><td><u>#<span data-ppcond="59">endif</span> /* HAVE_PTHREAD */</u></td></tr>
+<tr><th id="72">72</th><td><u>#<span data-ppcond="53">endif</span> /* have signal stuff */</u></td></tr>
+<tr><th id="73">73</th><td>}</td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td><i class="doc">/** unblock one signal, so we can catch it */</i></td></tr>
+<tr><th id="76">76</th><td><em>void</em> <dfn class="decl def fn" id="ub_thread_sig_unblock" title='ub_thread_sig_unblock' data-ref="ub_thread_sig_unblock" data-ref-filename="ub_thread_sig_unblock">ub_thread_sig_unblock</dfn>(<em>int</em> <dfn class="local col3 decl" id="3sig" title='sig' data-type='int' data-ref="3sig" data-ref-filename="3sig">sig</dfn>)</td></tr>
+<tr><th id="77">77</th><td>{</td></tr>
+<tr><th id="78">78</th><td><u>#<span data-ppcond="78">if</span> defined(<a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a>) || defined(<span class="macro" data-ref="_M/HAVE_SOLARIS_THREADS">HAVE_SOLARIS_THREADS</span>) || defined(<a class="macro" href="../../include/config.h.html#447" data-ref="_M/HAVE_SIGPROCMASK">HAVE_SIGPROCMASK</a>)</u></td></tr>
+<tr><th id="79">79</th><td><u>#  <span data-ppcond="79">if</span> defined(<a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a>) || defined(<span class="macro" data-ref="_M/HAVE_SOLARIS_THREADS">HAVE_SOLARIS_THREADS</span>)</u></td></tr>
+<tr><th id="80">80</th><td>	<em>int</em> <dfn class="local col4 decl" id="4err" title='err' data-type='int' data-ref="4err" data-ref-filename="4err">err</dfn>;</td></tr>
+<tr><th id="81">81</th><td><u>#  <span data-ppcond="79">endif</span></u></td></tr>
+<tr><th id="82">82</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/sigtypes.h.html#sigset_t" title='sigset_t' data-type='struct sigset_t' data-ref="sigset_t" data-ref-filename="sigset_t">sigset_t</a> <dfn class="local col5 decl" id="5sigset" title='sigset' data-type='sigset_t' data-ref="5sigset" data-ref-filename="5sigset">sigset</dfn>;</td></tr>
+<tr><th id="83">83</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/signal.h.html#__sigemptyset14" title='sigemptyset' data-ref="__sigemptyset14" data-ref-filename="__sigemptyset14">sigemptyset</a>(&amp;<a class="local col5 ref" href="#5sigset" title='sigset' data-ref="5sigset" data-ref-filename="5sigset">sigset</a>);</td></tr>
+<tr><th id="84">84</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/signal.h.html#__sigaddset14" title='sigaddset' data-ref="__sigaddset14" data-ref-filename="__sigaddset14">sigaddset</a>(&amp;<a class="local col5 ref" href="#5sigset" title='sigset' data-ref="5sigset" data-ref-filename="5sigset">sigset</a>, <a class="local col3 ref" href="#3sig" title='sig' data-ref="3sig" data-ref-filename="3sig">sig</a>);</td></tr>
+<tr><th id="85">85</th><td><u>#<span data-ppcond="85">ifdef</span> <a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a></u></td></tr>
+<tr><th id="86">86</th><td>	<b>if</b>((<a class="local col4 ref" href="#4err" title='err' data-ref="4err" data-ref-filename="4err">err</a>=<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/signal.h.html#80" title="__libc_thr_sigsetmask" data-ref="_M/pthread_sigmask">pthread_sigmask</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#168" title="2" data-ref="_M/SIG_UNBLOCK">SIG_UNBLOCK</a>, &amp;<a class="local col5 ref" href="#5sigset" title='sigset' data-ref="5sigset" data-ref-filename="5sigset">sigset</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)))</td></tr>
+<tr><th id="87">87</th><td>		<a class="ref fn" href="log.h.html#fatal_exit" title='fatal_exit' data-ref="fatal_exit" data-ref-filename="fatal_exit">fatal_exit</a>(<q>"pthread_sigmask: %s"</q>, <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strerror" title='strerror' data-ref="strerror" data-ref-filename="strerror">strerror</a>(<a class="local col4 ref" href="#4err" title='err' data-ref="4err" data-ref-filename="4err">err</a>));</td></tr>
+<tr><th id="88">88</th><td><u>#<span data-ppcond="85">else</span></u></td></tr>
+<tr><th id="89">89</th><td><u>#  ifdef HAVE_SOLARIS_THREADS</u></td></tr>
+<tr><th id="90">90</th><td>	<b>if</b>((err=thr_sigsetmask(SIG_UNBLOCK, &amp;sigset, NULL)))</td></tr>
+<tr><th id="91">91</th><td>		fatal_exit(<q>"thr_sigsetmask: %s"</q>, strerror(err));</td></tr>
+<tr><th id="92">92</th><td><u>#  else</u> </td></tr>
+<tr><th id="93">93</th><td>	<i>/* have nothing, do single thread case */</i></td></tr>
+<tr><th id="94">94</th><td>	<b>if</b>(sigprocmask(SIG_UNBLOCK, &amp;sigset, NULL))</td></tr>
+<tr><th id="95">95</th><td>		fatal_exit(<q>"sigprocmask: %s"</q>, strerror(errno));</td></tr>
+<tr><th id="96">96</th><td><u>#  endif /* HAVE_SOLARIS_THREADS */</u></td></tr>
+<tr><th id="97">97</th><td><u>#<span data-ppcond="85">endif</span> /* HAVE_PTHREAD */</u></td></tr>
+<tr><th id="98">98</th><td><u>#<span data-ppcond="78">else</span></u></td></tr>
+<tr><th id="99">99</th><td>	(<em>void</em>)sig;</td></tr>
+<tr><th id="100">100</th><td><u>#<span data-ppcond="78">endif</span> /* have signal stuff */</u></td></tr>
+<tr><th id="101">101</th><td>}</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><u>#<span data-ppcond="103">if</span> !defined(<a class="macro" href="../../include/config.h.html#387" data-ref="_M/HAVE_PTHREAD">HAVE_PTHREAD</a>) &amp;&amp; !defined(<span class="macro" data-ref="_M/HAVE_SOLARIS_THREADS">HAVE_SOLARIS_THREADS</span>) &amp;&amp; !defined(<span class="macro" data-ref="_M/HAVE_WINDOWS_THREADS">HAVE_WINDOWS_THREADS</span>)</u></td></tr>
+<tr><th id="104">104</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="105">105</th><td><i class="doc"> * No threading available: fork a new process.</i></td></tr>
+<tr><th id="106">106</th><td><i class="doc"> * This means no shared data structure, and no locking.</i></td></tr>
+<tr><th id="107">107</th><td><i class="doc"> * Only the main thread ever returns. Exits on errors.</i></td></tr>
+<tr><th id="108">108</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">thr:</span> the location where to store the thread-id.</i></td></tr>
+<tr><th id="109">109</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">func:</span> function body of the thread. Return value of func is lost.</i></td></tr>
+<tr><th id="110">110</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">arg:</span> user argument to func.</i></td></tr>
+<tr><th id="111">111</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="112">112</th><td><em>void</em> </td></tr>
+<tr><th id="113">113</th><td>ub_thr_fork_create(ub_thread_type* thr, <em>void</em>* (*func)(<em>void</em>*), <em>void</em>* arg)</td></tr>
+<tr><th id="114">114</th><td>{</td></tr>
+<tr><th id="115">115</th><td>	pid_t pid = fork();</td></tr>
+<tr><th id="116">116</th><td>	<b>switch</b>(pid) {</td></tr>
+<tr><th id="117">117</th><td>	<b>default</b>:	<i>/* main */</i></td></tr>
+<tr><th id="118">118</th><td>			*thr = (ub_thread_type)pid;</td></tr>
+<tr><th id="119">119</th><td>			<b>return</b>;</td></tr>
+<tr><th id="120">120</th><td>	<b>case</b> <var>0</var>: 	<i>/* child */</i></td></tr>
+<tr><th id="121">121</th><td>			*thr = (ub_thread_type)getpid();</td></tr>
+<tr><th id="122">122</th><td>			(<em>void</em>)(*func)(arg);</td></tr>
+<tr><th id="123">123</th><td>			exit(<var>0</var>);</td></tr>
+<tr><th id="124">124</th><td>	<b>case</b> -<var>1</var>:	<i>/* error */</i></td></tr>
+<tr><th id="125">125</th><td>			fatal_exit(<q>"could not fork: %s"</q>, strerror(errno));</td></tr>
+<tr><th id="126">126</th><td>	}</td></tr>
+<tr><th id="127">127</th><td>}</td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="130">130</th><td><i class="doc"> * There is no threading. Wait for a process to terminate.</i></td></tr>
+<tr><th id="131">131</th><td><i class="doc"> * Note that ub_thread_type is defined as pid_t.</i></td></tr>
+<tr><th id="132">132</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">thread:</span> the process id to wait for.</i></td></tr>
+<tr><th id="133">133</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="134">134</th><td><em>void</em> ub_thr_fork_wait(ub_thread_type thread)</td></tr>
+<tr><th id="135">135</th><td>{</td></tr>
+<tr><th id="136">136</th><td>	<em>int</em> status = <var>0</var>;</td></tr>
+<tr><th id="137">137</th><td>	<b>if</b>(waitpid((pid_t)thread, &amp;status, <var>0</var>) == -<var>1</var>)</td></tr>
+<tr><th id="138">138</th><td>		log_err(<q>"waitpid(%d): %s"</q>, (<em>int</em>)thread, strerror(errno));</td></tr>
+<tr><th id="139">139</th><td>	<b>if</b>(status != <var>0</var>)</td></tr>
+<tr><th id="140">140</th><td>		log_warn(<q>"process %d abnormal exit with status %d"</q>,</td></tr>
+<tr><th id="141">141</th><td>			(<em>int</em>)thread, status);</td></tr>
+<tr><th id="142">142</th><td>}</td></tr>
+<tr><th id="143">143</th><td><u>#<span data-ppcond="103">endif</span> /* !defined(HAVE_PTHREAD) &amp;&amp; !defined(HAVE_SOLARIS_THREADS) &amp;&amp; !defined(HAVE_WINDOWS_THREADS) */</u></td></tr>
+<tr><th id="144">144</th><td></td></tr>
+<tr><th id="145">145</th><td><u>#<span data-ppcond="145">ifdef</span> <span class="macro" data-ref="_M/HAVE_SOLARIS_THREADS">HAVE_SOLARIS_THREADS</span></u></td></tr>
+<tr><th id="146">146</th><td><em>void</em>* ub_thread_key_get(ub_thread_key_type key)</td></tr>
+<tr><th id="147">147</th><td>{</td></tr>
+<tr><th id="148">148</th><td>	<em>void</em>* ret=NULL;</td></tr>
+<tr><th id="149">149</th><td>	LOCKRET(thr_getspecific(key, &amp;ret));</td></tr>
+<tr><th id="150">150</th><td>	<b>return</b> ret;</td></tr>
+<tr><th id="151">151</th><td>}</td></tr>
+<tr><th id="152">152</th><td><u>#<span data-ppcond="145">endif</span></u></td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><u>#<span data-ppcond="154">ifdef</span> <span class="macro" data-ref="_M/HAVE_WINDOWS_THREADS">HAVE_WINDOWS_THREADS</span></u></td></tr>
+<tr><th id="155">155</th><td><i class="doc">/** log a windows GetLastError message */</i></td></tr>
+<tr><th id="156">156</th><td><em>static</em> <em>void</em> log_win_err(<em>const</em> <em>char</em>* str, DWORD err)</td></tr>
+<tr><th id="157">157</th><td>{</td></tr>
+<tr><th id="158">158</th><td>	LPTSTR buf;</td></tr>
+<tr><th id="159">159</th><td>	<b>if</b>(FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | </td></tr>
+<tr><th id="160">160</th><td>		FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_ALLOCATE_BUFFER, </td></tr>
+<tr><th id="161">161</th><td>		NULL, err, <var>0</var>, (LPTSTR)&amp;buf, <var>0</var>, NULL) == <var>0</var>) {</td></tr>
+<tr><th id="162">162</th><td>		<i>/* could not format error message */</i></td></tr>
+<tr><th id="163">163</th><td>		log_err(<q>"%s, GetLastError=%d"</q>, str, (<em>int</em>)err);</td></tr>
+<tr><th id="164">164</th><td>		<b>return</b>;</td></tr>
+<tr><th id="165">165</th><td>	}</td></tr>
+<tr><th id="166">166</th><td>	log_err(<q>"%s, (err=%d): %s"</q>, str, (<em>int</em>)err, buf);</td></tr>
+<tr><th id="167">167</th><td>	LocalFree(buf);</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><em>void</em> lock_basic_init(lock_basic_type* lock)</td></tr>
+<tr><th id="171">171</th><td>{</td></tr>
+<tr><th id="172">172</th><td>	<i>/* implement own lock, because windows HANDLE as Mutex usage</i></td></tr>
+<tr><th id="173">173</th><td><i>	 * uses too many handles and would bog down the whole system. */</i></td></tr>
+<tr><th id="174">174</th><td>	(<em>void</em>)InterlockedExchange(lock, <var>0</var>);</td></tr>
+<tr><th id="175">175</th><td>}</td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td><em>void</em> lock_basic_destroy(lock_basic_type* lock)</td></tr>
+<tr><th id="178">178</th><td>{</td></tr>
+<tr><th id="179">179</th><td>	(<em>void</em>)InterlockedExchange(lock, <var>0</var>);</td></tr>
+<tr><th id="180">180</th><td>}</td></tr>
+<tr><th id="181">181</th><td></td></tr>
+<tr><th id="182">182</th><td><em>void</em> lock_basic_lock(lock_basic_type* lock)</td></tr>
+<tr><th id="183">183</th><td>{</td></tr>
+<tr><th id="184">184</th><td>	LONG wait = <var>1</var>; <i>/* wait 1 msec at first */</i></td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td>	<b>while</b>(InterlockedExchange(lock, <var>1</var>)) {</td></tr>
+<tr><th id="187">187</th><td>		<i>/* if the old value was 1 then if was already locked */</i></td></tr>
+<tr><th id="188">188</th><td>		Sleep(wait); <i>/* wait with sleep */</i></td></tr>
+<tr><th id="189">189</th><td>		wait *= <var>2</var>;   <i>/* exponential backoff for waiting */</i></td></tr>
+<tr><th id="190">190</th><td>	}</td></tr>
+<tr><th id="191">191</th><td>	<i>/* the old value was 0, but we inserted 1, we locked it! */</i></td></tr>
+<tr><th id="192">192</th><td>}</td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td><em>void</em> lock_basic_unlock(lock_basic_type* lock)</td></tr>
+<tr><th id="195">195</th><td>{</td></tr>
+<tr><th id="196">196</th><td>	<i>/* unlock it by inserting the value of 0. xchg for cache coherency. */</i></td></tr>
+<tr><th id="197">197</th><td>	(<em>void</em>)InterlockedExchange(lock, <var>0</var>);</td></tr>
+<tr><th id="198">198</th><td>}</td></tr>
+<tr><th id="199">199</th><td></td></tr>
+<tr><th id="200">200</th><td><em>void</em> ub_thread_key_create(ub_thread_key_type* key, <em>void</em>* f)</td></tr>
+<tr><th id="201">201</th><td>{</td></tr>
+<tr><th id="202">202</th><td>	*key = TlsAlloc();</td></tr>
+<tr><th id="203">203</th><td>	<b>if</b>(*key == TLS_OUT_OF_INDEXES) {</td></tr>
+<tr><th id="204">204</th><td>		*key = <var>0</var>;</td></tr>
+<tr><th id="205">205</th><td>		log_win_err(<q>"TlsAlloc Failed(OUT_OF_INDEXES)"</q>, GetLastError());</td></tr>
+<tr><th id="206">206</th><td>	}</td></tr>
+<tr><th id="207">207</th><td>	<b>else</b> ub_thread_key_set(*key, f);</td></tr>
+<tr><th id="208">208</th><td>}</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><em>void</em> ub_thread_key_set(ub_thread_key_type key, <em>void</em>* v)</td></tr>
+<tr><th id="211">211</th><td>{</td></tr>
+<tr><th id="212">212</th><td>	<b>if</b>(!TlsSetValue(key, v)) {</td></tr>
+<tr><th id="213">213</th><td>		log_win_err(<q>"TlsSetValue failed"</q>, GetLastError());</td></tr>
+<tr><th id="214">214</th><td>	}</td></tr>
+<tr><th id="215">215</th><td>}</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><em>void</em>* ub_thread_key_get(ub_thread_key_type key)</td></tr>
+<tr><th id="218">218</th><td>{</td></tr>
+<tr><th id="219">219</th><td>	<em>void</em>* ret = (<em>void</em>*)TlsGetValue(key);</td></tr>
+<tr><th id="220">220</th><td>	<b>if</b>(ret == NULL &amp;&amp; GetLastError() != ERROR_SUCCESS) {</td></tr>
+<tr><th id="221">221</th><td>		log_win_err(<q>"TlsGetValue failed"</q>, GetLastError());</td></tr>
+<tr><th id="222">222</th><td>	}</td></tr>
+<tr><th id="223">223</th><td>	<b>return</b> ret;</td></tr>
+<tr><th id="224">224</th><td>}</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td><em>void</em> ub_thread_create(ub_thread_type* thr, <em>void</em>* (*func)(<em>void</em>*), <em>void</em>* arg)</td></tr>
+<tr><th id="227">227</th><td>{</td></tr>
+<tr><th id="228">228</th><td><u>#ifndef HAVE__BEGINTHREADEX</u></td></tr>
+<tr><th id="229">229</th><td>	*thr = CreateThread(NULL, <i>/* default security (no inherit handle) */</i></td></tr>
+<tr><th id="230">230</th><td>		<var>0</var>, <i>/* default stack size */</i></td></tr>
+<tr><th id="231">231</th><td>		(LPTHREAD_START_ROUTINE)func, arg,</td></tr>
+<tr><th id="232">232</th><td>		<var>0</var>, <i>/* default flags, run immediately */</i></td></tr>
+<tr><th id="233">233</th><td>		NULL); <i>/* do not store thread identifier anywhere */</i></td></tr>
+<tr><th id="234">234</th><td><u>#else</u></td></tr>
+<tr><th id="235">235</th><td>	<i>/* the beginthreadex routine setups for the C lib; aligns stack */</i></td></tr>
+<tr><th id="236">236</th><td>	*thr=(ub_thread_type)_beginthreadex(NULL, <var>0</var>, (<em>void</em>*)func, arg, <var>0</var>, NULL);</td></tr>
+<tr><th id="237">237</th><td><u>#endif</u></td></tr>
+<tr><th id="238">238</th><td>	<b>if</b>(*thr == NULL) {</td></tr>
+<tr><th id="239">239</th><td>		log_win_err(<q>"CreateThread failed"</q>, GetLastError());</td></tr>
+<tr><th id="240">240</th><td>		fatal_exit(<q>"thread create failed"</q>);</td></tr>
+<tr><th id="241">241</th><td>	}</td></tr>
+<tr><th id="242">242</th><td>}</td></tr>
+<tr><th id="243">243</th><td></td></tr>
+<tr><th id="244">244</th><td>ub_thread_type ub_thread_self(<em>void</em>)</td></tr>
+<tr><th id="245">245</th><td>{</td></tr>
+<tr><th id="246">246</th><td>	<b>return</b> GetCurrentThread();</td></tr>
+<tr><th id="247">247</th><td>}</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><em>void</em> ub_thread_join(ub_thread_type thr)</td></tr>
+<tr><th id="250">250</th><td>{</td></tr>
+<tr><th id="251">251</th><td>	DWORD ret = WaitForSingleObject(thr, INFINITE);</td></tr>
+<tr><th id="252">252</th><td>	<b>if</b>(ret == WAIT_FAILED) {</td></tr>
+<tr><th id="253">253</th><td>		log_win_err(<q>"WaitForSingleObject(Thread):WAIT_FAILED"</q>, </td></tr>
+<tr><th id="254">254</th><td>			GetLastError());</td></tr>
+<tr><th id="255">255</th><td>	} <b>else</b> <b>if</b>(ret == WAIT_TIMEOUT) {</td></tr>
+<tr><th id="256">256</th><td>		log_win_err(<q>"WaitForSingleObject(Thread):WAIT_TIMEOUT"</q>, </td></tr>
+<tr><th id="257">257</th><td>			GetLastError());</td></tr>
+<tr><th id="258">258</th><td>	}</td></tr>
+<tr><th id="259">259</th><td>	<i>/* and close the handle to the thread */</i></td></tr>
+<tr><th id="260">260</th><td>	<b>if</b>(!CloseHandle(thr)) {</td></tr>
+<tr><th id="261">261</th><td>		log_win_err(<q>"CloseHandle(Thread) failed"</q>, GetLastError());</td></tr>
+<tr><th id="262">262</th><td>	}</td></tr>
+<tr><th id="263">263</th><td>}</td></tr>
+<tr><th id="264">264</th><td><u>#<span data-ppcond="154">endif</span> /* HAVE_WINDOWS_THREADS */</u></td></tr>
+<tr><th id="265">265</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

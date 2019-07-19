@@ -1,0 +1,1029 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>clock.c source code [netbsd/sys/arch/xen/xen/clock.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="xen_vcputime_ticket,xen_wallclock_ticket "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/arch/xen/xen/clock.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>arch</a>/<a href='..'>xen</a>/<a href='./'>xen</a>/<a href='clock.c.html'>clock.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: clock.c,v 1.78 2019/03/09 09:51:29 kre Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2017, 2018 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Taylor R. Campbell.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="../../../../objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/opt_xen.h.html">"opt_xen.h"</a></u></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><u>#<span data-ppcond="34">ifndef</span> <span class="macro" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</span></u></td></tr>
+<tr><th id="35">35</th><td><u>#define	<dfn class="macro" id="_M/XEN_CLOCK_DEBUG" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</dfn>	0</u></td></tr>
+<tr><th id="36">36</th><td><u>#<span data-ppcond="34">endif</span></u></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="39">39</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: clock.c,v 1.78 2019/03/09 09:51:29 kre Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: clock.c,v 1.78 2019/03/09 09:51:29 kre Exp $"</q>);</td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../../../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../../../sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../../../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../../../sys/callout.h.html">&lt;sys/callout.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../../../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../../sys/device.h.html">&lt;sys/device.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../../sys/evcnt.h.html">&lt;sys/evcnt.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../../../sys/intr.h.html">&lt;sys/intr.h&gt;</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../../../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../../sys/lwp.h.html">&lt;sys/lwp.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../../../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../../../sys/sysctl.h.html">&lt;sys/sysctl.h&gt;</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../../../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="../../../sys/time.h.html">&lt;sys/time.h&gt;</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="../../../sys/timetc.h.html">&lt;sys/timetc.h&gt;</a></u></td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="../../../dev/clock_subr.h.html">&lt;dev/clock_subr.h&gt;</a></u></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><u>#include <a href="../../amd64/include/cpu.h.html">&lt;machine/cpu.h&gt;</a></u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../../amd64/include/cpu_counter.h.html">&lt;machine/cpu_counter.h&gt;</a></u></td></tr>
+<tr><th id="61">61</th><td><u>#include <a href="../../amd64/include/lock.h.html">&lt;machine/lock.h&gt;</a></u></td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td><u>#include <a href="../include/evtchn.h.html">&lt;xen/evtchn.h&gt;</a></u></td></tr>
+<tr><th id="64">64</th><td><u>#include <a href="../include/hypervisor.h.html">&lt;xen/hypervisor.h&gt;</a></u></td></tr>
+<tr><th id="65">65</th><td><u>#include <a href="../../../external/mit/xen-include-public/dist/xen/include/public/vcpu.h.html">&lt;xen/include/public/vcpu.h&gt;</a></u></td></tr>
+<tr><th id="66">66</th><td><u>#include <a href="../include/xen.h.html">&lt;xen/xen.h&gt;</a></u></td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td><u>#include <a href="../../x86/include/rtc.h.html">&lt;x86/rtc.h&gt;</a></u></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><u>#define <dfn class="macro" id="_M/NS_PER_TICK" data-ref="_M/NS_PER_TICK">NS_PER_TICK</dfn> ((<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>)1000000000ULL/<a class="ref" href="../../../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>)</u></td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td><em>static</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<a class="tu decl fn" href="#xen_vcputime_systime_ns" title='xen_vcputime_systime_ns' data-type='uint64_t xen_vcputime_systime_ns()' data-ref="xen_vcputime_systime_ns" data-ref-filename="xen_vcputime_systime_ns">xen_vcputime_systime_ns</a>(<em>void</em>);</td></tr>
+<tr><th id="73">73</th><td><em>static</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<a class="tu decl fn" href="#xen_vcputime_raw_systime_ns" title='xen_vcputime_raw_systime_ns' data-type='uint64_t xen_vcputime_raw_systime_ns()' data-ref="xen_vcputime_raw_systime_ns" data-ref-filename="xen_vcputime_raw_systime_ns">xen_vcputime_raw_systime_ns</a>(<em>void</em>);</td></tr>
+<tr><th id="74">74</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#xen_wallclock_time" title='xen_wallclock_time' data-type='void xen_wallclock_time(struct timespec * )' data-ref="xen_wallclock_time" data-ref-filename="xen_wallclock_time">xen_wallclock_time</a>(<b>struct</b> <a class="type" href="../../../sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> *);</td></tr>
+<tr><th id="75">75</th><td><em>static</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<a class="tu decl fn" href="#xen_global_systime_ns" title='xen_global_systime_ns' data-type='uint64_t xen_global_systime_ns()' data-ref="xen_global_systime_ns" data-ref-filename="xen_global_systime_ns">xen_global_systime_ns</a>(<em>void</em>);</td></tr>
+<tr><th id="76">76</th><td><em>static</em> <em>unsigned</em>	<a class="tu decl fn" href="#xen_get_timecount" title='xen_get_timecount' data-type='unsigned int xen_get_timecount(struct timecounter * )' data-ref="xen_get_timecount" data-ref-filename="xen_get_timecount">xen_get_timecount</a>(<b>struct</b> <a class="type" href="../../../sys/timetc.h.html#timecounter" title='timecounter' data-ref="timecounter" data-ref-filename="timecounter">timecounter</a> *);</td></tr>
+<tr><th id="77">77</th><td><em>static</em> <em>int</em>	<a class="tu decl fn" href="#xen_rtc_get" title='xen_rtc_get' data-type='int xen_rtc_get(struct todr_chip_handle * , struct timeval * )' data-ref="xen_rtc_get" data-ref-filename="xen_rtc_get">xen_rtc_get</a>(<b>struct</b> <a class="type" href="../../../dev/clock_subr.h.html#todr_chip_handle" title='todr_chip_handle' data-ref="todr_chip_handle" data-ref-filename="todr_chip_handle">todr_chip_handle</a> *, <b>struct</b> <a class="type" href="../../../sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> *);</td></tr>
+<tr><th id="78">78</th><td><em>static</em> <em>int</em>	<a class="tu decl fn" href="#xen_rtc_set" title='xen_rtc_set' data-type='int xen_rtc_set(struct todr_chip_handle * , struct timeval * )' data-ref="xen_rtc_set" data-ref-filename="xen_rtc_set">xen_rtc_set</a>(<b>struct</b> <a class="type" href="../../../dev/clock_subr.h.html#todr_chip_handle" title='todr_chip_handle' data-ref="todr_chip_handle" data-ref-filename="todr_chip_handle">todr_chip_handle</a> *, <b>struct</b> <a class="type" href="../../../sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> *);</td></tr>
+<tr><th id="79">79</th><td><em>static</em> <em>int</em>	<a class="tu decl fn" href="#xen_timer_handler" title='xen_timer_handler' data-type='int xen_timer_handler(void * , struct clockframe * )' data-ref="xen_timer_handler" data-ref-filename="xen_timer_handler">xen_timer_handler</a>(<em>void</em> *, <b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#clockframe" title='clockframe' data-ref="clockframe" data-ref-filename="clockframe">clockframe</a> *);</td></tr>
+<tr><th id="80">80</th><td></td></tr>
+<tr><th id="81">81</th><td><i  data-doc="xen_timecounter">/*</i></td></tr>
+<tr><th id="82">82</th><td><i  data-doc="xen_timecounter"> * xen timecounter:</i></td></tr>
+<tr><th id="83">83</th><td><i  data-doc="xen_timecounter"> *</i></td></tr>
+<tr><th id="84">84</th><td><i  data-doc="xen_timecounter"> *	Xen vCPU system time, plus an adjustment with rdtsc.</i></td></tr>
+<tr><th id="85">85</th><td><i  data-doc="xen_timecounter"> */</i></td></tr>
+<tr><th id="86">86</th><td><em>static</em> <b>struct</b> <a class="type" href="../../../sys/timetc.h.html#timecounter" title='timecounter' data-ref="timecounter" data-ref-filename="timecounter">timecounter</a> <dfn class="tu decl def" id="xen_timecounter" title='xen_timecounter' data-type='struct timecounter' data-ref="xen_timecounter" data-ref-filename="xen_timecounter">xen_timecounter</dfn> = {</td></tr>
+<tr><th id="87">87</th><td>	.<a class="ref field" href="../../../sys/timetc.h.html#timecounter::tc_get_timecount" title='timecounter::tc_get_timecount' data-ref="timecounter::tc_get_timecount" data-ref-filename="timecounter..tc_get_timecount">tc_get_timecount</a> = <a class="tu ref fn" href="#xen_get_timecount" title='xen_get_timecount' data-ref="xen_get_timecount" data-ref-filename="xen_get_timecount">xen_get_timecount</a>,</td></tr>
+<tr><th id="88">88</th><td>	.<a class="ref field" href="../../../sys/timetc.h.html#timecounter::tc_poll_pps" title='timecounter::tc_poll_pps' data-ref="timecounter::tc_poll_pps" data-ref-filename="timecounter..tc_poll_pps">tc_poll_pps</a> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="89">89</th><td>	.<a class="ref field" href="../../../sys/timetc.h.html#timecounter::tc_counter_mask" title='timecounter::tc_counter_mask' data-ref="timecounter::tc_counter_mask" data-ref-filename="timecounter..tc_counter_mask">tc_counter_mask</a> = ~<var>0U</var>,</td></tr>
+<tr><th id="90">90</th><td>	.<a class="ref field" href="../../../sys/timetc.h.html#timecounter::tc_frequency" title='timecounter::tc_frequency' data-ref="timecounter::tc_frequency" data-ref-filename="timecounter..tc_frequency">tc_frequency</a> = <var>1000000000ULL</var>,	<i>/* 1 GHz, i.e. units of nanoseconds */</i></td></tr>
+<tr><th id="91">91</th><td>	.<a class="ref field" href="../../../sys/timetc.h.html#timecounter::tc_name" title='timecounter::tc_name' data-ref="timecounter::tc_name" data-ref-filename="timecounter..tc_name">tc_name</a> = <q>"xen_system_time"</q>,</td></tr>
+<tr><th id="92">92</th><td>	.<a class="ref field" href="../../../sys/timetc.h.html#timecounter::tc_quality" title='timecounter::tc_quality' data-ref="timecounter::tc_quality" data-ref-filename="timecounter..tc_quality">tc_quality</a> = <var>10000</var>,</td></tr>
+<tr><th id="93">93</th><td>};</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><i  data-doc="xen_global_systime_ns_stamp">/*</i></td></tr>
+<tr><th id="96">96</th><td><i  data-doc="xen_global_systime_ns_stamp"> * xen_global_systime_ns_stamp</i></td></tr>
+<tr><th id="97">97</th><td><i  data-doc="xen_global_systime_ns_stamp"> *</i></td></tr>
+<tr><th id="98">98</th><td><i  data-doc="xen_global_systime_ns_stamp"> *	The latest Xen vCPU system time that has been observed on any</i></td></tr>
+<tr><th id="99">99</th><td><i  data-doc="xen_global_systime_ns_stamp"> *	CPU, for a global monotonic view of the Xen system time clock.</i></td></tr>
+<tr><th id="100">100</th><td><i  data-doc="xen_global_systime_ns_stamp"> */</i></td></tr>
+<tr><th id="101">101</th><td><em>static</em> <em>volatile</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="tu decl def" id="xen_global_systime_ns_stamp" title='xen_global_systime_ns_stamp' data-type='volatile uint64_t' data-ref="xen_global_systime_ns_stamp" data-ref-filename="xen_global_systime_ns_stamp">xen_global_systime_ns_stamp</dfn> <a class="macro" href="../../../sys/cdefs_elf.h.html#227" title="__attribute__((__aligned__(64), __section__(&quot;.data.cacheline_aligned&quot;)))" data-ref="_M/__cacheline_aligned">__cacheline_aligned</a>;</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><i  data-doc="xen_todr_chip">/*</i></td></tr>
+<tr><th id="104">104</th><td><i  data-doc="xen_todr_chip"> * xen time of day register:</i></td></tr>
+<tr><th id="105">105</th><td><i  data-doc="xen_todr_chip"> *</i></td></tr>
+<tr><th id="106">106</th><td><i  data-doc="xen_todr_chip"> *	Xen wall clock time, plus a Xen vCPU system time adjustment.</i></td></tr>
+<tr><th id="107">107</th><td><i  data-doc="xen_todr_chip"> */</i></td></tr>
+<tr><th id="108">108</th><td><em>static</em> <b>struct</b> <a class="type" href="../../../dev/clock_subr.h.html#todr_chip_handle" title='todr_chip_handle' data-ref="todr_chip_handle" data-ref-filename="todr_chip_handle">todr_chip_handle</a> <dfn class="tu decl def" id="xen_todr_chip" title='xen_todr_chip' data-type='struct todr_chip_handle' data-ref="xen_todr_chip" data-ref-filename="xen_todr_chip">xen_todr_chip</dfn> = {</td></tr>
+<tr><th id="109">109</th><td>	.<a class="ref field" href="../../../dev/clock_subr.h.html#todr_chip_handle::todr_gettime" title='todr_chip_handle::todr_gettime' data-ref="todr_chip_handle::todr_gettime" data-ref-filename="todr_chip_handle..todr_gettime">todr_gettime</a> = <a class="tu ref fn" href="#xen_rtc_get" title='xen_rtc_get' data-ref="xen_rtc_get" data-ref-filename="xen_rtc_get">xen_rtc_get</a>,</td></tr>
+<tr><th id="110">110</th><td>	.<a class="ref field" href="../../../dev/clock_subr.h.html#todr_chip_handle::todr_settime" title='todr_chip_handle::todr_settime' data-ref="todr_chip_handle::todr_settime" data-ref-filename="todr_chip_handle..todr_settime">todr_settime</a> = <a class="tu ref fn" href="#xen_rtc_set" title='xen_rtc_set' data-ref="xen_rtc_set" data-ref-filename="xen_rtc_set">xen_rtc_set</a>,</td></tr>
+<tr><th id="111">111</th><td>};</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td><u>#<span data-ppcond="113">ifdef</span> <span class="macro" data-ref="_M/DOM0OPS">DOM0OPS</span></u></td></tr>
+<tr><th id="114">114</th><td><i>/*</i></td></tr>
+<tr><th id="115">115</th><td><i> * xen timepush state:</i></td></tr>
+<tr><th id="116">116</th><td><i> *</i></td></tr>
+<tr><th id="117">117</th><td><i> *	Callout to periodically, after a sysctl-configurable number of</i></td></tr>
+<tr><th id="118">118</th><td><i> *	NetBSD ticks, set the Xen hypervisor's wall clock time.</i></td></tr>
+<tr><th id="119">119</th><td><i> */</i></td></tr>
+<tr><th id="120">120</th><td><em>static</em> <b>struct</b> {</td></tr>
+<tr><th id="121">121</th><td>	<b>struct</b> callout	ch;</td></tr>
+<tr><th id="122">122</th><td>	<em>int</em>		ticks;</td></tr>
+<tr><th id="123">123</th><td>} xen_timepush;</td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td><em>static</em> <em>void</em>	xen_timepush_init(<em>void</em>);</td></tr>
+<tr><th id="126">126</th><td><em>static</em> <em>void</em>	xen_timepush_intr(<em>void</em> *);</td></tr>
+<tr><th id="127">127</th><td><em>static</em> <em>int</em>	sysctl_xen_timepush(SYSCTLFN_ARGS);</td></tr>
+<tr><th id="128">128</th><td><u>#<span data-ppcond="113">endif</span></u></td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td><i>/*</i></td></tr>
+<tr><th id="131">131</th><td><i> * startrtclock()</i></td></tr>
+<tr><th id="132">132</th><td><i> *</i></td></tr>
+<tr><th id="133">133</th><td><i> *	Initialize the real-time clock from x86 machdep autoconf.</i></td></tr>
+<tr><th id="134">134</th><td><i> */</i></td></tr>
+<tr><th id="135">135</th><td><em>void</em></td></tr>
+<tr><th id="136">136</th><td><dfn class="decl def fn" id="startrtclock" title='startrtclock' data-ref="startrtclock" data-ref-filename="startrtclock">startrtclock</dfn>(<em>void</em>)</td></tr>
+<tr><th id="137">137</th><td>{</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td>	<a class="ref fn" href="../../../dev/clock_subr.h.html#todr_attach" title='todr_attach' data-ref="todr_attach" data-ref-filename="todr_attach">todr_attach</a>(&amp;<a class="tu ref" href="#xen_todr_chip" title='xen_todr_chip' data-use='a' data-ref="xen_todr_chip" data-ref-filename="xen_todr_chip">xen_todr_chip</a>);</td></tr>
+<tr><th id="140">140</th><td>}</td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td><i>/*</i></td></tr>
+<tr><th id="143">143</th><td><i> * setstatclockrate(rate)</i></td></tr>
+<tr><th id="144">144</th><td><i> *</i></td></tr>
+<tr><th id="145">145</th><td><i> *	Set the statclock to run at rate, in units of ticks per second.</i></td></tr>
+<tr><th id="146">146</th><td><i> *</i></td></tr>
+<tr><th id="147">147</th><td><i> *	Currently Xen does not have a separate statclock, so this is a</i></td></tr>
+<tr><th id="148">148</th><td><i> *	noop; instad the statclock runs in hardclock.</i></td></tr>
+<tr><th id="149">149</th><td><i> */</i></td></tr>
+<tr><th id="150">150</th><td><em>void</em></td></tr>
+<tr><th id="151">151</th><td><dfn class="decl def fn" id="setstatclockrate" title='setstatclockrate' data-ref="setstatclockrate" data-ref-filename="setstatclockrate">setstatclockrate</dfn>(<em>int</em> <dfn class="local col1 decl" id="1rate" title='rate' data-type='int' data-ref="1rate" data-ref-filename="1rate">rate</dfn>)</td></tr>
+<tr><th id="152">152</th><td>{</td></tr>
+<tr><th id="153">153</th><td>}</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td><i>/*</i></td></tr>
+<tr><th id="156">156</th><td><i> * idle_block()</i></td></tr>
+<tr><th id="157">157</th><td><i> *</i></td></tr>
+<tr><th id="158">158</th><td><i> *	Called from the idle loop when we have nothing to do but wait</i></td></tr>
+<tr><th id="159">159</th><td><i> *	for an interrupt.</i></td></tr>
+<tr><th id="160">160</th><td><i> */</i></td></tr>
+<tr><th id="161">161</th><td><em>void</em></td></tr>
+<tr><th id="162">162</th><td><dfn class="decl def fn" id="idle_block" title='idle_block' data-ref="idle_block" data-ref-filename="idle_block">idle_block</dfn>(<em>void</em>)</td></tr>
+<tr><th id="163">163</th><td>{</td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((x86_curcpu()-&gt;ci_xpending == 0)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;curcpu()-&gt;ci_xpending == 0&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 165))" data-ref="_M/KASSERT">KASSERT</a>(<a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>()-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xpending" title='cpu_info::ci_xpending' data-ref="cpu_info::ci_xpending" data-ref-filename="cpu_info..ci_xpending">ci_xpending</a> == <var>0</var>);</td></tr>
+<tr><th id="166">166</th><td>	<a class="ref fn" href="../include/amd64/hypercalls.h.html#HYPERVISOR_block" title='HYPERVISOR_block' data-ref="HYPERVISOR_block" data-ref-filename="HYPERVISOR_block">HYPERVISOR_block</a>();</td></tr>
+<tr><th id="167">167</th><td>}</td></tr>
+<tr><th id="168">168</th><td></td></tr>
+<tr><th id="169">169</th><td><i  data-doc="xen_rdtsc">/*</i></td></tr>
+<tr><th id="170">170</th><td><i  data-doc="xen_rdtsc"> * xen_rdtsc()</i></td></tr>
+<tr><th id="171">171</th><td><i  data-doc="xen_rdtsc"> *</i></td></tr>
+<tr><th id="172">172</th><td><i  data-doc="xen_rdtsc"> *	Read the local pCPU's tsc.</i></td></tr>
+<tr><th id="173">173</th><td><i  data-doc="xen_rdtsc"> */</i></td></tr>
+<tr><th id="174">174</th><td><em>static</em> <b>inline</b> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a></td></tr>
+<tr><th id="175">175</th><td><dfn class="tu decl def fn" id="xen_rdtsc" title='xen_rdtsc' data-type='uint64_t xen_rdtsc()' data-ref="xen_rdtsc" data-ref-filename="xen_rdtsc">xen_rdtsc</dfn>(<em>void</em>)</td></tr>
+<tr><th id="176">176</th><td>{</td></tr>
+<tr><th id="177">177</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col2 decl" id="2lo" title='lo' data-type='uint32_t' data-ref="2lo" data-ref-filename="2lo">lo</dfn>, <dfn class="local col3 decl" id="3hi" title='hi' data-type='uint32_t' data-ref="3hi" data-ref-filename="3hi">hi</dfn>;</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td>	<b>asm</b> <em>volatile</em>(<q>"rdtsc"</q> : <q>"=a"</q>(<a class="local col2 ref" href="#2lo" title='lo' data-ref="2lo" data-ref-filename="2lo">lo</a>), <q>"=d"</q>(<a class="local col3 ref" href="#3hi" title='hi' data-ref="3hi" data-ref-filename="3hi">hi</a>));</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>	<b>return</b> ((<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>)<a class="local col3 ref" href="#3hi" title='hi' data-ref="3hi" data-ref-filename="3hi">hi</a> &lt;&lt; <var>32</var>) | <a class="local col2 ref" href="#2lo" title='lo' data-ref="2lo" data-ref-filename="2lo">lo</a>;</td></tr>
+<tr><th id="182">182</th><td>}</td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><i>/*</i></td></tr>
+<tr><th id="185">185</th><td><i> * struct xen_vcputime_ticket</i></td></tr>
+<tr><th id="186">186</th><td><i> *</i></td></tr>
+<tr><th id="187">187</th><td><i> *	State for a vCPU read section, during which a caller may read</i></td></tr>
+<tr><th id="188">188</th><td><i> *	from fields of a struct vcpu_time_info and call xen_rdtsc.</i></td></tr>
+<tr><th id="189">189</th><td><i> *	Caller must enter with xen_vcputime_enter, exit with</i></td></tr>
+<tr><th id="190">190</th><td><i> *	xen_vcputime_exit, and be prepared to retry if</i></td></tr>
+<tr><th id="191">191</th><td><i> *	xen_vcputime_exit fails.</i></td></tr>
+<tr><th id="192">192</th><td><i> */</i></td></tr>
+<tr><th id="193">193</th><td><b>struct</b> <dfn class="type def" id="xen_vcputime_ticket" title='xen_vcputime_ticket' data-ref="xen_vcputime_ticket" data-ref-filename="xen_vcputime_ticket">xen_vcputime_ticket</dfn> {</td></tr>
+<tr><th id="194">194</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="tu decl field" id="xen_vcputime_ticket::version" title='xen_vcputime_ticket::version' data-type='uint64_t' data-ref="xen_vcputime_ticket::version" data-ref-filename="xen_vcputime_ticket..version">version</dfn>;</td></tr>
+<tr><th id="195">195</th><td>};</td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td><i  data-doc="xen_vcputime_enter">/*</i></td></tr>
+<tr><th id="198">198</th><td><i  data-doc="xen_vcputime_enter"> * xen_vcputime_enter(tp)</i></td></tr>
+<tr><th id="199">199</th><td><i  data-doc="xen_vcputime_enter"> *</i></td></tr>
+<tr><th id="200">200</th><td><i  data-doc="xen_vcputime_enter"> *	Enter a vCPU time read section and store a ticket in *tp, which</i></td></tr>
+<tr><th id="201">201</th><td><i  data-doc="xen_vcputime_enter"> *	the caller must use with xen_vcputime_exit.  Return a pointer</i></td></tr>
+<tr><th id="202">202</th><td><i  data-doc="xen_vcputime_enter"> *	to the current CPU's vcpu_time_info structure.  Caller must</i></td></tr>
+<tr><th id="203">203</th><td><i  data-doc="xen_vcputime_enter"> *	already be bound to the CPU.</i></td></tr>
+<tr><th id="204">204</th><td><i  data-doc="xen_vcputime_enter"> */</i></td></tr>
+<tr><th id="205">205</th><td><em>static</em> <b>inline</b> <em>volatile</em> <b>struct</b> <a class="type" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info" title='vcpu_time_info' data-ref="vcpu_time_info" data-ref-filename="vcpu_time_info">vcpu_time_info</a> *</td></tr>
+<tr><th id="206">206</th><td><dfn class="tu decl def fn" id="xen_vcputime_enter" title='xen_vcputime_enter' data-type='volatile struct vcpu_time_info * xen_vcputime_enter(struct xen_vcputime_ticket * tp)' data-ref="xen_vcputime_enter" data-ref-filename="xen_vcputime_enter">xen_vcputime_enter</dfn>(<b>struct</b> <a class="type" href="#xen_vcputime_ticket" title='xen_vcputime_ticket' data-ref="xen_vcputime_ticket" data-ref-filename="xen_vcputime_ticket">xen_vcputime_ticket</a> *<dfn class="local col4 decl" id="4tp" title='tp' data-type='struct xen_vcputime_ticket *' data-ref="4tp" data-ref-filename="4tp">tp</dfn>)</td></tr>
+<tr><th id="207">207</th><td>{</td></tr>
+<tr><th id="208">208</th><td>	<em>volatile</em> <b>struct</b> <a class="type" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info" title='vcpu_time_info' data-ref="vcpu_time_info" data-ref-filename="vcpu_time_info">vcpu_time_info</a> *<dfn class="local col5 decl" id="5vt" title='vt' data-type='volatile struct vcpu_time_info *' data-ref="5vt" data-ref-filename="5vt">vt</dfn> = &amp;<a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>()-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_vcpu" title='cpu_info::ci_vcpu' data-ref="cpu_info::ci_vcpu" data-ref-filename="cpu_info..ci_vcpu">ci_vcpu</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_info::time" title='vcpu_info::time' data-ref="vcpu_info::time" data-ref-filename="vcpu_info..time">time</a>;</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td>	<b>while</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((1 &amp; (tp-&gt;version = vt-&gt;version)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<var>1</var> &amp; (<a class="local col4 ref" href="#4tp" title='tp' data-ref="4tp" data-ref-filename="4tp">tp</a>-&gt;<a class="tu ref field" href="#xen_vcputime_ticket::version" title='xen_vcputime_ticket::version' data-use='w' data-ref="xen_vcputime_ticket::version" data-ref-filename="xen_vcputime_ticket..version">version</a> = <a class="local col5 ref" href="#5vt" title='vt' data-ref="5vt" data-ref-filename="5vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::version" title='vcpu_time_info::version' data-ref="vcpu_time_info::version" data-ref-filename="vcpu_time_info..version">version</a>)))</td></tr>
+<tr><th id="211">211</th><td>		<a class="macro" href="../../x86/include/lock.h.html#73" title="x86_pause()" data-ref="_M/SPINLOCK_BACKOFF_HOOK">SPINLOCK_BACKOFF_HOOK</a>;</td></tr>
+<tr><th id="212">212</th><td></td></tr>
+<tr><th id="213">213</th><td>	<i>/*</i></td></tr>
+<tr><th id="214">214</th><td><i>	 * Must read the version before reading the tsc on the local</i></td></tr>
+<tr><th id="215">215</th><td><i>	 * pCPU.  We are racing only with interruption by the</i></td></tr>
+<tr><th id="216">216</th><td><i>	 * hypervisor, so no need for a stronger memory barrier.</i></td></tr>
+<tr><th id="217">217</th><td><i>	 */</i></td></tr>
+<tr><th id="218">218</th><td>	<a class="macro" href="../../../sys/cdefs.h.html#453" title="__asm volatile(&quot;&quot;:::&quot;memory&quot;)" data-ref="_M/__insn_barrier">__insn_barrier</a>();</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td>	<b>return</b> <a class="local col5 ref" href="#5vt" title='vt' data-ref="5vt" data-ref-filename="5vt">vt</a>;</td></tr>
+<tr><th id="221">221</th><td>}</td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td><i  data-doc="xen_vcputime_exit">/*</i></td></tr>
+<tr><th id="224">224</th><td><i  data-doc="xen_vcputime_exit"> * xen_vcputime_exit(vt, tp)</i></td></tr>
+<tr><th id="225">225</th><td><i  data-doc="xen_vcputime_exit"> *</i></td></tr>
+<tr><th id="226">226</th><td><i  data-doc="xen_vcputime_exit"> *	Exit a vCPU time read section with the ticket in *tp from</i></td></tr>
+<tr><th id="227">227</th><td><i  data-doc="xen_vcputime_exit"> *	xen_vcputime_enter.  Return true on success, false if caller</i></td></tr>
+<tr><th id="228">228</th><td><i  data-doc="xen_vcputime_exit"> *	must retry.</i></td></tr>
+<tr><th id="229">229</th><td><i  data-doc="xen_vcputime_exit"> */</i></td></tr>
+<tr><th id="230">230</th><td><em>static</em> <b>inline</b> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="231">231</th><td><dfn class="tu decl def fn" id="xen_vcputime_exit" title='xen_vcputime_exit' data-type='_Bool xen_vcputime_exit(volatile struct vcpu_time_info * vt, struct xen_vcputime_ticket * tp)' data-ref="xen_vcputime_exit" data-ref-filename="xen_vcputime_exit">xen_vcputime_exit</dfn>(<em>volatile</em> <b>struct</b> <a class="type" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info" title='vcpu_time_info' data-ref="vcpu_time_info" data-ref-filename="vcpu_time_info">vcpu_time_info</a> *<dfn class="local col6 decl" id="6vt" title='vt' data-type='volatile struct vcpu_time_info *' data-ref="6vt" data-ref-filename="6vt">vt</dfn>,</td></tr>
+<tr><th id="232">232</th><td>    <b>struct</b> <a class="type" href="#xen_vcputime_ticket" title='xen_vcputime_ticket' data-ref="xen_vcputime_ticket" data-ref-filename="xen_vcputime_ticket">xen_vcputime_ticket</a> *<dfn class="local col7 decl" id="7tp" title='tp' data-type='struct xen_vcputime_ticket *' data-ref="7tp" data-ref-filename="7tp">tp</dfn>)</td></tr>
+<tr><th id="233">233</th><td>{</td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((vt == &amp;x86_curcpu()-&gt;ci_vcpu-&gt;time)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;vt == &amp;curcpu()-&gt;ci_vcpu-&gt;time&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 235))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col6 ref" href="#6vt" title='vt' data-ref="6vt" data-ref-filename="6vt">vt</a> == &amp;<a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>()-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_vcpu" title='cpu_info::ci_vcpu' data-ref="cpu_info::ci_vcpu" data-ref-filename="cpu_info..ci_vcpu">ci_vcpu</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_info::time" title='vcpu_info::time' data-ref="vcpu_info::time" data-ref-filename="vcpu_info..time">time</a>);</td></tr>
+<tr><th id="236">236</th><td></td></tr>
+<tr><th id="237">237</th><td>	<i>/*</i></td></tr>
+<tr><th id="238">238</th><td><i>	 * Must read the tsc before re-reading the version on the local</i></td></tr>
+<tr><th id="239">239</th><td><i>	 * pCPU.  We are racing only with interruption by the</i></td></tr>
+<tr><th id="240">240</th><td><i>	 * hypervisor, so no need for a stronger memory barrier.</i></td></tr>
+<tr><th id="241">241</th><td><i>	 */</i></td></tr>
+<tr><th id="242">242</th><td>	<a class="macro" href="../../../sys/cdefs.h.html#453" title="__asm volatile(&quot;&quot;:::&quot;memory&quot;)" data-ref="_M/__insn_barrier">__insn_barrier</a>();</td></tr>
+<tr><th id="243">243</th><td></td></tr>
+<tr><th id="244">244</th><td>	<b>return</b> <a class="local col7 ref" href="#7tp" title='tp' data-ref="7tp" data-ref-filename="7tp">tp</a>-&gt;<a class="tu ref field" href="#xen_vcputime_ticket::version" title='xen_vcputime_ticket::version' data-use='r' data-ref="xen_vcputime_ticket::version" data-ref-filename="xen_vcputime_ticket..version">version</a> == <a class="local col6 ref" href="#6vt" title='vt' data-ref="6vt" data-ref-filename="6vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::version" title='vcpu_time_info::version' data-ref="vcpu_time_info::version" data-ref-filename="vcpu_time_info..version">version</a>;</td></tr>
+<tr><th id="245">245</th><td>}</td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td><i  data-doc="xen_tsc_to_ns_delta">/*</i></td></tr>
+<tr><th id="248">248</th><td><i  data-doc="xen_tsc_to_ns_delta"> * xen_tsc_to_ns_delta(delta_tsc, mul_frac, shift)</i></td></tr>
+<tr><th id="249">249</th><td><i  data-doc="xen_tsc_to_ns_delta"> *</i></td></tr>
+<tr><th id="250">250</th><td><i  data-doc="xen_tsc_to_ns_delta"> *	Convert a difference in tsc units to a difference in</i></td></tr>
+<tr><th id="251">251</th><td><i  data-doc="xen_tsc_to_ns_delta"> *	nanoseconds given a multiplier and shift for the unit</i></td></tr>
+<tr><th id="252">252</th><td><i  data-doc="xen_tsc_to_ns_delta"> *	conversion.</i></td></tr>
+<tr><th id="253">253</th><td><i  data-doc="xen_tsc_to_ns_delta"> */</i></td></tr>
+<tr><th id="254">254</th><td><em>static</em> <b>inline</b> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a></td></tr>
+<tr><th id="255">255</th><td><dfn class="tu decl def fn" id="xen_tsc_to_ns_delta" title='xen_tsc_to_ns_delta' data-type='uint64_t xen_tsc_to_ns_delta(uint64_t delta_tsc, uint32_t tsc_to_system_mul, int8_t tsc_shift)' data-ref="xen_tsc_to_ns_delta" data-ref-filename="xen_tsc_to_ns_delta">xen_tsc_to_ns_delta</dfn>(<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col8 decl" id="8delta_tsc" title='delta_tsc' data-type='uint64_t' data-ref="8delta_tsc" data-ref-filename="8delta_tsc">delta_tsc</dfn>, <a class="typedef" href="../../../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col9 decl" id="9tsc_to_system_mul" title='tsc_to_system_mul' data-type='uint32_t' data-ref="9tsc_to_system_mul" data-ref-filename="9tsc_to_system_mul">tsc_to_system_mul</dfn>,</td></tr>
+<tr><th id="256">256</th><td>    <a class="typedef" href="../../../sys/stdint.h.html#int8_t" title='int8_t' data-type='__int8_t' data-ref="int8_t" data-ref-filename="int8_t">int8_t</a> <dfn class="local col0 decl" id="10tsc_shift" title='tsc_shift' data-type='int8_t' data-ref="10tsc_shift" data-ref-filename="10tsc_shift">tsc_shift</dfn>)</td></tr>
+<tr><th id="257">257</th><td>{</td></tr>
+<tr><th id="258">258</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col1 decl" id="11delta_tsc_hi" title='delta_tsc_hi' data-type='uint32_t' data-ref="11delta_tsc_hi" data-ref-filename="11delta_tsc_hi">delta_tsc_hi</dfn>, <dfn class="local col2 decl" id="12delta_tsc_lo" title='delta_tsc_lo' data-type='uint32_t' data-ref="12delta_tsc_lo" data-ref-filename="12delta_tsc_lo">delta_tsc_lo</dfn>;</td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td>	<b>if</b> (<a class="local col0 ref" href="#10tsc_shift" title='tsc_shift' data-ref="10tsc_shift" data-ref-filename="10tsc_shift">tsc_shift</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="261">261</th><td>		<a class="local col8 ref" href="#8delta_tsc" title='delta_tsc' data-ref="8delta_tsc" data-ref-filename="8delta_tsc">delta_tsc</a> &gt;&gt;= -<a class="local col0 ref" href="#10tsc_shift" title='tsc_shift' data-ref="10tsc_shift" data-ref-filename="10tsc_shift">tsc_shift</a>;</td></tr>
+<tr><th id="262">262</th><td>	<b>else</b></td></tr>
+<tr><th id="263">263</th><td>		<a class="local col8 ref" href="#8delta_tsc" title='delta_tsc' data-ref="8delta_tsc" data-ref-filename="8delta_tsc">delta_tsc</a> &lt;&lt;= <a class="local col0 ref" href="#10tsc_shift" title='tsc_shift' data-ref="10tsc_shift" data-ref-filename="10tsc_shift">tsc_shift</a>;</td></tr>
+<tr><th id="264">264</th><td></td></tr>
+<tr><th id="265">265</th><td>	<a class="local col1 ref" href="#11delta_tsc_hi" title='delta_tsc_hi' data-ref="11delta_tsc_hi" data-ref-filename="11delta_tsc_hi">delta_tsc_hi</a> = <a class="local col8 ref" href="#8delta_tsc" title='delta_tsc' data-ref="8delta_tsc" data-ref-filename="8delta_tsc">delta_tsc</a> &gt;&gt; <var>32</var>;</td></tr>
+<tr><th id="266">266</th><td>	<a class="local col2 ref" href="#12delta_tsc_lo" title='delta_tsc_lo' data-ref="12delta_tsc_lo" data-ref-filename="12delta_tsc_lo">delta_tsc_lo</a> = <a class="local col8 ref" href="#8delta_tsc" title='delta_tsc' data-ref="8delta_tsc" data-ref-filename="8delta_tsc">delta_tsc</a> &amp; <var>0xffffffffUL</var>;</td></tr>
+<tr><th id="267">267</th><td></td></tr>
+<tr><th id="268">268</th><td>	<i>/* d*m/2^32 = (2^32 d_h + d_l)*m/2^32 = d_h*m + (d_l*m)/2^32 */</i></td></tr>
+<tr><th id="269">269</th><td>	<b>return</b> ((<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>)<a class="local col1 ref" href="#11delta_tsc_hi" title='delta_tsc_hi' data-ref="11delta_tsc_hi" data-ref-filename="11delta_tsc_hi">delta_tsc_hi</a> * <a class="local col9 ref" href="#9tsc_to_system_mul" title='tsc_to_system_mul' data-ref="9tsc_to_system_mul" data-ref-filename="9tsc_to_system_mul">tsc_to_system_mul</a>) +</td></tr>
+<tr><th id="270">270</th><td>	    (((<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>)<a class="local col2 ref" href="#12delta_tsc_lo" title='delta_tsc_lo' data-ref="12delta_tsc_lo" data-ref-filename="12delta_tsc_lo">delta_tsc_lo</a> * <a class="local col9 ref" href="#9tsc_to_system_mul" title='tsc_to_system_mul' data-ref="9tsc_to_system_mul" data-ref-filename="9tsc_to_system_mul">tsc_to_system_mul</a>) &gt;&gt; <var>32</var>);</td></tr>
+<tr><th id="271">271</th><td>}</td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td><i  data-doc="xen_vcputime_systime_ns">/*</i></td></tr>
+<tr><th id="274">274</th><td><i  data-doc="xen_vcputime_systime_ns"> * xen_vcputime_systime_ns()</i></td></tr>
+<tr><th id="275">275</th><td><i  data-doc="xen_vcputime_systime_ns"> *</i></td></tr>
+<tr><th id="276">276</th><td><i  data-doc="xen_vcputime_systime_ns"> *	Return a snapshot of the Xen system time plus an adjustment</i></td></tr>
+<tr><th id="277">277</th><td><i  data-doc="xen_vcputime_systime_ns"> *	from the tsc, in units of nanoseconds.  Caller must be bound to</i></td></tr>
+<tr><th id="278">278</th><td><i  data-doc="xen_vcputime_systime_ns"> *	the current CPU.</i></td></tr>
+<tr><th id="279">279</th><td><i  data-doc="xen_vcputime_systime_ns"> */</i></td></tr>
+<tr><th id="280">280</th><td><em>static</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a></td></tr>
+<tr><th id="281">281</th><td><dfn class="tu decl def fn" id="xen_vcputime_systime_ns" title='xen_vcputime_systime_ns' data-type='uint64_t xen_vcputime_systime_ns()' data-ref="xen_vcputime_systime_ns" data-ref-filename="xen_vcputime_systime_ns">xen_vcputime_systime_ns</dfn>(<em>void</em>)</td></tr>
+<tr><th id="282">282</th><td>{</td></tr>
+<tr><th id="283">283</th><td>	<em>volatile</em> <b>struct</b> <a class="type" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info" title='vcpu_time_info' data-ref="vcpu_time_info" data-ref-filename="vcpu_time_info">vcpu_time_info</a> *<dfn class="local col3 decl" id="13vt" title='vt' data-type='volatile struct vcpu_time_info *' data-ref="13vt" data-ref-filename="13vt">vt</dfn>;</td></tr>
+<tr><th id="284">284</th><td>	<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col4 decl" id="14ci" title='ci' data-type='struct cpu_info *' data-ref="14ci" data-ref-filename="14ci">ci</dfn> = <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="285">285</th><td>	<b>struct</b> <a class="type" href="#xen_vcputime_ticket" title='xen_vcputime_ticket' data-ref="xen_vcputime_ticket" data-ref-filename="xen_vcputime_ticket">xen_vcputime_ticket</a> <dfn class="local col5 decl" id="15ticket" title='ticket' data-type='struct xen_vcputime_ticket' data-ref="15ticket" data-ref-filename="15ticket">ticket</dfn>;</td></tr>
+<tr><th id="286">286</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="16raw_systime_ns" title='raw_systime_ns' data-type='uint64_t' data-ref="16raw_systime_ns" data-ref-filename="16raw_systime_ns">raw_systime_ns</dfn>, <dfn class="local col7 decl" id="17tsc_timestamp" title='tsc_timestamp' data-type='uint64_t' data-ref="17tsc_timestamp" data-ref-filename="17tsc_timestamp">tsc_timestamp</dfn>, <dfn class="local col8 decl" id="18tsc" title='tsc' data-type='uint64_t' data-ref="18tsc" data-ref-filename="18tsc">tsc</dfn>, <dfn class="local col9 decl" id="19delta_tsc" title='delta_tsc' data-type='uint64_t' data-ref="19delta_tsc" data-ref-filename="19delta_tsc">delta_tsc</dfn>, <dfn class="local col0 decl" id="20delta_ns" title='delta_ns' data-type='uint64_t' data-ref="20delta_ns" data-ref-filename="20delta_ns">delta_ns</dfn>;</td></tr>
+<tr><th id="287">287</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col1 decl" id="21tsc_to_system_mul" title='tsc_to_system_mul' data-type='uint32_t' data-ref="21tsc_to_system_mul" data-ref-filename="21tsc_to_system_mul">tsc_to_system_mul</dfn>;</td></tr>
+<tr><th id="288">288</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#int8_t" title='int8_t' data-type='__int8_t' data-ref="int8_t" data-ref-filename="int8_t">int8_t</a> <dfn class="local col2 decl" id="22tsc_shift" title='tsc_shift' data-type='int8_t' data-ref="22tsc_shift" data-ref-filename="22tsc_shift">tsc_shift</dfn>;</td></tr>
+<tr><th id="289">289</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col3 decl" id="23systime_ns" title='systime_ns' data-type='uint64_t' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</dfn>;</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td>	<i>/* We'd better be bound to the CPU in _some_ way.  */</i></td></tr>
+<tr><th id="292">292</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((cpu_intr_p() || cpu_softintr_p() || kpreempt_disabled() || (x86_curlwp()-&gt;l_flag &amp; 0x80000000))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;cpu_intr_p() || cpu_softintr_p() || kpreempt_disabled() || (curlwp-&gt;l_flag &amp; LP_BOUND)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 293))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/cpu.h.html#cpu_intr_p" title='cpu_intr_p' data-ref="cpu_intr_p" data-ref-filename="cpu_intr_p">cpu_intr_p</a>() || <a class="ref fn" href="../../../sys/cpu.h.html#cpu_softintr_p" title='cpu_softintr_p' data-ref="cpu_softintr_p" data-ref-filename="cpu_softintr_p">cpu_softintr_p</a>() || <a class="ref fn" href="../../../sys/systm.h.html#kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</a>() ||</td></tr>
+<tr><th id="293">293</th><td>	    (<a class="macro" href="../../x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#264" title="0x80000000" data-ref="_M/LP_BOUND">LP_BOUND</a>));</td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td>	<i>/*</i></td></tr>
+<tr><th id="296">296</th><td><i>	 * Repeatedly try to read the system time, corresponding tsc</i></td></tr>
+<tr><th id="297">297</th><td><i>	 * timestamp, and tsc frequency until we get a consistent view.</i></td></tr>
+<tr><th id="298">298</th><td><i>	 */</i></td></tr>
+<tr><th id="299">299</th><td>	<b>do</b> {</td></tr>
+<tr><th id="300">300</th><td>		<a class="local col3 ref" href="#13vt" title='vt' data-ref="13vt" data-ref-filename="13vt">vt</a> = <a class="tu ref fn" href="#xen_vcputime_enter" title='xen_vcputime_enter' data-use='c' data-ref="xen_vcputime_enter" data-ref-filename="xen_vcputime_enter">xen_vcputime_enter</a>(&amp;<a class="local col5 ref" href="#15ticket" title='ticket' data-ref="15ticket" data-ref-filename="15ticket">ticket</a>);</td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td>		<i>/* Grab Xen's snapshot of raw system time and tsc.  */</i></td></tr>
+<tr><th id="303">303</th><td>		<a class="local col6 ref" href="#16raw_systime_ns" title='raw_systime_ns' data-ref="16raw_systime_ns" data-ref-filename="16raw_systime_ns">raw_systime_ns</a> = <a class="local col3 ref" href="#13vt" title='vt' data-ref="13vt" data-ref-filename="13vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::system_time" title='vcpu_time_info::system_time' data-ref="vcpu_time_info::system_time" data-ref-filename="vcpu_time_info..system_time">system_time</a>;</td></tr>
+<tr><th id="304">304</th><td>		<a class="local col7 ref" href="#17tsc_timestamp" title='tsc_timestamp' data-ref="17tsc_timestamp" data-ref-filename="17tsc_timestamp">tsc_timestamp</a> = <a class="local col3 ref" href="#13vt" title='vt' data-ref="13vt" data-ref-filename="13vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::tsc_timestamp" title='vcpu_time_info::tsc_timestamp' data-ref="vcpu_time_info::tsc_timestamp" data-ref-filename="vcpu_time_info..tsc_timestamp">tsc_timestamp</a>;</td></tr>
+<tr><th id="305">305</th><td></td></tr>
+<tr><th id="306">306</th><td>		<i>/* Get Xen's current idea of how fast the tsc is counting.  */</i></td></tr>
+<tr><th id="307">307</th><td>		<a class="local col1 ref" href="#21tsc_to_system_mul" title='tsc_to_system_mul' data-ref="21tsc_to_system_mul" data-ref-filename="21tsc_to_system_mul">tsc_to_system_mul</a> = <a class="local col3 ref" href="#13vt" title='vt' data-ref="13vt" data-ref-filename="13vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::tsc_to_system_mul" title='vcpu_time_info::tsc_to_system_mul' data-ref="vcpu_time_info::tsc_to_system_mul" data-ref-filename="vcpu_time_info..tsc_to_system_mul">tsc_to_system_mul</a>;</td></tr>
+<tr><th id="308">308</th><td>		<a class="local col2 ref" href="#22tsc_shift" title='tsc_shift' data-ref="22tsc_shift" data-ref-filename="22tsc_shift">tsc_shift</a> = <a class="local col3 ref" href="#13vt" title='vt' data-ref="13vt" data-ref-filename="13vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::tsc_shift" title='vcpu_time_info::tsc_shift' data-ref="vcpu_time_info::tsc_shift" data-ref-filename="vcpu_time_info..tsc_shift">tsc_shift</a>;</td></tr>
+<tr><th id="309">309</th><td></td></tr>
+<tr><th id="310">310</th><td>		<i>/* Read the CPU's tsc.  */</i></td></tr>
+<tr><th id="311">311</th><td>		<a class="local col8 ref" href="#18tsc" title='tsc' data-ref="18tsc" data-ref-filename="18tsc">tsc</a> = <a class="tu ref fn" href="#xen_rdtsc" title='xen_rdtsc' data-use='c' data-ref="xen_rdtsc" data-ref-filename="xen_rdtsc">xen_rdtsc</a>();</td></tr>
+<tr><th id="312">312</th><td>	} <b>while</b> (!<a class="tu ref fn" href="#xen_vcputime_exit" title='xen_vcputime_exit' data-use='c' data-ref="xen_vcputime_exit" data-ref-filename="xen_vcputime_exit">xen_vcputime_exit</a>(<a class="local col3 ref" href="#13vt" title='vt' data-ref="13vt" data-ref-filename="13vt">vt</a>, &amp;<a class="local col5 ref" href="#15ticket" title='ticket' data-ref="15ticket" data-ref-filename="15ticket">ticket</a>));</td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td>	<i>/*</i></td></tr>
+<tr><th id="315">315</th><td><i>	 * Out of paranoia, check whether the tsc has gone backwards</i></td></tr>
+<tr><th id="316">316</th><td><i>	 * since Xen's timestamp.</i></td></tr>
+<tr><th id="317">317</th><td><i>	 *</i></td></tr>
+<tr><th id="318">318</th><td><i>	 * This shouldn't happen because the Xen hypervisor is supposed</i></td></tr>
+<tr><th id="319">319</th><td><i>	 * to have read the tsc _before_ writing to the vcpu_time_info</i></td></tr>
+<tr><th id="320">320</th><td><i>	 * page, _before_ we read the tsc.</i></td></tr>
+<tr><th id="321">321</th><td><i>	 *</i></td></tr>
+<tr><th id="322">322</th><td><i>	 * Further, if we switched pCPUs after reading the tsc</i></td></tr>
+<tr><th id="323">323</th><td><i>	 * timestamp but before reading the CPU's tsc, the hypervisor</i></td></tr>
+<tr><th id="324">324</th><td><i>	 * had better notify us by updating the version too and forcing</i></td></tr>
+<tr><th id="325">325</th><td><i>	 * us to retry the vCPU time read.</i></td></tr>
+<tr><th id="326">326</th><td><i>	 */</i></td></tr>
+<tr><th id="327">327</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((tsc &lt; tsc_timestamp) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col8 ref" href="#18tsc" title='tsc' data-ref="18tsc" data-ref-filename="18tsc">tsc</a> &lt; <a class="local col7 ref" href="#17tsc_timestamp" title='tsc_timestamp' data-ref="17tsc_timestamp" data-ref-filename="17tsc_timestamp">tsc_timestamp</a>)) {</td></tr>
+<tr><th id="328">328</th><td>		<i>/*</i></td></tr>
+<tr><th id="329">329</th><td><i>		 * Notify the console that the CPU's tsc appeared to</i></td></tr>
+<tr><th id="330">330</th><td><i>		 * run behind Xen's idea of it, and pretend it hadn't.</i></td></tr>
+<tr><th id="331">331</th><td><i>		 */</i></td></tr>
+<tr><th id="332">332</th><td><u>#<span data-ppcond="332">if</span> <a class="macro" href="#35" title="0" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</a>		/* XXX dtrace hook */</u></td></tr>
+<tr><th id="333">333</th><td>		printf(<q>"xen cpu tsc %"</q>PRIu64</td></tr>
+<tr><th id="334">334</th><td>		    <q>" ran backwards from timestamp %"</q>PRIu64</td></tr>
+<tr><th id="335">335</th><td>		    <q>" by %"</q>PRIu64<q>"\n"</q>,</td></tr>
+<tr><th id="336">336</th><td>		    tsc, tsc_timestamp, tsc_timestamp - tsc);</td></tr>
+<tr><th id="337">337</th><td><u>#<span data-ppcond="332">endif</span></u></td></tr>
+<tr><th id="338">338</th><td>		<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_cpu_tsc_backwards_evcnt" title='cpu_info::ci_xen_cpu_tsc_backwards_evcnt' data-ref="cpu_info::ci_xen_cpu_tsc_backwards_evcnt" data-ref-filename="cpu_info..ci_xen_cpu_tsc_backwards_evcnt">ci_xen_cpu_tsc_backwards_evcnt</a>.<a class="ref field" href="../../../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="339">339</th><td>		<a class="local col0 ref" href="#20delta_ns" title='delta_ns' data-ref="20delta_ns" data-ref-filename="20delta_ns">delta_ns</a> = <a class="local col9 ref" href="#19delta_tsc" title='delta_tsc' data-ref="19delta_tsc" data-ref-filename="19delta_tsc">delta_tsc</a> = <var>0</var>;</td></tr>
+<tr><th id="340">340</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="341">341</th><td>		<i>/* Find how far the CPU's tsc has advanced.  */</i></td></tr>
+<tr><th id="342">342</th><td>		<a class="local col9 ref" href="#19delta_tsc" title='delta_tsc' data-ref="19delta_tsc" data-ref-filename="19delta_tsc">delta_tsc</a> = <a class="local col8 ref" href="#18tsc" title='tsc' data-ref="18tsc" data-ref-filename="18tsc">tsc</a> - <a class="local col7 ref" href="#17tsc_timestamp" title='tsc_timestamp' data-ref="17tsc_timestamp" data-ref-filename="17tsc_timestamp">tsc_timestamp</a>;</td></tr>
+<tr><th id="343">343</th><td></td></tr>
+<tr><th id="344">344</th><td>		<i>/* Convert the tsc delta to a nanosecond delta.  */</i></td></tr>
+<tr><th id="345">345</th><td>		<a class="local col0 ref" href="#20delta_ns" title='delta_ns' data-ref="20delta_ns" data-ref-filename="20delta_ns">delta_ns</a> = <a class="tu ref fn" href="#xen_tsc_to_ns_delta" title='xen_tsc_to_ns_delta' data-use='c' data-ref="xen_tsc_to_ns_delta" data-ref-filename="xen_tsc_to_ns_delta">xen_tsc_to_ns_delta</a>(<a class="local col9 ref" href="#19delta_tsc" title='delta_tsc' data-ref="19delta_tsc" data-ref-filename="19delta_tsc">delta_tsc</a>, <a class="local col1 ref" href="#21tsc_to_system_mul" title='tsc_to_system_mul' data-ref="21tsc_to_system_mul" data-ref-filename="21tsc_to_system_mul">tsc_to_system_mul</a>,</td></tr>
+<tr><th id="346">346</th><td>		    <a class="local col2 ref" href="#22tsc_shift" title='tsc_shift' data-ref="22tsc_shift" data-ref-filename="22tsc_shift">tsc_shift</a>);</td></tr>
+<tr><th id="347">347</th><td>	}</td></tr>
+<tr><th id="348">348</th><td></td></tr>
+<tr><th id="349">349</th><td>	<i>/*</i></td></tr>
+<tr><th id="350">350</th><td><i>	 * Notify the console if the delta computation yielded a</i></td></tr>
+<tr><th id="351">351</th><td><i>	 * negative, and pretend it hadn't.</i></td></tr>
+<tr><th id="352">352</th><td><i>	 *</i></td></tr>
+<tr><th id="353">353</th><td><i>	 * This doesn't make sense but I include it out of paranoia.</i></td></tr>
+<tr><th id="354">354</th><td><i>	 */</i></td></tr>
+<tr><th id="355">355</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect(((int64_t)delta_ns &lt; 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>((<a class="typedef" href="../../../sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a>)<a class="local col0 ref" href="#20delta_ns" title='delta_ns' data-ref="20delta_ns" data-ref-filename="20delta_ns">delta_ns</a> &lt; <var>0</var>)) {</td></tr>
+<tr><th id="356">356</th><td><u>#<span data-ppcond="356">if</span> <a class="macro" href="#35" title="0" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</a>		/* XXX dtrace hook */</u></td></tr>
+<tr><th id="357">357</th><td>		printf(<q>"xen tsc delta in ns went negative: %"</q>PRId64<q>"\n"</q>,</td></tr>
+<tr><th id="358">358</th><td>		    delta_ns);</td></tr>
+<tr><th id="359">359</th><td><u>#<span data-ppcond="356">endif</span></u></td></tr>
+<tr><th id="360">360</th><td>		<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_tsc_delta_negative_evcnt" title='cpu_info::ci_xen_tsc_delta_negative_evcnt' data-ref="cpu_info::ci_xen_tsc_delta_negative_evcnt" data-ref-filename="cpu_info..ci_xen_tsc_delta_negative_evcnt">ci_xen_tsc_delta_negative_evcnt</a>.<a class="ref field" href="../../../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="361">361</th><td>		<a class="local col0 ref" href="#20delta_ns" title='delta_ns' data-ref="20delta_ns" data-ref-filename="20delta_ns">delta_ns</a> = <var>0</var>;</td></tr>
+<tr><th id="362">362</th><td>	}</td></tr>
+<tr><th id="363">363</th><td></td></tr>
+<tr><th id="364">364</th><td>	<i>/*</i></td></tr>
+<tr><th id="365">365</th><td><i>	 * Compute the TSC-adjusted system time.</i></td></tr>
+<tr><th id="366">366</th><td><i>	 */</i></td></tr>
+<tr><th id="367">367</th><td>	<a class="local col3 ref" href="#23systime_ns" title='systime_ns' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</a> = <a class="local col6 ref" href="#16raw_systime_ns" title='raw_systime_ns' data-ref="16raw_systime_ns" data-ref-filename="16raw_systime_ns">raw_systime_ns</a> + <a class="local col0 ref" href="#20delta_ns" title='delta_ns' data-ref="20delta_ns" data-ref-filename="20delta_ns">delta_ns</a>;</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td>	<i>/*</i></td></tr>
+<tr><th id="370">370</th><td><i>	 * Notify the console if the addition wrapped around.</i></td></tr>
+<tr><th id="371">371</th><td><i>	 *</i></td></tr>
+<tr><th id="372">372</th><td><i>	 * This shouldn't happen because system time should be relative</i></td></tr>
+<tr><th id="373">373</th><td><i>	 * to a reasonable reference point, not centuries in the past.</i></td></tr>
+<tr><th id="374">374</th><td><i>	 * (2^64 ns is approximately half a millennium.)</i></td></tr>
+<tr><th id="375">375</th><td><i>	 */</i></td></tr>
+<tr><th id="376">376</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((systime_ns &lt; raw_systime_ns) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col3 ref" href="#23systime_ns" title='systime_ns' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</a> &lt; <a class="local col6 ref" href="#16raw_systime_ns" title='raw_systime_ns' data-ref="16raw_systime_ns" data-ref-filename="16raw_systime_ns">raw_systime_ns</a>)) {</td></tr>
+<tr><th id="377">377</th><td><u>#<span data-ppcond="377">if</span> <a class="macro" href="#35" title="0" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</a>		/* XXX dtrace hook */</u></td></tr>
+<tr><th id="378">378</th><td>		printf(<q>"xen raw systime + tsc delta wrapped around:"</q></td></tr>
+<tr><th id="379">379</th><td>		    <q>" %"</q>PRIu64<q>" + %"</q>PRIu64<q>" = %"</q>PRIu64<q>"\n"</q>,</td></tr>
+<tr><th id="380">380</th><td>		    raw_systime_ns, delta_ns, systime_ns);</td></tr>
+<tr><th id="381">381</th><td><u>#<span data-ppcond="377">endif</span></u></td></tr>
+<tr><th id="382">382</th><td>		<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_raw_systime_wraparound_evcnt" title='cpu_info::ci_xen_raw_systime_wraparound_evcnt' data-ref="cpu_info::ci_xen_raw_systime_wraparound_evcnt" data-ref-filename="cpu_info..ci_xen_raw_systime_wraparound_evcnt">ci_xen_raw_systime_wraparound_evcnt</a>.<a class="ref field" href="../../../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="383">383</th><td>	}</td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td>	<i>/*</i></td></tr>
+<tr><th id="386">386</th><td><i>	 * Notify the console if the TSC-adjusted Xen system time</i></td></tr>
+<tr><th id="387">387</th><td><i>	 * appears to have gone backwards, and pretend we had gone</i></td></tr>
+<tr><th id="388">388</th><td><i>	 * forward.  This seems to happen pretty regularly under load.</i></td></tr>
+<tr><th id="389">389</th><td><i>	 */</i></td></tr>
+<tr><th id="390">390</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((ci-&gt;ci_xen_last_systime_ns &gt; systime_ns) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_last_systime_ns" title='cpu_info::ci_xen_last_systime_ns' data-ref="cpu_info::ci_xen_last_systime_ns" data-ref-filename="cpu_info..ci_xen_last_systime_ns">ci_xen_last_systime_ns</a> &gt; <a class="local col3 ref" href="#23systime_ns" title='systime_ns' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</a>)) {</td></tr>
+<tr><th id="391">391</th><td><u>#<span data-ppcond="391">if</span> <a class="macro" href="#35" title="0" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</a>		/* XXX dtrace hook */</u></td></tr>
+<tr><th id="392">392</th><td>		printf(<q>"xen raw systime + tsc delta went backwards:"</q></td></tr>
+<tr><th id="393">393</th><td>		    <q>" %"</q>PRIu64<q>" &gt; %"</q>PRIu64<q>"\n"</q>,</td></tr>
+<tr><th id="394">394</th><td>		    ci-&gt;ci_xen_last_systime_ns, systime_ns);</td></tr>
+<tr><th id="395">395</th><td>		printf(<q>" raw_systime_ns=%"</q>PRIu64<q>"\n tsc_timestamp=%"</q>PRIu64<q>"\n"</q></td></tr>
+<tr><th id="396">396</th><td>		    <q>" tsc=%"</q>PRIu64<q>"\n tsc_to_system_mul=%"</q>PRIu32<q>"\n"</q></td></tr>
+<tr><th id="397">397</th><td>		    <q>" tsc_shift=%"</q>PRId8<q>"\n delta_tsc=%"</q>PRIu64<q>"\n"</q></td></tr>
+<tr><th id="398">398</th><td>		    <q>" delta_ns=%"</q>PRIu64<q>"\n"</q>,</td></tr>
+<tr><th id="399">399</th><td>		    raw_systime_ns, tsc_timestamp, tsc, tsc_to_system_mul,</td></tr>
+<tr><th id="400">400</th><td>		    tsc_shift, delta_tsc, delta_ns);</td></tr>
+<tr><th id="401">401</th><td><u>#<span data-ppcond="391">endif</span></u></td></tr>
+<tr><th id="402">402</th><td>		<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_raw_systime_backwards_evcnt" title='cpu_info::ci_xen_raw_systime_backwards_evcnt' data-ref="cpu_info::ci_xen_raw_systime_backwards_evcnt" data-ref-filename="cpu_info..ci_xen_raw_systime_backwards_evcnt">ci_xen_raw_systime_backwards_evcnt</a>.<a class="ref field" href="../../../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="403">403</th><td>		<a class="local col3 ref" href="#23systime_ns" title='systime_ns' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</a> = <a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_last_systime_ns" title='cpu_info::ci_xen_last_systime_ns' data-ref="cpu_info::ci_xen_last_systime_ns" data-ref-filename="cpu_info..ci_xen_last_systime_ns">ci_xen_last_systime_ns</a> + <var>1</var>;</td></tr>
+<tr><th id="404">404</th><td>	}</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td>	<i>/* Remember the TSC-adjusted Xen system time.  */</i></td></tr>
+<tr><th id="407">407</th><td>	<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_last_systime_ns" title='cpu_info::ci_xen_last_systime_ns' data-ref="cpu_info::ci_xen_last_systime_ns" data-ref-filename="cpu_info..ci_xen_last_systime_ns">ci_xen_last_systime_ns</a> = <a class="local col3 ref" href="#23systime_ns" title='systime_ns' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</a>;</td></tr>
+<tr><th id="408">408</th><td></td></tr>
+<tr><th id="409">409</th><td>	<i>/* We had better not have migrated CPUs.  */</i></td></tr>
+<tr><th id="410">410</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci == x86_curcpu())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci == curcpu()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 410))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col4 ref" href="#14ci" title='ci' data-ref="14ci" data-ref-filename="14ci">ci</a> == <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="411">411</th><td></td></tr>
+<tr><th id="412">412</th><td>	<i>/* And we're done: return the TSC-adjusted systime in nanoseconds.  */</i></td></tr>
+<tr><th id="413">413</th><td>	<b>return</b> <a class="local col3 ref" href="#23systime_ns" title='systime_ns' data-ref="23systime_ns" data-ref-filename="23systime_ns">systime_ns</a>;</td></tr>
+<tr><th id="414">414</th><td>}</td></tr>
+<tr><th id="415">415</th><td></td></tr>
+<tr><th id="416">416</th><td><i  data-doc="xen_vcputime_raw_systime_ns">/*</i></td></tr>
+<tr><th id="417">417</th><td><i  data-doc="xen_vcputime_raw_systime_ns"> * xen_vcputime_raw_systime_ns()</i></td></tr>
+<tr><th id="418">418</th><td><i  data-doc="xen_vcputime_raw_systime_ns"> *</i></td></tr>
+<tr><th id="419">419</th><td><i  data-doc="xen_vcputime_raw_systime_ns"> *	Return a snapshot of the current Xen system time to the</i></td></tr>
+<tr><th id="420">420</th><td><i  data-doc="xen_vcputime_raw_systime_ns"> *	resolution of the Xen hypervisor tick, in units of nanoseconds.</i></td></tr>
+<tr><th id="421">421</th><td><i  data-doc="xen_vcputime_raw_systime_ns"> */</i></td></tr>
+<tr><th id="422">422</th><td><em>static</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a></td></tr>
+<tr><th id="423">423</th><td><dfn class="tu decl def fn" id="xen_vcputime_raw_systime_ns" title='xen_vcputime_raw_systime_ns' data-type='uint64_t xen_vcputime_raw_systime_ns()' data-ref="xen_vcputime_raw_systime_ns" data-ref-filename="xen_vcputime_raw_systime_ns">xen_vcputime_raw_systime_ns</dfn>(<em>void</em>)</td></tr>
+<tr><th id="424">424</th><td>{</td></tr>
+<tr><th id="425">425</th><td>	<em>volatile</em> <b>struct</b> <a class="type" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info" title='vcpu_time_info' data-ref="vcpu_time_info" data-ref-filename="vcpu_time_info">vcpu_time_info</a> *<dfn class="local col4 decl" id="24vt" title='vt' data-type='volatile struct vcpu_time_info *' data-ref="24vt" data-ref-filename="24vt">vt</dfn>;</td></tr>
+<tr><th id="426">426</th><td>	<b>struct</b> <a class="type" href="#xen_vcputime_ticket" title='xen_vcputime_ticket' data-ref="xen_vcputime_ticket" data-ref-filename="xen_vcputime_ticket">xen_vcputime_ticket</a> <dfn class="local col5 decl" id="25ticket" title='ticket' data-type='struct xen_vcputime_ticket' data-ref="25ticket" data-ref-filename="25ticket">ticket</dfn>;</td></tr>
+<tr><th id="427">427</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="26raw_systime_ns" title='raw_systime_ns' data-type='uint64_t' data-ref="26raw_systime_ns" data-ref-filename="26raw_systime_ns">raw_systime_ns</dfn>;</td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td>	<b>do</b> {</td></tr>
+<tr><th id="430">430</th><td>		<a class="local col4 ref" href="#24vt" title='vt' data-ref="24vt" data-ref-filename="24vt">vt</a> = <a class="tu ref fn" href="#xen_vcputime_enter" title='xen_vcputime_enter' data-use='c' data-ref="xen_vcputime_enter" data-ref-filename="xen_vcputime_enter">xen_vcputime_enter</a>(&amp;<a class="local col5 ref" href="#25ticket" title='ticket' data-ref="25ticket" data-ref-filename="25ticket">ticket</a>);</td></tr>
+<tr><th id="431">431</th><td>		<a class="local col6 ref" href="#26raw_systime_ns" title='raw_systime_ns' data-ref="26raw_systime_ns" data-ref-filename="26raw_systime_ns">raw_systime_ns</a> = <a class="local col4 ref" href="#24vt" title='vt' data-ref="24vt" data-ref-filename="24vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::system_time" title='vcpu_time_info::system_time' data-ref="vcpu_time_info::system_time" data-ref-filename="vcpu_time_info..system_time">system_time</a>;</td></tr>
+<tr><th id="432">432</th><td>	} <b>while</b> (!<a class="tu ref fn" href="#xen_vcputime_exit" title='xen_vcputime_exit' data-use='c' data-ref="xen_vcputime_exit" data-ref-filename="xen_vcputime_exit">xen_vcputime_exit</a>(<a class="local col4 ref" href="#24vt" title='vt' data-ref="24vt" data-ref-filename="24vt">vt</a>, &amp;<a class="local col5 ref" href="#25ticket" title='ticket' data-ref="25ticket" data-ref-filename="25ticket">ticket</a>));</td></tr>
+<tr><th id="433">433</th><td></td></tr>
+<tr><th id="434">434</th><td>	<b>return</b> <a class="local col6 ref" href="#26raw_systime_ns" title='raw_systime_ns' data-ref="26raw_systime_ns" data-ref-filename="26raw_systime_ns">raw_systime_ns</a>;</td></tr>
+<tr><th id="435">435</th><td>}</td></tr>
+<tr><th id="436">436</th><td></td></tr>
+<tr><th id="437">437</th><td><i>/*</i></td></tr>
+<tr><th id="438">438</th><td><i> * struct xen_wallclock_ticket</i></td></tr>
+<tr><th id="439">439</th><td><i> *</i></td></tr>
+<tr><th id="440">440</th><td><i> *	State for a wall clock read section, during which a caller may</i></td></tr>
+<tr><th id="441">441</th><td><i> *	read from the wall clock fields of HYPERVISOR_shared_info.</i></td></tr>
+<tr><th id="442">442</th><td><i> *	Caller must enter with xen_wallclock_enter, exit with</i></td></tr>
+<tr><th id="443">443</th><td><i> *	xen_wallclock_exit, and be prepared to retry if</i></td></tr>
+<tr><th id="444">444</th><td><i> *	xen_wallclock_exit fails.</i></td></tr>
+<tr><th id="445">445</th><td><i> */</i></td></tr>
+<tr><th id="446">446</th><td><b>struct</b> <dfn class="type def" id="xen_wallclock_ticket" title='xen_wallclock_ticket' data-ref="xen_wallclock_ticket" data-ref-filename="xen_wallclock_ticket">xen_wallclock_ticket</dfn> {</td></tr>
+<tr><th id="447">447</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="tu decl field" id="xen_wallclock_ticket::version" title='xen_wallclock_ticket::version' data-type='uint32_t' data-ref="xen_wallclock_ticket::version" data-ref-filename="xen_wallclock_ticket..version">version</dfn>;</td></tr>
+<tr><th id="448">448</th><td>};</td></tr>
+<tr><th id="449">449</th><td></td></tr>
+<tr><th id="450">450</th><td><i  data-doc="xen_wallclock_enter">/*</i></td></tr>
+<tr><th id="451">451</th><td><i  data-doc="xen_wallclock_enter"> * xen_wallclock_enter(tp)</i></td></tr>
+<tr><th id="452">452</th><td><i  data-doc="xen_wallclock_enter"> *</i></td></tr>
+<tr><th id="453">453</th><td><i  data-doc="xen_wallclock_enter"> *	Enter a wall clock read section and store a ticket in *tp,</i></td></tr>
+<tr><th id="454">454</th><td><i  data-doc="xen_wallclock_enter"> *	which the caller must use with xen_wallclock_exit.</i></td></tr>
+<tr><th id="455">455</th><td><i  data-doc="xen_wallclock_enter"> */</i></td></tr>
+<tr><th id="456">456</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="457">457</th><td><dfn class="tu decl def fn" id="xen_wallclock_enter" title='xen_wallclock_enter' data-type='void xen_wallclock_enter(struct xen_wallclock_ticket * tp)' data-ref="xen_wallclock_enter" data-ref-filename="xen_wallclock_enter">xen_wallclock_enter</dfn>(<b>struct</b> <a class="type" href="#xen_wallclock_ticket" title='xen_wallclock_ticket' data-ref="xen_wallclock_ticket" data-ref-filename="xen_wallclock_ticket">xen_wallclock_ticket</a> *<dfn class="local col7 decl" id="27tp" title='tp' data-type='struct xen_wallclock_ticket *' data-ref="27tp" data-ref-filename="27tp">tp</dfn>)</td></tr>
+<tr><th id="458">458</th><td>{</td></tr>
+<tr><th id="459">459</th><td></td></tr>
+<tr><th id="460">460</th><td>	<b>while</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((1 &amp; (tp-&gt;version = HYPERVISOR_shared_info-&gt;wc_version)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<var>1</var> &amp; (<a class="local col7 ref" href="#27tp" title='tp' data-ref="27tp" data-ref-filename="27tp">tp</a>-&gt;<a class="tu ref field" href="#xen_wallclock_ticket::version" title='xen_wallclock_ticket::version' data-use='w' data-ref="xen_wallclock_ticket::version" data-ref-filename="xen_wallclock_ticket..version">version</a> =</td></tr>
+<tr><th id="461">461</th><td>		    <a class="ref" href="../include/hypervisor.h.html#HYPERVISOR_shared_info" title='HYPERVISOR_shared_info' data-ref="HYPERVISOR_shared_info" data-ref-filename="HYPERVISOR_shared_info">HYPERVISOR_shared_info</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#shared_info::wc_version" title='shared_info::wc_version' data-ref="shared_info::wc_version" data-ref-filename="shared_info..wc_version">wc_version</a>)))</td></tr>
+<tr><th id="462">462</th><td>		<a class="macro" href="../../x86/include/lock.h.html#73" title="x86_pause()" data-ref="_M/SPINLOCK_BACKOFF_HOOK">SPINLOCK_BACKOFF_HOOK</a>;</td></tr>
+<tr><th id="463">463</th><td></td></tr>
+<tr><th id="464">464</th><td>	<i>/*</i></td></tr>
+<tr><th id="465">465</th><td><i>	 * Must read the version from memory before reading the</i></td></tr>
+<tr><th id="466">466</th><td><i>	 * timestamp from memory, as written potentially by another</i></td></tr>
+<tr><th id="467">467</th><td><i>	 * pCPU.</i></td></tr>
+<tr><th id="468">468</th><td><i>	 */</i></td></tr>
+<tr><th id="469">469</th><td>	<a class="ref fn" href="../../../sys/atomic.h.html#membar_consumer" title='membar_consumer' data-ref="membar_consumer" data-ref-filename="membar_consumer">membar_consumer</a>();</td></tr>
+<tr><th id="470">470</th><td>}</td></tr>
+<tr><th id="471">471</th><td></td></tr>
+<tr><th id="472">472</th><td><i  data-doc="xen_wallclock_exit">/*</i></td></tr>
+<tr><th id="473">473</th><td><i  data-doc="xen_wallclock_exit"> * xen_wallclock_exit(tp)</i></td></tr>
+<tr><th id="474">474</th><td><i  data-doc="xen_wallclock_exit"> *</i></td></tr>
+<tr><th id="475">475</th><td><i  data-doc="xen_wallclock_exit"> *	Exit a wall clock read section with the ticket in *tp from</i></td></tr>
+<tr><th id="476">476</th><td><i  data-doc="xen_wallclock_exit"> *	xen_wallclock_enter.  Return true on success, false if caller</i></td></tr>
+<tr><th id="477">477</th><td><i  data-doc="xen_wallclock_exit"> *	must retry.</i></td></tr>
+<tr><th id="478">478</th><td><i  data-doc="xen_wallclock_exit"> */</i></td></tr>
+<tr><th id="479">479</th><td><em>static</em> <b>inline</b> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="480">480</th><td><dfn class="tu decl def fn" id="xen_wallclock_exit" title='xen_wallclock_exit' data-type='_Bool xen_wallclock_exit(struct xen_wallclock_ticket * tp)' data-ref="xen_wallclock_exit" data-ref-filename="xen_wallclock_exit">xen_wallclock_exit</dfn>(<b>struct</b> <a class="type" href="#xen_wallclock_ticket" title='xen_wallclock_ticket' data-ref="xen_wallclock_ticket" data-ref-filename="xen_wallclock_ticket">xen_wallclock_ticket</a> *<dfn class="local col8 decl" id="28tp" title='tp' data-type='struct xen_wallclock_ticket *' data-ref="28tp" data-ref-filename="28tp">tp</dfn>)</td></tr>
+<tr><th id="481">481</th><td>{</td></tr>
+<tr><th id="482">482</th><td></td></tr>
+<tr><th id="483">483</th><td>	<i>/*</i></td></tr>
+<tr><th id="484">484</th><td><i>	 * Must read the timestamp from memory before re-reading the</i></td></tr>
+<tr><th id="485">485</th><td><i>	 * version from memory, as written potentially by another pCPU.</i></td></tr>
+<tr><th id="486">486</th><td><i>	 */</i></td></tr>
+<tr><th id="487">487</th><td>	<a class="ref fn" href="../../../sys/atomic.h.html#membar_consumer" title='membar_consumer' data-ref="membar_consumer" data-ref-filename="membar_consumer">membar_consumer</a>();</td></tr>
+<tr><th id="488">488</th><td></td></tr>
+<tr><th id="489">489</th><td>	<b>return</b> <a class="local col8 ref" href="#28tp" title='tp' data-ref="28tp" data-ref-filename="28tp">tp</a>-&gt;<a class="tu ref field" href="#xen_wallclock_ticket::version" title='xen_wallclock_ticket::version' data-use='r' data-ref="xen_wallclock_ticket::version" data-ref-filename="xen_wallclock_ticket..version">version</a> == <a class="ref" href="../include/hypervisor.h.html#HYPERVISOR_shared_info" title='HYPERVISOR_shared_info' data-ref="HYPERVISOR_shared_info" data-ref-filename="HYPERVISOR_shared_info">HYPERVISOR_shared_info</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#shared_info::wc_version" title='shared_info::wc_version' data-ref="shared_info::wc_version" data-ref-filename="shared_info..wc_version">wc_version</a>;</td></tr>
+<tr><th id="490">490</th><td>}</td></tr>
+<tr><th id="491">491</th><td></td></tr>
+<tr><th id="492">492</th><td><i  data-doc="xen_wallclock_time">/*</i></td></tr>
+<tr><th id="493">493</th><td><i  data-doc="xen_wallclock_time"> * xen_wallclock_time(tsp)</i></td></tr>
+<tr><th id="494">494</th><td><i  data-doc="xen_wallclock_time"> *</i></td></tr>
+<tr><th id="495">495</th><td><i  data-doc="xen_wallclock_time"> *	Return a snapshot of the current low-resolution wall clock</i></td></tr>
+<tr><th id="496">496</th><td><i  data-doc="xen_wallclock_time"> *	time, as reported by the hypervisor, in tsp.</i></td></tr>
+<tr><th id="497">497</th><td><i  data-doc="xen_wallclock_time"> */</i></td></tr>
+<tr><th id="498">498</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="499">499</th><td><dfn class="tu decl def fn" id="xen_wallclock_time" title='xen_wallclock_time' data-type='void xen_wallclock_time(struct timespec * tsp)' data-ref="xen_wallclock_time" data-ref-filename="xen_wallclock_time">xen_wallclock_time</dfn>(<b>struct</b> <a class="type" href="../../../sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> *<dfn class="local col9 decl" id="29tsp" title='tsp' data-type='struct timespec *' data-ref="29tsp" data-ref-filename="29tsp">tsp</dfn>)</td></tr>
+<tr><th id="500">500</th><td>{</td></tr>
+<tr><th id="501">501</th><td>	<b>struct</b> <a class="type" href="#xen_wallclock_ticket" title='xen_wallclock_ticket' data-ref="xen_wallclock_ticket" data-ref-filename="xen_wallclock_ticket">xen_wallclock_ticket</a> <dfn class="local col0 decl" id="30ticket" title='ticket' data-type='struct xen_wallclock_ticket' data-ref="30ticket" data-ref-filename="30ticket">ticket</dfn>;</td></tr>
+<tr><th id="502">502</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col1 decl" id="31systime_ns" title='systime_ns' data-type='uint64_t' data-ref="31systime_ns" data-ref-filename="31systime_ns">systime_ns</dfn>;</td></tr>
+<tr><th id="503">503</th><td></td></tr>
+<tr><th id="504">504</th><td>	<i>/* Read the last wall clock sample from the hypervisor. */</i></td></tr>
+<tr><th id="505">505</th><td>	<b>do</b> {</td></tr>
+<tr><th id="506">506</th><td>		<a class="tu ref fn" href="#xen_wallclock_enter" title='xen_wallclock_enter' data-use='c' data-ref="xen_wallclock_enter" data-ref-filename="xen_wallclock_enter">xen_wallclock_enter</a>(&amp;<a class="local col0 ref" href="#30ticket" title='ticket' data-ref="30ticket" data-ref-filename="30ticket">ticket</a>);</td></tr>
+<tr><th id="507">507</th><td>		<a class="local col9 ref" href="#29tsp" title='tsp' data-ref="29tsp" data-ref-filename="29tsp">tsp</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a> = <a class="ref" href="../include/hypervisor.h.html#HYPERVISOR_shared_info" title='HYPERVISOR_shared_info' data-ref="HYPERVISOR_shared_info" data-ref-filename="HYPERVISOR_shared_info">HYPERVISOR_shared_info</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#shared_info::wc_sec" title='shared_info::wc_sec' data-ref="shared_info::wc_sec" data-ref-filename="shared_info..wc_sec">wc_sec</a>;</td></tr>
+<tr><th id="508">508</th><td>		<a class="local col9 ref" href="#29tsp" title='tsp' data-ref="29tsp" data-ref-filename="29tsp">tsp</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> = <a class="ref" href="../include/hypervisor.h.html#HYPERVISOR_shared_info" title='HYPERVISOR_shared_info' data-ref="HYPERVISOR_shared_info" data-ref-filename="HYPERVISOR_shared_info">HYPERVISOR_shared_info</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#shared_info::wc_nsec" title='shared_info::wc_nsec' data-ref="shared_info::wc_nsec" data-ref-filename="shared_info..wc_nsec">wc_nsec</a>;</td></tr>
+<tr><th id="509">509</th><td>	} <b>while</b> (!<a class="tu ref fn" href="#xen_wallclock_exit" title='xen_wallclock_exit' data-use='c' data-ref="xen_wallclock_exit" data-ref-filename="xen_wallclock_exit">xen_wallclock_exit</a>(&amp;<a class="local col0 ref" href="#30ticket" title='ticket' data-ref="30ticket" data-ref-filename="30ticket">ticket</a>));</td></tr>
+<tr><th id="510">510</th><td></td></tr>
+<tr><th id="511">511</th><td>	<i>/* Get the global system time.  */</i></td></tr>
+<tr><th id="512">512</th><td>	<a class="local col1 ref" href="#31systime_ns" title='systime_ns' data-ref="31systime_ns" data-ref-filename="31systime_ns">systime_ns</a> = <a class="tu ref fn" href="#xen_global_systime_ns" title='xen_global_systime_ns' data-use='c' data-ref="xen_global_systime_ns" data-ref-filename="xen_global_systime_ns">xen_global_systime_ns</a>();</td></tr>
+<tr><th id="513">513</th><td></td></tr>
+<tr><th id="514">514</th><td>	<i>/* Add the system time to the wall clock time.  */</i></td></tr>
+<tr><th id="515">515</th><td>	<a class="local col1 ref" href="#31systime_ns" title='systime_ns' data-ref="31systime_ns" data-ref-filename="31systime_ns">systime_ns</a> += <a class="local col9 ref" href="#29tsp" title='tsp' data-ref="29tsp" data-ref-filename="29tsp">tsp</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a>;</td></tr>
+<tr><th id="516">516</th><td>	<a class="local col9 ref" href="#29tsp" title='tsp' data-ref="29tsp" data-ref-filename="29tsp">tsp</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a> += <a class="local col1 ref" href="#31systime_ns" title='systime_ns' data-ref="31systime_ns" data-ref-filename="31systime_ns">systime_ns</a> / <var>1000000000ull</var>;</td></tr>
+<tr><th id="517">517</th><td>	<a class="local col9 ref" href="#29tsp" title='tsp' data-ref="29tsp" data-ref-filename="29tsp">tsp</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> = <a class="local col1 ref" href="#31systime_ns" title='systime_ns' data-ref="31systime_ns" data-ref-filename="31systime_ns">systime_ns</a> % <var>1000000000ull</var>;</td></tr>
+<tr><th id="518">518</th><td>}</td></tr>
+<tr><th id="519">519</th><td></td></tr>
+<tr><th id="520">520</th><td><i  data-doc="xen_global_systime_ns">/*</i></td></tr>
+<tr><th id="521">521</th><td><i  data-doc="xen_global_systime_ns"> * xen_global_systime_ns()</i></td></tr>
+<tr><th id="522">522</th><td><i  data-doc="xen_global_systime_ns"> *</i></td></tr>
+<tr><th id="523">523</th><td><i  data-doc="xen_global_systime_ns"> *	Return a global monotonic view of the system time in</i></td></tr>
+<tr><th id="524">524</th><td><i  data-doc="xen_global_systime_ns"> *	nanoseconds, computed by the per-CPU Xen raw system time plus</i></td></tr>
+<tr><th id="525">525</th><td><i  data-doc="xen_global_systime_ns"> *	an rdtsc adjustment, and advance the view of the system time</i></td></tr>
+<tr><th id="526">526</th><td><i  data-doc="xen_global_systime_ns"> *	for all other CPUs.</i></td></tr>
+<tr><th id="527">527</th><td><i  data-doc="xen_global_systime_ns"> */</i></td></tr>
+<tr><th id="528">528</th><td><em>static</em> <a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a></td></tr>
+<tr><th id="529">529</th><td><dfn class="tu decl def fn" id="xen_global_systime_ns" title='xen_global_systime_ns' data-type='uint64_t xen_global_systime_ns()' data-ref="xen_global_systime_ns" data-ref-filename="xen_global_systime_ns">xen_global_systime_ns</dfn>(<em>void</em>)</td></tr>
+<tr><th id="530">530</th><td>{</td></tr>
+<tr><th id="531">531</th><td>	<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col2 decl" id="32ci" title='ci' data-type='struct cpu_info *' data-ref="32ci" data-ref-filename="32ci">ci</dfn>;</td></tr>
+<tr><th id="532">532</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col3 decl" id="33local" title='local' data-type='uint64_t' data-ref="33local" data-ref-filename="33local">local</dfn>, <dfn class="local col4 decl" id="34global" title='global' data-type='uint64_t' data-ref="34global" data-ref-filename="34global">global</dfn>, <dfn class="local col5 decl" id="35result" title='result' data-type='uint64_t' data-ref="35result" data-ref-filename="35result">result</dfn>;</td></tr>
+<tr><th id="533">533</th><td>	<em>int</em> <dfn class="local col6 decl" id="36bound" title='bound' data-type='int' data-ref="36bound" data-ref-filename="36bound">bound</dfn>;</td></tr>
+<tr><th id="534">534</th><td></td></tr>
+<tr><th id="535">535</th><td>	<i>/*</i></td></tr>
+<tr><th id="536">536</th><td><i>	 * Find the local timecount on this CPU, and make sure it does</i></td></tr>
+<tr><th id="537">537</th><td><i>	 * not precede the latest global timecount witnessed so far by</i></td></tr>
+<tr><th id="538">538</th><td><i>	 * any CPU.  If it does, add to the local CPU's skew from the</i></td></tr>
+<tr><th id="539">539</th><td><i>	 * fastest CPU.</i></td></tr>
+<tr><th id="540">540</th><td><i>	 *</i></td></tr>
+<tr><th id="541">541</th><td><i>	 * XXX Can we avoid retrying if the CAS fails?</i></td></tr>
+<tr><th id="542">542</th><td><i>	 */</i></td></tr>
+<tr><th id="543">543</th><td>	<a class="local col6 ref" href="#36bound" title='bound' data-ref="36bound" data-ref-filename="36bound">bound</a> = <a class="ref fn" href="../../../sys/lwp.h.html#curlwp_bind" title='curlwp_bind' data-ref="curlwp_bind" data-ref-filename="curlwp_bind">curlwp_bind</a>();</td></tr>
+<tr><th id="544">544</th><td>	<a class="local col2 ref" href="#32ci" title='ci' data-ref="32ci" data-ref-filename="32ci">ci</a> = <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="545">545</th><td>	<b>do</b> {</td></tr>
+<tr><th id="546">546</th><td>		<a class="local col3 ref" href="#33local" title='local' data-ref="33local" data-ref-filename="33local">local</a> = <a class="tu ref fn" href="#xen_vcputime_systime_ns" title='xen_vcputime_systime_ns' data-use='c' data-ref="xen_vcputime_systime_ns" data-ref-filename="xen_vcputime_systime_ns">xen_vcputime_systime_ns</a>();</td></tr>
+<tr><th id="547">547</th><td>		<a class="local col3 ref" href="#33local" title='local' data-ref="33local" data-ref-filename="33local">local</a> += <a class="local col2 ref" href="#32ci" title='ci' data-ref="32ci" data-ref-filename="32ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_systime_ns_skew" title='cpu_info::ci_xen_systime_ns_skew' data-ref="cpu_info::ci_xen_systime_ns_skew" data-ref-filename="cpu_info..ci_xen_systime_ns_skew">ci_xen_systime_ns_skew</a>;</td></tr>
+<tr><th id="548">548</th><td>		<a class="local col4 ref" href="#34global" title='global' data-ref="34global" data-ref-filename="34global">global</a> = <a class="tu ref" href="#xen_global_systime_ns_stamp" title='xen_global_systime_ns_stamp' data-use='r' data-ref="xen_global_systime_ns_stamp" data-ref-filename="xen_global_systime_ns_stamp">xen_global_systime_ns_stamp</a>;</td></tr>
+<tr><th id="549">549</th><td>		<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((local &lt; global + 1) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col3 ref" href="#33local" title='local' data-ref="33local" data-ref-filename="33local">local</a> &lt; <a class="local col4 ref" href="#34global" title='global' data-ref="34global" data-ref-filename="34global">global</a> + <var>1</var>)) {</td></tr>
+<tr><th id="550">550</th><td>			<a class="local col5 ref" href="#35result" title='result' data-ref="35result" data-ref-filename="35result">result</a> = <a class="local col4 ref" href="#34global" title='global' data-ref="34global" data-ref-filename="34global">global</a> + <var>1</var>;</td></tr>
+<tr><th id="551">551</th><td>			<a class="local col2 ref" href="#32ci" title='ci' data-ref="32ci" data-ref-filename="32ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_systime_ns_skew" title='cpu_info::ci_xen_systime_ns_skew' data-ref="cpu_info::ci_xen_systime_ns_skew" data-ref-filename="cpu_info..ci_xen_systime_ns_skew">ci_xen_systime_ns_skew</a> += <a class="local col4 ref" href="#34global" title='global' data-ref="34global" data-ref-filename="34global">global</a> + <var>1</var> - <a class="local col3 ref" href="#33local" title='local' data-ref="33local" data-ref-filename="33local">local</a>;</td></tr>
+<tr><th id="552">552</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="553">553</th><td>			<a class="local col5 ref" href="#35result" title='result' data-ref="35result" data-ref-filename="35result">result</a> = <a class="local col3 ref" href="#33local" title='local' data-ref="33local" data-ref-filename="33local">local</a>;</td></tr>
+<tr><th id="554">554</th><td>		}</td></tr>
+<tr><th id="555">555</th><td>	} <b>while</b> (<a class="ref fn" href="../../../sys/atomic.h.html#atomic_cas_64" title='atomic_cas_64' data-ref="atomic_cas_64" data-ref-filename="atomic_cas_64">atomic_cas_64</a>(&amp;<a class="tu ref" href="#xen_global_systime_ns_stamp" title='xen_global_systime_ns_stamp' data-use='a' data-ref="xen_global_systime_ns_stamp" data-ref-filename="xen_global_systime_ns_stamp">xen_global_systime_ns_stamp</a>, <a class="local col4 ref" href="#34global" title='global' data-ref="34global" data-ref-filename="34global">global</a>, <a class="local col5 ref" href="#35result" title='result' data-ref="35result" data-ref-filename="35result">result</a>)</td></tr>
+<tr><th id="556">556</th><td>	    != <a class="local col4 ref" href="#34global" title='global' data-ref="34global" data-ref-filename="34global">global</a>);</td></tr>
+<tr><th id="557">557</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci == x86_curcpu())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci == curcpu()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 557))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col2 ref" href="#32ci" title='ci' data-ref="32ci" data-ref-filename="32ci">ci</a> == <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="558">558</th><td>	<a class="ref fn" href="../../../sys/lwp.h.html#curlwp_bindx" title='curlwp_bindx' data-ref="curlwp_bindx" data-ref-filename="curlwp_bindx">curlwp_bindx</a>(<a class="local col6 ref" href="#36bound" title='bound' data-ref="36bound" data-ref-filename="36bound">bound</a>);</td></tr>
+<tr><th id="559">559</th><td></td></tr>
+<tr><th id="560">560</th><td>	<b>return</b> <a class="local col5 ref" href="#35result" title='result' data-ref="35result" data-ref-filename="35result">result</a>;</td></tr>
+<tr><th id="561">561</th><td>}</td></tr>
+<tr><th id="562">562</th><td></td></tr>
+<tr><th id="563">563</th><td><i  data-doc="xen_get_timecount">/*</i></td></tr>
+<tr><th id="564">564</th><td><i  data-doc="xen_get_timecount"> * xen_get_timecount(tc)</i></td></tr>
+<tr><th id="565">565</th><td><i  data-doc="xen_get_timecount"> *</i></td></tr>
+<tr><th id="566">566</th><td><i  data-doc="xen_get_timecount"> *	Return the low 32 bits of a global monotonic view of the Xen</i></td></tr>
+<tr><th id="567">567</th><td><i  data-doc="xen_get_timecount"> *	system time.</i></td></tr>
+<tr><th id="568">568</th><td><i  data-doc="xen_get_timecount"> */</i></td></tr>
+<tr><th id="569">569</th><td><em>static</em> <em>unsigned</em></td></tr>
+<tr><th id="570">570</th><td><dfn class="tu decl def fn" id="xen_get_timecount" title='xen_get_timecount' data-type='unsigned int xen_get_timecount(struct timecounter * tc)' data-ref="xen_get_timecount" data-ref-filename="xen_get_timecount">xen_get_timecount</dfn>(<b>struct</b> <a class="type" href="../../../sys/timetc.h.html#timecounter" title='timecounter' data-ref="timecounter" data-ref-filename="timecounter">timecounter</a> *<dfn class="local col7 decl" id="37tc" title='tc' data-type='struct timecounter *' data-ref="37tc" data-ref-filename="37tc">tc</dfn>)</td></tr>
+<tr><th id="571">571</th><td>{</td></tr>
+<tr><th id="572">572</th><td></td></tr>
+<tr><th id="573">573</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((tc == &amp;xen_timecounter)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;tc == &amp;xen_timecounter&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 573))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col7 ref" href="#37tc" title='tc' data-ref="37tc" data-ref-filename="37tc">tc</a> == &amp;<a class="tu ref" href="#xen_timecounter" title='xen_timecounter' data-use='a' data-ref="xen_timecounter" data-ref-filename="xen_timecounter">xen_timecounter</a>);</td></tr>
+<tr><th id="574">574</th><td></td></tr>
+<tr><th id="575">575</th><td>	<b>return</b> (<em>unsigned</em>)<a class="tu ref fn" href="#xen_global_systime_ns" title='xen_global_systime_ns' data-use='c' data-ref="xen_global_systime_ns" data-ref-filename="xen_global_systime_ns">xen_global_systime_ns</a>();</td></tr>
+<tr><th id="576">576</th><td>}</td></tr>
+<tr><th id="577">577</th><td></td></tr>
+<tr><th id="578">578</th><td><i  data-doc="xen_rtc_get">/*</i></td></tr>
+<tr><th id="579">579</th><td><i  data-doc="xen_rtc_get"> * xen_rtc_get(todr, tv)</i></td></tr>
+<tr><th id="580">580</th><td><i  data-doc="xen_rtc_get"> *</i></td></tr>
+<tr><th id="581">581</th><td><i  data-doc="xen_rtc_get"> *	Get the current real-time clock from the Xen wall clock time</i></td></tr>
+<tr><th id="582">582</th><td><i  data-doc="xen_rtc_get"> *	and vCPU system time adjustment.</i></td></tr>
+<tr><th id="583">583</th><td><i  data-doc="xen_rtc_get"> */</i></td></tr>
+<tr><th id="584">584</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="585">585</th><td><dfn class="tu decl def fn" id="xen_rtc_get" title='xen_rtc_get' data-type='int xen_rtc_get(struct todr_chip_handle * todr, struct timeval * tvp)' data-ref="xen_rtc_get" data-ref-filename="xen_rtc_get">xen_rtc_get</dfn>(<b>struct</b> <a class="type" href="../../../dev/clock_subr.h.html#todr_chip_handle" title='todr_chip_handle' data-ref="todr_chip_handle" data-ref-filename="todr_chip_handle">todr_chip_handle</a> *<dfn class="local col8 decl" id="38todr" title='todr' data-type='struct todr_chip_handle *' data-ref="38todr" data-ref-filename="38todr">todr</dfn>, <b>struct</b> <a class="type" href="../../../sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> *<dfn class="local col9 decl" id="39tvp" title='tvp' data-type='struct timeval *' data-ref="39tvp" data-ref-filename="39tvp">tvp</dfn>)</td></tr>
+<tr><th id="586">586</th><td>{</td></tr>
+<tr><th id="587">587</th><td>	<b>struct</b> <a class="type" href="../../../sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col0 decl" id="40ts" title='ts' data-type='struct timespec' data-ref="40ts" data-ref-filename="40ts">ts</dfn>;</td></tr>
+<tr><th id="588">588</th><td></td></tr>
+<tr><th id="589">589</th><td>	<a class="tu ref fn" href="#xen_wallclock_time" title='xen_wallclock_time' data-use='c' data-ref="xen_wallclock_time" data-ref-filename="xen_wallclock_time">xen_wallclock_time</a>(&amp;<a class="local col0 ref" href="#40ts" title='ts' data-ref="40ts" data-ref-filename="40ts">ts</a>);</td></tr>
+<tr><th id="590">590</th><td>	<a class="macro" href="../../../sys/time.h.html#56" title="do { (tvp)-&gt;tv_sec = (&amp;ts)-&gt;tv_sec; (tvp)-&gt;tv_usec = (suseconds_t)(&amp;ts)-&gt;tv_nsec / 1000; } while ( 0)" data-ref="_M/TIMESPEC_TO_TIMEVAL">TIMESPEC_TO_TIMEVAL</a>(<a class="local col9 ref" href="#39tvp" title='tvp' data-ref="39tvp" data-ref-filename="39tvp">tvp</a>, &amp;<a class="local col0 ref" href="#40ts" title='ts' data-ref="40ts" data-ref-filename="40ts">ts</a>);</td></tr>
+<tr><th id="591">591</th><td></td></tr>
+<tr><th id="592">592</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="593">593</th><td>}</td></tr>
+<tr><th id="594">594</th><td></td></tr>
+<tr><th id="595">595</th><td><i  data-doc="xen_rtc_set">/*</i></td></tr>
+<tr><th id="596">596</th><td><i  data-doc="xen_rtc_set"> * xen_rtc_set(todr, tv)</i></td></tr>
+<tr><th id="597">597</th><td><i  data-doc="xen_rtc_set"> *</i></td></tr>
+<tr><th id="598">598</th><td><i  data-doc="xen_rtc_set"> *	Set the Xen wall clock time, if we can.</i></td></tr>
+<tr><th id="599">599</th><td><i  data-doc="xen_rtc_set"> */</i></td></tr>
+<tr><th id="600">600</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="601">601</th><td><dfn class="tu decl def fn" id="xen_rtc_set" title='xen_rtc_set' data-type='int xen_rtc_set(struct todr_chip_handle * todr, struct timeval * tvp)' data-ref="xen_rtc_set" data-ref-filename="xen_rtc_set">xen_rtc_set</dfn>(<b>struct</b> <a class="type" href="../../../dev/clock_subr.h.html#todr_chip_handle" title='todr_chip_handle' data-ref="todr_chip_handle" data-ref-filename="todr_chip_handle">todr_chip_handle</a> *<dfn class="local col1 decl" id="41todr" title='todr' data-type='struct todr_chip_handle *' data-ref="41todr" data-ref-filename="41todr">todr</dfn>, <b>struct</b> <a class="type" href="../../../sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> *<dfn class="local col2 decl" id="42tvp" title='tvp' data-type='struct timeval *' data-ref="42tvp" data-ref-filename="42tvp">tvp</dfn>)</td></tr>
+<tr><th id="602">602</th><td>{</td></tr>
+<tr><th id="603">603</th><td><u>#<span data-ppcond="603">ifdef</span> <span class="macro" data-ref="_M/DOM0OPS">DOM0OPS</span></u></td></tr>
+<tr><th id="604">604</th><td>	<b>struct</b> clock_ymdhms dt;</td></tr>
+<tr><th id="605">605</th><td>	xen_platform_op_t op;</td></tr>
+<tr><th id="606">606</th><td>	uint64_t systime_ns;</td></tr>
+<tr><th id="607">607</th><td></td></tr>
+<tr><th id="608">608</th><td>	<b>if</b> (xendomain_is_privileged()) {</td></tr>
+<tr><th id="609">609</th><td>		<i>/* Convert to ymdhms and set the x86 ISA RTC.  */</i></td></tr>
+<tr><th id="610">610</th><td>		clock_secs_to_ymdhms(tvp-&gt;tv_sec, &amp;dt);</td></tr>
+<tr><th id="611">611</th><td>		rtc_set_ymdhms(NULL, &amp;dt);</td></tr>
+<tr><th id="612">612</th><td></td></tr>
+<tr><th id="613">613</th><td>		<i>/* Get the global system time so we can preserve it.  */</i></td></tr>
+<tr><th id="614">614</th><td>		systime_ns = xen_global_systime_ns();</td></tr>
+<tr><th id="615">615</th><td></td></tr>
+<tr><th id="616">616</th><td>		<i>/* Set the hypervisor wall clock time.  */</i></td></tr>
+<tr><th id="617">617</th><td>		op.cmd = XENPF_settime;</td></tr>
+<tr><th id="618">618</th><td>		op.u.settime.secs = tvp-&gt;tv_sec;</td></tr>
+<tr><th id="619">619</th><td>		op.u.settime.nsecs = tvp-&gt;tv_usec * <var>1000</var>;</td></tr>
+<tr><th id="620">620</th><td>		op.u.settime.system_time = systime_ns;</td></tr>
+<tr><th id="621">621</th><td>		<b>return</b> HYPERVISOR_platform_op(&amp;op);</td></tr>
+<tr><th id="622">622</th><td>	}</td></tr>
+<tr><th id="623">623</th><td><u>#<span data-ppcond="603">endif</span></u></td></tr>
+<tr><th id="624">624</th><td></td></tr>
+<tr><th id="625">625</th><td>	<i>/* XXX Should this fail if not on privileged dom0?  */</i></td></tr>
+<tr><th id="626">626</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="627">627</th><td>}</td></tr>
+<tr><th id="628">628</th><td></td></tr>
+<tr><th id="629">629</th><td><i>/*</i></td></tr>
+<tr><th id="630">630</th><td><i> * xen_delay(n)</i></td></tr>
+<tr><th id="631">631</th><td><i> *</i></td></tr>
+<tr><th id="632">632</th><td><i> *	Wait approximately n microseconds.</i></td></tr>
+<tr><th id="633">633</th><td><i> */</i></td></tr>
+<tr><th id="634">634</th><td><em>void</em></td></tr>
+<tr><th id="635">635</th><td><dfn class="decl def fn" id="xen_delay" title='xen_delay' data-ref="xen_delay" data-ref-filename="xen_delay">xen_delay</dfn>(<em>unsigned</em> <dfn class="local col3 decl" id="43n" title='n' data-type='unsigned int' data-ref="43n" data-ref-filename="43n">n</dfn>)</td></tr>
+<tr><th id="636">636</th><td>{</td></tr>
+<tr><th id="637">637</th><td>	<em>int</em> <dfn class="local col4 decl" id="44bound" title='bound' data-type='int' data-ref="44bound" data-ref-filename="44bound">bound</dfn>;</td></tr>
+<tr><th id="638">638</th><td></td></tr>
+<tr><th id="639">639</th><td>	<i>/* Bind to the CPU so we don't compare tsc on different CPUs.  */</i></td></tr>
+<tr><th id="640">640</th><td>	<a class="local col4 ref" href="#44bound" title='bound' data-ref="44bound" data-ref-filename="44bound">bound</a> = <a class="ref fn" href="../../../sys/lwp.h.html#curlwp_bind" title='curlwp_bind' data-ref="curlwp_bind" data-ref-filename="curlwp_bind">curlwp_bind</a>();</td></tr>
+<tr><th id="641">641</th><td></td></tr>
+<tr><th id="642">642</th><td>	<i>/* Short wait (&lt;500us) or long wait?  */</i></td></tr>
+<tr><th id="643">643</th><td>	<b>if</b> (<a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a> &lt; <var>500000</var>) {</td></tr>
+<tr><th id="644">644</th><td>		<i>/*</i></td></tr>
+<tr><th id="645">645</th><td><i>		 * Xen system time is not precise enough for short</i></td></tr>
+<tr><th id="646">646</th><td><i>		 * delays, so use the tsc instead.</i></td></tr>
+<tr><th id="647">647</th><td><i>		 *</i></td></tr>
+<tr><th id="648">648</th><td><i>		 * We work with the current tsc frequency, and figure</i></td></tr>
+<tr><th id="649">649</th><td><i>		 * that if it changes while we're delaying, we've</i></td></tr>
+<tr><th id="650">650</th><td><i>		 * probably delayed long enough -- up to 500us.</i></td></tr>
+<tr><th id="651">651</th><td><i>		 *</i></td></tr>
+<tr><th id="652">652</th><td><i>		 * We do not use cpu_frequency(ci), which uses a</i></td></tr>
+<tr><th id="653">653</th><td><i>		 * quantity detected at boot time, and which may have</i></td></tr>
+<tr><th id="654">654</th><td><i>		 * changed by now if Xen has migrated this vCPU to</i></td></tr>
+<tr><th id="655">655</th><td><i>		 * another pCPU.</i></td></tr>
+<tr><th id="656">656</th><td><i>		 *</i></td></tr>
+<tr><th id="657">657</th><td><i>		 * XXX How long does it take to migrate pCPUs?</i></td></tr>
+<tr><th id="658">658</th><td><i>		 */</i></td></tr>
+<tr><th id="659">659</th><td>		<em>volatile</em> <b>struct</b> <a class="type" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info" title='vcpu_time_info' data-ref="vcpu_time_info" data-ref-filename="vcpu_time_info">vcpu_time_info</a> *<dfn class="local col5 decl" id="45vt" title='vt' data-type='volatile struct vcpu_time_info *' data-ref="45vt" data-ref-filename="45vt">vt</dfn>;</td></tr>
+<tr><th id="660">660</th><td>		<b>struct</b> <a class="type" href="#xen_vcputime_ticket" title='xen_vcputime_ticket' data-ref="xen_vcputime_ticket" data-ref-filename="xen_vcputime_ticket">xen_vcputime_ticket</a> <dfn class="local col6 decl" id="46ticket" title='ticket' data-type='struct xen_vcputime_ticket' data-ref="46ticket" data-ref-filename="46ticket">ticket</dfn>;</td></tr>
+<tr><th id="661">661</th><td>		<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col7 decl" id="47tsc_start" title='tsc_start' data-type='uint64_t' data-ref="47tsc_start" data-ref-filename="47tsc_start">tsc_start</dfn>, <dfn class="local col8 decl" id="48last_tsc" title='last_tsc' data-type='uint64_t' data-ref="48last_tsc" data-ref-filename="48last_tsc">last_tsc</dfn>, <dfn class="local col9 decl" id="49tsc" title='tsc' data-type='uint64_t' data-ref="49tsc" data-ref-filename="49tsc">tsc</dfn>;</td></tr>
+<tr><th id="662">662</th><td>		<a class="typedef" href="../../../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="50tsc_to_system_mul" title='tsc_to_system_mul' data-type='uint32_t' data-ref="50tsc_to_system_mul" data-ref-filename="50tsc_to_system_mul">tsc_to_system_mul</dfn>;</td></tr>
+<tr><th id="663">663</th><td>		<a class="typedef" href="../../../sys/stdint.h.html#int8_t" title='int8_t' data-type='__int8_t' data-ref="int8_t" data-ref-filename="int8_t">int8_t</a> <dfn class="local col1 decl" id="51tsc_shift" title='tsc_shift' data-type='int8_t' data-ref="51tsc_shift" data-ref-filename="51tsc_shift">tsc_shift</dfn>;</td></tr>
+<tr><th id="664">664</th><td></td></tr>
+<tr><th id="665">665</th><td>		<i>/* Get the starting tsc and tsc frequency.  */</i></td></tr>
+<tr><th id="666">666</th><td>		<b>do</b> {</td></tr>
+<tr><th id="667">667</th><td>			<a class="local col5 ref" href="#45vt" title='vt' data-ref="45vt" data-ref-filename="45vt">vt</a> = <a class="tu ref fn" href="#xen_vcputime_enter" title='xen_vcputime_enter' data-use='c' data-ref="xen_vcputime_enter" data-ref-filename="xen_vcputime_enter">xen_vcputime_enter</a>(&amp;<a class="local col6 ref" href="#46ticket" title='ticket' data-ref="46ticket" data-ref-filename="46ticket">ticket</a>);</td></tr>
+<tr><th id="668">668</th><td>			<a class="local col7 ref" href="#47tsc_start" title='tsc_start' data-ref="47tsc_start" data-ref-filename="47tsc_start">tsc_start</a> = <a class="local col8 ref" href="#48last_tsc" title='last_tsc' data-ref="48last_tsc" data-ref-filename="48last_tsc">last_tsc</a> = <a class="tu ref fn" href="#xen_rdtsc" title='xen_rdtsc' data-use='c' data-ref="xen_rdtsc" data-ref-filename="xen_rdtsc">xen_rdtsc</a>();</td></tr>
+<tr><th id="669">669</th><td>			<a class="local col0 ref" href="#50tsc_to_system_mul" title='tsc_to_system_mul' data-ref="50tsc_to_system_mul" data-ref-filename="50tsc_to_system_mul">tsc_to_system_mul</a> = <a class="local col5 ref" href="#45vt" title='vt' data-ref="45vt" data-ref-filename="45vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::tsc_to_system_mul" title='vcpu_time_info::tsc_to_system_mul' data-ref="vcpu_time_info::tsc_to_system_mul" data-ref-filename="vcpu_time_info..tsc_to_system_mul">tsc_to_system_mul</a>;</td></tr>
+<tr><th id="670">670</th><td>			<a class="local col1 ref" href="#51tsc_shift" title='tsc_shift' data-ref="51tsc_shift" data-ref-filename="51tsc_shift">tsc_shift</a> = <a class="local col5 ref" href="#45vt" title='vt' data-ref="45vt" data-ref-filename="45vt">vt</a>-&gt;<a class="ref field" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#vcpu_time_info::tsc_shift" title='vcpu_time_info::tsc_shift' data-ref="vcpu_time_info::tsc_shift" data-ref-filename="vcpu_time_info..tsc_shift">tsc_shift</a>;</td></tr>
+<tr><th id="671">671</th><td>		} <b>while</b> (!<a class="tu ref fn" href="#xen_vcputime_exit" title='xen_vcputime_exit' data-use='c' data-ref="xen_vcputime_exit" data-ref-filename="xen_vcputime_exit">xen_vcputime_exit</a>(<a class="local col5 ref" href="#45vt" title='vt' data-ref="45vt" data-ref-filename="45vt">vt</a>, &amp;<a class="local col6 ref" href="#46ticket" title='ticket' data-ref="46ticket" data-ref-filename="46ticket">ticket</a>));</td></tr>
+<tr><th id="672">672</th><td></td></tr>
+<tr><th id="673">673</th><td>		<i>/*</i></td></tr>
+<tr><th id="674">674</th><td><i>		 * Wait until as many tsc ticks as there are in n</i></td></tr>
+<tr><th id="675">675</th><td><i>		 * microseconds have elapsed, or the tsc has gone</i></td></tr>
+<tr><th id="676">676</th><td><i>		 * backwards meaning we've probably migrated pCPUs.</i></td></tr>
+<tr><th id="677">677</th><td><i>		 */</i></td></tr>
+<tr><th id="678">678</th><td>		<b>for</b> (;;) {</td></tr>
+<tr><th id="679">679</th><td>			<a class="local col9 ref" href="#49tsc" title='tsc' data-ref="49tsc" data-ref-filename="49tsc">tsc</a> = <a class="tu ref fn" href="#xen_rdtsc" title='xen_rdtsc' data-use='c' data-ref="xen_rdtsc" data-ref-filename="xen_rdtsc">xen_rdtsc</a>();</td></tr>
+<tr><th id="680">680</th><td>			<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((tsc &lt; last_tsc) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col9 ref" href="#49tsc" title='tsc' data-ref="49tsc" data-ref-filename="49tsc">tsc</a> &lt; <a class="local col8 ref" href="#48last_tsc" title='last_tsc' data-ref="48last_tsc" data-ref-filename="48last_tsc">last_tsc</a>))</td></tr>
+<tr><th id="681">681</th><td>				<b>break</b>;</td></tr>
+<tr><th id="682">682</th><td>			<b>if</b> (<a class="tu ref fn" href="#xen_tsc_to_ns_delta" title='xen_tsc_to_ns_delta' data-use='c' data-ref="xen_tsc_to_ns_delta" data-ref-filename="xen_tsc_to_ns_delta">xen_tsc_to_ns_delta</a>(<a class="local col9 ref" href="#49tsc" title='tsc' data-ref="49tsc" data-ref-filename="49tsc">tsc</a> - <a class="local col7 ref" href="#47tsc_start" title='tsc_start' data-ref="47tsc_start" data-ref-filename="47tsc_start">tsc_start</a>,</td></tr>
+<tr><th id="683">683</th><td>				<a class="local col0 ref" href="#50tsc_to_system_mul" title='tsc_to_system_mul' data-ref="50tsc_to_system_mul" data-ref-filename="50tsc_to_system_mul">tsc_to_system_mul</a>, <a class="local col1 ref" href="#51tsc_shift" title='tsc_shift' data-ref="51tsc_shift" data-ref-filename="51tsc_shift">tsc_shift</a>)/<var>1000</var> &gt;= <a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a>)</td></tr>
+<tr><th id="684">684</th><td>				<b>break</b>;</td></tr>
+<tr><th id="685">685</th><td>			<a class="local col8 ref" href="#48last_tsc" title='last_tsc' data-ref="48last_tsc" data-ref-filename="48last_tsc">last_tsc</a> = <a class="local col9 ref" href="#49tsc" title='tsc' data-ref="49tsc" data-ref-filename="49tsc">tsc</a>;</td></tr>
+<tr><th id="686">686</th><td>		}</td></tr>
+<tr><th id="687">687</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="688">688</th><td>		<i>/*</i></td></tr>
+<tr><th id="689">689</th><td><i>		 * Use the Xen system time for &gt;=500us delays.  From my</i></td></tr>
+<tr><th id="690">690</th><td><i>		 * testing, it seems to sometimes run backward by about</i></td></tr>
+<tr><th id="691">691</th><td><i>		 * 110us, which is not so bad.</i></td></tr>
+<tr><th id="692">692</th><td><i>		 */</i></td></tr>
+<tr><th id="693">693</th><td>		<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col2 decl" id="52n_ns" title='n_ns' data-type='uint64_t' data-ref="52n_ns" data-ref-filename="52n_ns">n_ns</dfn> = <var>1000</var>*(<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>)<a class="local col3 ref" href="#43n" title='n' data-ref="43n" data-ref-filename="43n">n</a>;</td></tr>
+<tr><th id="694">694</th><td>		<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col3 decl" id="53start_ns" title='start_ns' data-type='uint64_t' data-ref="53start_ns" data-ref-filename="53start_ns">start_ns</dfn>;</td></tr>
+<tr><th id="695">695</th><td></td></tr>
+<tr><th id="696">696</th><td>		<i>/* Get the start time.  */</i></td></tr>
+<tr><th id="697">697</th><td>		<a class="local col3 ref" href="#53start_ns" title='start_ns' data-ref="53start_ns" data-ref-filename="53start_ns">start_ns</a> = <a class="tu ref fn" href="#xen_vcputime_raw_systime_ns" title='xen_vcputime_raw_systime_ns' data-use='c' data-ref="xen_vcputime_raw_systime_ns" data-ref-filename="xen_vcputime_raw_systime_ns">xen_vcputime_raw_systime_ns</a>();</td></tr>
+<tr><th id="698">698</th><td></td></tr>
+<tr><th id="699">699</th><td>		<i>/* Wait until the system time has passed the end.  */</i></td></tr>
+<tr><th id="700">700</th><td>		<b>do</b> {</td></tr>
+<tr><th id="701">701</th><td>			<a class="ref fn" href="../include/amd64/hypercalls.h.html#HYPERVISOR_yield" title='HYPERVISOR_yield' data-ref="HYPERVISOR_yield" data-ref-filename="HYPERVISOR_yield">HYPERVISOR_yield</a>();</td></tr>
+<tr><th id="702">702</th><td>		} <b>while</b> (<a class="tu ref fn" href="#xen_vcputime_raw_systime_ns" title='xen_vcputime_raw_systime_ns' data-use='c' data-ref="xen_vcputime_raw_systime_ns" data-ref-filename="xen_vcputime_raw_systime_ns">xen_vcputime_raw_systime_ns</a>() - <a class="local col3 ref" href="#53start_ns" title='start_ns' data-ref="53start_ns" data-ref-filename="53start_ns">start_ns</a> &lt; <a class="local col2 ref" href="#52n_ns" title='n_ns' data-ref="52n_ns" data-ref-filename="52n_ns">n_ns</a>);</td></tr>
+<tr><th id="703">703</th><td>	}</td></tr>
+<tr><th id="704">704</th><td></td></tr>
+<tr><th id="705">705</th><td>	<i>/* Unbind from the CPU if we weren't already bound.  */</i></td></tr>
+<tr><th id="706">706</th><td>	<a class="ref fn" href="../../../sys/lwp.h.html#curlwp_bindx" title='curlwp_bindx' data-ref="curlwp_bindx" data-ref-filename="curlwp_bindx">curlwp_bindx</a>(<a class="local col4 ref" href="#44bound" title='bound' data-ref="44bound" data-ref-filename="44bound">bound</a>);</td></tr>
+<tr><th id="707">707</th><td>}</td></tr>
+<tr><th id="708">708</th><td></td></tr>
+<tr><th id="709">709</th><td><i>/*</i></td></tr>
+<tr><th id="710">710</th><td><i> * xen_suspendclocks(ci)</i></td></tr>
+<tr><th id="711">711</th><td><i> *</i></td></tr>
+<tr><th id="712">712</th><td><i> *	Stop handling the Xen timer event on the CPU of ci.  Caller</i></td></tr>
+<tr><th id="713">713</th><td><i> *	must be running on and bound to ci's CPU.</i></td></tr>
+<tr><th id="714">714</th><td><i> *</i></td></tr>
+<tr><th id="715">715</th><td><i> *	Actually, caller must have kpreemption disabled, because that's</i></td></tr>
+<tr><th id="716">716</th><td><i> *	easier to assert at the moment.</i></td></tr>
+<tr><th id="717">717</th><td><i> */</i></td></tr>
+<tr><th id="718">718</th><td><em>void</em></td></tr>
+<tr><th id="719">719</th><td><dfn class="decl def fn" id="xen_suspendclocks" title='xen_suspendclocks' data-ref="xen_suspendclocks" data-ref-filename="xen_suspendclocks">xen_suspendclocks</dfn>(<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col4 decl" id="54ci" title='ci' data-type='struct cpu_info *' data-ref="54ci" data-ref-filename="54ci">ci</dfn>)</td></tr>
+<tr><th id="720">720</th><td>{</td></tr>
+<tr><th id="721">721</th><td>	<em>int</em> <dfn class="local col5 decl" id="55evtch" title='evtch' data-type='int' data-ref="55evtch" data-ref-filename="55evtch">evtch</dfn>;</td></tr>
+<tr><th id="722">722</th><td></td></tr>
+<tr><th id="723">723</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci == x86_curcpu())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci == curcpu()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 723))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col4 ref" href="#54ci" title='ci' data-ref="54ci" data-ref-filename="54ci">ci</a> == <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="724">724</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((kpreempt_disabled())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;kpreempt_disabled()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 724))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</a>());</td></tr>
+<tr><th id="725">725</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci-&gt;ci_xen_timer_intrhand != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci-&gt;ci_xen_timer_intrhand != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 725))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col4 ref" href="#54ci" title='ci' data-ref="54ci" data-ref-filename="54ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_timer_intrhand" title='cpu_info::ci_xen_timer_intrhand' data-ref="cpu_info::ci_xen_timer_intrhand" data-ref-filename="cpu_info..ci_xen_timer_intrhand">ci_xen_timer_intrhand</a> != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="726">726</th><td></td></tr>
+<tr><th id="727">727</th><td>	<a class="local col5 ref" href="#55evtch" title='evtch' data-ref="55evtch" data-ref-filename="55evtch">evtch</a> = <a class="ref fn" href="../include/evtchn.h.html#unbind_virq_from_evtch" title='unbind_virq_from_evtch' data-ref="unbind_virq_from_evtch" data-ref-filename="unbind_virq_from_evtch">unbind_virq_from_evtch</a>(<a class="macro" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#171" title="0" data-ref="_M/VIRQ_TIMER">VIRQ_TIMER</a>);</td></tr>
+<tr><th id="728">728</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((evtch != -1)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;evtch != -1&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 728))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col5 ref" href="#55evtch" title='evtch' data-ref="55evtch" data-ref-filename="55evtch">evtch</a> != -<var>1</var>);</td></tr>
+<tr><th id="729">729</th><td></td></tr>
+<tr><th id="730">730</th><td>	<a class="ref fn" href="../include/hypervisor.h.html#hypervisor_mask_event" title='hypervisor_mask_event' data-ref="hypervisor_mask_event" data-ref-filename="hypervisor_mask_event">hypervisor_mask_event</a>(<a class="local col5 ref" href="#55evtch" title='evtch' data-ref="55evtch" data-ref-filename="55evtch">evtch</a>);</td></tr>
+<tr><th id="731">731</th><td>	<a class="ref fn" href="../include/intr.h.html#xen_intr_disestablish" title='xen_intr_disestablish' data-ref="xen_intr_disestablish" data-ref-filename="xen_intr_disestablish">xen_intr_disestablish</a>(<a class="local col4 ref" href="#54ci" title='ci' data-ref="54ci" data-ref-filename="54ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_timer_intrhand" title='cpu_info::ci_xen_timer_intrhand' data-ref="cpu_info::ci_xen_timer_intrhand" data-ref-filename="cpu_info..ci_xen_timer_intrhand">ci_xen_timer_intrhand</a>);</td></tr>
+<tr><th id="732">732</th><td>	<a class="local col4 ref" href="#54ci" title='ci' data-ref="54ci" data-ref-filename="54ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_timer_intrhand" title='cpu_info::ci_xen_timer_intrhand' data-ref="cpu_info::ci_xen_timer_intrhand" data-ref-filename="cpu_info..ci_xen_timer_intrhand">ci_xen_timer_intrhand</a> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="733">733</th><td></td></tr>
+<tr><th id="734">734</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#aprint_verbose" title='aprint_verbose' data-ref="aprint_verbose" data-ref-filename="aprint_verbose">aprint_verbose</a>(<q>"Xen clock: removed event channel %d\n"</q>, <a class="local col5 ref" href="#55evtch" title='evtch' data-ref="55evtch" data-ref-filename="55evtch">evtch</a>);</td></tr>
+<tr><th id="735">735</th><td></td></tr>
+<tr><th id="736">736</th><td>	<i>/* We'd better not have switched CPUs.  */</i></td></tr>
+<tr><th id="737">737</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci == x86_curcpu())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci == curcpu()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 737))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col4 ref" href="#54ci" title='ci' data-ref="54ci" data-ref-filename="54ci">ci</a> == <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="738">738</th><td>}</td></tr>
+<tr><th id="739">739</th><td></td></tr>
+<tr><th id="740">740</th><td><i>/*</i></td></tr>
+<tr><th id="741">741</th><td><i> * xen_resumeclocks(ci)</i></td></tr>
+<tr><th id="742">742</th><td><i> *</i></td></tr>
+<tr><th id="743">743</th><td><i> *	Start handling the Xen timer event on the CPU of ci.  Arm the</i></td></tr>
+<tr><th id="744">744</th><td><i> *	Xen timer.  Caller must be running on and bound to ci's CPU.</i></td></tr>
+<tr><th id="745">745</th><td><i> *</i></td></tr>
+<tr><th id="746">746</th><td><i> *	Actually, caller must have kpreemption disabled, because that's</i></td></tr>
+<tr><th id="747">747</th><td><i> *	easier to assert at the moment.</i></td></tr>
+<tr><th id="748">748</th><td><i> */</i></td></tr>
+<tr><th id="749">749</th><td><em>void</em></td></tr>
+<tr><th id="750">750</th><td><dfn class="decl def fn" id="xen_resumeclocks" title='xen_resumeclocks' data-ref="xen_resumeclocks" data-ref-filename="xen_resumeclocks">xen_resumeclocks</dfn>(<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col6 decl" id="56ci" title='ci' data-type='struct cpu_info *' data-ref="56ci" data-ref-filename="56ci">ci</dfn>)</td></tr>
+<tr><th id="751">751</th><td>{</td></tr>
+<tr><th id="752">752</th><td>	<em>char</em> <dfn class="local col7 decl" id="57intr_xname" title='intr_xname' data-type='char [256]' data-ref="57intr_xname" data-ref-filename="57intr_xname">intr_xname</dfn>[<a class="macro" href="../../../sys/intr.h.html#36" title="256" data-ref="_M/INTRDEVNAMEBUF">INTRDEVNAMEBUF</a>];</td></tr>
+<tr><th id="753">753</th><td>	<em>int</em> <dfn class="local col8 decl" id="58evtch" title='evtch' data-type='int' data-ref="58evtch" data-ref-filename="58evtch">evtch</dfn>;</td></tr>
+<tr><th id="754">754</th><td>	<em>int</em> <dfn class="local col9 decl" id="59error" title='error' data-type='int' data-ref="59error" data-ref-filename="59error">error</dfn> <a class="macro" href="../../../sys/cdefs.h.html#283" title="" data-ref="_M/__diagused">__diagused</a>;</td></tr>
+<tr><th id="755">755</th><td></td></tr>
+<tr><th id="756">756</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci == x86_curcpu())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci == curcpu()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 756))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a> == <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="757">757</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((kpreempt_disabled())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;kpreempt_disabled()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 757))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/systm.h.html#kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</a>());</td></tr>
+<tr><th id="758">758</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci-&gt;ci_xen_timer_intrhand == ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci-&gt;ci_xen_timer_intrhand == NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 758))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_timer_intrhand" title='cpu_info::ci_xen_timer_intrhand' data-ref="cpu_info::ci_xen_timer_intrhand" data-ref-filename="cpu_info..ci_xen_timer_intrhand">ci_xen_timer_intrhand</a> == <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="759">759</th><td></td></tr>
+<tr><th id="760">760</th><td>	<a class="local col8 ref" href="#58evtch" title='evtch' data-ref="58evtch" data-ref-filename="58evtch">evtch</a> = <a class="ref fn" href="../include/evtchn.h.html#bind_virq_to_evtch" title='bind_virq_to_evtch' data-ref="bind_virq_to_evtch" data-ref-filename="bind_virq_to_evtch">bind_virq_to_evtch</a>(<a class="macro" href="../../../external/mit/xen-include-public/dist/xen/include/public/xen.h.html#171" title="0" data-ref="_M/VIRQ_TIMER">VIRQ_TIMER</a>);</td></tr>
+<tr><th id="761">761</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((evtch != -1)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;evtch != -1&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 761))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col8 ref" href="#58evtch" title='evtch' data-ref="58evtch" data-ref-filename="58evtch">evtch</a> != -<var>1</var>);</td></tr>
+<tr><th id="762">762</th><td></td></tr>
+<tr><th id="763">763</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a>(<a class="local col7 ref" href="#57intr_xname" title='intr_xname' data-ref="57intr_xname" data-ref-filename="57intr_xname">intr_xname</a>, <b>sizeof</b>(<a class="local col7 ref" href="#57intr_xname" title='intr_xname' data-ref="57intr_xname" data-ref-filename="57intr_xname">intr_xname</a>), <q>"%s clock"</q>,</td></tr>
+<tr><th id="764">764</th><td>	    <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>));</td></tr>
+<tr><th id="765">765</th><td>	<i>/* XXX sketchy function pointer cast -- fix the API, please */</i></td></tr>
+<tr><th id="766">766</th><td>	<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_timer_intrhand" title='cpu_info::ci_xen_timer_intrhand' data-ref="cpu_info::ci_xen_timer_intrhand" data-ref-filename="cpu_info..ci_xen_timer_intrhand">ci_xen_timer_intrhand</a> = <a class="ref fn" href="../include/intr.h.html#xen_intr_establish_xname" title='xen_intr_establish_xname' data-ref="xen_intr_establish_xname" data-ref-filename="xen_intr_establish_xname">xen_intr_establish_xname</a>(-<var>1</var>, &amp;<a class="ref" href="../../x86/include/pic.h.html#xen_pic" title='xen_pic' data-ref="xen_pic" data-ref-filename="xen_pic">xen_pic</a>, <a class="local col8 ref" href="#58evtch" title='evtch' data-ref="58evtch" data-ref-filename="58evtch">evtch</a>,</td></tr>
+<tr><th id="767">767</th><td>	    <a class="macro" href="../../x86/include/intrdefs.h.html#22" title="3" data-ref="_M/IST_LEVEL">IST_LEVEL</a>, <a class="macro" href="../../../sys/intr.h.html#88" title="0x7" data-ref="_M/IPL_CLOCK">IPL_CLOCK</a>, (<em>int</em> (*)(<em>void</em> *))<a class="tu ref fn" href="#xen_timer_handler" title='xen_timer_handler' data-use='r' data-ref="xen_timer_handler" data-ref-filename="xen_timer_handler">xen_timer_handler</a>, <a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>, <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>,</td></tr>
+<tr><th id="768">768</th><td>	    <a class="local col7 ref" href="#57intr_xname" title='intr_xname' data-ref="57intr_xname" data-ref-filename="57intr_xname">intr_xname</a>);</td></tr>
+<tr><th id="769">769</th><td>	<b>if</b> (<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_timer_intrhand" title='cpu_info::ci_xen_timer_intrhand' data-ref="cpu_info::ci_xen_timer_intrhand" data-ref-filename="cpu_info..ci_xen_timer_intrhand">ci_xen_timer_intrhand</a> == <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="770">770</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"failed to establish timer interrupt handler"</q>);</td></tr>
+<tr><th id="771">771</th><td></td></tr>
+<tr><th id="772">772</th><td>	<a class="ref fn" href="../include/hypervisor.h.html#hypervisor_unmask_event" title='hypervisor_unmask_event' data-ref="hypervisor_unmask_event" data-ref-filename="hypervisor_unmask_event">hypervisor_unmask_event</a>(<a class="local col8 ref" href="#58evtch" title='evtch' data-ref="58evtch" data-ref-filename="58evtch">evtch</a>);</td></tr>
+<tr><th id="773">773</th><td></td></tr>
+<tr><th id="774">774</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#aprint_verbose" title='aprint_verbose' data-ref="aprint_verbose" data-ref-filename="aprint_verbose">aprint_verbose</a>(<q>"Xen %s: using event channel %d\n"</q>, <a class="local col7 ref" href="#57intr_xname" title='intr_xname' data-ref="57intr_xname" data-ref-filename="57intr_xname">intr_xname</a>, <a class="local col8 ref" href="#58evtch" title='evtch' data-ref="58evtch" data-ref-filename="58evtch">evtch</a>);</td></tr>
+<tr><th id="775">775</th><td></td></tr>
+<tr><th id="776">776</th><td>	<i>/* Disarm the periodic timer on Xen&gt;=3.1 which is allegedly buggy.  */</i></td></tr>
+<tr><th id="777">777</th><td>	<b>if</b> (<a class="macro" href="../include/hypervisor.h.html#156" title="(((xen_version) &amp; 0xffff0000) &gt;&gt; 16)" data-ref="_M/XEN_MAJOR">XEN_MAJOR</a>(<a class="ref" href="../include/hypervisor.h.html#xen_version" title='xen_version' data-ref="xen_version" data-ref-filename="xen_version">xen_version</a>) &gt; <var>3</var> || <a class="macro" href="../include/hypervisor.h.html#157" title="((xen_version) &amp; 0x0000ffff)" data-ref="_M/XEN_MINOR">XEN_MINOR</a>(<a class="ref" href="../include/hypervisor.h.html#xen_version" title='xen_version' data-ref="xen_version" data-ref-filename="xen_version">xen_version</a>) &gt; <var>0</var>) {</td></tr>
+<tr><th id="778">778</th><td>		<a class="local col9 ref" href="#59error" title='error' data-ref="59error" data-ref-filename="59error">error</a> = <a class="ref fn" href="../include/amd64/hypercalls.h.html#HYPERVISOR_vcpu_op" title='HYPERVISOR_vcpu_op' data-ref="HYPERVISOR_vcpu_op" data-ref-filename="HYPERVISOR_vcpu_op">HYPERVISOR_vcpu_op</a>(<a class="macro" href="../../../external/mit/xen-include-public/dist/xen/include/public/vcpu.h.html#149" title="7" data-ref="_M/VCPUOP_stop_periodic_timer">VCPUOP_stop_periodic_timer</a>,</td></tr>
+<tr><th id="779">779</th><td>		    <a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_cpuid" title='cpu_info::ci_cpuid' data-ref="cpu_info::ci_cpuid" data-ref-filename="cpu_info..ci_cpuid">ci_cpuid</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="780">780</th><td>		<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((error == 0)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;error == 0&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 780))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col9 ref" href="#59error" title='error' data-ref="59error" data-ref-filename="59error">error</a> == <var>0</var>);</td></tr>
+<tr><th id="781">781</th><td>	}</td></tr>
+<tr><th id="782">782</th><td></td></tr>
+<tr><th id="783">783</th><td>	<i>/* Pretend the last hardclock happened right now.  */</i></td></tr>
+<tr><th id="784">784</th><td>	<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_hardclock_systime_ns" title='cpu_info::ci_xen_hardclock_systime_ns' data-ref="cpu_info::ci_xen_hardclock_systime_ns" data-ref-filename="cpu_info..ci_xen_hardclock_systime_ns">ci_xen_hardclock_systime_ns</a> = <a class="tu ref fn" href="#xen_vcputime_systime_ns" title='xen_vcputime_systime_ns' data-use='c' data-ref="xen_vcputime_systime_ns" data-ref-filename="xen_vcputime_systime_ns">xen_vcputime_systime_ns</a>();</td></tr>
+<tr><th id="785">785</th><td></td></tr>
+<tr><th id="786">786</th><td>	<i>/* Arm the one-shot timer.  */</i></td></tr>
+<tr><th id="787">787</th><td>	<a class="local col9 ref" href="#59error" title='error' data-ref="59error" data-ref-filename="59error">error</a> = <a class="ref fn" href="../include/amd64/hypercalls.h.html#HYPERVISOR_set_timer_op" title='HYPERVISOR_set_timer_op' data-ref="HYPERVISOR_set_timer_op" data-ref-filename="HYPERVISOR_set_timer_op">HYPERVISOR_set_timer_op</a>(<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_hardclock_systime_ns" title='cpu_info::ci_xen_hardclock_systime_ns' data-ref="cpu_info::ci_xen_hardclock_systime_ns" data-ref-filename="cpu_info..ci_xen_hardclock_systime_ns">ci_xen_hardclock_systime_ns</a> +</td></tr>
+<tr><th id="788">788</th><td>	    <a class="macro" href="#70" title="((uint64_t)1000000000ULL/hz)" data-ref="_M/NS_PER_TICK">NS_PER_TICK</a>);</td></tr>
+<tr><th id="789">789</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((error == 0)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;error == 0&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 789))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col9 ref" href="#59error" title='error' data-ref="59error" data-ref-filename="59error">error</a> == <var>0</var>);</td></tr>
+<tr><th id="790">790</th><td></td></tr>
+<tr><th id="791">791</th><td>	<i>/* We'd better not have switched CPUs.  */</i></td></tr>
+<tr><th id="792">792</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ci == x86_curcpu())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ci == curcpu()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 792))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col6 ref" href="#56ci" title='ci' data-ref="56ci" data-ref-filename="56ci">ci</a> == <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>());</td></tr>
+<tr><th id="793">793</th><td>}</td></tr>
+<tr><th id="794">794</th><td></td></tr>
+<tr><th id="795">795</th><td><i  data-doc="xen_timer_handler">/*</i></td></tr>
+<tr><th id="796">796</th><td><i  data-doc="xen_timer_handler"> * xen_timer_handler(cookie, frame)</i></td></tr>
+<tr><th id="797">797</th><td><i  data-doc="xen_timer_handler"> *</i></td></tr>
+<tr><th id="798">798</th><td><i  data-doc="xen_timer_handler"> *	Periodic Xen timer event handler for NetBSD hardclock.  Calls</i></td></tr>
+<tr><th id="799">799</th><td><i  data-doc="xen_timer_handler"> *	to this may get delayed, so we run hardclock as many times as</i></td></tr>
+<tr><th id="800">800</th><td><i  data-doc="xen_timer_handler"> *	we need to in order to cover the Xen system time that elapsed.</i></td></tr>
+<tr><th id="801">801</th><td><i  data-doc="xen_timer_handler"> *	After that, re-arm the timer to run again at the next tick.</i></td></tr>
+<tr><th id="802">802</th><td><i  data-doc="xen_timer_handler"> *	The cookie is the pointer to struct cpu_info.</i></td></tr>
+<tr><th id="803">803</th><td><i  data-doc="xen_timer_handler"> */</i></td></tr>
+<tr><th id="804">804</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="805">805</th><td><dfn class="tu decl def fn" id="xen_timer_handler" title='xen_timer_handler' data-type='int xen_timer_handler(void * cookie, struct clockframe * frame)' data-ref="xen_timer_handler" data-ref-filename="xen_timer_handler">xen_timer_handler</dfn>(<em>void</em> *<dfn class="local col0 decl" id="60cookie" title='cookie' data-type='void *' data-ref="60cookie" data-ref-filename="60cookie">cookie</dfn>, <b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#clockframe" title='clockframe' data-ref="clockframe" data-ref-filename="clockframe">clockframe</a> *<dfn class="local col1 decl" id="61frame" title='frame' data-type='struct clockframe *' data-ref="61frame" data-ref-filename="61frame">frame</dfn>)</td></tr>
+<tr><th id="806">806</th><td>{</td></tr>
+<tr><th id="807">807</th><td>	<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col2 decl" id="62ci" title='ci' data-type='struct cpu_info *' data-ref="62ci" data-ref-filename="62ci">ci</dfn> = <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="808">808</th><td>	<a class="typedef" href="../../../sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col3 decl" id="63last" title='last' data-type='uint64_t' data-ref="63last" data-ref-filename="63last">last</dfn>, <dfn class="local col4 decl" id="64now" title='now' data-type='uint64_t' data-ref="64now" data-ref-filename="64now">now</dfn>, <dfn class="local col5 decl" id="65delta" title='delta' data-type='uint64_t' data-ref="65delta" data-ref-filename="65delta">delta</dfn>, <dfn class="local col6 decl" id="66next" title='next' data-type='uint64_t' data-ref="66next" data-ref-filename="66next">next</dfn>;</td></tr>
+<tr><th id="809">809</th><td>	<em>int</em> <dfn class="local col7 decl" id="67error" title='error' data-type='int' data-ref="67error" data-ref-filename="67error">error</dfn>;</td></tr>
+<tr><th id="810">810</th><td></td></tr>
+<tr><th id="811">811</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((cpu_intr_p())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;cpu_intr_p()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 811))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../../sys/cpu.h.html#cpu_intr_p" title='cpu_intr_p' data-ref="cpu_intr_p" data-ref-filename="cpu_intr_p">cpu_intr_p</a>());</td></tr>
+<tr><th id="812">812</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((cookie == ci)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;cookie == ci&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/INSTALL_XEN3_DOMU/../../../../../../sys/arch/xen/xen/clock.c&quot;, 812))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col0 ref" href="#60cookie" title='cookie' data-ref="60cookie" data-ref-filename="60cookie">cookie</a> == <a class="local col2 ref" href="#62ci" title='ci' data-ref="62ci" data-ref-filename="62ci">ci</a>);</td></tr>
+<tr><th id="813">813</th><td></td></tr>
+<tr><th id="814">814</th><td>	<a class="local col1 ref" href="#61frame" title='frame' data-ref="61frame" data-ref-filename="61frame">frame</a> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>; <i>/* We use values cached in curcpu()  */</i></td></tr>
+<tr><th id="815">815</th><td><dfn class="lbl" id="68again" data-ref="68again" data-ref-filename="68again">again</dfn>:</td></tr>
+<tr><th id="816">816</th><td>	<i>/*</i></td></tr>
+<tr><th id="817">817</th><td><i>	 * Find how many nanoseconds of Xen system time has elapsed</i></td></tr>
+<tr><th id="818">818</th><td><i>	 * since the last hardclock tick.</i></td></tr>
+<tr><th id="819">819</th><td><i>	 */</i></td></tr>
+<tr><th id="820">820</th><td>	<a class="local col3 ref" href="#63last" title='last' data-ref="63last" data-ref-filename="63last">last</a> = <a class="local col2 ref" href="#62ci" title='ci' data-ref="62ci" data-ref-filename="62ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_hardclock_systime_ns" title='cpu_info::ci_xen_hardclock_systime_ns' data-ref="cpu_info::ci_xen_hardclock_systime_ns" data-ref-filename="cpu_info..ci_xen_hardclock_systime_ns">ci_xen_hardclock_systime_ns</a>;</td></tr>
+<tr><th id="821">821</th><td>	<a class="local col4 ref" href="#64now" title='now' data-ref="64now" data-ref-filename="64now">now</a> = <a class="tu ref fn" href="#xen_vcputime_systime_ns" title='xen_vcputime_systime_ns' data-use='c' data-ref="xen_vcputime_systime_ns" data-ref-filename="xen_vcputime_systime_ns">xen_vcputime_systime_ns</a>();</td></tr>
+<tr><th id="822">822</th><td>	<b>if</b> (<a class="local col4 ref" href="#64now" title='now' data-ref="64now" data-ref-filename="64now">now</a> &lt; <a class="local col3 ref" href="#63last" title='last' data-ref="63last" data-ref-filename="63last">last</a>) {</td></tr>
+<tr><th id="823">823</th><td><u>#<span data-ppcond="823">if</span> <a class="macro" href="#35" title="0" data-ref="_M/XEN_CLOCK_DEBUG">XEN_CLOCK_DEBUG</a>		/* XXX dtrace hook */</u></td></tr>
+<tr><th id="824">824</th><td>		printf(<q>"xen systime ran backwards in hardclock %"</q>PRIu64<q>"ns\n"</q>,</td></tr>
+<tr><th id="825">825</th><td>		    last - now);</td></tr>
+<tr><th id="826">826</th><td><u>#<span data-ppcond="823">endif</span></u></td></tr>
+<tr><th id="827">827</th><td>		<a class="local col2 ref" href="#62ci" title='ci' data-ref="62ci" data-ref-filename="62ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_systime_backwards_hardclock_evcnt" title='cpu_info::ci_xen_systime_backwards_hardclock_evcnt' data-ref="cpu_info::ci_xen_systime_backwards_hardclock_evcnt" data-ref-filename="cpu_info..ci_xen_systime_backwards_hardclock_evcnt">ci_xen_systime_backwards_hardclock_evcnt</a>.<a class="ref field" href="../../../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="828">828</th><td>		<a class="local col4 ref" href="#64now" title='now' data-ref="64now" data-ref-filename="64now">now</a> = <a class="local col3 ref" href="#63last" title='last' data-ref="63last" data-ref-filename="63last">last</a>;</td></tr>
+<tr><th id="829">829</th><td>	}</td></tr>
+<tr><th id="830">830</th><td>	<a class="local col5 ref" href="#65delta" title='delta' data-ref="65delta" data-ref-filename="65delta">delta</a> = <a class="local col4 ref" href="#64now" title='now' data-ref="64now" data-ref-filename="64now">now</a> - <a class="local col3 ref" href="#63last" title='last' data-ref="63last" data-ref-filename="63last">last</a>;</td></tr>
+<tr><th id="831">831</th><td></td></tr>
+<tr><th id="832">832</th><td>	<i>/*</i></td></tr>
+<tr><th id="833">833</th><td><i>	 * Play hardclock catchup: run the hardclock timer as many</i></td></tr>
+<tr><th id="834">834</th><td><i>	 * times as appears necessary based on how much time has</i></td></tr>
+<tr><th id="835">835</th><td><i>	 * passed.</i></td></tr>
+<tr><th id="836">836</th><td><i>	 */</i></td></tr>
+<tr><th id="837">837</th><td>	<b>while</b> (<a class="local col5 ref" href="#65delta" title='delta' data-ref="65delta" data-ref-filename="65delta">delta</a> &gt;= <a class="macro" href="#70" title="((uint64_t)1000000000ULL/hz)" data-ref="_M/NS_PER_TICK">NS_PER_TICK</a>) {</td></tr>
+<tr><th id="838">838</th><td>		<a class="local col2 ref" href="#62ci" title='ci' data-ref="62ci" data-ref-filename="62ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_hardclock_systime_ns" title='cpu_info::ci_xen_hardclock_systime_ns' data-ref="cpu_info::ci_xen_hardclock_systime_ns" data-ref-filename="cpu_info..ci_xen_hardclock_systime_ns">ci_xen_hardclock_systime_ns</a> += <a class="macro" href="#70" title="((uint64_t)1000000000ULL/hz)" data-ref="_M/NS_PER_TICK">NS_PER_TICK</a>;</td></tr>
+<tr><th id="839">839</th><td>		<a class="local col5 ref" href="#65delta" title='delta' data-ref="65delta" data-ref-filename="65delta">delta</a> -= <a class="macro" href="#70" title="((uint64_t)1000000000ULL/hz)" data-ref="_M/NS_PER_TICK">NS_PER_TICK</a>;</td></tr>
+<tr><th id="840">840</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#hardclock" title='hardclock' data-ref="hardclock" data-ref-filename="hardclock">hardclock</a>(<a class="local col1 ref" href="#61frame" title='frame' data-ref="61frame" data-ref-filename="61frame">frame</a>);</td></tr>
+<tr><th id="841">841</th><td>		<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((delta &gt;= ((uint64_t)1000000000ULL/hz)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col5 ref" href="#65delta" title='delta' data-ref="65delta" data-ref-filename="65delta">delta</a> &gt;= <a class="macro" href="#70" title="((uint64_t)1000000000ULL/hz)" data-ref="_M/NS_PER_TICK">NS_PER_TICK</a>))</td></tr>
+<tr><th id="842">842</th><td>			<a class="local col2 ref" href="#62ci" title='ci' data-ref="62ci" data-ref-filename="62ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_missed_hardclock_evcnt" title='cpu_info::ci_xen_missed_hardclock_evcnt' data-ref="cpu_info::ci_xen_missed_hardclock_evcnt" data-ref-filename="cpu_info..ci_xen_missed_hardclock_evcnt">ci_xen_missed_hardclock_evcnt</a>.<a class="ref field" href="../../../sys/evcnt.h.html#evcnt::ev_count" title='evcnt::ev_count' data-ref="evcnt::ev_count" data-ref-filename="evcnt..ev_count">ev_count</a>++;</td></tr>
+<tr><th id="843">843</th><td>	}</td></tr>
+<tr><th id="844">844</th><td></td></tr>
+<tr><th id="845">845</th><td>	<i>/*</i></td></tr>
+<tr><th id="846">846</th><td><i>	 * Re-arm the timer.  If it fails, it's probably because the</i></td></tr>
+<tr><th id="847">847</th><td><i>	 * time is in the past, so update our idea of what the Xen</i></td></tr>
+<tr><th id="848">848</th><td><i>	 * system time is and try again.</i></td></tr>
+<tr><th id="849">849</th><td><i>	 */</i></td></tr>
+<tr><th id="850">850</th><td>	<a class="local col6 ref" href="#66next" title='next' data-ref="66next" data-ref-filename="66next">next</a> = <a class="local col2 ref" href="#62ci" title='ci' data-ref="62ci" data-ref-filename="62ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_hardclock_systime_ns" title='cpu_info::ci_xen_hardclock_systime_ns' data-ref="cpu_info::ci_xen_hardclock_systime_ns" data-ref-filename="cpu_info..ci_xen_hardclock_systime_ns">ci_xen_hardclock_systime_ns</a> + <a class="macro" href="#70" title="((uint64_t)1000000000ULL/hz)" data-ref="_M/NS_PER_TICK">NS_PER_TICK</a>;</td></tr>
+<tr><th id="851">851</th><td>	<a class="local col7 ref" href="#67error" title='error' data-ref="67error" data-ref-filename="67error">error</a> = <a class="ref fn" href="../include/amd64/hypercalls.h.html#HYPERVISOR_set_timer_op" title='HYPERVISOR_set_timer_op' data-ref="HYPERVISOR_set_timer_op" data-ref-filename="HYPERVISOR_set_timer_op">HYPERVISOR_set_timer_op</a>(<a class="local col6 ref" href="#66next" title='next' data-ref="66next" data-ref-filename="66next">next</a>);</td></tr>
+<tr><th id="852">852</th><td>	<b>if</b> (<a class="local col7 ref" href="#67error" title='error' data-ref="67error" data-ref-filename="67error">error</a>)</td></tr>
+<tr><th id="853">853</th><td>		<b>goto</b> <a class="lbl" href="#68again" data-ref="68again" data-ref-filename="68again">again</a>;</td></tr>
+<tr><th id="854">854</th><td></td></tr>
+<tr><th id="855">855</th><td>	<i>/* Success!  */</i></td></tr>
+<tr><th id="856">856</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="857">857</th><td>}</td></tr>
+<tr><th id="858">858</th><td></td></tr>
+<tr><th id="859">859</th><td><i>/*</i></td></tr>
+<tr><th id="860">860</th><td><i> * xen_initclocks()</i></td></tr>
+<tr><th id="861">861</th><td><i> *</i></td></tr>
+<tr><th id="862">862</th><td><i> *	Initialize the Xen clocks on the current CPU.</i></td></tr>
+<tr><th id="863">863</th><td><i> */</i></td></tr>
+<tr><th id="864">864</th><td><em>void</em></td></tr>
+<tr><th id="865">865</th><td><dfn class="decl def fn" id="xen_initclocks" title='xen_initclocks' data-ref="xen_initclocks" data-ref-filename="xen_initclocks">xen_initclocks</dfn>(<em>void</em>)</td></tr>
+<tr><th id="866">866</th><td>{</td></tr>
+<tr><th id="867">867</th><td>	<b>struct</b> <a class="type" href="../../x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col9 decl" id="69ci" title='ci' data-type='struct cpu_info *' data-ref="69ci" data-ref-filename="69ci">ci</dfn> = <a class="macro" href="../../x86/include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="868">868</th><td></td></tr>
+<tr><th id="869">869</th><td>	<i>/* If this is the primary CPU, do global initialization first.  */</i></td></tr>
+<tr><th id="870">870</th><td>	<b>if</b> (<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a> == &amp;<a class="ref" href="../../x86/include/cpu.h.html#cpu_info_primary" title='cpu_info_primary' data-ref="cpu_info_primary" data-ref-filename="cpu_info_primary">cpu_info_primary</a>) {</td></tr>
+<tr><th id="871">871</th><td>		<i>/* Initialize the systemwide Xen timecounter.  */</i></td></tr>
+<tr><th id="872">872</th><td>		<a class="ref fn" href="../../../sys/timetc.h.html#tc_init" title='tc_init' data-ref="tc_init" data-ref-filename="tc_init">tc_init</a>(&amp;<a class="tu ref" href="#xen_timecounter" title='xen_timecounter' data-use='a' data-ref="xen_timecounter" data-ref-filename="xen_timecounter">xen_timecounter</a>);</td></tr>
+<tr><th id="873">873</th><td></td></tr>
+<tr><th id="874">874</th><td><u>#<span data-ppcond="874">ifdef</span> <span class="macro" data-ref="_M/DOM0OPS">DOM0OPS</span></u></td></tr>
+<tr><th id="875">875</th><td>		<i>/*</i></td></tr>
+<tr><th id="876">876</th><td><i>		 * If this is a privileged dom0, start pushing the wall</i></td></tr>
+<tr><th id="877">877</th><td><i>		 * clock time back to the Xen hypervisor.</i></td></tr>
+<tr><th id="878">878</th><td><i>		 */</i></td></tr>
+<tr><th id="879">879</th><td>		<b>if</b> (xendomain_is_privileged())</td></tr>
+<tr><th id="880">880</th><td>			xen_timepush_init();</td></tr>
+<tr><th id="881">881</th><td><u>#<span data-ppcond="874">endif</span></u></td></tr>
+<tr><th id="882">882</th><td>	}</td></tr>
+<tr><th id="883">883</th><td></td></tr>
+<tr><th id="884">884</th><td>	<i>/* Attach the event counters.  */</i></td></tr>
+<tr><th id="885">885</th><td>	<a class="ref fn" href="../../../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_cpu_tsc_backwards_evcnt" title='cpu_info::ci_xen_cpu_tsc_backwards_evcnt' data-ref="cpu_info::ci_xen_cpu_tsc_backwards_evcnt" data-ref-filename="cpu_info..ci_xen_cpu_tsc_backwards_evcnt">ci_xen_cpu_tsc_backwards_evcnt</a>,</td></tr>
+<tr><th id="886">886</th><td>	    <a class="macro" href="../../../sys/evcnt.h.html#104" title="1" data-ref="_M/EVCNT_TYPE_INTR">EVCNT_TYPE_INTR</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>),</td></tr>
+<tr><th id="887">887</th><td>	    <q>"cpu tsc ran backwards"</q>);</td></tr>
+<tr><th id="888">888</th><td>	<a class="ref fn" href="../../../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_tsc_delta_negative_evcnt" title='cpu_info::ci_xen_tsc_delta_negative_evcnt' data-ref="cpu_info::ci_xen_tsc_delta_negative_evcnt" data-ref-filename="cpu_info..ci_xen_tsc_delta_negative_evcnt">ci_xen_tsc_delta_negative_evcnt</a>,</td></tr>
+<tr><th id="889">889</th><td>	    <a class="macro" href="../../../sys/evcnt.h.html#104" title="1" data-ref="_M/EVCNT_TYPE_INTR">EVCNT_TYPE_INTR</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>),</td></tr>
+<tr><th id="890">890</th><td>	    <q>"tsc delta went negative"</q>);</td></tr>
+<tr><th id="891">891</th><td>	<a class="ref fn" href="../../../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_raw_systime_wraparound_evcnt" title='cpu_info::ci_xen_raw_systime_wraparound_evcnt' data-ref="cpu_info::ci_xen_raw_systime_wraparound_evcnt" data-ref-filename="cpu_info..ci_xen_raw_systime_wraparound_evcnt">ci_xen_raw_systime_wraparound_evcnt</a>,</td></tr>
+<tr><th id="892">892</th><td>	    <a class="macro" href="../../../sys/evcnt.h.html#104" title="1" data-ref="_M/EVCNT_TYPE_INTR">EVCNT_TYPE_INTR</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>),</td></tr>
+<tr><th id="893">893</th><td>	    <q>"raw systime wrapped around"</q>);</td></tr>
+<tr><th id="894">894</th><td>	<a class="ref fn" href="../../../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_raw_systime_backwards_evcnt" title='cpu_info::ci_xen_raw_systime_backwards_evcnt' data-ref="cpu_info::ci_xen_raw_systime_backwards_evcnt" data-ref-filename="cpu_info..ci_xen_raw_systime_backwards_evcnt">ci_xen_raw_systime_backwards_evcnt</a>,</td></tr>
+<tr><th id="895">895</th><td>	    <a class="macro" href="../../../sys/evcnt.h.html#104" title="1" data-ref="_M/EVCNT_TYPE_INTR">EVCNT_TYPE_INTR</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>),</td></tr>
+<tr><th id="896">896</th><td>	    <q>"raw systime went backwards"</q>);</td></tr>
+<tr><th id="897">897</th><td>	<a class="ref fn" href="../../../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_systime_backwards_hardclock_evcnt" title='cpu_info::ci_xen_systime_backwards_hardclock_evcnt' data-ref="cpu_info::ci_xen_systime_backwards_hardclock_evcnt" data-ref-filename="cpu_info..ci_xen_systime_backwards_hardclock_evcnt">ci_xen_systime_backwards_hardclock_evcnt</a>,</td></tr>
+<tr><th id="898">898</th><td>	    <a class="macro" href="../../../sys/evcnt.h.html#104" title="1" data-ref="_M/EVCNT_TYPE_INTR">EVCNT_TYPE_INTR</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>),</td></tr>
+<tr><th id="899">899</th><td>	    <q>"systime went backwards in hardclock"</q>);</td></tr>
+<tr><th id="900">900</th><td>	<a class="ref fn" href="../../../sys/evcnt.h.html#evcnt_attach_dynamic" title='evcnt_attach_dynamic' data-ref="evcnt_attach_dynamic" data-ref-filename="evcnt_attach_dynamic">evcnt_attach_dynamic</a>(&amp;<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_xen_missed_hardclock_evcnt" title='cpu_info::ci_xen_missed_hardclock_evcnt' data-ref="cpu_info::ci_xen_missed_hardclock_evcnt" data-ref-filename="cpu_info..ci_xen_missed_hardclock_evcnt">ci_xen_missed_hardclock_evcnt</a>,</td></tr>
+<tr><th id="901">901</th><td>	    <a class="macro" href="../../../sys/evcnt.h.html#104" title="1" data-ref="_M/EVCNT_TYPE_INTR">EVCNT_TYPE_INTR</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="ref fn" href="../../../sys/device.h.html#device_xname" title='device_xname' data-ref="device_xname" data-ref-filename="device_xname">device_xname</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>-&gt;<a class="ref field" href="../../x86/include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>),</td></tr>
+<tr><th id="902">902</th><td>	    <q>"missed hardclock"</q>);</td></tr>
+<tr><th id="903">903</th><td></td></tr>
+<tr><th id="904">904</th><td>	<i>/* Fire up the clocks.  */</i></td></tr>
+<tr><th id="905">905</th><td>	<a class="ref fn" href="#xen_resumeclocks" title='xen_resumeclocks' data-ref="xen_resumeclocks" data-ref-filename="xen_resumeclocks">xen_resumeclocks</a>(<a class="local col9 ref" href="#69ci" title='ci' data-ref="69ci" data-ref-filename="69ci">ci</a>);</td></tr>
+<tr><th id="906">906</th><td>}</td></tr>
+<tr><th id="907">907</th><td></td></tr>
+<tr><th id="908">908</th><td><u>#<span data-ppcond="908">ifdef</span> <span class="macro" data-ref="_M/DOM0OPS">DOM0OPS</span></u></td></tr>
+<tr><th id="909">909</th><td></td></tr>
+<tr><th id="910">910</th><td><i>/*</i></td></tr>
+<tr><th id="911">911</th><td><i> * xen_timepush_init()</i></td></tr>
+<tr><th id="912">912</th><td><i> *</i></td></tr>
+<tr><th id="913">913</th><td><i> *	Initialize callout to periodically set Xen hypervisor's wall</i></td></tr>
+<tr><th id="914">914</th><td><i> *	clock time.</i></td></tr>
+<tr><th id="915">915</th><td><i> */</i></td></tr>
+<tr><th id="916">916</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="917">917</th><td>xen_timepush_init(<em>void</em>)</td></tr>
+<tr><th id="918">918</th><td>{</td></tr>
+<tr><th id="919">919</th><td>	<b>struct</b> sysctllog *log = NULL;</td></tr>
+<tr><th id="920">920</th><td>	<em>const</em> <b>struct</b> sysctlnode *node = NULL;</td></tr>
+<tr><th id="921">921</th><td>	<em>int</em> error;</td></tr>
+<tr><th id="922">922</th><td></td></tr>
+<tr><th id="923">923</th><td>	<i>/* Start periodically updating the hypervisor's wall clock time.  */</i></td></tr>
+<tr><th id="924">924</th><td>	callout_init(&amp;xen_timepush.ch, <var>0</var>);</td></tr>
+<tr><th id="925">925</th><td>	callout_setfunc(&amp;xen_timepush.ch, xen_timepush_intr, NULL);</td></tr>
+<tr><th id="926">926</th><td></td></tr>
+<tr><th id="927">927</th><td>	<i>/* Pick a default frequency for timepush.  */</i></td></tr>
+<tr><th id="928">928</th><td>	xen_timepush.ticks = <var>53</var>*hz + <var>3</var>; <i>/* avoid exact # of min/sec */</i></td></tr>
+<tr><th id="929">929</th><td></td></tr>
+<tr><th id="930">930</th><td>	<i>/* Create machdep.xen node.  */</i></td></tr>
+<tr><th id="931">931</th><td>	<i>/* XXX Creation of the `machdep.xen' node should be elsewhere.  */</i></td></tr>
+<tr><th id="932">932</th><td>	error = sysctl_createv(&amp;log, <var>0</var>, NULL, &amp;node, <var>0</var>,</td></tr>
+<tr><th id="933">933</th><td>	    CTLTYPE_NODE, <q>"xen"</q>,</td></tr>
+<tr><th id="934">934</th><td>	    SYSCTL_DESCR(<q>"Xen top level node"</q>),</td></tr>
+<tr><th id="935">935</th><td>	    NULL, <var>0</var>, NULL, <var>0</var>,</td></tr>
+<tr><th id="936">936</th><td>	    CTL_MACHDEP, CTL_CREATE, CTL_EOL);</td></tr>
+<tr><th id="937">937</th><td>	<b>if</b> (error)</td></tr>
+<tr><th id="938">938</th><td>		<b>goto</b> fail;</td></tr>
+<tr><th id="939">939</th><td>	KASSERT(node != NULL);</td></tr>
+<tr><th id="940">940</th><td></td></tr>
+<tr><th id="941">941</th><td>	<i>/* Create int machdep.xen.timepush_ticks knob.  */</i></td></tr>
+<tr><th id="942">942</th><td>	error = sysctl_createv(&amp;log, <var>0</var>, NULL, NULL, CTLFLAG_READWRITE,</td></tr>
+<tr><th id="943">943</th><td>	    CTLTYPE_INT, <q>"timepush_ticks"</q>,</td></tr>
+<tr><th id="944">944</th><td>	    SYSCTL_DESCR(<q>"How often to update the hypervisor's time-of-day;"</q></td></tr>
+<tr><th id="945">945</th><td>		<q>" 0 to disable"</q>),</td></tr>
+<tr><th id="946">946</th><td>	    sysctl_xen_timepush, <var>0</var>, &amp;xen_timepush.ticks, <var>0</var>,</td></tr>
+<tr><th id="947">947</th><td>	    CTL_CREATE, CTL_EOL);</td></tr>
+<tr><th id="948">948</th><td>	<b>if</b> (error)</td></tr>
+<tr><th id="949">949</th><td>		<b>goto</b> fail;</td></tr>
+<tr><th id="950">950</th><td></td></tr>
+<tr><th id="951">951</th><td>	<i>/* Start the timepush callout.  */</i></td></tr>
+<tr><th id="952">952</th><td>	callout_schedule(&amp;xen_timepush.ch, xen_timepush.ticks);</td></tr>
+<tr><th id="953">953</th><td></td></tr>
+<tr><th id="954">954</th><td>	<i>/* Success!  */</i></td></tr>
+<tr><th id="955">955</th><td>	<b>return</b>;</td></tr>
+<tr><th id="956">956</th><td></td></tr>
+<tr><th id="957">957</th><td>fail:	sysctl_teardown(&amp;log);</td></tr>
+<tr><th id="958">958</th><td>}</td></tr>
+<tr><th id="959">959</th><td></td></tr>
+<tr><th id="960">960</th><td><i>/*</i></td></tr>
+<tr><th id="961">961</th><td><i> * xen_timepush_intr(cookie)</i></td></tr>
+<tr><th id="962">962</th><td><i> *</i></td></tr>
+<tr><th id="963">963</th><td><i> *	Callout interrupt handler to push NetBSD's idea of the wall</i></td></tr>
+<tr><th id="964">964</th><td><i> *	clock time, usually synchronized with NTP, back to the Xen</i></td></tr>
+<tr><th id="965">965</th><td><i> *	hypervisor.</i></td></tr>
+<tr><th id="966">966</th><td><i> */</i></td></tr>
+<tr><th id="967">967</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="968">968</th><td>xen_timepush_intr(<em>void</em> *cookie)</td></tr>
+<tr><th id="969">969</th><td>{</td></tr>
+<tr><th id="970">970</th><td></td></tr>
+<tr><th id="971">971</th><td>	resettodr();</td></tr>
+<tr><th id="972">972</th><td>	<b>if</b> (xen_timepush.ticks)</td></tr>
+<tr><th id="973">973</th><td>		callout_schedule(&amp;xen_timepush.ch, xen_timepush.ticks);</td></tr>
+<tr><th id="974">974</th><td>}</td></tr>
+<tr><th id="975">975</th><td></td></tr>
+<tr><th id="976">976</th><td><i>/*</i></td></tr>
+<tr><th id="977">977</th><td><i> * sysctl_xen_timepush(...)</i></td></tr>
+<tr><th id="978">978</th><td><i> *</i></td></tr>
+<tr><th id="979">979</th><td><i> *	Sysctl handler to set machdep.xen.timepush_ticks.</i></td></tr>
+<tr><th id="980">980</th><td><i> */</i></td></tr>
+<tr><th id="981">981</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="982">982</th><td>sysctl_xen_timepush(SYSCTLFN_ARGS)</td></tr>
+<tr><th id="983">983</th><td>{</td></tr>
+<tr><th id="984">984</th><td>	<b>struct</b> sysctlnode node;</td></tr>
+<tr><th id="985">985</th><td>	<em>int</em> ticks;</td></tr>
+<tr><th id="986">986</th><td>	<em>int</em> error;</td></tr>
+<tr><th id="987">987</th><td></td></tr>
+<tr><th id="988">988</th><td>	ticks = xen_timepush.ticks;</td></tr>
+<tr><th id="989">989</th><td>	node = *rnode;</td></tr>
+<tr><th id="990">990</th><td>	node.sysctl_data = &amp;ticks;</td></tr>
+<tr><th id="991">991</th><td>	error = sysctl_lookup(SYSCTLFN_CALL(&amp;node));</td></tr>
+<tr><th id="992">992</th><td>	<b>if</b> (error || newp == NULL)</td></tr>
+<tr><th id="993">993</th><td>		<b>return</b> error;</td></tr>
+<tr><th id="994">994</th><td></td></tr>
+<tr><th id="995">995</th><td>	<b>if</b> (ticks &lt; <var>0</var>)</td></tr>
+<tr><th id="996">996</th><td>		<b>return</b> EINVAL;</td></tr>
+<tr><th id="997">997</th><td></td></tr>
+<tr><th id="998">998</th><td>	<b>if</b> (ticks != xen_timepush.ticks) {</td></tr>
+<tr><th id="999">999</th><td>		xen_timepush.ticks = ticks;</td></tr>
+<tr><th id="1000">1000</th><td></td></tr>
+<tr><th id="1001">1001</th><td>		<b>if</b> (ticks == <var>0</var>)</td></tr>
+<tr><th id="1002">1002</th><td>			callout_stop(&amp;xen_timepush.ch);</td></tr>
+<tr><th id="1003">1003</th><td>		<b>else</b></td></tr>
+<tr><th id="1004">1004</th><td>			callout_schedule(&amp;xen_timepush.ch, ticks);</td></tr>
+<tr><th id="1005">1005</th><td>	}</td></tr>
+<tr><th id="1006">1006</th><td></td></tr>
+<tr><th id="1007">1007</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="1008">1008</th><td>}</td></tr>
+<tr><th id="1009">1009</th><td></td></tr>
+<tr><th id="1010">1010</th><td><u>#<span data-ppcond="908">endif</span>	/* DOM0OPS */</u></td></tr>
+<tr><th id="1011">1011</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

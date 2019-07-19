@@ -1,0 +1,238 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>socket.c source code [netbsd/external/bsd/ntp/dist/libntp/socket.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/libntp/socket.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>libntp</a>/<a href='socket.c.html'>socket.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: socket.c,v 1.5 2016/01/08 21:35:38 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * socket.c - low-level socket operations</i></td></tr>
+<tr><th id="5">5</th><td><i> */</i></td></tr>
+<tr><th id="6">6</th><td></td></tr>
+<tr><th id="7">7</th><td><u>#<span data-ppcond="7">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="8">8</th><td><u># include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="9">9</th><td><u>#<span data-ppcond="7">endif</span></u></td></tr>
+<tr><th id="10">10</th><td></td></tr>
+<tr><th id="11">11</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#include <a href="../include/ntp.h.html">"ntp.h"</a></u></td></tr>
+<tr><th id="14">14</th><td><u>#include <a href="../include/ntp_io.h.html">"ntp_io.h"</a></u></td></tr>
+<tr><th id="15">15</th><td><u>#include <a href="../include/ntp_net.h.html">"ntp_net.h"</a></u></td></tr>
+<tr><th id="16">16</th><td><u>#include <a href="../include/ntp_debug.h.html">"ntp_debug.h"</a></u></td></tr>
+<tr><th id="17">17</th><td></td></tr>
+<tr><th id="18">18</th><td><i>/*</i></td></tr>
+<tr><th id="19">19</th><td><i> * Windows C runtime ioctl() can't deal properly with sockets, </i></td></tr>
+<tr><th id="20">20</th><td><i> * map to ioctlsocket for this source file.</i></td></tr>
+<tr><th id="21">21</th><td><i> */</i></td></tr>
+<tr><th id="22">22</th><td><u>#<span data-ppcond="22">ifdef</span> <span class="macro" data-ref="_M/SYS_WINNT">SYS_WINNT</span></u></td></tr>
+<tr><th id="23">23</th><td><u>#define ioctl(fd, opt, val)  ioctlsocket(fd, opt, (u_long *)(val))</u></td></tr>
+<tr><th id="24">24</th><td><u>#<span data-ppcond="22">endif</span></u></td></tr>
+<tr><th id="25">25</th><td></td></tr>
+<tr><th id="26">26</th><td><i>/*</i></td></tr>
+<tr><th id="27">27</th><td><i> * on Unix systems the stdio library typically</i></td></tr>
+<tr><th id="28">28</th><td><i> * makes use of file descriptors in the lower</i></td></tr>
+<tr><th id="29">29</th><td><i> * integer range.  stdio usually will make use</i></td></tr>
+<tr><th id="30">30</th><td><i> * of the file descriptors in the range of</i></td></tr>
+<tr><th id="31">31</th><td><i> * [0..FOPEN_MAX)</i></td></tr>
+<tr><th id="32">32</th><td><i> * in order to keep this range clean, for socket</i></td></tr>
+<tr><th id="33">33</th><td><i> * file descriptors we attempt to move them above</i></td></tr>
+<tr><th id="34">34</th><td><i> * FOPEN_MAX. This is not as easy as it sounds as</i></td></tr>
+<tr><th id="35">35</th><td><i> * FOPEN_MAX changes from implementation to implementation</i></td></tr>
+<tr><th id="36">36</th><td><i> * and may exceed to current file decriptor limits.</i></td></tr>
+<tr><th id="37">37</th><td><i> * We are using following strategy:</i></td></tr>
+<tr><th id="38">38</th><td><i> * - keep a current socket fd boundary initialized with</i></td></tr>
+<tr><th id="39">39</th><td><i> *   max(0, min(GETDTABLESIZE() - FD_CHUNK, FOPEN_MAX))</i></td></tr>
+<tr><th id="40">40</th><td><i> * - attempt to move the descriptor to the boundary or</i></td></tr>
+<tr><th id="41">41</th><td><i> *   above.</i></td></tr>
+<tr><th id="42">42</th><td><i> *   - if that fails and boundary &gt; 0 set boundary</i></td></tr>
+<tr><th id="43">43</th><td><i> *     to min(0, socket_fd_boundary - FD_CHUNK)</i></td></tr>
+<tr><th id="44">44</th><td><i> *     -&gt; retry</i></td></tr>
+<tr><th id="45">45</th><td><i> *     if failure and boundary == 0 return old fd</i></td></tr>
+<tr><th id="46">46</th><td><i> *   - on success close old fd return new fd</i></td></tr>
+<tr><th id="47">47</th><td><i> *</i></td></tr>
+<tr><th id="48">48</th><td><i> * effects:</i></td></tr>
+<tr><th id="49">49</th><td><i> *   - fds will be moved above the socket fd boundary</i></td></tr>
+<tr><th id="50">50</th><td><i> *     if at all possible.</i></td></tr>
+<tr><th id="51">51</th><td><i> *   - the socket boundary will be reduced until</i></td></tr>
+<tr><th id="52">52</th><td><i> *     allocation is possible or 0 is reached - at this</i></td></tr>
+<tr><th id="53">53</th><td><i> *     point the algrithm will be disabled</i></td></tr>
+<tr><th id="54">54</th><td><i> */</i></td></tr>
+<tr><th id="55">55</th><td><a class="typedef" href="../include/ntp_types.h.html#SOCKET" title='SOCKET' data-type='int' data-ref="SOCKET" data-ref-filename="SOCKET">SOCKET</a></td></tr>
+<tr><th id="56">56</th><td><dfn class="decl def fn" id="move_fd" title='move_fd' data-ref="move_fd" data-ref-filename="move_fd">move_fd</dfn>(</td></tr>
+<tr><th id="57">57</th><td>	<a class="typedef" href="../include/ntp_types.h.html#SOCKET" title='SOCKET' data-type='int' data-ref="SOCKET" data-ref-filename="SOCKET">SOCKET</a> <dfn class="local col1 decl" id="1fd" title='fd' data-type='SOCKET' data-ref="1fd" data-ref-filename="1fd">fd</dfn></td></tr>
+<tr><th id="58">58</th><td>	)</td></tr>
+<tr><th id="59">59</th><td>{</td></tr>
+<tr><th id="60">60</th><td><u>#<span data-ppcond="60">if</span> !defined(<span class="macro" data-ref="_M/SYS_WINNT">SYS_WINNT</span>) &amp;&amp; defined(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#177" data-ref="_M/F_DUPFD">F_DUPFD</a>)</u></td></tr>
+<tr><th id="61">61</th><td><u>#<span data-ppcond="61">ifndef</span> <span class="macro" data-ref="_M/FD_CHUNK">FD_CHUNK</span></u></td></tr>
+<tr><th id="62">62</th><td><u>#define <dfn class="macro" id="_M/FD_CHUNK" data-ref="_M/FD_CHUNK">FD_CHUNK</dfn>	10</u></td></tr>
+<tr><th id="63">63</th><td><u>#<span data-ppcond="61">endif</span></u></td></tr>
+<tr><th id="64">64</th><td><u>#<span data-ppcond="64">ifndef</span> <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#191" data-ref="_M/FOPEN_MAX">FOPEN_MAX</a></u></td></tr>
+<tr><th id="65">65</th><td><u>#define FOPEN_MAX	20</u></td></tr>
+<tr><th id="66">66</th><td><u>#<span data-ppcond="64">endif</span></u></td></tr>
+<tr><th id="67">67</th><td><i>/*</i></td></tr>
+<tr><th id="68">68</th><td><i> * number of fds we would like to have for</i></td></tr>
+<tr><th id="69">69</th><td><i> * stdio FILE* available.</i></td></tr>
+<tr><th id="70">70</th><td><i> * we can pick a "low" number as our use of</i></td></tr>
+<tr><th id="71">71</th><td><i> * FILE* is limited to log files and temporarily</i></td></tr>
+<tr><th id="72">72</th><td><i> * to data and config files. Except for log files</i></td></tr>
+<tr><th id="73">73</th><td><i> * we don't keep the other FILE* open beyond the</i></td></tr>
+<tr><th id="74">74</th><td><i> * scope of the function that opened it.</i></td></tr>
+<tr><th id="75">75</th><td><i> */</i></td></tr>
+<tr><th id="76">76</th><td><u>#<span data-ppcond="76">ifndef</span> <span class="macro" data-ref="_M/FD_PREFERRED_SOCKBOUNDARY">FD_PREFERRED_SOCKBOUNDARY</span></u></td></tr>
+<tr><th id="77">77</th><td><u>#define <dfn class="macro" id="_M/FD_PREFERRED_SOCKBOUNDARY" data-ref="_M/FD_PREFERRED_SOCKBOUNDARY">FD_PREFERRED_SOCKBOUNDARY</dfn> 48</u></td></tr>
+<tr><th id="78">78</th><td><u>#<span data-ppcond="76">endif</span></u></td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td>	<em>static</em> <a class="typedef" href="../include/ntp_types.h.html#SOCKET" title='SOCKET' data-type='int' data-ref="SOCKET" data-ref-filename="SOCKET">SOCKET</a> <dfn class="local col2 decl" id="2socket_boundary" title='socket_boundary' data-type='SOCKET' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</dfn> = -<var>1</var>;</td></tr>
+<tr><th id="81">81</th><td>	<a class="typedef" href="../include/ntp_types.h.html#SOCKET" title='SOCKET' data-type='int' data-ref="SOCKET" data-ref-filename="SOCKET">SOCKET</a> <dfn class="local col3 decl" id="3newfd" title='newfd' data-type='SOCKET' data-ref="3newfd" data-ref-filename="3newfd">newfd</dfn>;</td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td>	<a class="macro" href="../include/ntp_assert.h.html#84" title="((void) (((int)fd &gt;= 0) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/external/bsd/ntp/lib/libntp/../../../../../../external/bsd/ntp/dist/libntp/socket.c&quot;, 83, isc_assertiontype_require, &quot;(int)fd &gt;= 0&quot;), 0)))" data-ref="_M/REQUIRE">REQUIRE</a>((<em>int</em>)<a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a> &gt;= <var>0</var>);</td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td>	<i>/*</i></td></tr>
+<tr><th id="86">86</th><td><i>	 * check whether boundary has be set up</i></td></tr>
+<tr><th id="87">87</th><td><i>	 * already</i></td></tr>
+<tr><th id="88">88</th><td><i>	 */</i></td></tr>
+<tr><th id="89">89</th><td>	<b>if</b> (<a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a> == -<var>1</var>) {</td></tr>
+<tr><th id="90">90</th><td>		<a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a> = <a class="macro" href="../include/ntp.h.html#703" title="(((0) &gt; ((((((int)sysconf(5)) - 10) &lt; ((((20) &lt; (48)) ? (20) : (48)))) ? (((int)sysconf(5)) - 10) : ((((20) &lt; (48)) ? (20) : (48)))))) ? (0) : ((((((int)sysconf(5)) - 10) &lt; ((((20) &lt; (48)) ? (20) : (48)))) ? (((int)sysconf(5)) - 10) : ((((20) &lt; (48)) ? (20) : (48))))))" data-ref="_M/max">max</a>(<var>0</var>, <a class="macro" href="../include/ntp.h.html#702" title="(((((int)sysconf(5)) - 10) &lt; ((((20) &lt; (48)) ? (20) : (48)))) ? (((int)sysconf(5)) - 10) : ((((20) &lt; (48)) ? (20) : (48))))" data-ref="_M/min">min</a>(<a class="macro" href="../include/libntp.h.html#6" title="((int)sysconf(5))" data-ref="_M/GETDTABLESIZE">GETDTABLESIZE</a>() - <a class="macro" href="#62" title="10" data-ref="_M/FD_CHUNK">FD_CHUNK</a>,</td></tr>
+<tr><th id="91">91</th><td>					     <a class="macro" href="../include/ntp.h.html#702" title="(((20) &lt; (48)) ? (20) : (48))" data-ref="_M/min">min</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#191" title="20" data-ref="_M/FOPEN_MAX">FOPEN_MAX</a>, <a class="macro" href="#77" title="48" data-ref="_M/FD_PREFERRED_SOCKBOUNDARY">FD_PREFERRED_SOCKBOUNDARY</a>)));</td></tr>
+<tr><th id="92">92</th><td>		<a class="macro" href="../include/ntp_debug.h.html#23" title="do { if (debug &gt;= (1)) mprintf (&quot;move_fd: estimated max descriptors: %d, &quot; &quot;initial socket boundary: %d\n&quot;, ((int)sysconf(5)), socket_boundary); } while (0)" data-ref="_M/TRACE">TRACE</a>(<var>1</var>, (<q>"move_fd: estimated max descriptors: %d, "</q></td></tr>
+<tr><th id="93">93</th><td>			  <q>"initial socket boundary: %d\n"</q>,</td></tr>
+<tr><th id="94">94</th><td>			  <a class="macro" href="../include/libntp.h.html#6" title="((int)sysconf(5))" data-ref="_M/GETDTABLESIZE">GETDTABLESIZE</a>(), <a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a>));</td></tr>
+<tr><th id="95">95</th><td>	}</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td>	<i>/*</i></td></tr>
+<tr><th id="98">98</th><td><i>	 * Leave a space for stdio to work in. potentially moving the</i></td></tr>
+<tr><th id="99">99</th><td><i>	 * socket_boundary lower until allocation succeeds.</i></td></tr>
+<tr><th id="100">100</th><td><i>	 */</i></td></tr>
+<tr><th id="101">101</th><td>	<b>do</b> {</td></tr>
+<tr><th id="102">102</th><td>		<b>if</b> (<a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a> &gt;= <var>0</var> &amp;&amp; <a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a> &lt; <a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a>) {</td></tr>
+<tr><th id="103">103</th><td>			<i>/* inside reserved range: attempt to move fd */</i></td></tr>
+<tr><th id="104">104</th><td>			<a class="local col3 ref" href="#3newfd" title='newfd' data-ref="3newfd" data-ref-filename="3newfd">newfd</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#fcntl" title='fcntl' data-ref="fcntl" data-ref-filename="fcntl">fcntl</a>(<a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#177" title="0" data-ref="_M/F_DUPFD">F_DUPFD</a>, <a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a>);</td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td>			<b>if</b> (<a class="local col3 ref" href="#3newfd" title='newfd' data-ref="3newfd" data-ref-filename="3newfd">newfd</a> != -<var>1</var>) {</td></tr>
+<tr><th id="107">107</th><td>				<i>/* success: drop the old one - return the new one */</i></td></tr>
+<tr><th id="108">108</th><td>				<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a>);</td></tr>
+<tr><th id="109">109</th><td>				<b>return</b> <a class="local col3 ref" href="#3newfd" title='newfd' data-ref="3newfd" data-ref-filename="3newfd">newfd</a>;</td></tr>
+<tr><th id="110">110</th><td>			}</td></tr>
+<tr><th id="111">111</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="112">112</th><td>			<i>/* outside reserved range: no work - return the original one */</i></td></tr>
+<tr><th id="113">113</th><td>			<b>return</b> <a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a>;</td></tr>
+<tr><th id="114">114</th><td>		}</td></tr>
+<tr><th id="115">115</th><td>		<a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a> = <a class="macro" href="../include/ntp.h.html#703" title="(((0) &gt; (socket_boundary - 10)) ? (0) : (socket_boundary - 10))" data-ref="_M/max">max</a>(<var>0</var>, <a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a> - <a class="macro" href="#62" title="10" data-ref="_M/FD_CHUNK">FD_CHUNK</a>);</td></tr>
+<tr><th id="116">116</th><td>		<a class="macro" href="../include/ntp_debug.h.html#23" title="do { if (debug &gt;= (1)) mprintf (&quot;move_fd: selecting new socket boundary: %d\n&quot;, socket_boundary); } while (0)" data-ref="_M/TRACE">TRACE</a>(<var>1</var>, (<q>"move_fd: selecting new socket boundary: %d\n"</q>,</td></tr>
+<tr><th id="117">117</th><td>			  <a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a>));</td></tr>
+<tr><th id="118">118</th><td>	} <b>while</b> (<a class="local col2 ref" href="#2socket_boundary" title='socket_boundary' data-ref="2socket_boundary" data-ref-filename="2socket_boundary">socket_boundary</a> &gt; <var>0</var>);</td></tr>
+<tr><th id="119">119</th><td><u>#<span data-ppcond="60">else</span></u></td></tr>
+<tr><th id="120">120</th><td>	ENSURE((<em>int</em>)fd &gt;= <var>0</var>);</td></tr>
+<tr><th id="121">121</th><td><u>#<span data-ppcond="60">endif</span> /* !defined(SYS_WINNT) &amp;&amp; defined(F_DUPFD) */</u></td></tr>
+<tr><th id="122">122</th><td>	<b>return</b> <a class="local col1 ref" href="#1fd" title='fd' data-ref="1fd" data-ref-filename="1fd">fd</a>;</td></tr>
+<tr><th id="123">123</th><td>}</td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td><i>/*</i></td></tr>
+<tr><th id="127">127</th><td><i> * make_socket_nonblocking() - set up descriptor to be non blocking</i></td></tr>
+<tr><th id="128">128</th><td><i> */</i></td></tr>
+<tr><th id="129">129</th><td><em>void</em></td></tr>
+<tr><th id="130">130</th><td><dfn class="decl def fn" id="make_socket_nonblocking" title='make_socket_nonblocking' data-ref="make_socket_nonblocking" data-ref-filename="make_socket_nonblocking">make_socket_nonblocking</dfn>(</td></tr>
+<tr><th id="131">131</th><td>	<a class="typedef" href="../include/ntp_types.h.html#SOCKET" title='SOCKET' data-type='int' data-ref="SOCKET" data-ref-filename="SOCKET">SOCKET</a> <dfn class="local col4 decl" id="4fd" title='fd' data-type='SOCKET' data-ref="4fd" data-ref-filename="4fd">fd</dfn></td></tr>
+<tr><th id="132">132</th><td>	)</td></tr>
+<tr><th id="133">133</th><td>{</td></tr>
+<tr><th id="134">134</th><td>	<i>/*</i></td></tr>
+<tr><th id="135">135</th><td><i>	 * set non-blocking,</i></td></tr>
+<tr><th id="136">136</th><td><i>	 */</i></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><u>#<span data-ppcond="138">ifdef</span> <span class="macro" data-ref="_M/USE_FIONBIO">USE_FIONBIO</span></u></td></tr>
+<tr><th id="139">139</th><td>	<i>/* in vxWorks we use FIONBIO, but the others are defined for old</i></td></tr>
+<tr><th id="140">140</th><td><i>	 * systems, so all hell breaks loose if we leave them defined</i></td></tr>
+<tr><th id="141">141</th><td><i>	 */</i></td></tr>
+<tr><th id="142">142</th><td><u>#undef O_NONBLOCK</u></td></tr>
+<tr><th id="143">143</th><td><u>#undef FNDELAY</u></td></tr>
+<tr><th id="144">144</th><td><u>#undef O_NDELAY</u></td></tr>
+<tr><th id="145">145</th><td><u>#<span data-ppcond="138">endif</span></u></td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><u>#<span data-ppcond="147">if</span> defined(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#81" data-ref="_M/O_NONBLOCK">O_NONBLOCK</a>) /* POSIX */</u></td></tr>
+<tr><th id="148">148</th><td>	<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#fcntl" title='fcntl' data-ref="fcntl" data-ref-filename="fcntl">fcntl</a>(<a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#181" title="4" data-ref="_M/F_SETFL">F_SETFL</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#81" title="0x00000004" data-ref="_M/O_NONBLOCK">O_NONBLOCK</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="149">149</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>,</td></tr>
+<tr><th id="150">150</th><td>			<q>"fcntl(O_NONBLOCK) fails on fd #%d: %m"</q>, <a class="local col4 ref" href="#4fd" title='fd' data-ref="4fd" data-ref-filename="4fd">fd</a>);</td></tr>
+<tr><th id="151">151</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#exit" title='exit' data-ref="exit" data-ref-filename="exit">exit</a>(<var>1</var>);</td></tr>
+<tr><th id="152">152</th><td>	}</td></tr>
+<tr><th id="153">153</th><td><u>#<span data-ppcond="147">elif</span> defined(FNDELAY)</u></td></tr>
+<tr><th id="154">154</th><td>	<b>if</b> (fcntl(fd, F_SETFL, FNDELAY) &lt; <var>0</var>) {</td></tr>
+<tr><th id="155">155</th><td>		msyslog(LOG_ERR, <q>"fcntl(FNDELAY) fails on fd #%d: %m"</q>,</td></tr>
+<tr><th id="156">156</th><td>			fd);</td></tr>
+<tr><th id="157">157</th><td>		exit(<var>1</var>);</td></tr>
+<tr><th id="158">158</th><td>	}</td></tr>
+<tr><th id="159">159</th><td><u>#elif defined(O_NDELAY) /* generally the same as FNDELAY */</u></td></tr>
+<tr><th id="160">160</th><td>	<b>if</b> (fcntl(fd, F_SETFL, O_NDELAY) &lt; <var>0</var>) {</td></tr>
+<tr><th id="161">161</th><td>		msyslog(LOG_ERR, <q>"fcntl(O_NDELAY) fails on fd #%d: %m"</q>,</td></tr>
+<tr><th id="162">162</th><td>			fd);</td></tr>
+<tr><th id="163">163</th><td>		exit(<var>1</var>);</td></tr>
+<tr><th id="164">164</th><td>	}</td></tr>
+<tr><th id="165">165</th><td><u>#elif defined(FIONBIO)</u></td></tr>
+<tr><th id="166">166</th><td>	{</td></tr>
+<tr><th id="167">167</th><td>		<em>int</em> on = <var>1</var>;</td></tr>
+<tr><th id="168">168</th><td></td></tr>
+<tr><th id="169">169</th><td>		<b>if</b> (ioctl(fd, FIONBIO, &amp;on) &lt; <var>0</var>) {</td></tr>
+<tr><th id="170">170</th><td>			msyslog(LOG_ERR,</td></tr>
+<tr><th id="171">171</th><td>				<q>"ioctl(FIONBIO) fails on fd #%d: %m"</q>,</td></tr>
+<tr><th id="172">172</th><td>				fd);</td></tr>
+<tr><th id="173">173</th><td>			exit(<var>1</var>);</td></tr>
+<tr><th id="174">174</th><td>		}</td></tr>
+<tr><th id="175">175</th><td>	}</td></tr>
+<tr><th id="176">176</th><td><u>#elif defined(FIOSNBIO)</u></td></tr>
+<tr><th id="177">177</th><td>	<b>if</b> (ioctl(fd, FIOSNBIO, &amp;on) &lt; <var>0</var>) {</td></tr>
+<tr><th id="178">178</th><td>		msyslog(LOG_ERR,</td></tr>
+<tr><th id="179">179</th><td>			<q>"ioctl(FIOSNBIO) fails on fd #%d: %m"</q>, fd);</td></tr>
+<tr><th id="180">180</th><td>		exit(<var>1</var>);</td></tr>
+<tr><th id="181">181</th><td>	}</td></tr>
+<tr><th id="182">182</th><td><u>#else</u></td></tr>
+<tr><th id="183">183</th><td><u># include "Bletch: Need non-blocking I/O!"</u></td></tr>
+<tr><th id="184">184</th><td><u>#<span data-ppcond="147">endif</span></u></td></tr>
+<tr><th id="185">185</th><td>}</td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td><u>#<span data-ppcond="187">if</span> 0</u></td></tr>
+<tr><th id="188">188</th><td></td></tr>
+<tr><th id="189">189</th><td><i>/* The following subroutines should probably be moved here */</i></td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td><em>static</em> SOCKET</td></tr>
+<tr><th id="192">192</th><td>open_socket(</td></tr>
+<tr><th id="193">193</th><td>	sockaddr_u *	addr,</td></tr>
+<tr><th id="194">194</th><td>	<em>int</em>		bcast,</td></tr>
+<tr><th id="195">195</th><td>	<em>int</em>		turn_off_reuse,</td></tr>
+<tr><th id="196">196</th><td>	endpt *		interf</td></tr>
+<tr><th id="197">197</th><td>	)</td></tr>
+<tr><th id="198">198</th><td><em>void</em></td></tr>
+<tr><th id="199">199</th><td>sendpkt(</td></tr>
+<tr><th id="200">200</th><td>	sockaddr_u *		dest,</td></tr>
+<tr><th id="201">201</th><td>	<b>struct</b> interface *	ep,</td></tr>
+<tr><th id="202">202</th><td>	<em>int</em>			ttl,</td></tr>
+<tr><th id="203">203</th><td>	<b>struct</b> pkt *		pkt,</td></tr>
+<tr><th id="204">204</th><td>	<em>int</em>			len</td></tr>
+<tr><th id="205">205</th><td>	)</td></tr>
+<tr><th id="206">206</th><td></td></tr>
+<tr><th id="207">207</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="208">208</th><td>read_refclock_packet(SOCKET fd, <b>struct</b> refclockio *rp, l_fp ts)</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="211">211</th><td>read_network_packet(</td></tr>
+<tr><th id="212">212</th><td>	SOCKET			fd,</td></tr>
+<tr><th id="213">213</th><td>	<b>struct</b> interface *	itf,</td></tr>
+<tr><th id="214">214</th><td>	l_fp			ts</td></tr>
+<tr><th id="215">215</th><td>	)</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><em>void</em></td></tr>
+<tr><th id="218">218</th><td>kill_asyncio(<em>int</em> startfd)</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td><u>#<span data-ppcond="187">endif</span> /* 0 */</u></td></tr>
+<tr><th id="221">221</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

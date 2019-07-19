@@ -1,0 +1,343 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>auth-rhosts.c source code [netbsd/crypto/external/bsd/openssh/dist/auth-rhosts.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/crypto/external/bsd/openssh/dist/auth-rhosts.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>crypto</a>/<a href='../../..'>external</a>/<a href='../..'>bsd</a>/<a href='..'>openssh</a>/<a href='./'>dist</a>/<a href='auth-rhosts.c.html'>auth-rhosts.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: auth-rhosts.c,v 1.10 2019/01/27 02:08:33 pgoyette Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td><i>/* $OpenBSD: auth-rhosts.c,v 1.49 2018/07/09 21:35:50 markus Exp $ */</i></td></tr>
+<tr><th id="3">3</th><td></td></tr>
+<tr><th id="4">4</th><td><i>/*</i></td></tr>
+<tr><th id="5">5</th><td><i> * Author: Tatu Ylonen &lt;ylo@cs.hut.fi&gt;</i></td></tr>
+<tr><th id="6">6</th><td><i> * Copyright (c) 1995 Tatu Ylonen &lt;ylo@cs.hut.fi&gt;, Espoo, Finland</i></td></tr>
+<tr><th id="7">7</th><td><i> *                    All rights reserved</i></td></tr>
+<tr><th id="8">8</th><td><i> * Rhosts authentication.  This file contains code to check whether to admit</i></td></tr>
+<tr><th id="9">9</th><td><i> * the login based on rhosts authentication.  This file also processes</i></td></tr>
+<tr><th id="10">10</th><td><i> * /etc/hosts.equiv.</i></td></tr>
+<tr><th id="11">11</th><td><i> *</i></td></tr>
+<tr><th id="12">12</th><td><i> * As far as I am concerned, the code I have written for this software</i></td></tr>
+<tr><th id="13">13</th><td><i> * can be used freely for any purpose.  Any derived versions of this</i></td></tr>
+<tr><th id="14">14</th><td><i> * software must be clearly marked as such, and if the derived work is</i></td></tr>
+<tr><th id="15">15</th><td><i> * incompatible with the protocol description in the RFC file, it must be</i></td></tr>
+<tr><th id="16">16</th><td><i> * called by a name other than "ssh" or "Secure Shell".</i></td></tr>
+<tr><th id="17">17</th><td><i> */</i></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><u>#include <a href="includes.h.html">"includes.h"</a></u></td></tr>
+<tr><th id="20">20</th><td><a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: auth-rhosts.c,v 1.10 2019/01/27 02:08:33 pgoyette Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: auth-rhosts.c,v 1.10 2019/01/27 02:08:33 pgoyette Exp $"</q>);</td></tr>
+<tr><th id="21">21</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="22">22</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html">&lt;sys/stat.h&gt;</a></u></td></tr>
+<tr><th id="23">23</th><td></td></tr>
+<tr><th id="24">24</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html">&lt;fcntl.h&gt;</a></u></td></tr>
+<tr><th id="25">25</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/netgroup.h.html">&lt;netgroup.h&gt;</a></u></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html">&lt;pwd.h&gt;</a></u></td></tr>
+<tr><th id="27">27</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="28">28</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a></u></td></tr>
+<tr><th id="29">29</th><td><u>#include &lt;stdarg.h&gt;</u></td></tr>
+<tr><th id="30">30</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html">&lt;unistd.h&gt;</a></u></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="packet.h.html">"packet.h"</a></u></td></tr>
+<tr><th id="33">33</th><td><u>#include <a href="uidswap.h.html">"uidswap.h"</a></u></td></tr>
+<tr><th id="34">34</th><td><u>#include <a href="pathnames.h.html">"pathnames.h"</a></u></td></tr>
+<tr><th id="35">35</th><td><u>#include <a href="log.h.html">"log.h"</a></u></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="misc.h.html">"misc.h"</a></u></td></tr>
+<tr><th id="37">37</th><td><u>#include <a href="sshbuf.h.html">"sshbuf.h"</a></u></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="sshkey.h.html">"sshkey.h"</a></u></td></tr>
+<tr><th id="39">39</th><td><u>#include <a href="servconf.h.html">"servconf.h"</a></u></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="canohost.h.html">"canohost.h"</a></u></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="sshkey.h.html">"sshkey.h"</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="hostfile.h.html">"hostfile.h"</a></u></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="auth.h.html">"auth.h"</a></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><i>/* import */</i></td></tr>
+<tr><th id="46">46</th><td><b>extern</b> <a class="typedef" href="servconf.h.html#ServerOptions" title='ServerOptions' data-type='struct ServerOptions' data-ref="ServerOptions" data-ref-filename="ServerOptions">ServerOptions</a> <dfn class="decl" id="options" title='options' data-ref="options" data-ref-filename="options">options</dfn>;</td></tr>
+<tr><th id="47">47</th><td><b>extern</b> <em>int</em> <dfn class="decl" id="use_privsep" title='use_privsep' data-ref="use_privsep" data-ref-filename="use_privsep">use_privsep</dfn>;</td></tr>
+<tr><th id="48">48</th><td></td></tr>
+<tr><th id="49">49</th><td><i  data-doc="check_rhosts_file">/*</i></td></tr>
+<tr><th id="50">50</th><td><i  data-doc="check_rhosts_file"> * This function processes an rhosts-style file (.rhosts, .shosts, or</i></td></tr>
+<tr><th id="51">51</th><td><i  data-doc="check_rhosts_file"> * /etc/hosts.equiv).  This returns true if authentication can be granted</i></td></tr>
+<tr><th id="52">52</th><td><i  data-doc="check_rhosts_file"> * based on the file, and returns zero otherwise.</i></td></tr>
+<tr><th id="53">53</th><td><i  data-doc="check_rhosts_file"> */</i></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="56">56</th><td><dfn class="tu decl def fn" id="check_rhosts_file" title='check_rhosts_file' data-type='int check_rhosts_file(const char * filename, const char * hostname, const char * ipaddr, const char * client_user, const char * server_user)' data-ref="check_rhosts_file" data-ref-filename="check_rhosts_file">check_rhosts_file</dfn>(<em>const</em> <em>char</em> *<dfn class="local col1 decl" id="1filename" title='filename' data-type='const char *' data-ref="1filename" data-ref-filename="1filename">filename</dfn>, <em>const</em> <em>char</em> *<dfn class="local col2 decl" id="2hostname" title='hostname' data-type='const char *' data-ref="2hostname" data-ref-filename="2hostname">hostname</dfn>,</td></tr>
+<tr><th id="57">57</th><td>		  <em>const</em> <em>char</em> *<dfn class="local col3 decl" id="3ipaddr" title='ipaddr' data-type='const char *' data-ref="3ipaddr" data-ref-filename="3ipaddr">ipaddr</dfn>, <em>const</em> <em>char</em> *<dfn class="local col4 decl" id="4client_user" title='client_user' data-type='const char *' data-ref="4client_user" data-ref-filename="4client_user">client_user</dfn>,</td></tr>
+<tr><th id="58">58</th><td>		  <em>const</em> <em>char</em> *<dfn class="local col5 decl" id="5server_user" title='server_user' data-type='const char *' data-ref="5server_user" data-ref-filename="5server_user">server_user</dfn>)</td></tr>
+<tr><th id="59">59</th><td>{</td></tr>
+<tr><th id="60">60</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> *<dfn class="local col6 decl" id="6f" title='f' data-type='FILE *' data-ref="6f" data-ref-filename="6f">f</dfn>;</td></tr>
+<tr><th id="61">61</th><td><u>#define <dfn class="macro" id="_M/RBUFLN" data-ref="_M/RBUFLN">RBUFLN</dfn> 1024</u></td></tr>
+<tr><th id="62">62</th><td>	<em>char</em> <dfn class="local col7 decl" id="7buf" title='buf' data-type='char [1024]' data-ref="7buf" data-ref-filename="7buf">buf</dfn>[<a class="macro" href="#61" title="1024" data-ref="_M/RBUFLN">RBUFLN</a>];<i>/* Must not be larger than host, user, dummy below. */</i></td></tr>
+<tr><th id="63">63</th><td>	<em>int</em> <dfn class="local col8 decl" id="8fd" title='fd' data-type='int' data-ref="8fd" data-ref-filename="8fd">fd</dfn>;</td></tr>
+<tr><th id="64">64</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> <dfn class="local col9 decl" id="9st" title='st' data-type='struct stat' data-ref="9st" data-ref-filename="9st">st</dfn>;</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td>	<i>/* Open the .rhosts file, deny if unreadable */</i></td></tr>
+<tr><th id="67">67</th><td>	<b>if</b> ((<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="local col1 ref" href="#1filename" title='filename' data-ref="1filename" data-ref-filename="1filename">filename</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#64" title="0x00000000" data-ref="_M/O_RDONLY">O_RDONLY</a>|<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#81" title="0x00000004" data-ref="_M/O_NONBLOCK">O_NONBLOCK</a>)) == -<var>1</var>)</td></tr>
+<tr><th id="68">68</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="69">69</th><td>	<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__fstat50" title='fstat' data-ref="__fstat50" data-ref-filename="__fstat50">fstat</a>(<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a>, &amp;<a class="local col9 ref" href="#9st" title='st' data-ref="9st" data-ref-filename="9st">st</a>) == -<var>1</var>) {</td></tr>
+<tr><th id="70">70</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a>);</td></tr>
+<tr><th id="71">71</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="72">72</th><td>	}</td></tr>
+<tr><th id="73">73</th><td>	<b>if</b> (!<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#174" title="(((st.st_mode) &amp; 0170000) == 0100000)" data-ref="_M/S_ISREG">S_ISREG</a>(<a class="local col9 ref" href="#9st" title='st' data-ref="9st" data-ref-filename="9st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_mode" title='stat::st_mode' data-ref="stat::st_mode" data-ref-filename="stat..st_mode">st_mode</a>)) {</td></tr>
+<tr><th id="74">74</th><td>		<a class="macro" href="namespace.h.html#21" title="ssh_logit" data-ref="_M/logit">logit</a>(<q>"User %s hosts file %s is not a regular file"</q>,</td></tr>
+<tr><th id="75">75</th><td>		    <a class="local col5 ref" href="#5server_user" title='server_user' data-ref="5server_user" data-ref-filename="5server_user">server_user</a>, <a class="local col1 ref" href="#1filename" title='filename' data-ref="1filename" data-ref-filename="1filename">filename</a>);</td></tr>
+<tr><th id="76">76</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a>);</td></tr>
+<tr><th id="77">77</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="78">78</th><td>	}</td></tr>
+<tr><th id="79">79</th><td>	<a class="ref fn" href="misc.h.html#unset_nonblock" title='unset_nonblock' data-ref="unset_nonblock" data-ref-filename="unset_nonblock">unset_nonblock</a>(<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a>);</td></tr>
+<tr><th id="80">80</th><td>	<b>if</b> ((<a class="local col6 ref" href="#6f" title='f' data-ref="6f" data-ref-filename="6f">f</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fdopen" title='fdopen' data-ref="fdopen" data-ref-filename="fdopen">fdopen</a>(<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a>, <q>"r"</q>)) == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>) {</td></tr>
+<tr><th id="81">81</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col8 ref" href="#8fd" title='fd' data-ref="8fd" data-ref-filename="8fd">fd</a>);</td></tr>
+<tr><th id="82">82</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="83">83</th><td>	}</td></tr>
+<tr><th id="84">84</th><td>	<b>while</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fgets" title='fgets' data-ref="fgets" data-ref-filename="fgets">fgets</a>(<a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>, <b>sizeof</b>(<a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>), <a class="local col6 ref" href="#6f" title='f' data-ref="6f" data-ref-filename="6f">f</a>)) {</td></tr>
+<tr><th id="85">85</th><td>		<i>/* All three must have length &gt;= buf to avoid overflows. */</i></td></tr>
+<tr><th id="86">86</th><td>		<em>char</em> <dfn class="local col0 decl" id="10hostbuf" title='hostbuf' data-type='char [1024]' data-ref="10hostbuf" data-ref-filename="10hostbuf">hostbuf</dfn>[<a class="macro" href="#61" title="1024" data-ref="_M/RBUFLN">RBUFLN</a>], <dfn class="local col1 decl" id="11userbuf" title='userbuf' data-type='char [1024]' data-ref="11userbuf" data-ref-filename="11userbuf">userbuf</dfn>[<a class="macro" href="#61" title="1024" data-ref="_M/RBUFLN">RBUFLN</a>], <dfn class="local col2 decl" id="12dummy" title='dummy' data-type='char [1024]' data-ref="12dummy" data-ref-filename="12dummy">dummy</dfn>[<a class="macro" href="#61" title="1024" data-ref="_M/RBUFLN">RBUFLN</a>];</td></tr>
+<tr><th id="87">87</th><td>		<em>char</em> *<dfn class="local col3 decl" id="13host" title='host' data-type='char *' data-ref="13host" data-ref-filename="13host">host</dfn>, *<dfn class="local col4 decl" id="14user" title='user' data-type='char *' data-ref="14user" data-ref-filename="14user">user</dfn>, *<dfn class="local col5 decl" id="15cp" title='cp' data-type='char *' data-ref="15cp" data-ref-filename="15cp">cp</dfn>;</td></tr>
+<tr><th id="88">88</th><td>		<em>int</em> <dfn class="local col6 decl" id="16negated" title='negated' data-type='int' data-ref="16negated" data-ref-filename="16negated">negated</dfn>;</td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td>		<b>for</b> (<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a> = <a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>; *<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a> == <kbd>' '</kbd> || *<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a> == <kbd>'\t'</kbd>; <a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a>++)</td></tr>
+<tr><th id="91">91</th><td>			;</td></tr>
+<tr><th id="92">92</th><td>		<b>if</b> (*<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a> == <kbd>'#'</kbd> || *<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a> == <kbd>'\n'</kbd> || !*<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a>)</td></tr>
+<tr><th id="93">93</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td>		<i>/*</i></td></tr>
+<tr><th id="96">96</th><td><i>		 * NO_PLUS is supported at least on OSF/1.  We skip it (we</i></td></tr>
+<tr><th id="97">97</th><td><i>		 * don't ever support the plus syntax).</i></td></tr>
+<tr><th id="98">98</th><td><i>		 */</i></td></tr>
+<tr><th id="99">99</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strncmp" title='strncmp' data-ref="strncmp" data-ref-filename="strncmp">strncmp</a>(<a class="local col5 ref" href="#15cp" title='cp' data-ref="15cp" data-ref-filename="15cp">cp</a>, <q>"NO_PLUS"</q>, <var>7</var>) == <var>0</var>)</td></tr>
+<tr><th id="100">100</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td>		<i>/*</i></td></tr>
+<tr><th id="103">103</th><td><i>		 * This should be safe because each buffer is as big as the</i></td></tr>
+<tr><th id="104">104</th><td><i>		 * whole string, and thus cannot be overwritten.</i></td></tr>
+<tr><th id="105">105</th><td><i>		 */</i></td></tr>
+<tr><th id="106">106</th><td>		<b>switch</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sscanf" title='sscanf' data-ref="sscanf" data-ref-filename="sscanf">sscanf</a>(<a class="local col7 ref" href="#7buf" title='buf' data-ref="7buf" data-ref-filename="7buf">buf</a>, <q>"%1023s %1023s %1023s"</q>, <a class="local col0 ref" href="#10hostbuf" title='hostbuf' data-ref="10hostbuf" data-ref-filename="10hostbuf">hostbuf</a>, <a class="local col1 ref" href="#11userbuf" title='userbuf' data-ref="11userbuf" data-ref-filename="11userbuf">userbuf</a>,</td></tr>
+<tr><th id="107">107</th><td>		    <a class="local col2 ref" href="#12dummy" title='dummy' data-ref="12dummy" data-ref-filename="12dummy">dummy</a>)) {</td></tr>
+<tr><th id="108">108</th><td>		<b>case</b> <var>0</var>:</td></tr>
+<tr><th id="109">109</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Found empty line in %.100s."</q>, <a class="local col1 ref" href="#1filename" title='filename' data-ref="1filename" data-ref-filename="1filename">filename</a>);</td></tr>
+<tr><th id="110">110</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="111">111</th><td>		<b>case</b> <var>1</var>:</td></tr>
+<tr><th id="112">112</th><td>			<i>/* Host name only. */</i></td></tr>
+<tr><th id="113">113</th><td>			<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlcpy" title='strlcpy' data-ref="strlcpy" data-ref-filename="strlcpy">strlcpy</a>(<a class="local col1 ref" href="#11userbuf" title='userbuf' data-ref="11userbuf" data-ref-filename="11userbuf">userbuf</a>, <a class="local col5 ref" href="#5server_user" title='server_user' data-ref="5server_user" data-ref-filename="5server_user">server_user</a>, <b>sizeof</b>(<a class="local col1 ref" href="#11userbuf" title='userbuf' data-ref="11userbuf" data-ref-filename="11userbuf">userbuf</a>));</td></tr>
+<tr><th id="114">114</th><td>			<b>break</b>;</td></tr>
+<tr><th id="115">115</th><td>		<b>case</b> <var>2</var>:</td></tr>
+<tr><th id="116">116</th><td>			<i>/* Got both host and user name. */</i></td></tr>
+<tr><th id="117">117</th><td>			<b>break</b>;</td></tr>
+<tr><th id="118">118</th><td>		<b>case</b> <var>3</var>:</td></tr>
+<tr><th id="119">119</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Found garbage in %.100s."</q>, <a class="local col1 ref" href="#1filename" title='filename' data-ref="1filename" data-ref-filename="1filename">filename</a>);</td></tr>
+<tr><th id="120">120</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="121">121</th><td>		<b>default</b>:</td></tr>
+<tr><th id="122">122</th><td>			<i>/* Weird... */</i></td></tr>
+<tr><th id="123">123</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="124">124</th><td>		}</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td>		<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a> = <a class="local col0 ref" href="#10hostbuf" title='hostbuf' data-ref="10hostbuf" data-ref-filename="10hostbuf">hostbuf</a>;</td></tr>
+<tr><th id="127">127</th><td>		<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a> = <a class="local col1 ref" href="#11userbuf" title='userbuf' data-ref="11userbuf" data-ref-filename="11userbuf">userbuf</a>;</td></tr>
+<tr><th id="128">128</th><td>		<a class="local col6 ref" href="#16negated" title='negated' data-ref="16negated" data-ref-filename="16negated">negated</a> = <var>0</var>;</td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td>		<i>/* Process negated host names, or positive netgroups. */</i></td></tr>
+<tr><th id="131">131</th><td>		<b>if</b> (<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>[<var>0</var>] == <kbd>'-'</kbd>) {</td></tr>
+<tr><th id="132">132</th><td>			<a class="local col6 ref" href="#16negated" title='negated' data-ref="16negated" data-ref-filename="16negated">negated</a> = <var>1</var>;</td></tr>
+<tr><th id="133">133</th><td>			<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>++;</td></tr>
+<tr><th id="134">134</th><td>		} <b>else</b> <b>if</b> (<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>[<var>0</var>] == <kbd>'+'</kbd>)</td></tr>
+<tr><th id="135">135</th><td>			<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>++;</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td>		<b>if</b> (<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>[<var>0</var>] == <kbd>'-'</kbd>) {</td></tr>
+<tr><th id="138">138</th><td>			<a class="local col6 ref" href="#16negated" title='negated' data-ref="16negated" data-ref-filename="16negated">negated</a> = <var>1</var>;</td></tr>
+<tr><th id="139">139</th><td>			<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>++;</td></tr>
+<tr><th id="140">140</th><td>		} <b>else</b> <b>if</b> (<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>[<var>0</var>] == <kbd>'+'</kbd>)</td></tr>
+<tr><th id="141">141</th><td>			<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>++;</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td>		<i>/* Check for empty host/user names (particularly '+'). */</i></td></tr>
+<tr><th id="144">144</th><td>		<b>if</b> (!<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>[<var>0</var>] || !<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>[<var>0</var>]) {</td></tr>
+<tr><th id="145">145</th><td>			<i>/* We come here if either was '+' or '-'. */</i></td></tr>
+<tr><th id="146">146</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Ignoring wild host/user names "</q></td></tr>
+<tr><th id="147">147</th><td>			    <q>"in %.100s."</q>, <a class="local col1 ref" href="#1filename" title='filename' data-ref="1filename" data-ref-filename="1filename">filename</a>);</td></tr>
+<tr><th id="148">148</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="149">149</th><td>		}</td></tr>
+<tr><th id="150">150</th><td>		<i>/* Verify that host name matches. */</i></td></tr>
+<tr><th id="151">151</th><td>		<b>if</b> (<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>[<var>0</var>] == <kbd>'@'</kbd>) {</td></tr>
+<tr><th id="152">152</th><td>			<b>if</b> (!<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/netgroup.h.html#innetgr" title='innetgr' data-ref="innetgr" data-ref-filename="innetgr">innetgr</a>(<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a> + <var>1</var>, <a class="local col2 ref" href="#2hostname" title='hostname' data-ref="2hostname" data-ref-filename="2hostname">hostname</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>) &amp;&amp;</td></tr>
+<tr><th id="153">153</th><td>			    !<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/netgroup.h.html#innetgr" title='innetgr' data-ref="innetgr" data-ref-filename="innetgr">innetgr</a>(<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a> + <var>1</var>, <a class="local col3 ref" href="#3ipaddr" title='ipaddr' data-ref="3ipaddr" data-ref-filename="3ipaddr">ipaddr</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>))</td></tr>
+<tr><th id="154">154</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="155">155</th><td>		} <b>else</b> <b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/strings.h.html#strcasecmp" title='strcasecmp' data-ref="strcasecmp" data-ref-filename="strcasecmp">strcasecmp</a>(<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>, <a class="local col2 ref" href="#2hostname" title='hostname' data-ref="2hostname" data-ref-filename="2hostname">hostname</a>) &amp;&amp;</td></tr>
+<tr><th id="156">156</th><td>		    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcmp" title='strcmp' data-ref="strcmp" data-ref-filename="strcmp">strcmp</a>(<a class="local col3 ref" href="#13host" title='host' data-ref="13host" data-ref-filename="13host">host</a>, <a class="local col3 ref" href="#3ipaddr" title='ipaddr' data-ref="3ipaddr" data-ref-filename="3ipaddr">ipaddr</a>) != <var>0</var>)</td></tr>
+<tr><th id="157">157</th><td>			<b>continue</b>;	<i>/* Different hostname. */</i></td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td>		<i>/* Verify that user name matches. */</i></td></tr>
+<tr><th id="160">160</th><td>		<b>if</b> (<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>[<var>0</var>] == <kbd>'@'</kbd>) {</td></tr>
+<tr><th id="161">161</th><td>			<b>if</b> (!<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/netgroup.h.html#innetgr" title='innetgr' data-ref="innetgr" data-ref-filename="innetgr">innetgr</a>(<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a> + <var>1</var>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>, <a class="local col4 ref" href="#4client_user" title='client_user' data-ref="4client_user" data-ref-filename="4client_user">client_user</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>))</td></tr>
+<tr><th id="162">162</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="163">163</th><td>		} <b>else</b> <b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcmp" title='strcmp' data-ref="strcmp" data-ref-filename="strcmp">strcmp</a>(<a class="local col4 ref" href="#14user" title='user' data-ref="14user" data-ref-filename="14user">user</a>, <a class="local col4 ref" href="#4client_user" title='client_user' data-ref="4client_user" data-ref-filename="4client_user">client_user</a>) != <var>0</var>)</td></tr>
+<tr><th id="164">164</th><td>			<b>continue</b>;	<i>/* Different username. */</i></td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td>		<i>/* Found the user and host. */</i></td></tr>
+<tr><th id="167">167</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a>(<a class="local col6 ref" href="#6f" title='f' data-ref="6f" data-ref-filename="6f">f</a>);</td></tr>
+<tr><th id="168">168</th><td></td></tr>
+<tr><th id="169">169</th><td>		<i>/* If the entry was negated, deny access. */</i></td></tr>
+<tr><th id="170">170</th><td>		<b>if</b> (<a class="local col6 ref" href="#16negated" title='negated' data-ref="16negated" data-ref-filename="16negated">negated</a>) {</td></tr>
+<tr><th id="171">171</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Matched negative entry in %.100s."</q>,</td></tr>
+<tr><th id="172">172</th><td>			    <a class="local col1 ref" href="#1filename" title='filename' data-ref="1filename" data-ref-filename="1filename">filename</a>);</td></tr>
+<tr><th id="173">173</th><td>			<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="174">174</th><td>		}</td></tr>
+<tr><th id="175">175</th><td>		<i>/* Accept authentication. */</i></td></tr>
+<tr><th id="176">176</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="177">177</th><td>	}</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td>	<i>/* Authentication using this file denied. */</i></td></tr>
+<tr><th id="180">180</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#fclose" title='fclose' data-ref="fclose" data-ref-filename="fclose">fclose</a>(<a class="local col6 ref" href="#6f" title='f' data-ref="6f" data-ref-filename="6f">f</a>);</td></tr>
+<tr><th id="181">181</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="182">182</th><td>}</td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><i>/*</i></td></tr>
+<tr><th id="185">185</th><td><i> * Tries to authenticate the user using the .shosts or .rhosts file. Returns</i></td></tr>
+<tr><th id="186">186</th><td><i> * true if authentication succeeds.  If ignore_rhosts is true, only</i></td></tr>
+<tr><th id="187">187</th><td><i> * /etc/hosts.equiv will be considered (.rhosts and .shosts are ignored).</i></td></tr>
+<tr><th id="188">188</th><td><i> */</i></td></tr>
+<tr><th id="189">189</th><td><em>int</em></td></tr>
+<tr><th id="190">190</th><td><dfn class="decl def fn" id="auth_rhosts2" title='auth_rhosts2' data-ref="auth_rhosts2" data-ref-filename="auth_rhosts2">auth_rhosts2</dfn>(<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd" title='passwd' data-ref="passwd" data-ref-filename="passwd">passwd</a> *<dfn class="local col7 decl" id="17pw" title='pw' data-type='struct passwd *' data-ref="17pw" data-ref-filename="17pw">pw</dfn>, <em>const</em> <em>char</em> *<dfn class="local col8 decl" id="18client_user" title='client_user' data-type='const char *' data-ref="18client_user" data-ref-filename="18client_user">client_user</dfn>, <em>const</em> <em>char</em> *<dfn class="local col9 decl" id="19hostname" title='hostname' data-type='const char *' data-ref="19hostname" data-ref-filename="19hostname">hostname</dfn>,</td></tr>
+<tr><th id="191">191</th><td>    <em>const</em> <em>char</em> *<dfn class="local col0 decl" id="20ipaddr" title='ipaddr' data-type='const char *' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</dfn>)</td></tr>
+<tr><th id="192">192</th><td>{</td></tr>
+<tr><th id="193">193</th><td>	<em>char</em> <dfn class="local col1 decl" id="21buf" title='buf' data-type='char [1024]' data-ref="21buf" data-ref-filename="21buf">buf</dfn>[<var>1024</var>];</td></tr>
+<tr><th id="194">194</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> <dfn class="local col2 decl" id="22st" title='st' data-type='struct stat' data-ref="22st" data-ref-filename="22st">st</dfn>;</td></tr>
+<tr><th id="195">195</th><td>	<em>static</em> <em>const</em> <em>char</em> *<dfn class="local col3 decl" id="23rhosts_files" title='rhosts_files' data-type='const char *[3]' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</dfn>[] = {<q>".shosts"</q>, <q>".rhosts"</q>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>};</td></tr>
+<tr><th id="196">196</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col4 decl" id="24rhosts_file_index" title='rhosts_file_index' data-type='u_int' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</dfn>;</td></tr>
+<tr><th id="197">197</th><td></td></tr>
+<tr><th id="198">198</th><td>	<a class="macro" href="namespace.h.html#10" title="ssh_debug2" data-ref="_M/debug2">debug2</a>(<q>"auth_rhosts2: clientuser %s hostname %s ipaddr %s"</q>,</td></tr>
+<tr><th id="199">199</th><td>	    <a class="local col8 ref" href="#18client_user" title='client_user' data-ref="18client_user" data-ref-filename="18client_user">client_user</a>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>);</td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td>	<i>/* Switch to the user's uid. */</i></td></tr>
+<tr><th id="202">202</th><td>	<a class="ref fn" href="uidswap.h.html#temporarily_use_uid" title='temporarily_use_uid' data-ref="temporarily_use_uid" data-ref-filename="temporarily_use_uid">temporarily_use_uid</a>(<a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>);</td></tr>
+<tr><th id="203">203</th><td>	<i>/*</i></td></tr>
+<tr><th id="204">204</th><td><i>	 * Quick check: if the user has no .shosts or .rhosts files and</i></td></tr>
+<tr><th id="205">205</th><td><i>	 * no system hosts.equiv/shosts.equiv files exist then return</i></td></tr>
+<tr><th id="206">206</th><td><i>	 * failure immediately without doing costly lookups from name</i></td></tr>
+<tr><th id="207">207</th><td><i>	 * servers.</i></td></tr>
+<tr><th id="208">208</th><td><i>	 */</i></td></tr>
+<tr><th id="209">209</th><td>	<b>for</b> (<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a> = <var>0</var>; <a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>];</td></tr>
+<tr><th id="210">210</th><td>	    <a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>++) {</td></tr>
+<tr><th id="211">211</th><td>		<i>/* Check users .rhosts or .shosts. */</i></td></tr>
+<tr><th id="212">212</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a>(<a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, <b>sizeof</b> <a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, <q>"%.500s/%.100s"</q>,</td></tr>
+<tr><th id="213">213</th><td>			 <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_dir" title='passwd::pw_dir' data-ref="passwd::pw_dir" data-ref-filename="passwd..pw_dir">pw_dir</a>, <a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>]);</td></tr>
+<tr><th id="214">214</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, &amp;<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>) &gt;= <var>0</var>)</td></tr>
+<tr><th id="215">215</th><td>			<b>break</b>;</td></tr>
+<tr><th id="216">216</th><td>	}</td></tr>
+<tr><th id="217">217</th><td>	<i>/* Switch back to privileged uid. */</i></td></tr>
+<tr><th id="218">218</th><td>	<a class="ref fn" href="uidswap.h.html#restore_uid" title='restore_uid' data-ref="restore_uid" data-ref-filename="restore_uid">restore_uid</a>();</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td>	<i>/*</i></td></tr>
+<tr><th id="221">221</th><td><i>	 * Deny if The user has no .shosts or .rhosts file and there</i></td></tr>
+<tr><th id="222">222</th><td><i>	 * are no system-wide files.</i></td></tr>
+<tr><th id="223">223</th><td><i>	 */</i></td></tr>
+<tr><th id="224">224</th><td>	<b>if</b> (!<a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>] &amp;&amp;</td></tr>
+<tr><th id="225">225</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<a class="macro" href="pathnames.h.html#109" title="&quot;/etc/hosts.equiv&quot;" data-ref="_M/_PATH_RHOSTS_EQUIV">_PATH_RHOSTS_EQUIV</a>, &amp;<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>) &lt; <var>0</var> &amp;&amp;</td></tr>
+<tr><th id="226">226</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<a class="macro" href="pathnames.h.html#108" title="&quot;/etc&quot; &quot;/shosts.equiv&quot;" data-ref="_M/_PATH_SSH_HOSTS_EQUIV">_PATH_SSH_HOSTS_EQUIV</a>, &amp;<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="227">227</th><td>		<a class="macro" href="namespace.h.html#11" title="ssh_debug3" data-ref="_M/debug3">debug3</a>(<q>"%s: no hosts access files exist"</q>, <b>__func__</b>);</td></tr>
+<tr><th id="228">228</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="229">229</th><td>	}</td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td>	<i>/*</i></td></tr>
+<tr><th id="232">232</th><td><i>	 * If not logging in as superuser, try /etc/hosts.equiv and</i></td></tr>
+<tr><th id="233">233</th><td><i>	 * shosts.equiv.</i></td></tr>
+<tr><th id="234">234</th><td><i>	 */</i></td></tr>
+<tr><th id="235">235</th><td>	<b>if</b> (<a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_uid" title='passwd::pw_uid' data-ref="passwd::pw_uid" data-ref-filename="passwd..pw_uid">pw_uid</a> == <var>0</var>)</td></tr>
+<tr><th id="236">236</th><td>		<a class="macro" href="namespace.h.html#11" title="ssh_debug3" data-ref="_M/debug3">debug3</a>(<q>"%s: root user, ignoring system hosts files"</q>, <b>__func__</b>);</td></tr>
+<tr><th id="237">237</th><td>	<b>else</b> {</td></tr>
+<tr><th id="238">238</th><td>		<b>if</b> (<a class="tu ref fn" href="#check_rhosts_file" title='check_rhosts_file' data-use='c' data-ref="check_rhosts_file" data-ref-filename="check_rhosts_file">check_rhosts_file</a>(<a class="macro" href="pathnames.h.html#109" title="&quot;/etc/hosts.equiv&quot;" data-ref="_M/_PATH_RHOSTS_EQUIV">_PATH_RHOSTS_EQUIV</a>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>,</td></tr>
+<tr><th id="239">239</th><td>		    <a class="local col8 ref" href="#18client_user" title='client_user' data-ref="18client_user" data-ref-filename="18client_user">client_user</a>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>)) {</td></tr>
+<tr><th id="240">240</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Accepted for %.100s [%.100s] by "</q></td></tr>
+<tr><th id="241">241</th><td>			    <q>"/etc/hosts.equiv."</q>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>);</td></tr>
+<tr><th id="242">242</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="243">243</th><td>		}</td></tr>
+<tr><th id="244">244</th><td>		<b>if</b> (<a class="tu ref fn" href="#check_rhosts_file" title='check_rhosts_file' data-use='c' data-ref="check_rhosts_file" data-ref-filename="check_rhosts_file">check_rhosts_file</a>(<a class="macro" href="pathnames.h.html#108" title="&quot;/etc&quot; &quot;/shosts.equiv&quot;" data-ref="_M/_PATH_SSH_HOSTS_EQUIV">_PATH_SSH_HOSTS_EQUIV</a>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>,</td></tr>
+<tr><th id="245">245</th><td>		    <a class="local col8 ref" href="#18client_user" title='client_user' data-ref="18client_user" data-ref-filename="18client_user">client_user</a>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>)) {</td></tr>
+<tr><th id="246">246</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Accepted for %.100s [%.100s] by "</q></td></tr>
+<tr><th id="247">247</th><td>			    <q>"%.100s."</q>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>, <a class="macro" href="pathnames.h.html#108" title="&quot;/etc&quot; &quot;/shosts.equiv&quot;" data-ref="_M/_PATH_SSH_HOSTS_EQUIV">_PATH_SSH_HOSTS_EQUIV</a>);</td></tr>
+<tr><th id="248">248</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="249">249</th><td>		}</td></tr>
+<tr><th id="250">250</th><td>	}</td></tr>
+<tr><th id="251">251</th><td></td></tr>
+<tr><th id="252">252</th><td>	<i>/*</i></td></tr>
+<tr><th id="253">253</th><td><i>	 * Check that the home directory is owned by root or the user, and is</i></td></tr>
+<tr><th id="254">254</th><td><i>	 * not group or world writable.</i></td></tr>
+<tr><th id="255">255</th><td><i>	 */</i></td></tr>
+<tr><th id="256">256</th><td>	<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_dir" title='passwd::pw_dir' data-ref="passwd::pw_dir" data-ref-filename="passwd..pw_dir">pw_dir</a>, &amp;<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="257">257</th><td>		<a class="macro" href="namespace.h.html#21" title="ssh_logit" data-ref="_M/logit">logit</a>(<q>"Rhosts authentication refused for %.100s: "</q></td></tr>
+<tr><th id="258">258</th><td>		    <q>"no home directory %.200s"</q>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_dir" title='passwd::pw_dir' data-ref="passwd::pw_dir" data-ref-filename="passwd..pw_dir">pw_dir</a>);</td></tr>
+<tr><th id="259">259</th><td>		<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Rhosts authentication refused for %.100s: "</q></td></tr>
+<tr><th id="260">260</th><td>		    <q>"no home directory %.200s"</q>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_dir" title='passwd::pw_dir' data-ref="passwd::pw_dir" data-ref-filename="passwd..pw_dir">pw_dir</a>);</td></tr>
+<tr><th id="261">261</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="262">262</th><td>	}</td></tr>
+<tr><th id="263">263</th><td>	<b>if</b> (<a class="ref" href="#options" title='options' data-ref="options" data-ref-filename="options">options</a>.<a class="ref field" href="servconf.h.html#(anonymous)::strict_modes" title='(anonymous struct)::strict_modes' data-ref="(anonymous)::strict_modes" data-ref-filename="(anonymous)..strict_modes">strict_modes</a> &amp;&amp;</td></tr>
+<tr><th id="264">264</th><td>	    ((<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_uid" title='stat::st_uid' data-ref="stat::st_uid" data-ref-filename="stat..st_uid">st_uid</a> != <var>0</var> &amp;&amp; <a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_uid" title='stat::st_uid' data-ref="stat::st_uid" data-ref-filename="stat..st_uid">st_uid</a> != <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_uid" title='passwd::pw_uid' data-ref="passwd::pw_uid" data-ref-filename="passwd..pw_uid">pw_uid</a>) ||</td></tr>
+<tr><th id="265">265</th><td>	    (<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_mode" title='stat::st_mode' data-ref="stat::st_mode" data-ref-filename="stat..st_mode">st_mode</a> &amp; <var>022</var>) != <var>0</var>)) {</td></tr>
+<tr><th id="266">266</th><td>		<a class="macro" href="namespace.h.html#21" title="ssh_logit" data-ref="_M/logit">logit</a>(<q>"Rhosts authentication refused for %.100s: "</q></td></tr>
+<tr><th id="267">267</th><td>		    <q>"bad ownership or modes for home directory."</q>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>);</td></tr>
+<tr><th id="268">268</th><td>		<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Rhosts authentication refused for %.100s: "</q></td></tr>
+<tr><th id="269">269</th><td>		    <q>"bad ownership or modes for home directory."</q>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>);</td></tr>
+<tr><th id="270">270</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="271">271</th><td>	}</td></tr>
+<tr><th id="272">272</th><td>	<i>/* Temporarily use the user's uid. */</i></td></tr>
+<tr><th id="273">273</th><td>	<a class="ref fn" href="uidswap.h.html#temporarily_use_uid" title='temporarily_use_uid' data-ref="temporarily_use_uid" data-ref-filename="temporarily_use_uid">temporarily_use_uid</a>(<a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>);</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td>	<i>/* Check all .rhosts files (currently .shosts and .rhosts). */</i></td></tr>
+<tr><th id="276">276</th><td>	<b>for</b> (<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a> = <var>0</var>; <a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>];</td></tr>
+<tr><th id="277">277</th><td>	    <a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>++) {</td></tr>
+<tr><th id="278">278</th><td>		<i>/* Check users .rhosts or .shosts. */</i></td></tr>
+<tr><th id="279">279</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a>(<a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, <b>sizeof</b> <a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, <q>"%.500s/%.100s"</q>,</td></tr>
+<tr><th id="280">280</th><td>			 <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_dir" title='passwd::pw_dir' data-ref="passwd::pw_dir" data-ref-filename="passwd..pw_dir">pw_dir</a>, <a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>]);</td></tr>
+<tr><th id="281">281</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, &amp;<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="282">282</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="283">283</th><td></td></tr>
+<tr><th id="284">284</th><td>		<i>/*</i></td></tr>
+<tr><th id="285">285</th><td><i>		 * Make sure that the file is either owned by the user or by</i></td></tr>
+<tr><th id="286">286</th><td><i>		 * root, and make sure it is not writable by anyone but the</i></td></tr>
+<tr><th id="287">287</th><td><i>		 * owner.  This is to help avoid novices accidentally</i></td></tr>
+<tr><th id="288">288</th><td><i>		 * allowing access to their account by anyone.</i></td></tr>
+<tr><th id="289">289</th><td><i>		 */</i></td></tr>
+<tr><th id="290">290</th><td>		<b>if</b> (<a class="ref" href="#options" title='options' data-ref="options" data-ref-filename="options">options</a>.<a class="ref field" href="servconf.h.html#(anonymous)::strict_modes" title='(anonymous struct)::strict_modes' data-ref="(anonymous)::strict_modes" data-ref-filename="(anonymous)..strict_modes">strict_modes</a> &amp;&amp;</td></tr>
+<tr><th id="291">291</th><td>		    ((<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_uid" title='stat::st_uid' data-ref="stat::st_uid" data-ref-filename="stat..st_uid">st_uid</a> != <var>0</var> &amp;&amp; <a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_uid" title='stat::st_uid' data-ref="stat::st_uid" data-ref-filename="stat..st_uid">st_uid</a> != <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_uid" title='passwd::pw_uid' data-ref="passwd::pw_uid" data-ref-filename="passwd..pw_uid">pw_uid</a>) ||</td></tr>
+<tr><th id="292">292</th><td>		    (<a class="local col2 ref" href="#22st" title='st' data-ref="22st" data-ref-filename="22st">st</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat::st_mode" title='stat::st_mode' data-ref="stat::st_mode" data-ref-filename="stat..st_mode">st_mode</a> &amp; <var>022</var>) != <var>0</var>)) {</td></tr>
+<tr><th id="293">293</th><td>			<a class="macro" href="namespace.h.html#21" title="ssh_logit" data-ref="_M/logit">logit</a>(<q>"Rhosts authentication refused for %.100s: bad modes for %.200s"</q>,</td></tr>
+<tr><th id="294">294</th><td>			    <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>, <a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>);</td></tr>
+<tr><th id="295">295</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Bad file modes for %.200s"</q>, <a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>);</td></tr>
+<tr><th id="296">296</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="297">297</th><td>		}</td></tr>
+<tr><th id="298">298</th><td>		<i>/*</i></td></tr>
+<tr><th id="299">299</th><td><i>		 * Check if we have been configured to ignore .rhosts</i></td></tr>
+<tr><th id="300">300</th><td><i>		 * and .shosts files.</i></td></tr>
+<tr><th id="301">301</th><td><i>		 */</i></td></tr>
+<tr><th id="302">302</th><td>		<b>if</b> ((<a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_uid" title='passwd::pw_uid' data-ref="passwd::pw_uid" data-ref-filename="passwd..pw_uid">pw_uid</a> == <var>0</var> &amp;&amp; <a class="ref" href="#options" title='options' data-ref="options" data-ref-filename="options">options</a>.<a class="ref field" href="servconf.h.html#(anonymous)::ignore_root_rhosts" title='(anonymous struct)::ignore_root_rhosts' data-ref="(anonymous)::ignore_root_rhosts" data-ref-filename="(anonymous)..ignore_root_rhosts">ignore_root_rhosts</a>) ||</td></tr>
+<tr><th id="303">303</th><td>		    (<a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_uid" title='passwd::pw_uid' data-ref="passwd::pw_uid" data-ref-filename="passwd..pw_uid">pw_uid</a> != <var>0</var> &amp;&amp; <a class="ref" href="#options" title='options' data-ref="options" data-ref-filename="options">options</a>.<a class="ref field" href="servconf.h.html#(anonymous)::ignore_rhosts" title='(anonymous struct)::ignore_rhosts' data-ref="(anonymous)::ignore_rhosts" data-ref-filename="(anonymous)..ignore_rhosts">ignore_rhosts</a>)) {</td></tr>
+<tr><th id="304">304</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Server has been configured to "</q></td></tr>
+<tr><th id="305">305</th><td>			    <q>"ignore %.100s."</q>, <a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>]);</td></tr>
+<tr><th id="306">306</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="307">307</th><td>		}</td></tr>
+<tr><th id="308">308</th><td>		<i>/* Check if authentication is permitted by the file. */</i></td></tr>
+<tr><th id="309">309</th><td>		<b>if</b> (<a class="tu ref fn" href="#check_rhosts_file" title='check_rhosts_file' data-use='c' data-ref="check_rhosts_file" data-ref-filename="check_rhosts_file">check_rhosts_file</a>(<a class="local col1 ref" href="#21buf" title='buf' data-ref="21buf" data-ref-filename="21buf">buf</a>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>,</td></tr>
+<tr><th id="310">310</th><td>		    <a class="local col8 ref" href="#18client_user" title='client_user' data-ref="18client_user" data-ref-filename="18client_user">client_user</a>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>)) {</td></tr>
+<tr><th id="311">311</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Accepted by %.100s."</q>,</td></tr>
+<tr><th id="312">312</th><td>			    <a class="local col3 ref" href="#23rhosts_files" title='rhosts_files' data-ref="23rhosts_files" data-ref-filename="23rhosts_files">rhosts_files</a>[<a class="local col4 ref" href="#24rhosts_file_index" title='rhosts_file_index' data-ref="24rhosts_file_index" data-ref-filename="24rhosts_file_index">rhosts_file_index</a>]);</td></tr>
+<tr><th id="313">313</th><td>			<i>/* Restore the privileged uid. */</i></td></tr>
+<tr><th id="314">314</th><td>			<a class="ref fn" href="uidswap.h.html#restore_uid" title='restore_uid' data-ref="restore_uid" data-ref-filename="restore_uid">restore_uid</a>();</td></tr>
+<tr><th id="315">315</th><td>			<a class="ref fn" href="auth.h.html#auth_debug_add" title='auth_debug_add' data-ref="auth_debug_add" data-ref-filename="auth_debug_add">auth_debug_add</a>(<q>"Accepted host %s ip %s client_user "</q></td></tr>
+<tr><th id="316">316</th><td>			    <q>"%s server_user %s"</q>, <a class="local col9 ref" href="#19hostname" title='hostname' data-ref="19hostname" data-ref-filename="19hostname">hostname</a>, <a class="local col0 ref" href="#20ipaddr" title='ipaddr' data-ref="20ipaddr" data-ref-filename="20ipaddr">ipaddr</a>,</td></tr>
+<tr><th id="317">317</th><td>			    <a class="local col8 ref" href="#18client_user" title='client_user' data-ref="18client_user" data-ref-filename="18client_user">client_user</a>, <a class="local col7 ref" href="#17pw" title='pw' data-ref="17pw" data-ref-filename="17pw">pw</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/pwd.h.html#passwd::pw_name" title='passwd::pw_name' data-ref="passwd::pw_name" data-ref-filename="passwd..pw_name">pw_name</a>);</td></tr>
+<tr><th id="318">318</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="319">319</th><td>		}</td></tr>
+<tr><th id="320">320</th><td>	}</td></tr>
+<tr><th id="321">321</th><td></td></tr>
+<tr><th id="322">322</th><td>	<i>/* Restore the privileged uid. */</i></td></tr>
+<tr><th id="323">323</th><td>	<a class="ref fn" href="uidswap.h.html#restore_uid" title='restore_uid' data-ref="restore_uid" data-ref-filename="restore_uid">restore_uid</a>();</td></tr>
+<tr><th id="324">324</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="325">325</th><td>}</td></tr>
+<tr><th id="326">326</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

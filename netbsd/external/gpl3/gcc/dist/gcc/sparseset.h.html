@@ -1,0 +1,238 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>sparseset.h source code [netbsd/external/gpl3/gcc/dist/gcc/sparseset.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="sparseset_def "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/gcc/sparseset.h'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>gcc</a>/<a href='sparseset.h.html'>sparseset.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* SparseSet implementation.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 2007-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Contributed by Peter Bergner &lt;bergner@vnet.ibm.com&gt;</i></td></tr>
+<tr><th id="4">4</th><td><i></i></td></tr>
+<tr><th id="5">5</th><td><i>This file is part of GCC.</i></td></tr>
+<tr><th id="6">6</th><td><i></i></td></tr>
+<tr><th id="7">7</th><td><i>GCC is free software; you can redistribute it and/or modify it under</i></td></tr>
+<tr><th id="8">8</th><td><i>the terms of the GNU General Public License as published by the Free</i></td></tr>
+<tr><th id="9">9</th><td><i>Software Foundation; either version 3, or (at your option) any later</i></td></tr>
+<tr><th id="10">10</th><td><i>version.</i></td></tr>
+<tr><th id="11">11</th><td><i></i></td></tr>
+<tr><th id="12">12</th><td><i>GCC is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="13">13</th><td><i>WARRANTY; without even the implied warranty of MERCHANTABILITY or</i></td></tr>
+<tr><th id="14">14</th><td><i>FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License</i></td></tr>
+<tr><th id="15">15</th><td><i>for more details.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="18">18</th><td><i>along with GCC; see the file COPYING3.  If not see</i></td></tr>
+<tr><th id="19">19</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="20">20</th><td></td></tr>
+<tr><th id="21">21</th><td><u>#<span data-ppcond="21">ifndef</span> <span class="macro" data-ref="_M/GCC_SPARSESET_H">GCC_SPARSESET_H</span></u></td></tr>
+<tr><th id="22">22</th><td><u>#define <dfn class="macro" id="_M/GCC_SPARSESET_H" data-ref="_M/GCC_SPARSESET_H">GCC_SPARSESET_H</dfn></u></td></tr>
+<tr><th id="23">23</th><td></td></tr>
+<tr><th id="24">24</th><td><i>/* Implementation of the Briggs and Torczon sparse set representation.</i></td></tr>
+<tr><th id="25">25</th><td><i>   The sparse set representation was first published in:</i></td></tr>
+<tr><th id="26">26</th><td><i></i></td></tr>
+<tr><th id="27">27</th><td><i>   "An Efficient Representation for Sparse Sets",</i></td></tr>
+<tr><th id="28">28</th><td><i>   ACM LOPLAS, Vol. 2, Nos. 1-4, March-December 1993, Pages 59-69.</i></td></tr>
+<tr><th id="29">29</th><td><i></i></td></tr>
+<tr><th id="30">30</th><td><i>   The sparse set representation is suitable for integer sets with a</i></td></tr>
+<tr><th id="31">31</th><td><i>   fixed-size universe.  Two vectors are used to store the members of</i></td></tr>
+<tr><th id="32">32</th><td><i>   the set.  If an element I is in the set, then sparse[I] is the</i></td></tr>
+<tr><th id="33">33</th><td><i>   index of I in the dense vector, and dense[sparse[I]] == I.  The dense</i></td></tr>
+<tr><th id="34">34</th><td><i>   vector works like a stack.  The size of the stack is the cardinality</i></td></tr>
+<tr><th id="35">35</th><td><i>   of the set.</i></td></tr>
+<tr><th id="36">36</th><td><i></i></td></tr>
+<tr><th id="37">37</th><td><i>   The following operations can be performed in O(1) time:</i></td></tr>
+<tr><th id="38">38</th><td><i></i></td></tr>
+<tr><th id="39">39</th><td><i>     * clear			: sparseset_clear</i></td></tr>
+<tr><th id="40">40</th><td><i>     * cardinality		: sparseset_cardinality</i></td></tr>
+<tr><th id="41">41</th><td><i>     * set_size			: sparseset_size</i></td></tr>
+<tr><th id="42">42</th><td><i>     * member_p			: sparseset_bit_p</i></td></tr>
+<tr><th id="43">43</th><td><i>     * add_member		: sparseset_set_bit</i></td></tr>
+<tr><th id="44">44</th><td><i>     * remove_member		: sparseset_clear_bit</i></td></tr>
+<tr><th id="45">45</th><td><i>     * choose_one		: sparseset_pop</i></td></tr>
+<tr><th id="46">46</th><td><i></i></td></tr>
+<tr><th id="47">47</th><td><i>   Additionally, the sparse set representation supports enumeration of</i></td></tr>
+<tr><th id="48">48</th><td><i>   the members in O(N) time, where n is the number of members in the set.</i></td></tr>
+<tr><th id="49">49</th><td><i>   The members of the set are stored cache-friendly in the dense vector.</i></td></tr>
+<tr><th id="50">50</th><td><i>   This makes it a competitive choice for iterating over relatively sparse</i></td></tr>
+<tr><th id="51">51</th><td><i>   sets requiring operations:</i></td></tr>
+<tr><th id="52">52</th><td><i></i></td></tr>
+<tr><th id="53">53</th><td><i>     * forall			: EXECUTE_IF_SET_IN_SPARSESET</i></td></tr>
+<tr><th id="54">54</th><td><i>     * set_copy			: sparseset_copy</i></td></tr>
+<tr><th id="55">55</th><td><i>     * set_intersection		: sparseset_and</i></td></tr>
+<tr><th id="56">56</th><td><i>     * set_union		: sparseset_ior</i></td></tr>
+<tr><th id="57">57</th><td><i>     * set_difference		: sparseset_and_compl</i></td></tr>
+<tr><th id="58">58</th><td><i>     * set_disjuction		: (not implemented)</i></td></tr>
+<tr><th id="59">59</th><td><i>     * set_compare		: sparseset_equal_p</i></td></tr>
+<tr><th id="60">60</th><td><i></i></td></tr>
+<tr><th id="61">61</th><td><i>   NB: It is OK to use remove_member during EXECUTE_IF_SET_IN_SPARSESET.</i></td></tr>
+<tr><th id="62">62</th><td><i>   The iterator is updated for it.</i></td></tr>
+<tr><th id="63">63</th><td><i></i></td></tr>
+<tr><th id="64">64</th><td><i>   Based on the efficiency of these operations, this representation of</i></td></tr>
+<tr><th id="65">65</th><td><i>   sparse sets will often be superior to alternatives such as simple</i></td></tr>
+<tr><th id="66">66</th><td><i>   bitmaps, linked-list bitmaps, array bitmaps, balanced binary trees,</i></td></tr>
+<tr><th id="67">67</th><td><i>   hash tables, linked lists, etc., if the set is sufficiently sparse.</i></td></tr>
+<tr><th id="68">68</th><td><i>   In the LOPLAS paper the cut-off point where sparse sets became faster</i></td></tr>
+<tr><th id="69">69</th><td><i>   than simple bitmaps (see sbitmap.h) when N / U &lt; 64 (where U is the</i></td></tr>
+<tr><th id="70">70</th><td><i>   size of the universe of the set).</i></td></tr>
+<tr><th id="71">71</th><td><i></i></td></tr>
+<tr><th id="72">72</th><td><i>   Because the set universe is fixed, the set cannot be resized.  For</i></td></tr>
+<tr><th id="73">73</th><td><i>   sparse sets with initially unknown size, linked-list bitmaps are a</i></td></tr>
+<tr><th id="74">74</th><td><i>   better choice, see bitmap.h.</i></td></tr>
+<tr><th id="75">75</th><td><i></i></td></tr>
+<tr><th id="76">76</th><td><i>   Sparse sets storage requirements are relatively large: O(U) with a</i></td></tr>
+<tr><th id="77">77</th><td><i>   larger constant than sbitmaps (if the storage requirement for an</i></td></tr>
+<tr><th id="78">78</th><td><i>   sbitmap with universe U is S, then the storage required for a sparse</i></td></tr>
+<tr><th id="79">79</th><td><i>   set for the same universe are 2*HOST_BITS_PER_WIDEST_FAST_INT * S).</i></td></tr>
+<tr><th id="80">80</th><td><i>   Accessing the sparse vector is not very cache-friendly, but iterating</i></td></tr>
+<tr><th id="81">81</th><td><i>   over the members in the set is cache-friendly because only the dense</i></td></tr>
+<tr><th id="82">82</th><td><i>   vector is used.  */</i></td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td><i>/* Data Structure used for the SparseSet representation.  */</i></td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><u>#define <dfn class="macro" id="_M/SPARSESET_ELT_BITS" data-ref="_M/SPARSESET_ELT_BITS">SPARSESET_ELT_BITS</dfn> ((unsigned) HOST_BITS_PER_WIDEST_FAST_INT)</u></td></tr>
+<tr><th id="87">87</th><td><u>#define <dfn class="macro" id="_M/SPARSESET_ELT_TYPE" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</dfn> unsigned HOST_WIDEST_FAST_INT</u></td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="sparseset_def" title='sparseset_def' data-ref="sparseset_def" data-ref-filename="sparseset_def"><a class="type" href="#sparseset_def" title='sparseset_def' data-ref="sparseset_def" data-ref-filename="sparseset_def">sparseset_def</a></dfn></td></tr>
+<tr><th id="90">90</th><td>{</td></tr>
+<tr><th id="91">91</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> *<dfn class="decl field" id="sparseset_def::dense" title='sparseset_def::dense' data-ref="sparseset_def::dense" data-ref-filename="sparseset_def..dense">dense</dfn>;	<i>/* Dense array.  */</i></td></tr>
+<tr><th id="92">92</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> *<dfn class="decl field" id="sparseset_def::sparse" title='sparseset_def::sparse' data-ref="sparseset_def::sparse" data-ref-filename="sparseset_def..sparse">sparse</dfn>;	<i>/* Sparse array.  */</i></td></tr>
+<tr><th id="93">93</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="decl field" id="sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</dfn>;	<i>/* Number of elements.  */</i></td></tr>
+<tr><th id="94">94</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="decl field" id="sparseset_def::size" title='sparseset_def::size' data-ref="sparseset_def::size" data-ref-filename="sparseset_def..size">size</dfn>;	<i>/* Maximum number of elements.  */</i></td></tr>
+<tr><th id="95">95</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="decl field" id="sparseset_def::iter" title='sparseset_def::iter' data-ref="sparseset_def::iter" data-ref-filename="sparseset_def..iter">iter</dfn>;	<i>/* Iterator index.  */</i></td></tr>
+<tr><th id="96">96</th><td>  <em>unsigned</em> <em>char</em> <dfn class="decl field" id="sparseset_def::iter_inc" title='sparseset_def::iter_inc' data-ref="sparseset_def::iter_inc" data-ref-filename="sparseset_def..iter_inc">iter_inc</dfn>;	<i>/* Iteration increment amount.  */</i></td></tr>
+<tr><th id="97">97</th><td>  <em>bool</em> <dfn class="decl field" id="sparseset_def::iterating" title='sparseset_def::iterating' data-ref="sparseset_def::iterating" data-ref-filename="sparseset_def..iterating">iterating</dfn>;</td></tr>
+<tr><th id="98">98</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="decl field" id="sparseset_def::elms" title='sparseset_def::elms' data-ref="sparseset_def::elms" data-ref-filename="sparseset_def..elms">elms</dfn>[<var>2</var>];   <i>/* Combined dense and sparse arrays.  */</i></td></tr>
+<tr><th id="99">99</th><td>} *<dfn class="typedef" id="sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</dfn>;</td></tr>
+<tr><th id="100">100</th><td></td></tr>
+<tr><th id="101">101</th><td><u>#define <dfn class="macro" id="_M/sparseset_free" data-ref="_M/sparseset_free">sparseset_free</dfn>(MAP)  free(MAP)</u></td></tr>
+<tr><th id="102">102</th><td><b>extern</b> <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="decl fn" id="_Z15sparseset_allocm" title='sparseset_alloc' data-ref="_Z15sparseset_allocm" data-ref-filename="_Z15sparseset_allocm">sparseset_alloc</dfn> (<a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col1 decl" id="1n_elms" title='n_elms' data-type='unsigned long' data-ref="1n_elms" data-ref-filename="1n_elms">n_elms</dfn>);</td></tr>
+<tr><th id="103">103</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="_Z19sparseset_clear_bitP13sparseset_defm" title='sparseset_clear_bit' data-ref="_Z19sparseset_clear_bitP13sparseset_defm" data-ref-filename="_Z19sparseset_clear_bitP13sparseset_defm">sparseset_clear_bit</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a>);</td></tr>
+<tr><th id="104">104</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="_Z14sparseset_copyP13sparseset_defS0_" title='sparseset_copy' data-ref="_Z14sparseset_copyP13sparseset_defS0_" data-ref-filename="_Z14sparseset_copyP13sparseset_defS0_">sparseset_copy</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>);</td></tr>
+<tr><th id="105">105</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="_Z13sparseset_andP13sparseset_defS0_S0_" title='sparseset_and' data-ref="_Z13sparseset_andP13sparseset_defS0_S0_" data-ref-filename="_Z13sparseset_andP13sparseset_defS0_S0_">sparseset_and</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>);</td></tr>
+<tr><th id="106">106</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="_Z19sparseset_and_complP13sparseset_defS0_S0_" title='sparseset_and_compl' data-ref="_Z19sparseset_and_complP13sparseset_defS0_S0_" data-ref-filename="_Z19sparseset_and_complP13sparseset_defS0_S0_">sparseset_and_compl</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>);</td></tr>
+<tr><th id="107">107</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="_Z13sparseset_iorP13sparseset_defS0_S0_" title='sparseset_ior' data-ref="_Z13sparseset_iorP13sparseset_defS0_S0_" data-ref-filename="_Z13sparseset_iorP13sparseset_defS0_S0_">sparseset_ior</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>);</td></tr>
+<tr><th id="108">108</th><td><b>extern</b> <em>bool</em> <dfn class="decl fn" id="_Z17sparseset_equal_pP13sparseset_defS0_" title='sparseset_equal_p' data-ref="_Z17sparseset_equal_pP13sparseset_defS0_" data-ref-filename="_Z17sparseset_equal_pP13sparseset_defS0_">sparseset_equal_p</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>, <a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a>);</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td><i>/* Operation: S = {}</i></td></tr>
+<tr><th id="111">111</th><td><i>   Clear the set of all elements.  */</i></td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="114">114</th><td><dfn class="decl def fn" id="_ZL15sparseset_clearP13sparseset_def" title='sparseset_clear' data-ref="_ZL15sparseset_clearP13sparseset_def" data-ref-filename="_ZL15sparseset_clearP13sparseset_def">sparseset_clear</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col2 decl" id="2s" title='s' data-type='sparseset' data-ref="2s" data-ref-filename="2s">s</dfn>)</td></tr>
+<tr><th id="115">115</th><td>{</td></tr>
+<tr><th id="116">116</th><td>  <a class="local col2 ref" href="#2s" title='s' data-ref="2s" data-ref-filename="2s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a> = <var>0</var>;</td></tr>
+<tr><th id="117">117</th><td>  <a class="local col2 ref" href="#2s" title='s' data-ref="2s" data-ref-filename="2s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iterating" title='sparseset_def::iterating' data-ref="sparseset_def::iterating" data-ref-filename="sparseset_def..iterating">iterating</a> = <b>false</b>;</td></tr>
+<tr><th id="118">118</th><td>}</td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><i>/* Return the number of elements currently in the set.  */</i></td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td><em>static</em> <b>inline</b> <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a></td></tr>
+<tr><th id="123">123</th><td><dfn class="decl def fn" id="_ZL21sparseset_cardinalityP13sparseset_def" title='sparseset_cardinality' data-ref="_ZL21sparseset_cardinalityP13sparseset_def" data-ref-filename="_ZL21sparseset_cardinalityP13sparseset_def">sparseset_cardinality</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col3 decl" id="3s" title='s' data-type='sparseset' data-ref="3s" data-ref-filename="3s">s</dfn>)</td></tr>
+<tr><th id="124">124</th><td>{</td></tr>
+<tr><th id="125">125</th><td>  <b>return</b> <a class="local col3 ref" href="#3s" title='s' data-ref="3s" data-ref-filename="3s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a>;</td></tr>
+<tr><th id="126">126</th><td>}</td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><i>/* Return the maximum number of elements this set can hold.  */</i></td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td><em>static</em> <b>inline</b> <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a></td></tr>
+<tr><th id="131">131</th><td><dfn class="decl def fn" id="_ZL14sparseset_sizeP13sparseset_def" title='sparseset_size' data-ref="_ZL14sparseset_sizeP13sparseset_def" data-ref-filename="_ZL14sparseset_sizeP13sparseset_def">sparseset_size</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col4 decl" id="4s" title='s' data-type='sparseset' data-ref="4s" data-ref-filename="4s">s</dfn>)</td></tr>
+<tr><th id="132">132</th><td>{</td></tr>
+<tr><th id="133">133</th><td>  <b>return</b> <a class="local col4 ref" href="#4s" title='s' data-ref="4s" data-ref-filename="4s">s</a>-&gt;<a class="ref field" href="#sparseset_def::size" title='sparseset_def::size' data-ref="sparseset_def::size" data-ref-filename="sparseset_def..size">size</a>;</td></tr>
+<tr><th id="134">134</th><td>}</td></tr>
+<tr><th id="135">135</th><td></td></tr>
+<tr><th id="136">136</th><td><i>/* Return true if e is a member of the set S, otherwise return false.  */</i></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><em>static</em> <b>inline</b> <em>bool</em></td></tr>
+<tr><th id="139">139</th><td><dfn class="decl def fn" id="_ZL15sparseset_bit_pP13sparseset_defm" title='sparseset_bit_p' data-ref="_ZL15sparseset_bit_pP13sparseset_defm" data-ref-filename="_ZL15sparseset_bit_pP13sparseset_defm">sparseset_bit_p</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col5 decl" id="5s" title='s' data-type='sparseset' data-ref="5s" data-ref-filename="5s">s</dfn>, <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col6 decl" id="6e" title='e' data-type='unsigned long' data-ref="6e" data-ref-filename="6e">e</dfn>)</td></tr>
+<tr><th id="140">140</th><td>{</td></tr>
+<tr><th id="141">141</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col7 decl" id="7idx" title='idx' data-type='unsigned long' data-ref="7idx" data-ref-filename="7idx">idx</dfn>;</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td>  <a class="macro" href="system.h.html#750" title="((void)(0 &amp;&amp; (e &lt; s-&gt;size)))" data-ref="_M/gcc_checking_assert">gcc_checking_assert</a> (<a class="local col6 ref" href="#6e" title='e' data-ref="6e" data-ref-filename="6e">e</a> &lt; <a class="local col5 ref" href="#5s" title='s' data-ref="5s" data-ref-filename="5s">s</a>-&gt;<a class="ref field" href="#sparseset_def::size" title='sparseset_def::size' data-ref="sparseset_def::size" data-ref-filename="sparseset_def..size">size</a>);</td></tr>
+<tr><th id="144">144</th><td></td></tr>
+<tr><th id="145">145</th><td>  <a class="local col7 ref" href="#7idx" title='idx' data-ref="7idx" data-ref-filename="7idx">idx</a> = <a class="local col5 ref" href="#5s" title='s' data-ref="5s" data-ref-filename="5s">s</a>-&gt;<a class="ref field" href="#sparseset_def::sparse" title='sparseset_def::sparse' data-ref="sparseset_def::sparse" data-ref-filename="sparseset_def..sparse">sparse</a>[<a class="local col6 ref" href="#6e" title='e' data-ref="6e" data-ref-filename="6e">e</a>];</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td>  <b>return</b> <a class="local col7 ref" href="#7idx" title='idx' data-ref="7idx" data-ref-filename="7idx">idx</a> &lt; <a class="local col5 ref" href="#5s" title='s' data-ref="5s" data-ref-filename="5s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a> &amp;&amp; <a class="local col5 ref" href="#5s" title='s' data-ref="5s" data-ref-filename="5s">s</a>-&gt;<a class="ref field" href="#sparseset_def::dense" title='sparseset_def::dense' data-ref="sparseset_def::dense" data-ref-filename="sparseset_def..dense">dense</a>[<a class="local col7 ref" href="#7idx" title='idx' data-ref="7idx" data-ref-filename="7idx">idx</a>] == <a class="local col6 ref" href="#6e" title='e' data-ref="6e" data-ref-filename="6e">e</a>;</td></tr>
+<tr><th id="148">148</th><td>}</td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td><i>/* Low level insertion routine not meant for use outside of sparseset.[ch].</i></td></tr>
+<tr><th id="151">151</th><td><i>   Assumes E is valid and not already a member of the set S.  */</i></td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="154">154</th><td><dfn class="decl def fn" id="_ZL20sparseset_insert_bitP13sparseset_defmm" title='sparseset_insert_bit' data-ref="_ZL20sparseset_insert_bitP13sparseset_defmm" data-ref-filename="_ZL20sparseset_insert_bitP13sparseset_defmm">sparseset_insert_bit</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col8 decl" id="8s" title='s' data-type='sparseset' data-ref="8s" data-ref-filename="8s">s</dfn>, <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col9 decl" id="9e" title='e' data-type='unsigned long' data-ref="9e" data-ref-filename="9e">e</dfn>, <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col0 decl" id="10idx" title='idx' data-type='unsigned long' data-ref="10idx" data-ref-filename="10idx">idx</dfn>)</td></tr>
+<tr><th id="155">155</th><td>{</td></tr>
+<tr><th id="156">156</th><td>  <a class="local col8 ref" href="#8s" title='s' data-ref="8s" data-ref-filename="8s">s</a>-&gt;<a class="ref field" href="#sparseset_def::sparse" title='sparseset_def::sparse' data-ref="sparseset_def::sparse" data-ref-filename="sparseset_def..sparse">sparse</a>[<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>] = <a class="local col0 ref" href="#10idx" title='idx' data-ref="10idx" data-ref-filename="10idx">idx</a>;</td></tr>
+<tr><th id="157">157</th><td>  <a class="local col8 ref" href="#8s" title='s' data-ref="8s" data-ref-filename="8s">s</a>-&gt;<a class="ref field" href="#sparseset_def::dense" title='sparseset_def::dense' data-ref="sparseset_def::dense" data-ref-filename="sparseset_def..dense">dense</a>[<a class="local col0 ref" href="#10idx" title='idx' data-ref="10idx" data-ref-filename="10idx">idx</a>] = <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>;</td></tr>
+<tr><th id="158">158</th><td>}</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td><i>/* Operation: S = S + {e}</i></td></tr>
+<tr><th id="161">161</th><td><i>   Insert E into the set S, if it isn't already a member.  */</i></td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="164">164</th><td><dfn class="decl def fn" id="_ZL17sparseset_set_bitP13sparseset_defm" title='sparseset_set_bit' data-ref="_ZL17sparseset_set_bitP13sparseset_defm" data-ref-filename="_ZL17sparseset_set_bitP13sparseset_defm">sparseset_set_bit</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col1 decl" id="11s" title='s' data-type='sparseset' data-ref="11s" data-ref-filename="11s">s</dfn>, <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col2 decl" id="12e" title='e' data-type='unsigned long' data-ref="12e" data-ref-filename="12e">e</dfn>)</td></tr>
+<tr><th id="165">165</th><td>{</td></tr>
+<tr><th id="166">166</th><td>  <b>if</b> (!<a class="ref fn" href="#_ZL15sparseset_bit_pP13sparseset_defm" title='sparseset_bit_p' data-ref="_ZL15sparseset_bit_pP13sparseset_defm" data-ref-filename="_ZL15sparseset_bit_pP13sparseset_defm">sparseset_bit_p</a> (<a class="local col1 ref" href="#11s" title='s' data-ref="11s" data-ref-filename="11s">s</a>, <a class="local col2 ref" href="#12e" title='e' data-ref="12e" data-ref-filename="12e">e</a>))</td></tr>
+<tr><th id="167">167</th><td>    <a class="ref fn" href="#_ZL20sparseset_insert_bitP13sparseset_defmm" title='sparseset_insert_bit' data-ref="_ZL20sparseset_insert_bitP13sparseset_defmm" data-ref-filename="_ZL20sparseset_insert_bitP13sparseset_defmm">sparseset_insert_bit</a> (<a class="local col1 ref" href="#11s" title='s' data-ref="11s" data-ref-filename="11s">s</a>, <a class="local col2 ref" href="#12e" title='e' data-ref="12e" data-ref-filename="12e">e</a>, <a class="local col1 ref" href="#11s" title='s' data-ref="11s" data-ref-filename="11s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a>++);</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><i>/* Return and remove the last member added to the set S.  */</i></td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td><em>static</em> <b>inline</b> <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a></td></tr>
+<tr><th id="173">173</th><td><dfn class="decl def fn" id="_ZL13sparseset_popP13sparseset_def" title='sparseset_pop' data-ref="_ZL13sparseset_popP13sparseset_def" data-ref-filename="_ZL13sparseset_popP13sparseset_def">sparseset_pop</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col3 decl" id="13s" title='s' data-type='sparseset' data-ref="13s" data-ref-filename="13s">s</dfn>)</td></tr>
+<tr><th id="174">174</th><td>{</td></tr>
+<tr><th id="175">175</th><td>  <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a> <dfn class="local col4 decl" id="14mem" title='mem' data-type='unsigned long' data-ref="14mem" data-ref-filename="14mem">mem</dfn> = <a class="local col3 ref" href="#13s" title='s' data-ref="13s" data-ref-filename="13s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a>;</td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td>  <a class="macro" href="system.h.html#750" title="((void)(0 &amp;&amp; (mem != 0)))" data-ref="_M/gcc_checking_assert">gcc_checking_assert</a> (<a class="local col4 ref" href="#14mem" title='mem' data-ref="14mem" data-ref-filename="14mem">mem</a> != <var>0</var>);</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td>  <a class="local col3 ref" href="#13s" title='s' data-ref="13s" data-ref-filename="13s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a> = <a class="local col4 ref" href="#14mem" title='mem' data-ref="14mem" data-ref-filename="14mem">mem</a> - <var>1</var>;</td></tr>
+<tr><th id="180">180</th><td>  <b>return</b> <a class="local col3 ref" href="#13s" title='s' data-ref="13s" data-ref-filename="13s">s</a>-&gt;<a class="ref field" href="#sparseset_def::dense" title='sparseset_def::dense' data-ref="sparseset_def::dense" data-ref-filename="sparseset_def..dense">dense</a>[<a class="local col3 ref" href="#13s" title='s' data-ref="13s" data-ref-filename="13s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a>];</td></tr>
+<tr><th id="181">181</th><td>}</td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="184">184</th><td><dfn class="decl def fn" id="_ZL19sparseset_iter_initP13sparseset_def" title='sparseset_iter_init' data-ref="_ZL19sparseset_iter_initP13sparseset_def" data-ref-filename="_ZL19sparseset_iter_initP13sparseset_def">sparseset_iter_init</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col5 decl" id="15s" title='s' data-type='sparseset' data-ref="15s" data-ref-filename="15s">s</dfn>)</td></tr>
+<tr><th id="185">185</th><td>{</td></tr>
+<tr><th id="186">186</th><td>  <a class="local col5 ref" href="#15s" title='s' data-ref="15s" data-ref-filename="15s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter" title='sparseset_def::iter' data-ref="sparseset_def::iter" data-ref-filename="sparseset_def..iter">iter</a> = <var>0</var>;</td></tr>
+<tr><th id="187">187</th><td>  <a class="local col5 ref" href="#15s" title='s' data-ref="15s" data-ref-filename="15s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter_inc" title='sparseset_def::iter_inc' data-ref="sparseset_def::iter_inc" data-ref-filename="sparseset_def..iter_inc">iter_inc</a> = <var>1</var>;</td></tr>
+<tr><th id="188">188</th><td>  <a class="local col5 ref" href="#15s" title='s' data-ref="15s" data-ref-filename="15s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iterating" title='sparseset_def::iterating' data-ref="sparseset_def::iterating" data-ref-filename="sparseset_def..iterating">iterating</a> = <b>true</b>;</td></tr>
+<tr><th id="189">189</th><td>}</td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td><em>static</em> <b>inline</b> <em>bool</em></td></tr>
+<tr><th id="192">192</th><td><dfn class="decl def fn" id="_ZL16sparseset_iter_pP13sparseset_def" title='sparseset_iter_p' data-ref="_ZL16sparseset_iter_pP13sparseset_def" data-ref-filename="_ZL16sparseset_iter_pP13sparseset_def">sparseset_iter_p</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col6 decl" id="16s" title='s' data-type='sparseset' data-ref="16s" data-ref-filename="16s">s</dfn>)</td></tr>
+<tr><th id="193">193</th><td>{</td></tr>
+<tr><th id="194">194</th><td>  <b>if</b> (<a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iterating" title='sparseset_def::iterating' data-ref="sparseset_def::iterating" data-ref-filename="sparseset_def..iterating">iterating</a> &amp;&amp; <a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter" title='sparseset_def::iter' data-ref="sparseset_def::iter" data-ref-filename="sparseset_def..iter">iter</a> &lt; <a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>-&gt;<a class="ref field" href="#sparseset_def::members" title='sparseset_def::members' data-ref="sparseset_def::members" data-ref-filename="sparseset_def..members">members</a>)</td></tr>
+<tr><th id="195">195</th><td>    <b>return</b> <b>true</b>;</td></tr>
+<tr><th id="196">196</th><td>  <b>else</b></td></tr>
+<tr><th id="197">197</th><td>    <b>return</b> <a class="local col6 ref" href="#16s" title='s' data-ref="16s" data-ref-filename="16s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iterating" title='sparseset_def::iterating' data-ref="sparseset_def::iterating" data-ref-filename="sparseset_def..iterating">iterating</a> = <b>false</b>;</td></tr>
+<tr><th id="198">198</th><td>}</td></tr>
+<tr><th id="199">199</th><td></td></tr>
+<tr><th id="200">200</th><td><em>static</em> <b>inline</b> <a class="macro" href="#87" title="unsigned long" data-ref="_M/SPARSESET_ELT_TYPE">SPARSESET_ELT_TYPE</a></td></tr>
+<tr><th id="201">201</th><td><dfn class="decl def fn" id="_ZL18sparseset_iter_elmP13sparseset_def" title='sparseset_iter_elm' data-ref="_ZL18sparseset_iter_elmP13sparseset_def" data-ref-filename="_ZL18sparseset_iter_elmP13sparseset_def">sparseset_iter_elm</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col7 decl" id="17s" title='s' data-type='sparseset' data-ref="17s" data-ref-filename="17s">s</dfn>)</td></tr>
+<tr><th id="202">202</th><td>{</td></tr>
+<tr><th id="203">203</th><td>  <b>return</b> <a class="local col7 ref" href="#17s" title='s' data-ref="17s" data-ref-filename="17s">s</a>-&gt;<a class="ref field" href="#sparseset_def::dense" title='sparseset_def::dense' data-ref="sparseset_def::dense" data-ref-filename="sparseset_def..dense">dense</a>[<a class="local col7 ref" href="#17s" title='s' data-ref="17s" data-ref-filename="17s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter" title='sparseset_def::iter' data-ref="sparseset_def::iter" data-ref-filename="sparseset_def..iter">iter</a>];</td></tr>
+<tr><th id="204">204</th><td>}</td></tr>
+<tr><th id="205">205</th><td></td></tr>
+<tr><th id="206">206</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="207">207</th><td><dfn class="decl def fn" id="_ZL19sparseset_iter_nextP13sparseset_def" title='sparseset_iter_next' data-ref="_ZL19sparseset_iter_nextP13sparseset_def" data-ref-filename="_ZL19sparseset_iter_nextP13sparseset_def">sparseset_iter_next</dfn> (<a class="typedef" href="#sparseset" title='sparseset' data-type='struct sparseset_def *' data-ref="sparseset" data-ref-filename="sparseset">sparseset</a> <dfn class="local col8 decl" id="18s" title='s' data-type='sparseset' data-ref="18s" data-ref-filename="18s">s</dfn>)</td></tr>
+<tr><th id="208">208</th><td>{</td></tr>
+<tr><th id="209">209</th><td>  <a class="local col8 ref" href="#18s" title='s' data-ref="18s" data-ref-filename="18s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter" title='sparseset_def::iter' data-ref="sparseset_def::iter" data-ref-filename="sparseset_def..iter">iter</a> += <a class="local col8 ref" href="#18s" title='s' data-ref="18s" data-ref-filename="18s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter_inc" title='sparseset_def::iter_inc' data-ref="sparseset_def::iter_inc" data-ref-filename="sparseset_def..iter_inc">iter_inc</a>;</td></tr>
+<tr><th id="210">210</th><td>  <a class="local col8 ref" href="#18s" title='s' data-ref="18s" data-ref-filename="18s">s</a>-&gt;<a class="ref field" href="#sparseset_def::iter_inc" title='sparseset_def::iter_inc' data-ref="sparseset_def::iter_inc" data-ref-filename="sparseset_def..iter_inc">iter_inc</a> = <var>1</var>;</td></tr>
+<tr><th id="211">211</th><td>}</td></tr>
+<tr><th id="212">212</th><td></td></tr>
+<tr><th id="213">213</th><td><u>#define <dfn class="macro" id="_M/EXECUTE_IF_SET_IN_SPARSESET" data-ref="_M/EXECUTE_IF_SET_IN_SPARSESET">EXECUTE_IF_SET_IN_SPARSESET</dfn>(SPARSESET, ITER)			\</u></td></tr>
+<tr><th id="214">214</th><td><u>  for (sparseset_iter_init (SPARSESET);					\</u></td></tr>
+<tr><th id="215">215</th><td><u>       sparseset_iter_p (SPARSESET)					\</u></td></tr>
+<tr><th id="216">216</th><td><u>       &amp;&amp; (((ITER) = sparseset_iter_elm (SPARSESET)) || 1);		\</u></td></tr>
+<tr><th id="217">217</th><td><u>       sparseset_iter_next (SPARSESET))</u></td></tr>
+<tr><th id="218">218</th><td></td></tr>
+<tr><th id="219">219</th><td><u>#<span data-ppcond="21">endif</span> /* GCC_SPARSESET_H */</u></td></tr>
+<tr><th id="220">220</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='fwprop.c.html'>netbsd/external/gpl3/gcc/dist/gcc/fwprop.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

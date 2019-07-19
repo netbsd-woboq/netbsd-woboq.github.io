@@ -1,0 +1,665 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>mesh.h source code [netbsd/external/bsd/unbound/dist/services/mesh.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="mesh_area,mesh_cb,mesh_list_select,mesh_reply,mesh_state,mesh_state_ref "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/unbound/dist/services/mesh.h'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>unbound</a>/<a href='..'>dist</a>/<a href='./'>services</a>/<a href='mesh.h.html'>mesh.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * services/mesh.h - deal with mesh of query states and handle events for that.</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007, NLnet Labs. All rights reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This software is open source.</i></td></tr>
+<tr><th id="7">7</th><td><i> * </i></td></tr>
+<tr><th id="8">8</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="9">9</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="10">10</th><td><i> * are met:</i></td></tr>
+<tr><th id="11">11</th><td><i> * </i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistributions of source code must retain the above copyright notice,</i></td></tr>
+<tr><th id="13">13</th><td><i> * this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="14">14</th><td><i> * </i></td></tr>
+<tr><th id="15">15</th><td><i> * Redistributions in binary form must reproduce the above copyright notice,</i></td></tr>
+<tr><th id="16">16</th><td><i> * this list of conditions and the following disclaimer in the documentation</i></td></tr>
+<tr><th id="17">17</th><td><i> * and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> * </i></td></tr>
+<tr><th id="19">19</th><td><i> * Neither the name of the NLNET LABS nor the names of its contributors may</i></td></tr>
+<tr><th id="20">20</th><td><i> * be used to endorse or promote products derived from this software without</i></td></tr>
+<tr><th id="21">21</th><td><i> * specific prior written permission.</i></td></tr>
+<tr><th id="22">22</th><td><i> * </i></td></tr>
+<tr><th id="23">23</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS</i></td></tr>
+<tr><th id="24">24</th><td><i> * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT</i></td></tr>
+<tr><th id="25">25</th><td><i> * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR</i></td></tr>
+<tr><th id="26">26</th><td><i> * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT</i></td></tr>
+<tr><th id="27">27</th><td><i> * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,</i></td></tr>
+<tr><th id="28">28</th><td><i> * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="29">29</th><td><i> * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR</i></td></tr>
+<tr><th id="30">30</th><td><i> * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF</i></td></tr>
+<tr><th id="31">31</th><td><i> * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING</i></td></tr>
+<tr><th id="32">32</th><td><i> * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS</i></td></tr>
+<tr><th id="33">33</th><td><i> * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="34">34</th><td><i> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> *<span class="command"> \file</span></i></td></tr>
+<tr><th id="38">38</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="39">39</th><td><i class="doc"> * This file contains functions to assist in dealing with a mesh of</i></td></tr>
+<tr><th id="40">40</th><td><i class="doc"> * query states. This mesh is supposed to be thread-specific.</i></td></tr>
+<tr><th id="41">41</th><td><i class="doc"> * It consists of query states (per qname, qtype, qclass) and connections</i></td></tr>
+<tr><th id="42">42</th><td><i class="doc"> * between query states and the super and subquery states, and replies to</i></td></tr>
+<tr><th id="43">43</th><td><i class="doc"> * send back to clients.</i></td></tr>
+<tr><th id="44">44</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><u>#<span data-ppcond="46">ifndef</span> <span class="macro" data-ref="_M/SERVICES_MESH_H">SERVICES_MESH_H</span></u></td></tr>
+<tr><th id="47">47</th><td><u>#define <dfn class="macro" id="_M/SERVICES_MESH_H" data-ref="_M/SERVICES_MESH_H">SERVICES_MESH_H</dfn></u></td></tr>
+<tr><th id="48">48</th><td></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../util/rbtree.h.html">"util/rbtree.h"</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../util/netevent.h.html">"util/netevent.h"</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../util/data/msgparse.h.html">"util/data/msgparse.h"</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../util/module.h.html">"util/module.h"</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="modstack.h.html">"services/modstack.h"</a></u></td></tr>
+<tr><th id="54">54</th><td><b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer" id="sldns_buffer">sldns_buffer</a>;</td></tr>
+<tr><th id="55">55</th><td><b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>;</td></tr>
+<tr><th id="56">56</th><td><b>struct</b> <a class="type" href="#mesh_reply" title='mesh_reply' data-ref="mesh_reply" data-ref-filename="mesh_reply">mesh_reply</a>;</td></tr>
+<tr><th id="57">57</th><td><b>struct</b> <a class="type" href="#mesh_cb" title='mesh_cb' data-ref="mesh_cb" data-ref-filename="mesh_cb">mesh_cb</a>;</td></tr>
+<tr><th id="58">58</th><td><b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info" id="query_info">query_info</a>;</td></tr>
+<tr><th id="59">59</th><td><b>struct</b> <a class="type" href="../util/data/msgreply.h.html#reply_info" title='reply_info' data-ref="reply_info" data-ref-filename="reply_info" id="reply_info">reply_info</a>;</td></tr>
+<tr><th id="60">60</th><td><b>struct</b> <a class="type" href="../util/module.h.html#outbound_entry" title='outbound_entry' data-ref="outbound_entry" data-ref-filename="outbound_entry" id="outbound_entry">outbound_entry</a>;</td></tr>
+<tr><th id="61">61</th><td><b>struct</b> <dfn class="type" id="timehist" title='timehist' data-ref="timehist" data-ref-filename="timehist">timehist</dfn>;</td></tr>
+<tr><th id="62">62</th><td><b>struct</b> <a class="type" href="../util/module.h.html#respip_client_info" title='respip_client_info' data-ref="respip_client_info" data-ref-filename="respip_client_info" id="respip_client_info">respip_client_info</a>;</td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="65">65</th><td><i class="doc"> * Maximum number of mesh state activations. Any more is likely an</i></td></tr>
+<tr><th id="66">66</th><td><i class="doc"> * infinite loop in the module. It is then terminated.</i></td></tr>
+<tr><th id="67">67</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="68">68</th><td><u>#define <dfn class="macro" id="_M/MESH_MAX_ACTIVATION" data-ref="_M/MESH_MAX_ACTIVATION">MESH_MAX_ACTIVATION</dfn> 10000</u></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="71">71</th><td><i class="doc"> * Max number of references-to-references-to-references.. search size.</i></td></tr>
+<tr><th id="72">72</th><td><i class="doc"> * Any more is treated like 'too large', and the creation of a new</i></td></tr>
+<tr><th id="73">73</th><td><i class="doc"> * dependency is failed (so that no loops can be created).</i></td></tr>
+<tr><th id="74">74</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="75">75</th><td><u>#define <dfn class="macro" id="_M/MESH_MAX_SUBSUB" data-ref="_M/MESH_MAX_SUBSUB">MESH_MAX_SUBSUB</dfn> 1024</u></td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td><i class="doc">/** </i></td></tr>
+<tr><th id="78">78</th><td><i class="doc"> * Mesh of query states</i></td></tr>
+<tr><th id="79">79</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="80">80</th><td><b>struct</b> <dfn class="type def" id="mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</dfn> {</td></tr>
+<tr><th id="81">81</th><td>	<i class="doc">/** active module stack */</i></td></tr>
+<tr><th id="82">82</th><td>	<b>struct</b> <a class="type" href="modstack.h.html#module_stack" title='module_stack' data-ref="module_stack" data-ref-filename="module_stack">module_stack</a> <dfn class="decl field" id="mesh_area::mods" title='mesh_area::mods' data-ref="mesh_area::mods" data-ref-filename="mesh_area..mods">mods</dfn>;</td></tr>
+<tr><th id="83">83</th><td>	<i class="doc">/** environment for new states */</i></td></tr>
+<tr><th id="84">84</th><td>	<b>struct</b> <a class="type" href="../util/module.h.html#module_env" title='module_env' data-ref="module_env" data-ref-filename="module_env">module_env</a>* <dfn class="decl field" id="mesh_area::env" title='mesh_area::env' data-ref="mesh_area::env" data-ref-filename="mesh_area..env">env</dfn>;</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td>	<i class="doc">/** set of runnable queries (mesh_state.run_node) */</i></td></tr>
+<tr><th id="87">87</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbtree_type" title='rbtree_type' data-type='struct rbtree_type' data-ref="rbtree_type" data-ref-filename="rbtree_type">rbtree_type</a> <dfn class="decl field" id="mesh_area::run" title='mesh_area::run' data-ref="mesh_area::run" data-ref-filename="mesh_area..run">run</dfn>;</td></tr>
+<tr><th id="88">88</th><td>	<i class="doc">/** rbtree of all current queries (mesh_state.node)*/</i></td></tr>
+<tr><th id="89">89</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbtree_type" title='rbtree_type' data-type='struct rbtree_type' data-ref="rbtree_type" data-ref-filename="rbtree_type">rbtree_type</a> <dfn class="decl field" id="mesh_area::all" title='mesh_area::all' data-ref="mesh_area::all" data-ref-filename="mesh_area..all">all</dfn>;</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td>	<i class="doc">/** count of the total number of mesh_reply entries */</i></td></tr>
+<tr><th id="92">92</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::num_reply_addrs" title='mesh_area::num_reply_addrs' data-ref="mesh_area::num_reply_addrs" data-ref-filename="mesh_area..num_reply_addrs">num_reply_addrs</dfn>;</td></tr>
+<tr><th id="93">93</th><td>	<i class="doc">/** count of the number of mesh_states that have mesh_replies </i></td></tr>
+<tr><th id="94">94</th><td><i class="doc">	 * Because a state can send results to multiple reply addresses,</i></td></tr>
+<tr><th id="95">95</th><td><i class="doc">	 * this number must be equal or lower than num_reply_addrs. */</i></td></tr>
+<tr><th id="96">96</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::num_reply_states" title='mesh_area::num_reply_states' data-ref="mesh_area::num_reply_states" data-ref-filename="mesh_area..num_reply_states">num_reply_states</dfn>;</td></tr>
+<tr><th id="97">97</th><td>	<i class="doc">/** number of mesh_states that have no mesh_replies, and also</i></td></tr>
+<tr><th id="98">98</th><td><i class="doc">	 * an empty set of super-states, thus are 'toplevel' or detached</i></td></tr>
+<tr><th id="99">99</th><td><i class="doc">	 * internal opportunistic queries */</i></td></tr>
+<tr><th id="100">100</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::num_detached_states" title='mesh_area::num_detached_states' data-ref="mesh_area::num_detached_states" data-ref-filename="mesh_area..num_detached_states">num_detached_states</dfn>;</td></tr>
+<tr><th id="101">101</th><td>	<i class="doc">/** number of reply states in the forever list */</i></td></tr>
+<tr><th id="102">102</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::num_forever_states" title='mesh_area::num_forever_states' data-ref="mesh_area::num_forever_states" data-ref-filename="mesh_area..num_forever_states">num_forever_states</dfn>;</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td>	<i class="doc">/** max total number of reply states to have */</i></td></tr>
+<tr><th id="105">105</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::max_reply_states" title='mesh_area::max_reply_states' data-ref="mesh_area::max_reply_states" data-ref-filename="mesh_area..max_reply_states">max_reply_states</dfn>;</td></tr>
+<tr><th id="106">106</th><td>	<i class="doc">/** max forever number of reply states to have */</i></td></tr>
+<tr><th id="107">107</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::max_forever_states" title='mesh_area::max_forever_states' data-ref="mesh_area::max_forever_states" data-ref-filename="mesh_area..max_forever_states">max_forever_states</dfn>;</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td>	<i class="doc">/** stats, cumulative number of reply states jostled out */</i></td></tr>
+<tr><th id="110">110</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::stats_jostled" title='mesh_area::stats_jostled' data-ref="mesh_area::stats_jostled" data-ref-filename="mesh_area..stats_jostled">stats_jostled</dfn>;</td></tr>
+<tr><th id="111">111</th><td>	<i class="doc">/** stats, cumulative number of incoming client msgs dropped */</i></td></tr>
+<tr><th id="112">112</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::stats_dropped" title='mesh_area::stats_dropped' data-ref="mesh_area::stats_dropped" data-ref-filename="mesh_area..stats_dropped">stats_dropped</dfn>;</td></tr>
+<tr><th id="113">113</th><td>	<i class="doc">/** number of replies sent */</i></td></tr>
+<tr><th id="114">114</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::replies_sent" title='mesh_area::replies_sent' data-ref="mesh_area::replies_sent" data-ref-filename="mesh_area..replies_sent">replies_sent</dfn>;</td></tr>
+<tr><th id="115">115</th><td>	<i class="doc">/** sum of waiting times for the replies */</i></td></tr>
+<tr><th id="116">116</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="decl field" id="mesh_area::replies_sum_wait" title='mesh_area::replies_sum_wait' data-ref="mesh_area::replies_sum_wait" data-ref-filename="mesh_area..replies_sum_wait">replies_sum_wait</dfn>;</td></tr>
+<tr><th id="117">117</th><td>	<i class="doc">/** histogram of time values */</i></td></tr>
+<tr><th id="118">118</th><td>	<b>struct</b> <a class="type" href="#timehist" title='timehist' data-ref="timehist" data-ref-filename="timehist">timehist</a>* <dfn class="decl field" id="mesh_area::histogram" title='mesh_area::histogram' data-ref="mesh_area::histogram" data-ref-filename="mesh_area..histogram">histogram</dfn>;</td></tr>
+<tr><th id="119">119</th><td>	<i class="doc">/** (extended stats) secure replies */</i></td></tr>
+<tr><th id="120">120</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::ans_secure" title='mesh_area::ans_secure' data-ref="mesh_area::ans_secure" data-ref-filename="mesh_area..ans_secure">ans_secure</dfn>;</td></tr>
+<tr><th id="121">121</th><td>	<i class="doc">/** (extended stats) bogus replies */</i></td></tr>
+<tr><th id="122">122</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::ans_bogus" title='mesh_area::ans_bogus' data-ref="mesh_area::ans_bogus" data-ref-filename="mesh_area..ans_bogus">ans_bogus</dfn>;</td></tr>
+<tr><th id="123">123</th><td>	<i class="doc">/** (extended stats) rcodes in replies */</i></td></tr>
+<tr><th id="124">124</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::ans_rcode" title='mesh_area::ans_rcode' data-ref="mesh_area::ans_rcode" data-ref-filename="mesh_area..ans_rcode">ans_rcode</dfn>[<var>16</var>];</td></tr>
+<tr><th id="125">125</th><td>	<i class="doc">/** (extended stats) rcode nodata in replies */</i></td></tr>
+<tr><th id="126">126</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_area::ans_nodata" title='mesh_area::ans_nodata' data-ref="mesh_area::ans_nodata" data-ref-filename="mesh_area..ans_nodata">ans_nodata</dfn>;</td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td>	<i class="doc">/** backup of query if other operations recurse and need the</i></td></tr>
+<tr><th id="129">129</th><td><i class="doc">	 * network buffers */</i></td></tr>
+<tr><th id="130">130</th><td>	<b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>* <dfn class="decl field" id="mesh_area::qbuf_bak" title='mesh_area::qbuf_bak' data-ref="mesh_area::qbuf_bak" data-ref-filename="mesh_area..qbuf_bak">qbuf_bak</dfn>;</td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td>	<i class="doc">/** double linked list of the run-to-completion query states.</i></td></tr>
+<tr><th id="133">133</th><td><i class="doc">	 * These are query states with a reply */</i></td></tr>
+<tr><th id="134">134</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_area::forever_first" title='mesh_area::forever_first' data-ref="mesh_area::forever_first" data-ref-filename="mesh_area..forever_first">forever_first</dfn>;</td></tr>
+<tr><th id="135">135</th><td>	<i class="doc">/** last entry in run forever list */</i></td></tr>
+<tr><th id="136">136</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_area::forever_last" title='mesh_area::forever_last' data-ref="mesh_area::forever_last" data-ref-filename="mesh_area..forever_last">forever_last</dfn>;</td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td>	<i class="doc">/** double linked list of the query states that can be jostled out</i></td></tr>
+<tr><th id="139">139</th><td><i class="doc">	 * by new queries if too old.  These are query states with a reply */</i></td></tr>
+<tr><th id="140">140</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_area::jostle_first" title='mesh_area::jostle_first' data-ref="mesh_area::jostle_first" data-ref-filename="mesh_area..jostle_first">jostle_first</dfn>;</td></tr>
+<tr><th id="141">141</th><td>	<i class="doc">/** last entry in jostle list - this is the entry that is newest */</i></td></tr>
+<tr><th id="142">142</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_area::jostle_last" title='mesh_area::jostle_last' data-ref="mesh_area::jostle_last" data-ref-filename="mesh_area..jostle_last">jostle_last</dfn>;</td></tr>
+<tr><th id="143">143</th><td>	<i class="doc">/** timeout for jostling. if age is lower, it does not get jostled. */</i></td></tr>
+<tr><th id="144">144</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="decl field" id="mesh_area::jostle_max" title='mesh_area::jostle_max' data-ref="mesh_area::jostle_max" data-ref-filename="mesh_area..jostle_max">jostle_max</dfn>;</td></tr>
+<tr><th id="145">145</th><td>};</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="148">148</th><td><i class="doc"> * A mesh query state</i></td></tr>
+<tr><th id="149">149</th><td><i class="doc"> * Unique per qname, qtype, qclass (from the qstate).</i></td></tr>
+<tr><th id="150">150</th><td><i class="doc"> * And RD / CD flag; in case a client turns it off.</i></td></tr>
+<tr><th id="151">151</th><td><i class="doc"> * And priming queries are different from ordinary queries (because of hints).</i></td></tr>
+<tr><th id="152">152</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="153">153</th><td><i class="doc"> * The entire structure is allocated in a region, this region is the qstate</i></td></tr>
+<tr><th id="154">154</th><td><i class="doc"> * region. All parts (rbtree nodes etc) are also allocated in the region.</i></td></tr>
+<tr><th id="155">155</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="156">156</th><td><b>struct</b> <dfn class="type def" id="mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</dfn> {</td></tr>
+<tr><th id="157">157</th><td>	<i class="doc">/** node in mesh_area all tree, key is this struct. Must be first. */</i></td></tr>
+<tr><th id="158">158</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbnode_type" title='rbnode_type' data-type='struct rbnode_type' data-ref="rbnode_type" data-ref-filename="rbnode_type">rbnode_type</a> <dfn class="decl field" id="mesh_state::node" title='mesh_state::node' data-ref="mesh_state::node" data-ref-filename="mesh_state..node">node</dfn>;</td></tr>
+<tr><th id="159">159</th><td>	<i class="doc">/** node in mesh_area runnable tree, key is this struct */</i></td></tr>
+<tr><th id="160">160</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbnode_type" title='rbnode_type' data-type='struct rbnode_type' data-ref="rbnode_type" data-ref-filename="rbnode_type">rbnode_type</a> <dfn class="decl field" id="mesh_state::run_node" title='mesh_state::run_node' data-ref="mesh_state::run_node" data-ref-filename="mesh_state..run_node">run_node</dfn>;</td></tr>
+<tr><th id="161">161</th><td>	<i class="doc">/** the query state. Note that the qinfo and query_flags </i></td></tr>
+<tr><th id="162">162</th><td><i class="doc">	 * may not change. */</i></td></tr>
+<tr><th id="163">163</th><td>	<b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a> <dfn class="decl field" id="mesh_state::s" title='mesh_state::s' data-ref="mesh_state::s" data-ref-filename="mesh_state..s">s</dfn>;</td></tr>
+<tr><th id="164">164</th><td>	<i class="doc">/** the list of replies to clients for the results */</i></td></tr>
+<tr><th id="165">165</th><td>	<b>struct</b> <a class="type" href="#mesh_reply" title='mesh_reply' data-ref="mesh_reply" data-ref-filename="mesh_reply">mesh_reply</a>* <dfn class="decl field" id="mesh_state::reply_list" title='mesh_state::reply_list' data-ref="mesh_state::reply_list" data-ref-filename="mesh_state..reply_list">reply_list</dfn>;</td></tr>
+<tr><th id="166">166</th><td>	<i class="doc">/** the list of callbacks for the results */</i></td></tr>
+<tr><th id="167">167</th><td>	<b>struct</b> <a class="type" href="#mesh_cb" title='mesh_cb' data-ref="mesh_cb" data-ref-filename="mesh_cb">mesh_cb</a>* <dfn class="decl field" id="mesh_state::cb_list" title='mesh_state::cb_list' data-ref="mesh_state::cb_list" data-ref-filename="mesh_state..cb_list">cb_list</dfn>;</td></tr>
+<tr><th id="168">168</th><td>	<i class="doc">/** set of superstates (that want this state's result) </i></td></tr>
+<tr><th id="169">169</th><td><i class="doc">	 * contains struct mesh_state_ref* */</i></td></tr>
+<tr><th id="170">170</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbtree_type" title='rbtree_type' data-type='struct rbtree_type' data-ref="rbtree_type" data-ref-filename="rbtree_type">rbtree_type</a> <dfn class="decl field" id="mesh_state::super_set" title='mesh_state::super_set' data-ref="mesh_state::super_set" data-ref-filename="mesh_state..super_set">super_set</dfn>;</td></tr>
+<tr><th id="171">171</th><td>	<i class="doc">/** set of substates (that this state needs to continue)</i></td></tr>
+<tr><th id="172">172</th><td><i class="doc">	 * contains struct mesh_state_ref* */</i></td></tr>
+<tr><th id="173">173</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbtree_type" title='rbtree_type' data-type='struct rbtree_type' data-ref="rbtree_type" data-ref-filename="rbtree_type">rbtree_type</a> <dfn class="decl field" id="mesh_state::sub_set" title='mesh_state::sub_set' data-ref="mesh_state::sub_set" data-ref-filename="mesh_state..sub_set">sub_set</dfn>;</td></tr>
+<tr><th id="174">174</th><td>	<i class="doc">/** number of activations for the mesh state */</i></td></tr>
+<tr><th id="175">175</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl field" id="mesh_state::num_activated" title='mesh_state::num_activated' data-ref="mesh_state::num_activated" data-ref-filename="mesh_state..num_activated">num_activated</dfn>;</td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td>	<i class="doc">/** previous in linked list for reply states */</i></td></tr>
+<tr><th id="178">178</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_state::prev" title='mesh_state::prev' data-ref="mesh_state::prev" data-ref-filename="mesh_state..prev">prev</dfn>;</td></tr>
+<tr><th id="179">179</th><td>	<i class="doc">/** next in linked list for reply states */</i></td></tr>
+<tr><th id="180">180</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_state::next" title='mesh_state::next' data-ref="mesh_state::next" data-ref-filename="mesh_state..next">next</dfn>;</td></tr>
+<tr><th id="181">181</th><td>	<i class="doc">/** if this state is in the forever list, jostle list, or neither */</i></td></tr>
+<tr><th id="182">182</th><td>	<b>enum</b> <dfn class="type def" id="mesh_list_select" title='mesh_list_select' data-ref="mesh_list_select" data-ref-filename="mesh_list_select"><a class="type" href="#mesh_list_select" title='mesh_list_select' data-ref="mesh_list_select" data-ref-filename="mesh_list_select">mesh_list_select</a></dfn> { <dfn class="enum" id="mesh_no_list" title='mesh_no_list' data-ref="mesh_no_list" data-ref-filename="mesh_no_list">mesh_no_list</dfn>, <dfn class="enum" id="mesh_forever_list" title='mesh_forever_list' data-ref="mesh_forever_list" data-ref-filename="mesh_forever_list">mesh_forever_list</dfn>, </td></tr>
+<tr><th id="183">183</th><td>		<dfn class="enum" id="mesh_jostle_list" title='mesh_jostle_list' data-ref="mesh_jostle_list" data-ref-filename="mesh_jostle_list">mesh_jostle_list</dfn> } <dfn class="decl field" id="mesh_state::list_select" title='mesh_state::list_select' data-ref="mesh_state::list_select" data-ref-filename="mesh_state..list_select">list_select</dfn>;</td></tr>
+<tr><th id="184">184</th><td>	<i class="doc">/** pointer to this state for uniqueness or NULL */</i></td></tr>
+<tr><th id="185">185</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_state::unique" title='mesh_state::unique' data-ref="mesh_state::unique" data-ref-filename="mesh_state..unique">unique</dfn>;</td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td>	<i class="doc">/** true if replies have been sent out (at end for alignment) */</i></td></tr>
+<tr><th id="188">188</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="mesh_state::replies_sent" title='mesh_state::replies_sent' data-ref="mesh_state::replies_sent" data-ref-filename="mesh_state..replies_sent">replies_sent</dfn>;</td></tr>
+<tr><th id="189">189</th><td>};</td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="192">192</th><td><i class="doc"> * Rbtree reference to a mesh_state.</i></td></tr>
+<tr><th id="193">193</th><td><i class="doc"> * Used in super_set and sub_set. </i></td></tr>
+<tr><th id="194">194</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="195">195</th><td><b>struct</b> <dfn class="type def" id="mesh_state_ref" title='mesh_state_ref' data-ref="mesh_state_ref" data-ref-filename="mesh_state_ref">mesh_state_ref</dfn> {</td></tr>
+<tr><th id="196">196</th><td>	<i class="doc">/** node in rbtree for set, key is this structure */</i></td></tr>
+<tr><th id="197">197</th><td>	<a class="typedef" href="../util/rbtree.h.html#rbnode_type" title='rbnode_type' data-type='struct rbnode_type' data-ref="rbnode_type" data-ref-filename="rbnode_type">rbnode_type</a> <dfn class="decl field" id="mesh_state_ref::node" title='mesh_state_ref::node' data-ref="mesh_state_ref::node" data-ref-filename="mesh_state_ref..node">node</dfn>;</td></tr>
+<tr><th id="198">198</th><td>	<i class="doc">/** the mesh state */</i></td></tr>
+<tr><th id="199">199</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl field" id="mesh_state_ref::s" title='mesh_state_ref::s' data-ref="mesh_state_ref::s" data-ref-filename="mesh_state_ref..s">s</dfn>;</td></tr>
+<tr><th id="200">200</th><td>};</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="203">203</th><td><i class="doc"> * Reply to a client</i></td></tr>
+<tr><th id="204">204</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="205">205</th><td><b>struct</b> <dfn class="type def" id="mesh_reply" title='mesh_reply' data-ref="mesh_reply" data-ref-filename="mesh_reply">mesh_reply</dfn> {</td></tr>
+<tr><th id="206">206</th><td>	<i class="doc">/** next in reply list */</i></td></tr>
+<tr><th id="207">207</th><td>	<b>struct</b> <a class="type" href="#mesh_reply" title='mesh_reply' data-ref="mesh_reply" data-ref-filename="mesh_reply">mesh_reply</a>* <dfn class="decl field" id="mesh_reply::next" title='mesh_reply::next' data-ref="mesh_reply::next" data-ref-filename="mesh_reply..next">next</dfn>;</td></tr>
+<tr><th id="208">208</th><td>	<i class="doc">/** the query reply destination, packet buffer and where to send. */</i></td></tr>
+<tr><th id="209">209</th><td>	<b>struct</b> <a class="type" href="../util/netevent.h.html#comm_reply" title='comm_reply' data-ref="comm_reply" data-ref-filename="comm_reply">comm_reply</a> <dfn class="decl field" id="mesh_reply::query_reply" title='mesh_reply::query_reply' data-ref="mesh_reply::query_reply" data-ref-filename="mesh_reply..query_reply">query_reply</dfn>;</td></tr>
+<tr><th id="210">210</th><td>	<i class="doc">/** edns data from query */</i></td></tr>
+<tr><th id="211">211</th><td>	<b>struct</b> <a class="type" href="../util/data/msgparse.h.html#edns_data" title='edns_data' data-ref="edns_data" data-ref-filename="edns_data">edns_data</a> <dfn class="decl field" id="mesh_reply::edns" title='mesh_reply::edns' data-ref="mesh_reply::edns" data-ref-filename="mesh_reply..edns">edns</dfn>;</td></tr>
+<tr><th id="212">212</th><td>	<i class="doc">/** the time when request was entered */</i></td></tr>
+<tr><th id="213">213</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="decl field" id="mesh_reply::start_time" title='mesh_reply::start_time' data-ref="mesh_reply::start_time" data-ref-filename="mesh_reply..start_time">start_time</dfn>;</td></tr>
+<tr><th id="214">214</th><td>	<i class="doc">/** id of query, in network byteorder. */</i></td></tr>
+<tr><th id="215">215</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="decl field" id="mesh_reply::qid" title='mesh_reply::qid' data-ref="mesh_reply::qid" data-ref-filename="mesh_reply..qid">qid</dfn>;</td></tr>
+<tr><th id="216">216</th><td>	<i class="doc">/** flags of query, for reply flags */</i></td></tr>
+<tr><th id="217">217</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="decl field" id="mesh_reply::qflags" title='mesh_reply::qflags' data-ref="mesh_reply::qflags" data-ref-filename="mesh_reply..qflags">qflags</dfn>;</td></tr>
+<tr><th id="218">218</th><td>	<i class="doc">/** qname from this query. len same as mesh qinfo. */</i></td></tr>
+<tr><th id="219">219</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>* <dfn class="decl field" id="mesh_reply::qname" title='mesh_reply::qname' data-ref="mesh_reply::qname" data-ref-filename="mesh_reply..qname">qname</dfn>;</td></tr>
+<tr><th id="220">220</th><td>	<i class="doc">/** same as that in query_info. */</i></td></tr>
+<tr><th id="221">221</th><td>	<b>struct</b> <a class="type" href="../util/data/msgreply.h.html#local_rrset" title='local_rrset' data-ref="local_rrset" data-ref-filename="local_rrset">local_rrset</a>* <dfn class="decl field" id="mesh_reply::local_alias" title='mesh_reply::local_alias' data-ref="mesh_reply::local_alias" data-ref-filename="mesh_reply..local_alias">local_alias</dfn>;</td></tr>
+<tr><th id="222">222</th><td>};</td></tr>
+<tr><th id="223">223</th><td></td></tr>
+<tr><th id="224">224</th><td><i class="doc">/** </i></td></tr>
+<tr><th id="225">225</th><td><i class="doc"> * Mesh result callback func.</i></td></tr>
+<tr><th id="226">226</th><td><i class="doc"> * called as func(cb_arg, rcode, buffer_with_reply, security, why_bogus,</i></td></tr>
+<tr><th id="227">227</th><td><i class="doc"> *		was_ratelimited);</i></td></tr>
+<tr><th id="228">228</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="229">229</th><td><b>typedef</b> <em>void</em> (*<dfn class="typedef" id="mesh_cb_func_type" title='mesh_cb_func_type' data-type='void (*)(void *, int, struct sldns_buffer *, enum sec_status, char *, int)' data-ref="mesh_cb_func_type" data-ref-filename="mesh_cb_func_type">mesh_cb_func_type</dfn>)(<em>void</em>* <dfn class="local col3 decl" id="893cb_arg" title='cb_arg' data-type='void *' data-ref="893cb_arg" data-ref-filename="893cb_arg">cb_arg</dfn>, <em>int</em> <dfn class="local col4 decl" id="894rcode" title='rcode' data-type='int' data-ref="894rcode" data-ref-filename="894rcode">rcode</dfn>, <b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>*,</td></tr>
+<tr><th id="230">230</th><td>	<b>enum</b> <a class="type" href="../util/data/packed_rrset.h.html#sec_status" title='sec_status' data-ref="sec_status" data-ref-filename="sec_status">sec_status</a>, <em>char</em>* <dfn class="local col5 decl" id="895why_bogus" title='why_bogus' data-type='char *' data-ref="895why_bogus" data-ref-filename="895why_bogus">why_bogus</dfn>, <em>int</em> <dfn class="local col6 decl" id="896was_ratelimited" title='was_ratelimited' data-type='int' data-ref="896was_ratelimited" data-ref-filename="896was_ratelimited">was_ratelimited</dfn>);</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="233">233</th><td><i class="doc"> * Callback to result routine</i></td></tr>
+<tr><th id="234">234</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="235">235</th><td><b>struct</b> <dfn class="type def" id="mesh_cb" title='mesh_cb' data-ref="mesh_cb" data-ref-filename="mesh_cb">mesh_cb</dfn> {</td></tr>
+<tr><th id="236">236</th><td>	<i class="doc">/** next in list */</i></td></tr>
+<tr><th id="237">237</th><td>	<b>struct</b> <a class="type" href="#mesh_cb" title='mesh_cb' data-ref="mesh_cb" data-ref-filename="mesh_cb">mesh_cb</a>* <dfn class="decl field" id="mesh_cb::next" title='mesh_cb::next' data-ref="mesh_cb::next" data-ref-filename="mesh_cb..next">next</dfn>;</td></tr>
+<tr><th id="238">238</th><td>	<i class="doc">/** edns data from query */</i></td></tr>
+<tr><th id="239">239</th><td>	<b>struct</b> <a class="type" href="../util/data/msgparse.h.html#edns_data" title='edns_data' data-ref="edns_data" data-ref-filename="edns_data">edns_data</a> <dfn class="decl field" id="mesh_cb::edns" title='mesh_cb::edns' data-ref="mesh_cb::edns" data-ref-filename="mesh_cb..edns">edns</dfn>;</td></tr>
+<tr><th id="240">240</th><td>	<i class="doc">/** id of query, in network byteorder. */</i></td></tr>
+<tr><th id="241">241</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="decl field" id="mesh_cb::qid" title='mesh_cb::qid' data-ref="mesh_cb::qid" data-ref-filename="mesh_cb..qid">qid</dfn>;</td></tr>
+<tr><th id="242">242</th><td>	<i class="doc">/** flags of query, for reply flags */</i></td></tr>
+<tr><th id="243">243</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="decl field" id="mesh_cb::qflags" title='mesh_cb::qflags' data-ref="mesh_cb::qflags" data-ref-filename="mesh_cb..qflags">qflags</dfn>;</td></tr>
+<tr><th id="244">244</th><td>	<i class="doc">/** buffer for reply */</i></td></tr>
+<tr><th id="245">245</th><td>	<b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>* <dfn class="decl field" id="mesh_cb::buf" title='mesh_cb::buf' data-ref="mesh_cb::buf" data-ref-filename="mesh_cb..buf">buf</dfn>;</td></tr>
+<tr><th id="246">246</th><td>	<i class="doc">/** callback routine for results. if rcode != 0 buf has message.</i></td></tr>
+<tr><th id="247">247</th><td><i class="doc">	 * called as cb(cb_arg, rcode, buf, sec_state, why_bogus, was_ratelimited);</i></td></tr>
+<tr><th id="248">248</th><td><i class="doc">	 */</i></td></tr>
+<tr><th id="249">249</th><td>	<a class="typedef" href="#mesh_cb_func_type" title='mesh_cb_func_type' data-type='void (*)(void *, int, struct sldns_buffer *, enum sec_status, char *, int)' data-ref="mesh_cb_func_type" data-ref-filename="mesh_cb_func_type">mesh_cb_func_type</a> <dfn class="decl field" id="mesh_cb::cb" title='mesh_cb::cb' data-ref="mesh_cb::cb" data-ref-filename="mesh_cb..cb">cb</dfn>;</td></tr>
+<tr><th id="250">250</th><td>	<i class="doc">/** user arg for callback */</i></td></tr>
+<tr><th id="251">251</th><td>	<em>void</em>* <dfn class="decl field" id="mesh_cb::cb_arg" title='mesh_cb::cb_arg' data-ref="mesh_cb::cb_arg" data-ref-filename="mesh_cb..cb_arg">cb_arg</dfn>;</td></tr>
+<tr><th id="252">252</th><td>};</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td><i>/* ------------------- Functions for worker -------------------- */</i></td></tr>
+<tr><th id="255">255</th><td></td></tr>
+<tr><th id="256">256</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="257">257</th><td><i class="doc"> * Allocate mesh, to empty.</i></td></tr>
+<tr><th id="258">258</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">stack:</span> module stack to activate, copied (as readonly reference).</i></td></tr>
+<tr><th id="259">259</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">env:</span> environment for new queries.</i></td></tr>
+<tr><th id="260">260</th><td><i class="doc"> * <span class="command">@return</span> mesh: the new mesh or NULL on error.</i></td></tr>
+<tr><th id="261">261</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="262">262</th><td><b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="decl fn" id="mesh_create" title='mesh_create' data-ref="mesh_create" data-ref-filename="mesh_create">mesh_create</dfn>(<b>struct</b> <a class="type" href="modstack.h.html#module_stack" title='module_stack' data-ref="module_stack" data-ref-filename="module_stack">module_stack</a>* <dfn class="local col7 decl" id="897stack" title='stack' data-type='struct module_stack *' data-ref="897stack" data-ref-filename="897stack">stack</dfn>, </td></tr>
+<tr><th id="263">263</th><td>	<b>struct</b> <a class="type" href="../util/module.h.html#module_env" title='module_env' data-ref="module_env" data-ref-filename="module_env">module_env</a>* <dfn class="local col8 decl" id="898env" title='env' data-type='struct module_env *' data-ref="898env" data-ref-filename="898env">env</dfn>);</td></tr>
+<tr><th id="264">264</th><td></td></tr>
+<tr><th id="265">265</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="266">266</th><td><i class="doc"> * Delete mesh, and all query states and replies in it.</i></td></tr>
+<tr><th id="267">267</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh to delete.</i></td></tr>
+<tr><th id="268">268</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="269">269</th><td><em>void</em> <dfn class="decl fn" id="mesh_delete" title='mesh_delete' data-ref="mesh_delete" data-ref-filename="mesh_delete">mesh_delete</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col9 decl" id="899mesh" title='mesh' data-type='struct mesh_area *' data-ref="899mesh" data-ref-filename="899mesh">mesh</dfn>);</td></tr>
+<tr><th id="270">270</th><td></td></tr>
+<tr><th id="271">271</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="272">272</th><td><i class="doc"> * New query incoming from clients. Create new query state if needed, and</i></td></tr>
+<tr><th id="273">273</th><td><i class="doc"> * add mesh_reply to it. Returns error to client on malloc failures.</i></td></tr>
+<tr><th id="274">274</th><td><i class="doc"> * Will run the mesh area queries to process if a new query state is created.</i></td></tr>
+<tr><th id="275">275</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="276">276</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh.</i></td></tr>
+<tr><th id="277">277</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> query from client.</i></td></tr>
+<tr><th id="278">278</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cinfo:</span> additional information associated with the query client.</i></td></tr>
+<tr><th id="279">279</th><td><i class="doc"> * 	'cinfo' itself is ephemeral but data pointed to by its members</i></td></tr>
+<tr><th id="280">280</th><td><i class="doc"> *      can be assumed to be valid and unchanged until the query processing is</i></td></tr>
+<tr><th id="281">281</th><td><i class="doc"> *      completed.</i></td></tr>
+<tr><th id="282">282</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> flags from client query.</i></td></tr>
+<tr><th id="283">283</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns:</span> edns data from client query.</i></td></tr>
+<tr><th id="284">284</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">rep:</span> where to reply to.</i></td></tr>
+<tr><th id="285">285</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qid:</span> query id to reply with.</i></td></tr>
+<tr><th id="286">286</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="287">287</th><td><em>void</em> <dfn class="decl fn" id="mesh_new_client" title='mesh_new_client' data-ref="mesh_new_client" data-ref-filename="mesh_new_client">mesh_new_client</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col0 decl" id="900mesh" title='mesh' data-type='struct mesh_area *' data-ref="900mesh" data-ref-filename="900mesh">mesh</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col1 decl" id="901qinfo" title='qinfo' data-type='struct query_info *' data-ref="901qinfo" data-ref-filename="901qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="288">288</th><td>	<b>struct</b> <a class="type" href="../util/module.h.html#respip_client_info" title='respip_client_info' data-ref="respip_client_info" data-ref-filename="respip_client_info">respip_client_info</a>* <dfn class="local col2 decl" id="902cinfo" title='cinfo' data-type='struct respip_client_info *' data-ref="902cinfo" data-ref-filename="902cinfo">cinfo</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col3 decl" id="903qflags" title='qflags' data-type='uint16_t' data-ref="903qflags" data-ref-filename="903qflags">qflags</dfn>,</td></tr>
+<tr><th id="289">289</th><td>	<b>struct</b> <a class="type" href="../util/data/msgparse.h.html#edns_data" title='edns_data' data-ref="edns_data" data-ref-filename="edns_data">edns_data</a>* <dfn class="local col4 decl" id="904edns" title='edns' data-type='struct edns_data *' data-ref="904edns" data-ref-filename="904edns">edns</dfn>, <b>struct</b> <a class="type" href="../util/netevent.h.html#comm_reply" title='comm_reply' data-ref="comm_reply" data-ref-filename="comm_reply">comm_reply</a>* <dfn class="local col5 decl" id="905rep" title='rep' data-type='struct comm_reply *' data-ref="905rep" data-ref-filename="905rep">rep</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col6 decl" id="906qid" title='qid' data-type='uint16_t' data-ref="906qid" data-ref-filename="906qid">qid</dfn>);</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="292">292</th><td><i class="doc"> * New query with callback. Create new query state if needed, and</i></td></tr>
+<tr><th id="293">293</th><td><i class="doc"> * add mesh_cb to it. </i></td></tr>
+<tr><th id="294">294</th><td><i class="doc"> * Will run the mesh area queries to process if a new query state is created.</i></td></tr>
+<tr><th id="295">295</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="296">296</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh.</i></td></tr>
+<tr><th id="297">297</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> query from client.</i></td></tr>
+<tr><th id="298">298</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> flags from client query.</i></td></tr>
+<tr><th id="299">299</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns:</span> edns data from client query.</i></td></tr>
+<tr><th id="300">300</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">buf:</span> buffer for reply contents.</i></td></tr>
+<tr><th id="301">301</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qid:</span> query id to reply with.</i></td></tr>
+<tr><th id="302">302</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cb:</span> callback function.</i></td></tr>
+<tr><th id="303">303</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cb_arg:</span> callback user arg.</i></td></tr>
+<tr><th id="304">304</th><td><i class="doc"> * <span class="command">@return</span> 0 on error.</i></td></tr>
+<tr><th id="305">305</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="306">306</th><td><em>int</em> <dfn class="decl fn" id="mesh_new_callback" title='mesh_new_callback' data-ref="mesh_new_callback" data-ref-filename="mesh_new_callback">mesh_new_callback</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col7 decl" id="907mesh" title='mesh' data-type='struct mesh_area *' data-ref="907mesh" data-ref-filename="907mesh">mesh</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col8 decl" id="908qinfo" title='qinfo' data-type='struct query_info *' data-ref="908qinfo" data-ref-filename="908qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="307">307</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col9 decl" id="909qflags" title='qflags' data-type='uint16_t' data-ref="909qflags" data-ref-filename="909qflags">qflags</dfn>, <b>struct</b> <a class="type" href="../util/data/msgparse.h.html#edns_data" title='edns_data' data-ref="edns_data" data-ref-filename="edns_data">edns_data</a>* <dfn class="local col0 decl" id="910edns" title='edns' data-type='struct edns_data *' data-ref="910edns" data-ref-filename="910edns">edns</dfn>, <b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>* <dfn class="local col1 decl" id="911buf" title='buf' data-type='struct sldns_buffer *' data-ref="911buf" data-ref-filename="911buf">buf</dfn>, </td></tr>
+<tr><th id="308">308</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col2 decl" id="912qid" title='qid' data-type='uint16_t' data-ref="912qid" data-ref-filename="912qid">qid</dfn>, <a class="typedef" href="#mesh_cb_func_type" title='mesh_cb_func_type' data-type='void (*)(void *, int, struct sldns_buffer *, enum sec_status, char *, int)' data-ref="mesh_cb_func_type" data-ref-filename="mesh_cb_func_type">mesh_cb_func_type</a> <dfn class="local col3 decl" id="913cb" title='cb' data-type='mesh_cb_func_type' data-ref="913cb" data-ref-filename="913cb">cb</dfn>, <em>void</em>* <dfn class="local col4 decl" id="914cb_arg" title='cb_arg' data-type='void *' data-ref="914cb_arg" data-ref-filename="914cb_arg">cb_arg</dfn>);</td></tr>
+<tr><th id="309">309</th><td></td></tr>
+<tr><th id="310">310</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="311">311</th><td><i class="doc"> * New prefetch message. Create new query state if needed.</i></td></tr>
+<tr><th id="312">312</th><td><i class="doc"> * Will run the mesh area queries to process if a new query state is created.</i></td></tr>
+<tr><th id="313">313</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="314">314</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh.</i></td></tr>
+<tr><th id="315">315</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> query from client.</i></td></tr>
+<tr><th id="316">316</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> flags from client query.</i></td></tr>
+<tr><th id="317">317</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">leeway:</span> TTL leeway what to expire earlier for this update.</i></td></tr>
+<tr><th id="318">318</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="319">319</th><td><em>void</em> <dfn class="decl fn" id="mesh_new_prefetch" title='mesh_new_prefetch' data-ref="mesh_new_prefetch" data-ref-filename="mesh_new_prefetch">mesh_new_prefetch</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col5 decl" id="915mesh" title='mesh' data-type='struct mesh_area *' data-ref="915mesh" data-ref-filename="915mesh">mesh</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col6 decl" id="916qinfo" title='qinfo' data-type='struct query_info *' data-ref="916qinfo" data-ref-filename="916qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="320">320</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col7 decl" id="917qflags" title='qflags' data-type='uint16_t' data-ref="917qflags" data-ref-filename="917qflags">qflags</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col8 decl" id="918leeway" title='leeway' data-type='time_t' data-ref="918leeway" data-ref-filename="918leeway">leeway</dfn>);</td></tr>
+<tr><th id="321">321</th><td></td></tr>
+<tr><th id="322">322</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="323">323</th><td><i class="doc"> * Handle new event from the wire. A serviced query has returned.</i></td></tr>
+<tr><th id="324">324</th><td><i class="doc"> * The query state will be made runnable, and the mesh_area will process</i></td></tr>
+<tr><th id="325">325</th><td><i class="doc"> * query states until processing is complete.</i></td></tr>
+<tr><th id="326">326</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="327">327</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the query mesh.</i></td></tr>
+<tr><th id="328">328</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">e:</span> outbound entry, with query state to run and reply pointer.</i></td></tr>
+<tr><th id="329">329</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">reply:</span> the comm point reply info.</i></td></tr>
+<tr><th id="330">330</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">what:</span> NETEVENT_* error code (if not 0, what is wrong, TIMEOUT).</i></td></tr>
+<tr><th id="331">331</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="332">332</th><td><em>void</em> <dfn class="decl fn" id="mesh_report_reply" title='mesh_report_reply' data-ref="mesh_report_reply" data-ref-filename="mesh_report_reply">mesh_report_reply</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col9 decl" id="919mesh" title='mesh' data-type='struct mesh_area *' data-ref="919mesh" data-ref-filename="919mesh">mesh</dfn>, <b>struct</b> <a class="type" href="../util/module.h.html#outbound_entry" title='outbound_entry' data-ref="outbound_entry" data-ref-filename="outbound_entry">outbound_entry</a>* <dfn class="local col0 decl" id="920e" title='e' data-type='struct outbound_entry *' data-ref="920e" data-ref-filename="920e">e</dfn>,</td></tr>
+<tr><th id="333">333</th><td>	<b>struct</b> <a class="type" href="../util/netevent.h.html#comm_reply" title='comm_reply' data-ref="comm_reply" data-ref-filename="comm_reply">comm_reply</a>* <dfn class="local col1 decl" id="921reply" title='reply' data-type='struct comm_reply *' data-ref="921reply" data-ref-filename="921reply">reply</dfn>, <em>int</em> <dfn class="local col2 decl" id="922what" title='what' data-type='int' data-ref="922what" data-ref-filename="922what">what</dfn>);</td></tr>
+<tr><th id="334">334</th><td></td></tr>
+<tr><th id="335">335</th><td><i>/* ------------------- Functions for module environment --------------- */</i></td></tr>
+<tr><th id="336">336</th><td></td></tr>
+<tr><th id="337">337</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="338">338</th><td><i class="doc"> * Detach-subqueries.</i></td></tr>
+<tr><th id="339">339</th><td><i class="doc"> * Remove all sub-query references from this query state.</i></td></tr>
+<tr><th id="340">340</th><td><i class="doc"> * Keeps super-references of those sub-queries correct.</i></td></tr>
+<tr><th id="341">341</th><td><i class="doc"> * Updates stat items in mesh_area structure.</i></td></tr>
+<tr><th id="342">342</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qstate:</span> used to find mesh state.</i></td></tr>
+<tr><th id="343">343</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="344">344</th><td><em>void</em> <dfn class="decl fn" id="mesh_detach_subs" title='mesh_detach_subs' data-ref="mesh_detach_subs" data-ref-filename="mesh_detach_subs">mesh_detach_subs</dfn>(<b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>* <dfn class="local col3 decl" id="923qstate" title='qstate' data-type='struct module_qstate *' data-ref="923qstate" data-ref-filename="923qstate">qstate</dfn>);</td></tr>
+<tr><th id="345">345</th><td></td></tr>
+<tr><th id="346">346</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="347">347</th><td><i class="doc"> * Attach subquery.</i></td></tr>
+<tr><th id="348">348</th><td><i class="doc"> * Creates it if it does not exist already.</i></td></tr>
+<tr><th id="349">349</th><td><i class="doc"> * Keeps sub and super references correct.</i></td></tr>
+<tr><th id="350">350</th><td><i class="doc"> * Performs a cycle detection - for double check - and fails if there is one.</i></td></tr>
+<tr><th id="351">351</th><td><i class="doc"> * Also fails if the sub-sub-references become too large.</i></td></tr>
+<tr><th id="352">352</th><td><i class="doc"> * Updates stat items in mesh_area structure.</i></td></tr>
+<tr><th id="353">353</th><td><i class="doc"> * Pass if it is priming query or not.</i></td></tr>
+<tr><th id="354">354</th><td><i class="doc"> * return:</i></td></tr>
+<tr><th id="355">355</th><td><i class="doc"> * 	o if error (malloc) happened.</i></td></tr>
+<tr><th id="356">356</th><td><i class="doc"> * 	o need to initialise the new state (module init; it is a new state).</i></td></tr>
+<tr><th id="357">357</th><td><i class="doc"> * 	  so that the next run of the query with this module is successful.</i></td></tr>
+<tr><th id="358">358</th><td><i class="doc"> * 	o no init needed, attachment successful.</i></td></tr>
+<tr><th id="359">359</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="360">360</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qstate:</span> the state to find mesh state, and that wants to receive</i></td></tr>
+<tr><th id="361">361</th><td><i class="doc"> * 	the results from the new subquery.</i></td></tr>
+<tr><th id="362">362</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> what to query for (copied).</i></td></tr>
+<tr><th id="363">363</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> what flags to use (RD / CD flag or not).</i></td></tr>
+<tr><th id="364">364</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">prime:</span> if it is a (stub) priming query.</i></td></tr>
+<tr><th id="365">365</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">valrec:</span> if it is a validation recursion query (lookup of key, DS).</i></td></tr>
+<tr><th id="366">366</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">newq:</span> If the new subquery needs initialisation, it is returned,</i></td></tr>
+<tr><th id="367">367</th><td><i class="doc"> * 	otherwise NULL is returned.</i></td></tr>
+<tr><th id="368">368</th><td><i class="doc"> * <span class="command">@return</span>: false on error, true if success (and init may be needed).</i></td></tr>
+<tr><th id="369">369</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="370">370</th><td><em>int</em> <dfn class="decl fn" id="mesh_attach_sub" title='mesh_attach_sub' data-ref="mesh_attach_sub" data-ref-filename="mesh_attach_sub">mesh_attach_sub</dfn>(<b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>* <dfn class="local col4 decl" id="924qstate" title='qstate' data-type='struct module_qstate *' data-ref="924qstate" data-ref-filename="924qstate">qstate</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col5 decl" id="925qinfo" title='qinfo' data-type='struct query_info *' data-ref="925qinfo" data-ref-filename="925qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="371">371</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col6 decl" id="926qflags" title='qflags' data-type='uint16_t' data-ref="926qflags" data-ref-filename="926qflags">qflags</dfn>, <em>int</em> <dfn class="local col7 decl" id="927prime" title='prime' data-type='int' data-ref="927prime" data-ref-filename="927prime">prime</dfn>, <em>int</em> <dfn class="local col8 decl" id="928valrec" title='valrec' data-type='int' data-ref="928valrec" data-ref-filename="928valrec">valrec</dfn>, <b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>** <dfn class="local col9 decl" id="929newq" title='newq' data-type='struct module_qstate **' data-ref="929newq" data-ref-filename="929newq">newq</dfn>);</td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="374">374</th><td><i class="doc"> * Add detached query.</i></td></tr>
+<tr><th id="375">375</th><td><i class="doc"> * Creates it if it does not exist already.</i></td></tr>
+<tr><th id="376">376</th><td><i class="doc"> * Does not make super/sub references.</i></td></tr>
+<tr><th id="377">377</th><td><i class="doc"> * Performs a cycle detection - for double check - and fails if there is one.</i></td></tr>
+<tr><th id="378">378</th><td><i class="doc"> * Updates stat items in mesh_area structure.</i></td></tr>
+<tr><th id="379">379</th><td><i class="doc"> * Pass if it is priming query or not.</i></td></tr>
+<tr><th id="380">380</th><td><i class="doc"> * return:</i></td></tr>
+<tr><th id="381">381</th><td><i class="doc"> * 	o if error (malloc) happened.</i></td></tr>
+<tr><th id="382">382</th><td><i class="doc"> * 	o need to initialise the new state (module init; it is a new state).</i></td></tr>
+<tr><th id="383">383</th><td><i class="doc"> * 	  so that the next run of the query with this module is successful.</i></td></tr>
+<tr><th id="384">384</th><td><i class="doc"> * 	o no init needed, attachment successful.</i></td></tr>
+<tr><th id="385">385</th><td><i class="doc"> * 	o added subquery, created if it did not exist already.</i></td></tr>
+<tr><th id="386">386</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="387">387</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qstate:</span> the state to find mesh state, and that wants to receive</i></td></tr>
+<tr><th id="388">388</th><td><i class="doc"> * 	the results from the new subquery.</i></td></tr>
+<tr><th id="389">389</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> what to query for (copied).</i></td></tr>
+<tr><th id="390">390</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> what flags to use (RD / CD flag or not).</i></td></tr>
+<tr><th id="391">391</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">prime:</span> if it is a (stub) priming query.</i></td></tr>
+<tr><th id="392">392</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">valrec:</span> if it is a validation recursion query (lookup of key, DS).</i></td></tr>
+<tr><th id="393">393</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">newq:</span> If the new subquery needs initialisation, it is returned,</i></td></tr>
+<tr><th id="394">394</th><td><i class="doc"> * 	otherwise NULL is returned.</i></td></tr>
+<tr><th id="395">395</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">sub:</span> The added mesh state, created if it did not exist already.</i></td></tr>
+<tr><th id="396">396</th><td><i class="doc"> * <span class="command">@return</span>: false on error, true if success (and init may be needed).</i></td></tr>
+<tr><th id="397">397</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="398">398</th><td><em>int</em> <dfn class="decl fn" id="mesh_add_sub" title='mesh_add_sub' data-ref="mesh_add_sub" data-ref-filename="mesh_add_sub">mesh_add_sub</dfn>(<b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>* <dfn class="local col0 decl" id="930qstate" title='qstate' data-type='struct module_qstate *' data-ref="930qstate" data-ref-filename="930qstate">qstate</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col1 decl" id="931qinfo" title='qinfo' data-type='struct query_info *' data-ref="931qinfo" data-ref-filename="931qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="399">399</th><td>        <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col2 decl" id="932qflags" title='qflags' data-type='uint16_t' data-ref="932qflags" data-ref-filename="932qflags">qflags</dfn>, <em>int</em> <dfn class="local col3 decl" id="933prime" title='prime' data-type='int' data-ref="933prime" data-ref-filename="933prime">prime</dfn>, <em>int</em> <dfn class="local col4 decl" id="934valrec" title='valrec' data-type='int' data-ref="934valrec" data-ref-filename="934valrec">valrec</dfn>, <b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>** <dfn class="local col5 decl" id="935newq" title='newq' data-type='struct module_qstate **' data-ref="935newq" data-ref-filename="935newq">newq</dfn>,</td></tr>
+<tr><th id="400">400</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>** <dfn class="local col6 decl" id="936sub" title='sub' data-type='struct mesh_state **' data-ref="936sub" data-ref-filename="936sub">sub</dfn>);</td></tr>
+<tr><th id="401">401</th><td></td></tr>
+<tr><th id="402">402</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="403">403</th><td><i class="doc"> * Query state is done, send messages to reply entries.</i></td></tr>
+<tr><th id="404">404</th><td><i class="doc"> * Encode messages using reply entry values and the querystate (with original</i></td></tr>
+<tr><th id="405">405</th><td><i class="doc"> * qinfo), using given reply_info.</i></td></tr>
+<tr><th id="406">406</th><td><i class="doc"> * Pass errcode != 0 if an error reply is needed.</i></td></tr>
+<tr><th id="407">407</th><td><i class="doc"> * If no reply entries, nothing is done.</i></td></tr>
+<tr><th id="408">408</th><td><i class="doc"> * Must be called before a module can module_finished or return module_error.</i></td></tr>
+<tr><th id="409">409</th><td><i class="doc"> * The module must handle the super query states itself as well.</i></td></tr>
+<tr><th id="410">410</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="411">411</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mstate:</span> mesh state that is done. return_rcode and return_msg</i></td></tr>
+<tr><th id="412">412</th><td><i class="doc"> * 	are used for replies.</i></td></tr>
+<tr><th id="413">413</th><td><i class="doc"> * 	return_rcode: if not 0 (NOERROR) an error is sent back (and </i></td></tr>
+<tr><th id="414">414</th><td><i class="doc"> * 		return_msg is ignored).</i></td></tr>
+<tr><th id="415">415</th><td><i class="doc"> * 	return_msg: reply to encode and send back to clients.</i></td></tr>
+<tr><th id="416">416</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="417">417</th><td><em>void</em> <dfn class="decl fn" id="mesh_query_done" title='mesh_query_done' data-ref="mesh_query_done" data-ref-filename="mesh_query_done">mesh_query_done</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col7 decl" id="937mstate" title='mstate' data-type='struct mesh_state *' data-ref="937mstate" data-ref-filename="937mstate">mstate</dfn>);</td></tr>
+<tr><th id="418">418</th><td></td></tr>
+<tr><th id="419">419</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="420">420</th><td><i class="doc"> * Call inform_super for the super query states that are interested in the </i></td></tr>
+<tr><th id="421">421</th><td><i class="doc"> * results from this query state. These can then be changed for error </i></td></tr>
+<tr><th id="422">422</th><td><i class="doc"> * or results.</i></td></tr>
+<tr><th id="423">423</th><td><i class="doc"> * Called when a module is module_finished or returns module_error.</i></td></tr>
+<tr><th id="424">424</th><td><i class="doc"> * The super query states become runnable with event module_event_pass,</i></td></tr>
+<tr><th id="425">425</th><td><i class="doc"> * it calls the current module for the super with the inform_super event.</i></td></tr>
+<tr><th id="426">426</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="427">427</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> mesh area to add newly runnable modules to.</i></td></tr>
+<tr><th id="428">428</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mstate:</span> the state that has results, used to find mesh state.</i></td></tr>
+<tr><th id="429">429</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="430">430</th><td><em>void</em> <dfn class="decl fn" id="mesh_walk_supers" title='mesh_walk_supers' data-ref="mesh_walk_supers" data-ref-filename="mesh_walk_supers">mesh_walk_supers</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col8 decl" id="938mesh" title='mesh' data-type='struct mesh_area *' data-ref="938mesh" data-ref-filename="938mesh">mesh</dfn>, <b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col9 decl" id="939mstate" title='mstate' data-type='struct mesh_state *' data-ref="939mstate" data-ref-filename="939mstate">mstate</dfn>);</td></tr>
+<tr><th id="431">431</th><td></td></tr>
+<tr><th id="432">432</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="433">433</th><td><i class="doc"> * Delete mesh state, cleanup and also rbtrees and so on.</i></td></tr>
+<tr><th id="434">434</th><td><i class="doc"> * Will detach from all super/subnodes.</i></td></tr>
+<tr><th id="435">435</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qstate:</span> to remove.</i></td></tr>
+<tr><th id="436">436</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="437">437</th><td><em>void</em> <dfn class="decl fn" id="mesh_state_delete" title='mesh_state_delete' data-ref="mesh_state_delete" data-ref-filename="mesh_state_delete">mesh_state_delete</dfn>(<b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>* <dfn class="local col0 decl" id="940qstate" title='qstate' data-type='struct module_qstate *' data-ref="940qstate" data-ref-filename="940qstate">qstate</dfn>);</td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td><i>/* ------------------- Functions for mesh -------------------- */</i></td></tr>
+<tr><th id="440">440</th><td></td></tr>
+<tr><th id="441">441</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="442">442</th><td><i class="doc"> * Create and initialize a new mesh state and its query state</i></td></tr>
+<tr><th id="443">443</th><td><i class="doc"> * Does not put the mesh state into rbtrees and so on.</i></td></tr>
+<tr><th id="444">444</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">env:</span> module environment to set.</i></td></tr>
+<tr><th id="445">445</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> query info that the mesh is for.</i></td></tr>
+<tr><th id="446">446</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cinfo:</span> control info for the query client (can be NULL).</i></td></tr>
+<tr><th id="447">447</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> flags for query (RD / CD flag).</i></td></tr>
+<tr><th id="448">448</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">prime:</span> if true, it is a priming query, set is_priming on mesh state.</i></td></tr>
+<tr><th id="449">449</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">valrec:</span> if true, it is a validation recursion query, and sets</i></td></tr>
+<tr><th id="450">450</th><td><i class="doc"> * 	is_valrec on the mesh state.</i></td></tr>
+<tr><th id="451">451</th><td><i class="doc"> * <span class="command">@return</span>: new mesh state or NULL on allocation error.</i></td></tr>
+<tr><th id="452">452</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="453">453</th><td><b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl fn" id="mesh_state_create" title='mesh_state_create' data-ref="mesh_state_create" data-ref-filename="mesh_state_create">mesh_state_create</dfn>(<b>struct</b> <a class="type" href="../util/module.h.html#module_env" title='module_env' data-ref="module_env" data-ref-filename="module_env">module_env</a>* <dfn class="local col1 decl" id="941env" title='env' data-type='struct module_env *' data-ref="941env" data-ref-filename="941env">env</dfn>,</td></tr>
+<tr><th id="454">454</th><td>	<b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col2 decl" id="942qinfo" title='qinfo' data-type='struct query_info *' data-ref="942qinfo" data-ref-filename="942qinfo">qinfo</dfn>, <b>struct</b> <a class="type" href="../util/module.h.html#respip_client_info" title='respip_client_info' data-ref="respip_client_info" data-ref-filename="respip_client_info">respip_client_info</a>* <dfn class="local col3 decl" id="943cinfo" title='cinfo' data-type='struct respip_client_info *' data-ref="943cinfo" data-ref-filename="943cinfo">cinfo</dfn>,</td></tr>
+<tr><th id="455">455</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col4 decl" id="944qflags" title='qflags' data-type='uint16_t' data-ref="944qflags" data-ref-filename="944qflags">qflags</dfn>, <em>int</em> <dfn class="local col5 decl" id="945prime" title='prime' data-type='int' data-ref="945prime" data-ref-filename="945prime">prime</dfn>, <em>int</em> <dfn class="local col6 decl" id="946valrec" title='valrec' data-type='int' data-ref="946valrec" data-ref-filename="946valrec">valrec</dfn>);</td></tr>
+<tr><th id="456">456</th><td></td></tr>
+<tr><th id="457">457</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="458">458</th><td><i class="doc"> * Check if the mesh state is unique.</i></td></tr>
+<tr><th id="459">459</th><td><i class="doc"> * A unique mesh state uses it's unique member to point to itself, else NULL.</i></td></tr>
+<tr><th id="460">460</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mstate:</span> mesh state to check.</i></td></tr>
+<tr><th id="461">461</th><td><i class="doc"> * <span class="command">@return</span> true if the mesh state is unique, false otherwise.</i></td></tr>
+<tr><th id="462">462</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="463">463</th><td><em>int</em> <dfn class="decl fn" id="mesh_state_is_unique" title='mesh_state_is_unique' data-ref="mesh_state_is_unique" data-ref-filename="mesh_state_is_unique">mesh_state_is_unique</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col7 decl" id="947mstate" title='mstate' data-type='struct mesh_state *' data-ref="947mstate" data-ref-filename="947mstate">mstate</dfn>);</td></tr>
+<tr><th id="464">464</th><td></td></tr>
+<tr><th id="465">465</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="466">466</th><td><i class="doc"> * Make a mesh state unique.</i></td></tr>
+<tr><th id="467">467</th><td><i class="doc"> * A unique mesh state uses it's unique member to point to itself.</i></td></tr>
+<tr><th id="468">468</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mstate:</span> mesh state to check.</i></td></tr>
+<tr><th id="469">469</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="470">470</th><td><em>void</em> <dfn class="decl fn" id="mesh_state_make_unique" title='mesh_state_make_unique' data-ref="mesh_state_make_unique" data-ref-filename="mesh_state_make_unique">mesh_state_make_unique</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col8 decl" id="948mstate" title='mstate' data-type='struct mesh_state *' data-ref="948mstate" data-ref-filename="948mstate">mstate</dfn>);</td></tr>
+<tr><th id="471">471</th><td></td></tr>
+<tr><th id="472">472</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="473">473</th><td><i class="doc"> * Cleanup a mesh state and its query state. Does not do rbtree or </i></td></tr>
+<tr><th id="474">474</th><td><i class="doc"> * reference cleanup.</i></td></tr>
+<tr><th id="475">475</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mstate:</span> mesh state to cleanup. Its pointer may no longer be used</i></td></tr>
+<tr><th id="476">476</th><td><i class="doc"> * 	afterwards. Cleanup rbtrees before calling this function.</i></td></tr>
+<tr><th id="477">477</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="478">478</th><td><em>void</em> <dfn class="decl fn" id="mesh_state_cleanup" title='mesh_state_cleanup' data-ref="mesh_state_cleanup" data-ref-filename="mesh_state_cleanup">mesh_state_cleanup</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col9 decl" id="949mstate" title='mstate' data-type='struct mesh_state *' data-ref="949mstate" data-ref-filename="949mstate">mstate</dfn>);</td></tr>
+<tr><th id="479">479</th><td></td></tr>
+<tr><th id="480">480</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="481">481</th><td><i class="doc"> * Delete all mesh states from the mesh.</i></td></tr>
+<tr><th id="482">482</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh area to clear</i></td></tr>
+<tr><th id="483">483</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="484">484</th><td><em>void</em> <dfn class="decl fn" id="mesh_delete_all" title='mesh_delete_all' data-ref="mesh_delete_all" data-ref-filename="mesh_delete_all">mesh_delete_all</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col0 decl" id="950mesh" title='mesh' data-type='struct mesh_area *' data-ref="950mesh" data-ref-filename="950mesh">mesh</dfn>);</td></tr>
+<tr><th id="485">485</th><td></td></tr>
+<tr><th id="486">486</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="487">487</th><td><i class="doc"> * Find a mesh state in the mesh area. Pass relevant flags.</i></td></tr>
+<tr><th id="488">488</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="489">489</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh area to look in.</i></td></tr>
+<tr><th id="490">490</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cinfo:</span> if non-NULL client specific info that may affect IP-based</i></td></tr>
+<tr><th id="491">491</th><td><i class="doc"> * 	actions that apply to the query result.</i></td></tr>
+<tr><th id="492">492</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> what query</i></td></tr>
+<tr><th id="493">493</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> if RD / CD bit is set or not.</i></td></tr>
+<tr><th id="494">494</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">prime:</span> if it is a priming query.</i></td></tr>
+<tr><th id="495">495</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">valrec:</span> if it is a validation-recursion query.</i></td></tr>
+<tr><th id="496">496</th><td><i class="doc"> * <span class="command">@return</span>: mesh state or NULL if not found.</i></td></tr>
+<tr><th id="497">497</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="498">498</th><td><b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="decl fn" id="mesh_area_find" title='mesh_area_find' data-ref="mesh_area_find" data-ref-filename="mesh_area_find">mesh_area_find</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col1 decl" id="951mesh" title='mesh' data-type='struct mesh_area *' data-ref="951mesh" data-ref-filename="951mesh">mesh</dfn>,</td></tr>
+<tr><th id="499">499</th><td>	<b>struct</b> <a class="type" href="../util/module.h.html#respip_client_info" title='respip_client_info' data-ref="respip_client_info" data-ref-filename="respip_client_info">respip_client_info</a>* <dfn class="local col2 decl" id="952cinfo" title='cinfo' data-type='struct respip_client_info *' data-ref="952cinfo" data-ref-filename="952cinfo">cinfo</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col3 decl" id="953qinfo" title='qinfo' data-type='struct query_info *' data-ref="953qinfo" data-ref-filename="953qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="500">500</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col4 decl" id="954qflags" title='qflags' data-type='uint16_t' data-ref="954qflags" data-ref-filename="954qflags">qflags</dfn>, <em>int</em> <dfn class="local col5 decl" id="955prime" title='prime' data-type='int' data-ref="955prime" data-ref-filename="955prime">prime</dfn>, <em>int</em> <dfn class="local col6 decl" id="956valrec" title='valrec' data-type='int' data-ref="956valrec" data-ref-filename="956valrec">valrec</dfn>);</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="503">503</th><td><i class="doc"> * Setup attachment super/sub relation between super and sub mesh state.</i></td></tr>
+<tr><th id="504">504</th><td><i class="doc"> * The relation must not be present when calling the function.</i></td></tr>
+<tr><th id="505">505</th><td><i class="doc"> * Does not update stat items in mesh_area.</i></td></tr>
+<tr><th id="506">506</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">super:</span> super state.</i></td></tr>
+<tr><th id="507">507</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">sub:</span> sub state.</i></td></tr>
+<tr><th id="508">508</th><td><i class="doc"> * <span class="command">@return</span>: 0 on alloc error.</i></td></tr>
+<tr><th id="509">509</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="510">510</th><td><em>int</em> <dfn class="decl fn" id="mesh_state_attachment" title='mesh_state_attachment' data-ref="mesh_state_attachment" data-ref-filename="mesh_state_attachment">mesh_state_attachment</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col7 decl" id="957super" title='super' data-type='struct mesh_state *' data-ref="957super" data-ref-filename="957super">super</dfn>, <b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col8 decl" id="958sub" title='sub' data-type='struct mesh_state *' data-ref="958sub" data-ref-filename="958sub">sub</dfn>);</td></tr>
+<tr><th id="511">511</th><td></td></tr>
+<tr><th id="512">512</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="513">513</th><td><i class="doc"> * Create new reply structure and attach it to a mesh state.</i></td></tr>
+<tr><th id="514">514</th><td><i class="doc"> * Does not update stat items in mesh area.</i></td></tr>
+<tr><th id="515">515</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">s:</span> the mesh state.</i></td></tr>
+<tr><th id="516">516</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns:</span> edns data for reply (bufsize).</i></td></tr>
+<tr><th id="517">517</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">rep:</span> comm point reply info.</i></td></tr>
+<tr><th id="518">518</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qid:</span> ID of reply.</i></td></tr>
+<tr><th id="519">519</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> original query flags.</i></td></tr>
+<tr><th id="520">520</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> original query info.</i></td></tr>
+<tr><th id="521">521</th><td><i class="doc"> * <span class="command">@return</span>: 0 on alloc error.</i></td></tr>
+<tr><th id="522">522</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="523">523</th><td><em>int</em> <dfn class="decl fn" id="mesh_state_add_reply" title='mesh_state_add_reply' data-ref="mesh_state_add_reply" data-ref-filename="mesh_state_add_reply">mesh_state_add_reply</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col9 decl" id="959s" title='s' data-type='struct mesh_state *' data-ref="959s" data-ref-filename="959s">s</dfn>, <b>struct</b> <a class="type" href="../util/data/msgparse.h.html#edns_data" title='edns_data' data-ref="edns_data" data-ref-filename="edns_data">edns_data</a>* <dfn class="local col0 decl" id="960edns" title='edns' data-type='struct edns_data *' data-ref="960edns" data-ref-filename="960edns">edns</dfn>,</td></tr>
+<tr><th id="524">524</th><td>	<b>struct</b> <a class="type" href="../util/netevent.h.html#comm_reply" title='comm_reply' data-ref="comm_reply" data-ref-filename="comm_reply">comm_reply</a>* <dfn class="local col1 decl" id="961rep" title='rep' data-type='struct comm_reply *' data-ref="961rep" data-ref-filename="961rep">rep</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col2 decl" id="962qid" title='qid' data-type='uint16_t' data-ref="962qid" data-ref-filename="962qid">qid</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col3 decl" id="963qflags" title='qflags' data-type='uint16_t' data-ref="963qflags" data-ref-filename="963qflags">qflags</dfn>,</td></tr>
+<tr><th id="525">525</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col4 decl" id="964qinfo" title='qinfo' data-type='const struct query_info *' data-ref="964qinfo" data-ref-filename="964qinfo">qinfo</dfn>);</td></tr>
+<tr><th id="526">526</th><td></td></tr>
+<tr><th id="527">527</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="528">528</th><td><i class="doc"> * Create new callback structure and attach it to a mesh state.</i></td></tr>
+<tr><th id="529">529</th><td><i class="doc"> * Does not update stat items in mesh area.</i></td></tr>
+<tr><th id="530">530</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">s:</span> the mesh state.</i></td></tr>
+<tr><th id="531">531</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">edns:</span> edns data for reply (bufsize).</i></td></tr>
+<tr><th id="532">532</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">buf:</span> buffer for reply</i></td></tr>
+<tr><th id="533">533</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cb:</span> callback to call with results.</i></td></tr>
+<tr><th id="534">534</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cb_arg:</span> callback user arg.</i></td></tr>
+<tr><th id="535">535</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qid:</span> ID of reply.</i></td></tr>
+<tr><th id="536">536</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qflags:</span> original query flags.</i></td></tr>
+<tr><th id="537">537</th><td><i class="doc"> * <span class="command">@return</span>: 0 on alloc error.</i></td></tr>
+<tr><th id="538">538</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="539">539</th><td><em>int</em> <dfn class="decl fn" id="mesh_state_add_cb" title='mesh_state_add_cb' data-ref="mesh_state_add_cb" data-ref-filename="mesh_state_add_cb">mesh_state_add_cb</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col5 decl" id="965s" title='s' data-type='struct mesh_state *' data-ref="965s" data-ref-filename="965s">s</dfn>, <b>struct</b> <a class="type" href="../util/data/msgparse.h.html#edns_data" title='edns_data' data-ref="edns_data" data-ref-filename="edns_data">edns_data</a>* <dfn class="local col6 decl" id="966edns" title='edns' data-type='struct edns_data *' data-ref="966edns" data-ref-filename="966edns">edns</dfn>,</td></tr>
+<tr><th id="540">540</th><td>        <b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>* <dfn class="local col7 decl" id="967buf" title='buf' data-type='struct sldns_buffer *' data-ref="967buf" data-ref-filename="967buf">buf</dfn>, <a class="typedef" href="#mesh_cb_func_type" title='mesh_cb_func_type' data-type='void (*)(void *, int, struct sldns_buffer *, enum sec_status, char *, int)' data-ref="mesh_cb_func_type" data-ref-filename="mesh_cb_func_type">mesh_cb_func_type</a> <dfn class="local col8 decl" id="968cb" title='cb' data-type='mesh_cb_func_type' data-ref="968cb" data-ref-filename="968cb">cb</dfn>, <em>void</em>* <dfn class="local col9 decl" id="969cb_arg" title='cb_arg' data-type='void *' data-ref="969cb_arg" data-ref-filename="969cb_arg">cb_arg</dfn>,</td></tr>
+<tr><th id="541">541</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col0 decl" id="970qid" title='qid' data-type='uint16_t' data-ref="970qid" data-ref-filename="970qid">qid</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col1 decl" id="971qflags" title='qflags' data-type='uint16_t' data-ref="971qflags" data-ref-filename="971qflags">qflags</dfn>);</td></tr>
+<tr><th id="542">542</th><td></td></tr>
+<tr><th id="543">543</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="544">544</th><td><i class="doc"> * Run the mesh. Run all runnable mesh states. Which can create new</i></td></tr>
+<tr><th id="545">545</th><td><i class="doc"> * runnable mesh states. Until completion. Automatically called by</i></td></tr>
+<tr><th id="546">546</th><td><i class="doc"> * mesh_report_reply and mesh_new_client as needed.</i></td></tr>
+<tr><th id="547">547</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> mesh area.</i></td></tr>
+<tr><th id="548">548</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mstate:</span> first mesh state to run.</i></td></tr>
+<tr><th id="549">549</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">ev:</span> event the mstate. Others get event_pass.</i></td></tr>
+<tr><th id="550">550</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">e:</span> if a reply, its outbound entry.</i></td></tr>
+<tr><th id="551">551</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="552">552</th><td><em>void</em> <dfn class="decl fn" id="mesh_run" title='mesh_run' data-ref="mesh_run" data-ref-filename="mesh_run">mesh_run</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col2 decl" id="972mesh" title='mesh' data-type='struct mesh_area *' data-ref="972mesh" data-ref-filename="972mesh">mesh</dfn>, <b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col3 decl" id="973mstate" title='mstate' data-type='struct mesh_state *' data-ref="973mstate" data-ref-filename="973mstate">mstate</dfn>, </td></tr>
+<tr><th id="553">553</th><td>	<b>enum</b> <a class="type" href="../util/module.h.html#module_ev" title='module_ev' data-ref="module_ev" data-ref-filename="module_ev">module_ev</a> <dfn class="local col4 decl" id="974ev" title='ev' data-type='enum module_ev' data-ref="974ev" data-ref-filename="974ev">ev</dfn>, <b>struct</b> <a class="type" href="../util/module.h.html#outbound_entry" title='outbound_entry' data-ref="outbound_entry" data-ref-filename="outbound_entry">outbound_entry</a>* <dfn class="local col5 decl" id="975e" title='e' data-type='struct outbound_entry *' data-ref="975e" data-ref-filename="975e">e</dfn>);</td></tr>
+<tr><th id="554">554</th><td></td></tr>
+<tr><th id="555">555</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="556">556</th><td><i class="doc"> * Print some stats about the mesh to the log.</i></td></tr>
+<tr><th id="557">557</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh to print it for.</i></td></tr>
+<tr><th id="558">558</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">str:</span> descriptive string to go with it.</i></td></tr>
+<tr><th id="559">559</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="560">560</th><td><em>void</em> <dfn class="decl fn" id="mesh_stats" title='mesh_stats' data-ref="mesh_stats" data-ref-filename="mesh_stats">mesh_stats</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col6 decl" id="976mesh" title='mesh' data-type='struct mesh_area *' data-ref="976mesh" data-ref-filename="976mesh">mesh</dfn>, <em>const</em> <em>char</em>* <dfn class="local col7 decl" id="977str" title='str' data-type='const char *' data-ref="977str" data-ref-filename="977str">str</dfn>);</td></tr>
+<tr><th id="561">561</th><td></td></tr>
+<tr><th id="562">562</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="563">563</th><td><i class="doc"> * Clear the stats that the mesh keeps (number of queries serviced)</i></td></tr>
+<tr><th id="564">564</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh</i></td></tr>
+<tr><th id="565">565</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="566">566</th><td><em>void</em> <dfn class="decl fn" id="mesh_stats_clear" title='mesh_stats_clear' data-ref="mesh_stats_clear" data-ref-filename="mesh_stats_clear">mesh_stats_clear</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col8 decl" id="978mesh" title='mesh' data-type='struct mesh_area *' data-ref="978mesh" data-ref-filename="978mesh">mesh</dfn>);</td></tr>
+<tr><th id="567">567</th><td></td></tr>
+<tr><th id="568">568</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="569">569</th><td><i class="doc"> * Print all the states in the mesh to the log.</i></td></tr>
+<tr><th id="570">570</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh to print all states of.</i></td></tr>
+<tr><th id="571">571</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="572">572</th><td><em>void</em> <dfn class="decl fn" id="mesh_log_list" title='mesh_log_list' data-ref="mesh_log_list" data-ref-filename="mesh_log_list">mesh_log_list</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col9 decl" id="979mesh" title='mesh' data-type='struct mesh_area *' data-ref="979mesh" data-ref-filename="979mesh">mesh</dfn>);</td></tr>
+<tr><th id="573">573</th><td></td></tr>
+<tr><th id="574">574</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="575">575</th><td><i class="doc"> * Calculate memory size in use by mesh and all queries inside it.</i></td></tr>
+<tr><th id="576">576</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> the mesh to examine.</i></td></tr>
+<tr><th id="577">577</th><td><i class="doc"> * <span class="command">@return</span> size in bytes.</i></td></tr>
+<tr><th id="578">578</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="579">579</th><td><a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="decl fn" id="mesh_get_mem" title='mesh_get_mem' data-ref="mesh_get_mem" data-ref-filename="mesh_get_mem">mesh_get_mem</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col0 decl" id="980mesh" title='mesh' data-type='struct mesh_area *' data-ref="980mesh" data-ref-filename="980mesh">mesh</dfn>);</td></tr>
+<tr><th id="580">580</th><td></td></tr>
+<tr><th id="581">581</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="582">582</th><td><i class="doc"> * Find cycle; see if the given mesh is in the targets sub, or sub-sub, ...</i></td></tr>
+<tr><th id="583">583</th><td><i class="doc"> * trees.</i></td></tr>
+<tr><th id="584">584</th><td><i class="doc"> * If the sub-sub structure is too large, it returns 'a cycle'=2.</i></td></tr>
+<tr><th id="585">585</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qstate:</span> given mesh querystate.</i></td></tr>
+<tr><th id="586">586</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qinfo:</span> query info for dependency.</i></td></tr>
+<tr><th id="587">587</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">flags:</span> query flags of dependency.</i></td></tr>
+<tr><th id="588">588</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">prime:</span> if dependency is a priming query or not.</i></td></tr>
+<tr><th id="589">589</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">valrec:</span> if it is a validation recursion query (lookup of key, DS).</i></td></tr>
+<tr><th id="590">590</th><td><i class="doc"> * <span class="command">@return</span> true if the name,type,class exists and the given qstate mesh exists</i></td></tr>
+<tr><th id="591">591</th><td><i class="doc"> * 	as a dependency of that name. Thus if qstate becomes dependent on</i></td></tr>
+<tr><th id="592">592</th><td><i class="doc"> * 	name,type,class then a cycle is created, this is return value 1.</i></td></tr>
+<tr><th id="593">593</th><td><i class="doc"> * 	Too large to search is value 2 (also true).</i></td></tr>
+<tr><th id="594">594</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="595">595</th><td><em>int</em> <dfn class="decl fn" id="mesh_detect_cycle" title='mesh_detect_cycle' data-ref="mesh_detect_cycle" data-ref-filename="mesh_detect_cycle">mesh_detect_cycle</dfn>(<b>struct</b> <a class="type" href="../util/module.h.html#module_qstate" title='module_qstate' data-ref="module_qstate" data-ref-filename="module_qstate">module_qstate</a>* <dfn class="local col1 decl" id="981qstate" title='qstate' data-type='struct module_qstate *' data-ref="981qstate" data-ref-filename="981qstate">qstate</dfn>, <b>struct</b> <a class="type" href="../util/data/msgreply.h.html#query_info" title='query_info' data-ref="query_info" data-ref-filename="query_info">query_info</a>* <dfn class="local col2 decl" id="982qinfo" title='qinfo' data-type='struct query_info *' data-ref="982qinfo" data-ref-filename="982qinfo">qinfo</dfn>,</td></tr>
+<tr><th id="596">596</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint16_t" title='uint16_t' data-type='__uint16_t' data-ref="uint16_t" data-ref-filename="uint16_t">uint16_t</a> <dfn class="local col3 decl" id="983flags" title='flags' data-type='uint16_t' data-ref="983flags" data-ref-filename="983flags">flags</dfn>, <em>int</em> <dfn class="local col4 decl" id="984prime" title='prime' data-type='int' data-ref="984prime" data-ref-filename="984prime">prime</dfn>, <em>int</em> <dfn class="local col5 decl" id="985valrec" title='valrec' data-type='int' data-ref="985valrec" data-ref-filename="985valrec">valrec</dfn>);</td></tr>
+<tr><th id="597">597</th><td></td></tr>
+<tr><th id="598">598</th><td><i class="doc">/** compare two mesh_states */</i></td></tr>
+<tr><th id="599">599</th><td><em>int</em> <dfn class="decl fn" id="mesh_state_compare" title='mesh_state_compare' data-ref="mesh_state_compare" data-ref-filename="mesh_state_compare">mesh_state_compare</dfn>(<em>const</em> <em>void</em>* <dfn class="local col6 decl" id="986ap" title='ap' data-type='const void *' data-ref="986ap" data-ref-filename="986ap">ap</dfn>, <em>const</em> <em>void</em>* <dfn class="local col7 decl" id="987bp" title='bp' data-type='const void *' data-ref="987bp" data-ref-filename="987bp">bp</dfn>);</td></tr>
+<tr><th id="600">600</th><td></td></tr>
+<tr><th id="601">601</th><td><i class="doc">/** compare two mesh references */</i></td></tr>
+<tr><th id="602">602</th><td><em>int</em> <dfn class="decl fn" id="mesh_state_ref_compare" title='mesh_state_ref_compare' data-ref="mesh_state_ref_compare" data-ref-filename="mesh_state_ref_compare">mesh_state_ref_compare</dfn>(<em>const</em> <em>void</em>* <dfn class="local col8 decl" id="988ap" title='ap' data-type='const void *' data-ref="988ap" data-ref-filename="988ap">ap</dfn>, <em>const</em> <em>void</em>* <dfn class="local col9 decl" id="989bp" title='bp' data-type='const void *' data-ref="989bp" data-ref-filename="989bp">bp</dfn>);</td></tr>
+<tr><th id="603">603</th><td></td></tr>
+<tr><th id="604">604</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="605">605</th><td><i class="doc"> * Make space for another recursion state for a reply in the mesh</i></td></tr>
+<tr><th id="606">606</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> mesh area</i></td></tr>
+<tr><th id="607">607</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">qbuf:</span> query buffer to save if recursion is invoked to make space.</i></td></tr>
+<tr><th id="608">608</th><td><i class="doc"> *    This buffer is necessary, because the following sequence in calls</i></td></tr>
+<tr><th id="609">609</th><td><i class="doc"> *    can result in an overwrite of the incoming query:</i></td></tr>
+<tr><th id="610">610</th><td><i class="doc"> *    delete_other_mesh_query - iter_clean - serviced_delete - waiting</i></td></tr>
+<tr><th id="611">611</th><td><i class="doc"> *    udp query is sent - on error callback - callback sends SERVFAIL reply</i></td></tr>
+<tr><th id="612">612</th><td><i class="doc"> *    over the same network channel, and shared UDP buffer is overwritten.</i></td></tr>
+<tr><th id="613">613</th><td><i class="doc"> *    You can pass NULL if there is no buffer that must be backed up.</i></td></tr>
+<tr><th id="614">614</th><td><i class="doc"> * <span class="command">@return</span> false if no space is available.</i></td></tr>
+<tr><th id="615">615</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="616">616</th><td><em>int</em> <dfn class="decl fn" id="mesh_make_new_space" title='mesh_make_new_space' data-ref="mesh_make_new_space" data-ref-filename="mesh_make_new_space">mesh_make_new_space</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col0 decl" id="990mesh" title='mesh' data-type='struct mesh_area *' data-ref="990mesh" data-ref-filename="990mesh">mesh</dfn>, <b>struct</b> <a class="type" href="../util/log.h.html#sldns_buffer" title='sldns_buffer' data-ref="sldns_buffer" data-ref-filename="sldns_buffer">sldns_buffer</a>* <dfn class="local col1 decl" id="991qbuf" title='qbuf' data-type='struct sldns_buffer *' data-ref="991qbuf" data-ref-filename="991qbuf">qbuf</dfn>);</td></tr>
+<tr><th id="617">617</th><td></td></tr>
+<tr><th id="618">618</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="619">619</th><td><i class="doc"> * Insert mesh state into a double linked list.  Inserted at end.</i></td></tr>
+<tr><th id="620">620</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">m:</span> mesh state.</i></td></tr>
+<tr><th id="621">621</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">fp:</span> pointer to the first-elem-pointer of the list.</i></td></tr>
+<tr><th id="622">622</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">lp:</span> pointer to the last-elem-pointer of the list.</i></td></tr>
+<tr><th id="623">623</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="624">624</th><td><em>void</em> <dfn class="decl fn" id="mesh_list_insert" title='mesh_list_insert' data-ref="mesh_list_insert" data-ref-filename="mesh_list_insert">mesh_list_insert</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col2 decl" id="992m" title='m' data-type='struct mesh_state *' data-ref="992m" data-ref-filename="992m">m</dfn>, <b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>** <dfn class="local col3 decl" id="993fp" title='fp' data-type='struct mesh_state **' data-ref="993fp" data-ref-filename="993fp">fp</dfn>,</td></tr>
+<tr><th id="625">625</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>** <dfn class="local col4 decl" id="994lp" title='lp' data-type='struct mesh_state **' data-ref="994lp" data-ref-filename="994lp">lp</dfn>);</td></tr>
+<tr><th id="626">626</th><td></td></tr>
+<tr><th id="627">627</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="628">628</th><td><i class="doc"> * Remove mesh state from a double linked list.  Remove from any position.</i></td></tr>
+<tr><th id="629">629</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">m:</span> mesh state.</i></td></tr>
+<tr><th id="630">630</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">fp:</span> pointer to the first-elem-pointer of the list.</i></td></tr>
+<tr><th id="631">631</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">lp:</span> pointer to the last-elem-pointer of the list.</i></td></tr>
+<tr><th id="632">632</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="633">633</th><td><em>void</em> <dfn class="decl fn" id="mesh_list_remove" title='mesh_list_remove' data-ref="mesh_list_remove" data-ref-filename="mesh_list_remove">mesh_list_remove</dfn>(<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col5 decl" id="995m" title='m' data-type='struct mesh_state *' data-ref="995m" data-ref-filename="995m">m</dfn>, <b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>** <dfn class="local col6 decl" id="996fp" title='fp' data-type='struct mesh_state **' data-ref="996fp" data-ref-filename="996fp">fp</dfn>,</td></tr>
+<tr><th id="634">634</th><td>	<b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>** <dfn class="local col7 decl" id="997lp" title='lp' data-type='struct mesh_state **' data-ref="997lp" data-ref-filename="997lp">lp</dfn>);</td></tr>
+<tr><th id="635">635</th><td></td></tr>
+<tr><th id="636">636</th><td><i class="doc">/**</i></td></tr>
+<tr><th id="637">637</th><td><i class="doc"> * Remove mesh reply entry from the reply entry list.  Searches for</i></td></tr>
+<tr><th id="638">638</th><td><i class="doc"> * the comm_point pointer.</i></td></tr>
+<tr><th id="639">639</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">mesh:</span> to update the counters.</i></td></tr>
+<tr><th id="640">640</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">m:</span> the mesh state.</i></td></tr>
+<tr><th id="641">641</th><td><i class="doc"> * <span class="command">@param</span> <span class="arg">cp:</span> the comm_point to remove from the list.</i></td></tr>
+<tr><th id="642">642</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="643">643</th><td><em>void</em> <dfn class="decl fn" id="mesh_state_remove_reply" title='mesh_state_remove_reply' data-ref="mesh_state_remove_reply" data-ref-filename="mesh_state_remove_reply">mesh_state_remove_reply</dfn>(<b>struct</b> <a class="type" href="#mesh_area" title='mesh_area' data-ref="mesh_area" data-ref-filename="mesh_area">mesh_area</a>* <dfn class="local col8 decl" id="998mesh" title='mesh' data-type='struct mesh_area *' data-ref="998mesh" data-ref-filename="998mesh">mesh</dfn>, <b>struct</b> <a class="type" href="#mesh_state" title='mesh_state' data-ref="mesh_state" data-ref-filename="mesh_state">mesh_state</a>* <dfn class="local col9 decl" id="999m" title='m' data-type='struct mesh_state *' data-ref="999m" data-ref-filename="999m">m</dfn>,</td></tr>
+<tr><th id="644">644</th><td>	<b>struct</b> <a class="type" href="../util/netevent.h.html#comm_point" title='comm_point' data-ref="comm_point" data-ref-filename="comm_point">comm_point</a>* <dfn class="local col0 decl" id="1000cp" title='cp' data-type='struct comm_point *' data-ref="1000cp" data-ref-filename="1000cp">cp</dfn>);</td></tr>
+<tr><th id="645">645</th><td></td></tr>
+<tr><th id="646">646</th><td><u>#<span data-ppcond="46">endif</span> /* SERVICES_MESH_H */</u></td></tr>
+<tr><th id="647">647</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../dns64/dns64.c.html'>netbsd/external/bsd/unbound/dist/dns64/dns64.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

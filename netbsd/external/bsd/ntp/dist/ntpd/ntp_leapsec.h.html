@@ -1,0 +1,297 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>ntp_leapsec.h source code [netbsd/external/bsd/ntp/dist/ntpd/ntp_leapsec.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="leap_era,leap_result,leap_signature "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/ntp_leapsec.h'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='ntp_leapsec.h.html'>ntp_leapsec.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: ntp_leapsec.h,v 1.4 2016/01/08 21:35:39 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * ntp_leapsec.h - leap second processing for NTPD</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Written by Juergen Perlinger (perlinger@ntp.org) for the NTP project.</i></td></tr>
+<tr><th id="7">7</th><td><i> * The contents of 'html/copyright.html' apply.</i></td></tr>
+<tr><th id="8">8</th><td><i> * ----------------------------------------------------------------------</i></td></tr>
+<tr><th id="9">9</th><td><i> * This is an attempt to get the leap second handling into a dedicated</i></td></tr>
+<tr><th id="10">10</th><td><i> * module to make the somewhat convoluted logic testable.</i></td></tr>
+<tr><th id="11">11</th><td><i> */</i></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#<span data-ppcond="13">ifndef</span> <span class="macro" data-ref="_M/NTP_LEAPSEC_H">NTP_LEAPSEC_H</span></u></td></tr>
+<tr><th id="14">14</th><td><u>#define <dfn class="macro" id="_M/NTP_LEAPSEC_H" data-ref="_M/NTP_LEAPSEC_H">NTP_LEAPSEC_H</dfn></u></td></tr>
+<tr><th id="15">15</th><td></td></tr>
+<tr><th id="16">16</th><td><b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat" id="stat">stat</a>;</td></tr>
+<tr><th id="17">17</th><td></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><i>/* function pointer types. Note that 'fprintf' and 'getc' can be casted</i></td></tr>
+<tr><th id="20">20</th><td><i> * to the dumper resp. reader type, provided the auxiliary argument is a</i></td></tr>
+<tr><th id="21">21</th><td><i> * valid FILE pointer in hat case.</i></td></tr>
+<tr><th id="22">22</th><td><i> */</i></td></tr>
+<tr><th id="23">23</th><td><b>typedef</b> <em>void</em> (*<dfn class="typedef" id="leapsec_dumper" title='leapsec_dumper' data-type='void (*)(void *, const char *, ...)' data-ref="leapsec_dumper" data-ref-filename="leapsec_dumper">leapsec_dumper</dfn>)(<em>void</em>*, <em>const</em> <em>char</em> *<dfn class="local col1 decl" id="1fmt" title='fmt' data-type='const char *' data-ref="1fmt" data-ref-filename="1fmt">fmt</dfn>, ...);</td></tr>
+<tr><th id="24">24</th><td><b>typedef</b> <em>int</em>  (*<dfn class="typedef" id="leapsec_reader" title='leapsec_reader' data-type='int (*)(void *)' data-ref="leapsec_reader" data-ref-filename="leapsec_reader">leapsec_reader</dfn>)(<em>void</em>*);</td></tr>
+<tr><th id="25">25</th><td></td></tr>
+<tr><th id="26">26</th><td><b>struct</b> <dfn class="type" id="leap_table" title='leap_table' data-ref="leap_table" data-ref-filename="leap_table">leap_table</dfn>;</td></tr>
+<tr><th id="27">27</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#leap_table" title='leap_table' data-ref="leap_table" data-ref-filename="leap_table">leap_table</a> <dfn class="typedef" id="leap_table_t" title='leap_table_t' data-type='struct leap_table' data-ref="leap_table_t" data-ref-filename="leap_table_t">leap_table_t</dfn>;</td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><i>/* Validate a stream containing a leap second file in the NIST / NTPD</i></td></tr>
+<tr><th id="30">30</th><td><i> * format that can also be loaded via 'leapsec_load()'. This uses</i></td></tr>
+<tr><th id="31">31</th><td><i> * the SHA1 hash and preprocessing as described in the NIST leapsecond</i></td></tr>
+<tr><th id="32">32</th><td><i> * file.</i></td></tr>
+<tr><th id="33">33</th><td><i> */</i></td></tr>
+<tr><th id="34">34</th><td><u>#define <dfn class="macro" id="_M/LSVALID_GOODHASH" data-ref="_M/LSVALID_GOODHASH">LSVALID_GOODHASH</dfn>	1	/* valid signature         */</u></td></tr>
+<tr><th id="35">35</th><td><u>#define <dfn class="macro" id="_M/LSVALID_NOHASH" data-ref="_M/LSVALID_NOHASH">LSVALID_NOHASH</dfn>		0	/* no signature in file    */</u></td></tr>
+<tr><th id="36">36</th><td><u>#define <dfn class="macro" id="_M/LSVALID_BADHASH" data-ref="_M/LSVALID_BADHASH">LSVALID_BADHASH</dfn>	       -1	/* signature mismatch      */</u></td></tr>
+<tr><th id="37">37</th><td><u>#define <dfn class="macro" id="_M/LSVALID_BADFORMAT" data-ref="_M/LSVALID_BADFORMAT">LSVALID_BADFORMAT</dfn>      -2	/* signature not parseable */</u></td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><b>extern</b> <em>int</em> <dfn class="decl fn" id="leapsec_validate" title='leapsec_validate' data-ref="leapsec_validate" data-ref-filename="leapsec_validate">leapsec_validate</dfn>(<a class="typedef" href="#leapsec_reader" title='leapsec_reader' data-type='int (*)(void *)' data-ref="leapsec_reader" data-ref-filename="leapsec_reader">leapsec_reader</a>, <em>void</em>*);</td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td><i>/* Set/get electric mode</i></td></tr>
+<tr><th id="43">43</th><td><i> * Electric mode is defined as the operation mode where the system clock</i></td></tr>
+<tr><th id="44">44</th><td><i> * automagically manages the leap second, so we don't have to care about</i></td></tr>
+<tr><th id="45">45</th><td><i> * stepping the clock. (This should be the case with most systems,</i></td></tr>
+<tr><th id="46">46</th><td><i> * including the current implementation of the Win32 timekeeping.)</i></td></tr>
+<tr><th id="47">47</th><td><i> *</i></td></tr>
+<tr><th id="48">48</th><td><i> * The consequence of electric mode is that we do not 'see' the leap</i></td></tr>
+<tr><th id="49">49</th><td><i> * second, and no client actions are needed when crossing the leap era</i></td></tr>
+<tr><th id="50">50</th><td><i> * boundary.  In manual (aka non-electric) mode the clock will simply</i></td></tr>
+<tr><th id="51">51</th><td><i> * step forward untill *we* (that is, this module) tells the client app</i></td></tr>
+<tr><th id="52">52</th><td><i> * to step at the right time. This needs a slightly different type of</i></td></tr>
+<tr><th id="53">53</th><td><i> * processing, so switching between those two modes should not be done</i></td></tr>
+<tr><th id="54">54</th><td><i> * too close to a leap second. The transition might be lost in that</i></td></tr>
+<tr><th id="55">55</th><td><i> * case. (The limit is actual 2 sec before transition.)</i></td></tr>
+<tr><th id="56">56</th><td><i> *</i></td></tr>
+<tr><th id="57">57</th><td><i> * OTOH, this is a system characteristic, so it's expected to be set</i></td></tr>
+<tr><th id="58">58</th><td><i> * properly somewhere after system start and retain the value.</i></td></tr>
+<tr><th id="59">59</th><td><i> *</i></td></tr>
+<tr><th id="60">60</th><td><i> * Simply querying the state or setting it to the same value as before</i></td></tr>
+<tr><th id="61">61</th><td><i> * does not have any unwanted side effects.  You can query by giving a</i></td></tr>
+<tr><th id="62">62</th><td><i> * negative value for the switch.</i></td></tr>
+<tr><th id="63">63</th><td><i> */</i></td></tr>
+<tr><th id="64">64</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_electric" title='leapsec_electric' data-ref="leapsec_electric" data-ref-filename="leapsec_electric">leapsec_electric</dfn>(<em>int</em><i>/*BOOL*/</i> <dfn class="local col2 decl" id="2on" title='on' data-type='int' data-ref="2on" data-ref-filename="2on">on</dfn>);</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td><i>/* Query result for a leap era. This is the minimal stateless</i></td></tr>
+<tr><th id="67">67</th><td><i> * information available for a time stamp in UTC.</i></td></tr>
+<tr><th id="68">68</th><td><i> */</i></td></tr>
+<tr><th id="69">69</th><td><b>struct</b> <dfn class="type def" id="leap_era" title='leap_era' data-ref="leap_era" data-ref-filename="leap_era">leap_era</dfn> {</td></tr>
+<tr><th id="70">70</th><td>	<a class="typedef" href="../include/ntp_types.h.html#vint64" title='vint64' data-type='union vint64' data-ref="vint64" data-ref-filename="vint64">vint64</a>   <dfn class="decl field" id="leap_era::ebase" title='leap_era::ebase' data-ref="leap_era::ebase" data-ref-filename="leap_era..ebase">ebase</dfn>;	<i>/* era base (UTC of start)		*/</i></td></tr>
+<tr><th id="71">71</th><td>	<a class="typedef" href="../include/ntp_types.h.html#vint64" title='vint64' data-type='union vint64' data-ref="vint64" data-ref-filename="vint64">vint64</a>   <dfn class="decl field" id="leap_era::ttime" title='leap_era::ttime' data-ref="leap_era::ttime" data-ref-filename="leap_era..ttime">ttime</dfn>; <i>/* era end (UTC of next leap second)	*/</i></td></tr>
+<tr><th id="72">72</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#int16_t" title='int16_t' data-type='__int16_t' data-ref="int16_t" data-ref-filename="int16_t">int16_t</a>  <dfn class="decl field" id="leap_era::taiof" title='leap_era::taiof' data-ref="leap_era::taiof" data-ref-filename="leap_era..taiof">taiof</dfn>;	<i>/* offset to TAI in this era		*/</i></td></tr>
+<tr><th id="73">73</th><td>};</td></tr>
+<tr><th id="74">74</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#leap_era" title='leap_era' data-ref="leap_era" data-ref-filename="leap_era">leap_era</a> <dfn class="typedef" id="leap_era_t" title='leap_era_t' data-type='struct leap_era' data-ref="leap_era_t" data-ref-filename="leap_era_t">leap_era_t</dfn>;</td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><i>/* Query result for a leap second schedule</i></td></tr>
+<tr><th id="77">77</th><td><i> * 'ebase' is the nominal UTC time when the current leap era</i></td></tr>
+<tr><th id="78">78</th><td><i> *      started. (Era base time)</i></td></tr>
+<tr><th id="79">79</th><td><i> * 'ttime' is the next transition point in full time scale. (Nominal UTC</i></td></tr>
+<tr><th id="80">80</th><td><i> *      time when the next leap era starts.)</i></td></tr>
+<tr><th id="81">81</th><td><i> * 'ddist' is the distance to the transition, in clock seconds.</i></td></tr>
+<tr><th id="82">82</th><td><i> *      This is the distance to the due time, which is different</i></td></tr>
+<tr><th id="83">83</th><td><i> *      from the transition time if the mode is non-electric.</i></td></tr>
+<tr><th id="84">84</th><td><i> *	Only valid if 'tai_diff' is not zero.</i></td></tr>
+<tr><th id="85">85</th><td><i> * 'tai_offs' is the CURRENT distance from clock (UTC) to TAI. Always</i></td></tr>
+<tr><th id="86">86</th><td><i> *      valid.</i></td></tr>
+<tr><th id="87">87</th><td><i> * 'tai_diff' is the change in TAI offset after the next leap</i></td></tr>
+<tr><th id="88">88</th><td><i> *	transition. Zero if nothing is pending or too far ahead.</i></td></tr>
+<tr><th id="89">89</th><td><i> * 'warped' is set only once, when the the leap second occurred between</i></td></tr>
+<tr><th id="90">90</th><td><i> *	two queries. Always zero in electric mode. If non-zero,</i></td></tr>
+<tr><th id="91">91</th><td><i> *      immediately step the clock.</i></td></tr>
+<tr><th id="92">92</th><td><i> * 'proximity' is a proximity warning. See definitions below. This is</i></td></tr>
+<tr><th id="93">93</th><td><i> *	more useful than an absolute difference to the leap second.</i></td></tr>
+<tr><th id="94">94</th><td><i> * 'dynamic' != 0 if entry was requested by clock/peer</i></td></tr>
+<tr><th id="95">95</th><td><i> */</i></td></tr>
+<tr><th id="96">96</th><td><b>struct</b> <dfn class="type def" id="leap_result" title='leap_result' data-ref="leap_result" data-ref-filename="leap_result">leap_result</dfn> {</td></tr>
+<tr><th id="97">97</th><td>	<a class="typedef" href="../include/ntp_types.h.html#vint64" title='vint64' data-type='union vint64' data-ref="vint64" data-ref-filename="vint64">vint64</a>   <dfn class="decl field" id="leap_result::ebase" title='leap_result::ebase' data-ref="leap_result::ebase" data-ref-filename="leap_result..ebase">ebase</dfn>;</td></tr>
+<tr><th id="98">98</th><td>	<a class="typedef" href="../include/ntp_types.h.html#vint64" title='vint64' data-type='union vint64' data-ref="vint64" data-ref-filename="vint64">vint64</a>   <dfn class="decl field" id="leap_result::ttime" title='leap_result::ttime' data-ref="leap_result::ttime" data-ref-filename="leap_result..ttime">ttime</dfn>;</td></tr>
+<tr><th id="99">99</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="decl field" id="leap_result::ddist" title='leap_result::ddist' data-ref="leap_result::ddist" data-ref-filename="leap_result..ddist">ddist</dfn>;</td></tr>
+<tr><th id="100">100</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#int16_t" title='int16_t' data-type='__int16_t' data-ref="int16_t" data-ref-filename="int16_t">int16_t</a>  <dfn class="decl field" id="leap_result::tai_offs" title='leap_result::tai_offs' data-ref="leap_result::tai_offs" data-ref-filename="leap_result..tai_offs">tai_offs</dfn>;</td></tr>
+<tr><th id="101">101</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#int16_t" title='int16_t' data-type='__int16_t' data-ref="int16_t" data-ref-filename="int16_t">int16_t</a>  <dfn class="decl field" id="leap_result::tai_diff" title='leap_result::tai_diff' data-ref="leap_result::tai_diff" data-ref-filename="leap_result..tai_diff">tai_diff</dfn>;</td></tr>
+<tr><th id="102">102</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#int16_t" title='int16_t' data-type='__int16_t' data-ref="int16_t" data-ref-filename="int16_t">int16_t</a>  <dfn class="decl field" id="leap_result::warped" title='leap_result::warped' data-ref="leap_result::warped" data-ref-filename="leap_result..warped">warped</dfn>;</td></tr>
+<tr><th id="103">103</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>  <dfn class="decl field" id="leap_result::proximity" title='leap_result::proximity' data-ref="leap_result::proximity" data-ref-filename="leap_result..proximity">proximity</dfn>;</td></tr>
+<tr><th id="104">104</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>  <dfn class="decl field" id="leap_result::dynamic" title='leap_result::dynamic' data-ref="leap_result::dynamic" data-ref-filename="leap_result..dynamic">dynamic</dfn>;</td></tr>
+<tr><th id="105">105</th><td>};</td></tr>
+<tr><th id="106">106</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#leap_result" title='leap_result' data-ref="leap_result" data-ref-filename="leap_result">leap_result</a> <dfn class="typedef" id="leap_result_t" title='leap_result_t' data-type='struct leap_result' data-ref="leap_result_t" data-ref-filename="leap_result_t">leap_result_t</dfn>;</td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td><i>/* The leap signature is used in two distinct circumstances, and it has</i></td></tr>
+<tr><th id="109">109</th><td><i> * slightly different content in these cases:</i></td></tr>
+<tr><th id="110">110</th><td><i> *  - it is used to indictae the time range covered by the leap second</i></td></tr>
+<tr><th id="111">111</th><td><i> *    table, and then it contains the last transition, TAI offset after</i></td></tr>
+<tr><th id="112">112</th><td><i> *    the final transition, and the expiration time.</i></td></tr>
+<tr><th id="113">113</th><td><i> *  - it is used to query data for AUTOKEY updates, and then it contains</i></td></tr>
+<tr><th id="114">114</th><td><i> *    the *current* TAI offset, the *next* transition time and the</i></td></tr>
+<tr><th id="115">115</th><td><i> *    expiration time of the table.</i></td></tr>
+<tr><th id="116">116</th><td><i> */</i></td></tr>
+<tr><th id="117">117</th><td><b>struct</b> <dfn class="type def" id="leap_signature" title='leap_signature' data-ref="leap_signature" data-ref-filename="leap_signature">leap_signature</dfn> {</td></tr>
+<tr><th id="118">118</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="decl field" id="leap_signature::etime" title='leap_signature::etime' data-ref="leap_signature::etime" data-ref-filename="leap_signature..etime">etime</dfn>;	<i>/* expiration time	*/</i></td></tr>
+<tr><th id="119">119</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="decl field" id="leap_signature::ttime" title='leap_signature::ttime' data-ref="leap_signature::ttime" data-ref-filename="leap_signature..ttime">ttime</dfn>;	<i>/* transition time	*/</i></td></tr>
+<tr><th id="120">120</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#int16_t" title='int16_t' data-type='__int16_t' data-ref="int16_t" data-ref-filename="int16_t">int16_t</a>  <dfn class="decl field" id="leap_signature::taiof" title='leap_signature::taiof' data-ref="leap_signature::taiof" data-ref-filename="leap_signature..taiof">taiof</dfn>;	<i>/* total offset to TAI	*/</i></td></tr>
+<tr><th id="121">121</th><td>};</td></tr>
+<tr><th id="122">122</th><td><b>typedef</b> <b>struct</b> <a class="type" href="#leap_signature" title='leap_signature' data-ref="leap_signature" data-ref-filename="leap_signature">leap_signature</a> <dfn class="typedef" id="leap_signature_t" title='leap_signature_t' data-type='struct leap_signature' data-ref="leap_signature_t" data-ref-filename="leap_signature_t">leap_signature_t</dfn>;</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td><u>#<span data-ppcond="125">ifdef</span> <span class="macro" data-ref="_M/LEAP_SMEAR">LEAP_SMEAR</span></u></td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td><b>struct</b> leap_smear_info {</td></tr>
+<tr><th id="128">128</th><td>	<em>int</em> enabled;        <i>/* not 0 if smearing is generally enabled */</i></td></tr>
+<tr><th id="129">129</th><td>	<em>int</em> in_progress;    <i>/* not 0 if smearing is in progress, i.e. the offset has been computed */</i></td></tr>
+<tr><th id="130">130</th><td>	<em>int</em> leap_occurred;  <i>/* not 0 if the leap second has already occurred, i.e., during the leap second */</i></td></tr>
+<tr><th id="131">131</th><td>	<em>double</em> doffset;     <i>/* the current smear offset as double */</i></td></tr>
+<tr><th id="132">132</th><td>	l_fp offset;        <i>/* the current smear offset */</i></td></tr>
+<tr><th id="133">133</th><td>	uint32_t t_offset;  <i>/* the current time for which a smear offset has been computed */</i></td></tr>
+<tr><th id="134">134</th><td>	<em>long</em> interval;      <i>/* smear interval, in [s], should be at least some hours */</i></td></tr>
+<tr><th id="135">135</th><td>	<em>double</em> intv_start;  <i>/* start time of the smear interval */</i></td></tr>
+<tr><th id="136">136</th><td>	<em>double</em> intv_end;    <i>/* end time of the smear interval */</i></td></tr>
+<tr><th id="137">137</th><td>};</td></tr>
+<tr><th id="138">138</th><td><b>typedef</b> <b>struct</b> leap_smear_info leap_smear_info_t;</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><u>#<span data-ppcond="125">endif</span>  /* LEAP_SMEAR */</u></td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td><u>#define <dfn class="macro" id="_M/LSPROX_NOWARN" data-ref="_M/LSPROX_NOWARN">LSPROX_NOWARN</dfn>	0	/* clear radar screen         */</u></td></tr>
+<tr><th id="144">144</th><td><u>#define <dfn class="macro" id="_M/LSPROX_SCHEDULE" data-ref="_M/LSPROX_SCHEDULE">LSPROX_SCHEDULE</dfn>	1	/* less than 1 month to target*/</u></td></tr>
+<tr><th id="145">145</th><td><u>#define <dfn class="macro" id="_M/LSPROX_ANNOUNCE" data-ref="_M/LSPROX_ANNOUNCE">LSPROX_ANNOUNCE</dfn>	2	/* less than 1 day to target  */</u></td></tr>
+<tr><th id="146">146</th><td><u>#define <dfn class="macro" id="_M/LSPROX_ALERT" data-ref="_M/LSPROX_ALERT">LSPROX_ALERT</dfn>	3	/* less than 10 sec to target */</u></td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td><i>/* Get the current or alternate table pointer. Getting the alternate</i></td></tr>
+<tr><th id="149">149</th><td><i> * pointer will automatically copy the primary table, so it can be</i></td></tr>
+<tr><th id="150">150</th><td><i> * subsequently modified.</i></td></tr>
+<tr><th id="151">151</th><td><i> */</i></td></tr>
+<tr><th id="152">152</th><td><b>extern</b> <a class="typedef" href="#leap_table_t" title='leap_table_t' data-type='struct leap_table' data-ref="leap_table_t" data-ref-filename="leap_table_t">leap_table_t</a> *<dfn class="decl fn" id="leapsec_get_table" title='leapsec_get_table' data-ref="leapsec_get_table" data-ref-filename="leapsec_get_table">leapsec_get_table</dfn>(<em>int</em> <dfn class="local col3 decl" id="3alternate" title='alternate' data-type='int' data-ref="3alternate" data-ref-filename="3alternate">alternate</dfn>);</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td><i>/* Set the current leap table. Accepts only return values from</i></td></tr>
+<tr><th id="155">155</th><td><i> * 'leapsec_get_table()', so it's hard to do something wrong. Returns</i></td></tr>
+<tr><th id="156">156</th><td><i> * TRUE if the current table is the requested one.</i></td></tr>
+<tr><th id="157">157</th><td><i> */</i></td></tr>
+<tr><th id="158">158</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_set_table" title='leapsec_set_table' data-ref="leapsec_set_table" data-ref-filename="leapsec_set_table">leapsec_set_table</dfn>(<a class="typedef" href="#leap_table_t" title='leap_table_t' data-type='struct leap_table' data-ref="leap_table_t" data-ref-filename="leap_table_t">leap_table_t</a> *);</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td><i>/* Clear all leap second data. Use it for init &amp; cleanup */</i></td></tr>
+<tr><th id="161">161</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="leapsec_clear" title='leapsec_clear' data-ref="leapsec_clear" data-ref-filename="leapsec_clear">leapsec_clear</dfn>(<a class="typedef" href="#leap_table_t" title='leap_table_t' data-type='struct leap_table' data-ref="leap_table_t" data-ref-filename="leap_table_t">leap_table_t</a>*);</td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td><i>/* Load a leap second file. If 'blimit' is set, do not store (but</i></td></tr>
+<tr><th id="164">164</th><td><i> * register with their TAI offset) leap entries before the build date.</i></td></tr>
+<tr><th id="165">165</th><td><i> * Update the leap signature data on the fly.</i></td></tr>
+<tr><th id="166">166</th><td><i> */</i></td></tr>
+<tr><th id="167">167</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_load" title='leapsec_load' data-ref="leapsec_load" data-ref-filename="leapsec_load">leapsec_load</dfn>(<a class="typedef" href="#leap_table_t" title='leap_table_t' data-type='struct leap_table' data-ref="leap_table_t" data-ref-filename="leap_table_t">leap_table_t</a>*, <a class="typedef" href="#leapsec_reader" title='leapsec_reader' data-type='int (*)(void *)' data-ref="leapsec_reader" data-ref-filename="leapsec_reader">leapsec_reader</a>,</td></tr>
+<tr><th id="168">168</th><td>				<em>void</em>*, <em>int</em> <dfn class="local col4 decl" id="4blimit" title='blimit' data-type='int' data-ref="4blimit" data-ref-filename="4blimit">blimit</dfn>);</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><i>/* Dump the current leap table in readable format, using the provided</i></td></tr>
+<tr><th id="171">171</th><td><i> * dump formatter function.</i></td></tr>
+<tr><th id="172">172</th><td><i> */</i></td></tr>
+<tr><th id="173">173</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="leapsec_dump" title='leapsec_dump' data-ref="leapsec_dump" data-ref-filename="leapsec_dump">leapsec_dump</dfn>(<em>const</em> <a class="typedef" href="#leap_table_t" title='leap_table_t' data-type='struct leap_table' data-ref="leap_table_t" data-ref-filename="leap_table_t">leap_table_t</a>*, <a class="typedef" href="#leapsec_dumper" title='leapsec_dumper' data-type='void (*)(void *, const char *, ...)' data-ref="leapsec_dumper" data-ref-filename="leapsec_dumper">leapsec_dumper</a> <dfn class="local col5 decl" id="5func" title='func' data-type='leapsec_dumper' data-ref="5func" data-ref-filename="5func">func</dfn>, <em>void</em> *<dfn class="local col6 decl" id="6farg" title='farg' data-type='void *' data-ref="6farg" data-ref-filename="6farg">farg</dfn>);</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td><i>/* Read a leap second file from stream. This is a convenience wrapper</i></td></tr>
+<tr><th id="176">176</th><td><i> * around the generic load function, 'leapsec_load()'.</i></td></tr>
+<tr><th id="177">177</th><td><i> */</i></td></tr>
+<tr><th id="178">178</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_load_stream" title='leapsec_load_stream' data-ref="leapsec_load_stream" data-ref-filename="leapsec_load_stream">leapsec_load_stream</dfn>(<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#FILE" title='FILE' data-type='struct __sFILE' data-ref="FILE" data-ref-filename="FILE">FILE</a> * <dfn class="local col7 decl" id="7fp" title='fp' data-type='FILE *' data-ref="7fp" data-ref-filename="7fp">fp</dfn>, <em>const</em> <em>char</em> * <dfn class="local col8 decl" id="8fname" title='fname' data-type='const char *' data-ref="8fname" data-ref-filename="8fname">fname</dfn>,</td></tr>
+<tr><th id="179">179</th><td>				       <em>int</em><i>/*BOOL*/</i><dfn class="local col9 decl" id="9logall" title='logall' data-type='int' data-ref="9logall" data-ref-filename="9logall">logall</dfn>);</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td><i>/* Read a leap second file from file. It checks that the file exists and</i></td></tr>
+<tr><th id="182">182</th><td><i> * (if 'force' is not applied) the ctime/mtime has changed since the</i></td></tr>
+<tr><th id="183">183</th><td><i> * last load. If the file has to be loaded, either due to 'force' or</i></td></tr>
+<tr><th id="184">184</th><td><i> * changed time stamps, the 'stat()' results of the file are stored in</i></td></tr>
+<tr><th id="185">185</th><td><i> * '*sb' for the next cycle. Returns TRUE on successful load, FALSE</i></td></tr>
+<tr><th id="186">186</th><td><i> * otherwise. Uses 'leapsec_load_stream()' internally.</i></td></tr>
+<tr><th id="187">187</th><td><i> */</i></td></tr>
+<tr><th id="188">188</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_load_file" title='leapsec_load_file' data-ref="leapsec_load_file" data-ref-filename="leapsec_load_file">leapsec_load_file</dfn>(<em>const</em> <em>char</em> * <dfn class="local col0 decl" id="10fname" title='fname' data-type='const char *' data-ref="10fname" data-ref-filename="10fname">fname</dfn>, <b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> * <dfn class="local col1 decl" id="11sb" title='sb' data-type='struct stat *' data-ref="11sb" data-ref-filename="11sb">sb</dfn>,</td></tr>
+<tr><th id="189">189</th><td>				     <em>int</em><i>/*BOOL*/</i><dfn class="local col2 decl" id="12force" title='force' data-type='int' data-ref="12force" data-ref-filename="12force">force</dfn>, <em>int</em><i>/*BOOL*/</i><dfn class="local col3 decl" id="13logall" title='logall' data-type='int' data-ref="13logall" data-ref-filename="13logall">logall</dfn>);</td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td><i>/* Get the current leap data signature. This consists of the last</i></td></tr>
+<tr><th id="192">192</th><td><i> * ransition, the table expiration, and the total TAI difference at the</i></td></tr>
+<tr><th id="193">193</th><td><i> * last transition. This is valid even if the leap transition itself was</i></td></tr>
+<tr><th id="194">194</th><td><i> * culled due to the build date limit.</i></td></tr>
+<tr><th id="195">195</th><td><i> */</i></td></tr>
+<tr><th id="196">196</th><td><b>extern</b> <em>void</em>        <dfn class="decl fn" id="leapsec_getsig" title='leapsec_getsig' data-ref="leapsec_getsig" data-ref-filename="leapsec_getsig">leapsec_getsig</dfn>(<a class="typedef" href="#leap_signature_t" title='leap_signature_t' data-type='struct leap_signature' data-ref="leap_signature_t" data-ref-filename="leap_signature_t">leap_signature_t</a> * <dfn class="local col4 decl" id="14psig" title='psig' data-type='leap_signature_t *' data-ref="14psig" data-ref-filename="14psig">psig</dfn>);</td></tr>
+<tr><th id="197">197</th><td></td></tr>
+<tr><th id="198">198</th><td><i>/* Check if the leap table is expired at the given time.</i></td></tr>
+<tr><th id="199">199</th><td><i> */</i></td></tr>
+<tr><th id="200">200</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_expired" title='leapsec_expired' data-ref="leapsec_expired" data-ref-filename="leapsec_expired">leapsec_expired</dfn>(<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col5 decl" id="15when" title='when' data-type='uint32_t' data-ref="15when" data-ref-filename="15when">when</dfn>, <em>const</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> * <dfn class="local col6 decl" id="16pivot" title='pivot' data-type='const time_t *' data-ref="16pivot" data-ref-filename="16pivot">pivot</dfn>);</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td><i>/* Get the distance to expiration in days.</i></td></tr>
+<tr><th id="203">203</th><td><i> * Returns negative values if expired, zero if there are less than 24hrs</i></td></tr>
+<tr><th id="204">204</th><td><i> * left, and positive numbers otherwise.</i></td></tr>
+<tr><th id="205">205</th><td><i> */</i></td></tr>
+<tr><th id="206">206</th><td><b>extern</b> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#int32_t" title='int32_t' data-type='__int32_t' data-ref="int32_t" data-ref-filename="int32_t">int32_t</a> <dfn class="decl fn" id="leapsec_daystolive" title='leapsec_daystolive' data-ref="leapsec_daystolive" data-ref-filename="leapsec_daystolive">leapsec_daystolive</dfn>(<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col7 decl" id="17when" title='when' data-type='uint32_t' data-ref="17when" data-ref-filename="17when">when</dfn>, <em>const</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> * <dfn class="local col8 decl" id="18pivot" title='pivot' data-type='const time_t *' data-ref="18pivot" data-ref-filename="18pivot">pivot</dfn>);</td></tr>
+<tr><th id="207">207</th><td></td></tr>
+<tr><th id="208">208</th><td><i>/* Reset the current leap frame, so the next query will do proper table</i></td></tr>
+<tr><th id="209">209</th><td><i> * lookup from fresh. Suppresses a possible leap era transition detection</i></td></tr>
+<tr><th id="210">210</th><td><i> * for the next query.</i></td></tr>
+<tr><th id="211">211</th><td><i> */</i></td></tr>
+<tr><th id="212">212</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="leapsec_reset_frame" title='leapsec_reset_frame' data-ref="leapsec_reset_frame" data-ref-filename="leapsec_reset_frame">leapsec_reset_frame</dfn>(<em>void</em>);</td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td><u>#<span data-ppcond="214">if</span> 0 /* currently unused -- possibly revived later */</u></td></tr>
+<tr><th id="215">215</th><td><i>/* Given a transition time, the TAI offset valid after that and an</i></td></tr>
+<tr><th id="216">216</th><td><i> * expiration time, try to establish a system leap transition. Only</i></td></tr>
+<tr><th id="217">217</th><td><i> * works if the existing table is extended. On success, updates the</i></td></tr>
+<tr><th id="218">218</th><td><i> * signature data.</i></td></tr>
+<tr><th id="219">219</th><td><i> */</i></td></tr>
+<tr><th id="220">220</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> leapsec_add_fix(<em>int</em> offset, uint32_t ttime, uint32_t etime,</td></tr>
+<tr><th id="221">221</th><td>				   <em>const</em> time_t * pivot);</td></tr>
+<tr><th id="222">222</th><td><u>#<span data-ppcond="214">endif</span></u></td></tr>
+<tr><th id="223">223</th><td></td></tr>
+<tr><th id="224">224</th><td><i>/* Take a time stamp and create a leap second frame for it. This will</i></td></tr>
+<tr><th id="225">225</th><td><i> * schedule a leap second for the beginning of the next month, midnight</i></td></tr>
+<tr><th id="226">226</th><td><i> * UTC. The 'insert' argument tells if a leap second is added (!=0) or</i></td></tr>
+<tr><th id="227">227</th><td><i> * removed (==0). We do not handle multiple inserts (yet?)</i></td></tr>
+<tr><th id="228">228</th><td><i> *</i></td></tr>
+<tr><th id="229">229</th><td><i> * Returns 1 if the insert worked, 0 otherwise. (It's not possible to</i></td></tr>
+<tr><th id="230">230</th><td><i> * insert a leap second into the current history -- only appending</i></td></tr>
+<tr><th id="231">231</th><td><i> * towards the future is allowed!)</i></td></tr>
+<tr><th id="232">232</th><td><i> *</i></td></tr>
+<tr><th id="233">233</th><td><i> * 'ntp_now' is subject to era unfolding. The entry is marked</i></td></tr>
+<tr><th id="234">234</th><td><i> * dynamic. The leap signature is NOT updated.</i></td></tr>
+<tr><th id="235">235</th><td><i> */</i></td></tr>
+<tr><th id="236">236</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_add_dyn" title='leapsec_add_dyn' data-ref="leapsec_add_dyn" data-ref-filename="leapsec_add_dyn">leapsec_add_dyn</dfn>(<em>int</em><i>/*BOOL*/</i> <dfn class="local col9 decl" id="19insert" title='insert' data-type='int' data-ref="19insert" data-ref-filename="19insert">insert</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="20ntp_now" title='ntp_now' data-type='uint32_t' data-ref="20ntp_now" data-ref-filename="20ntp_now">ntp_now</dfn>,</td></tr>
+<tr><th id="237">237</th><td>				   <em>const</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> * <dfn class="local col1 decl" id="21pivot" title='pivot' data-type='const time_t *' data-ref="21pivot" data-ref-filename="21pivot">pivot</dfn>);</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td><i>/* Take a time stamp and get the associated leap information. The time</i></td></tr>
+<tr><th id="240">240</th><td><i> * stamp is subject to era unfolding around the pivot or the current</i></td></tr>
+<tr><th id="241">241</th><td><i> * system time if pivot is NULL. Sets the information in '*qr' and</i></td></tr>
+<tr><th id="242">242</th><td><i> * returns TRUE if a leap second era boundary was crossed between the</i></td></tr>
+<tr><th id="243">243</th><td><i> * last and the current query. In that case, qr-&gt;warped contains the</i></td></tr>
+<tr><th id="244">244</th><td><i> * required clock stepping, which is always zero in electric mode.</i></td></tr>
+<tr><th id="245">245</th><td><i> */</i></td></tr>
+<tr><th id="246">246</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_query" title='leapsec_query' data-ref="leapsec_query" data-ref-filename="leapsec_query">leapsec_query</dfn>(<a class="typedef" href="#leap_result_t" title='leap_result_t' data-type='struct leap_result' data-ref="leap_result_t" data-ref-filename="leap_result_t">leap_result_t</a> * <dfn class="local col2 decl" id="22qr" title='qr' data-type='leap_result_t *' data-ref="22qr" data-ref-filename="22qr">qr</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col3 decl" id="23ntpts" title='ntpts' data-type='uint32_t' data-ref="23ntpts" data-ref-filename="23ntpts">ntpts</dfn>,</td></tr>
+<tr><th id="247">247</th><td>				 <em>const</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> * <dfn class="local col4 decl" id="24pivot" title='pivot' data-type='const time_t *' data-ref="24pivot" data-ref-filename="24pivot">pivot</dfn>);</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><i>/* For a given time stamp, fetch the data for the bracketing leap</i></td></tr>
+<tr><th id="250">250</th><td><i> * era. The time stamp is subject to NTP era unfolding.</i></td></tr>
+<tr><th id="251">251</th><td><i> */</i></td></tr>
+<tr><th id="252">252</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_query_era" title='leapsec_query_era' data-ref="leapsec_query_era" data-ref-filename="leapsec_query_era">leapsec_query_era</dfn>(<a class="typedef" href="#leap_era_t" title='leap_era_t' data-type='struct leap_era' data-ref="leap_era_t" data-ref-filename="leap_era_t">leap_era_t</a> * <dfn class="local col5 decl" id="25qr" title='qr' data-type='leap_era_t *' data-ref="25qr" data-ref-filename="25qr">qr</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col6 decl" id="26ntpts" title='ntpts' data-type='uint32_t' data-ref="26ntpts" data-ref-filename="26ntpts">ntpts</dfn>,</td></tr>
+<tr><th id="253">253</th><td>				     <em>const</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> * <dfn class="local col7 decl" id="27pivot" title='pivot' data-type='const time_t *' data-ref="27pivot" data-ref-filename="27pivot">pivot</dfn>);</td></tr>
+<tr><th id="254">254</th><td></td></tr>
+<tr><th id="255">255</th><td><i>/* Get the current leap frame info. Returns TRUE if the result contains</i></td></tr>
+<tr><th id="256">256</th><td><i> * useable data, FALSE if there is currently no leap second frame.</i></td></tr>
+<tr><th id="257">257</th><td><i> * This merely replicates some results from a previous query, but since</i></td></tr>
+<tr><th id="258">258</th><td><i> * it does not check the current time, only the following entries are</i></td></tr>
+<tr><th id="259">259</th><td><i> * meaningful:</i></td></tr>
+<tr><th id="260">260</th><td><i> *  qr-&gt;ttime;</i></td></tr>
+<tr><th id="261">261</th><td><i> *  qr-&gt;tai_offs;</i></td></tr>
+<tr><th id="262">262</th><td><i> *  qr-&gt;tai_diff;</i></td></tr>
+<tr><th id="263">263</th><td><i> *  qr-&gt;dynamic;</i></td></tr>
+<tr><th id="264">264</th><td><i> */</i></td></tr>
+<tr><th id="265">265</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_frame" title='leapsec_frame' data-ref="leapsec_frame" data-ref-filename="leapsec_frame">leapsec_frame</dfn>(<a class="typedef" href="#leap_result_t" title='leap_result_t' data-type='struct leap_result' data-ref="leap_result_t" data-ref-filename="leap_result_t">leap_result_t</a> *<dfn class="local col8 decl" id="28qr" title='qr' data-type='leap_result_t *' data-ref="28qr" data-ref-filename="28qr">qr</dfn>);</td></tr>
+<tr><th id="266">266</th><td></td></tr>
+<tr><th id="267">267</th><td></td></tr>
+<tr><th id="268">268</th><td><i>/* Process a AUTOKEY TAI offset information. This *might* augment the</i></td></tr>
+<tr><th id="269">269</th><td><i> * current leap data table with the given TAI offset.</i></td></tr>
+<tr><th id="270">270</th><td><i> * Returns TRUE if action was taken, FALSE otherwise.</i></td></tr>
+<tr><th id="271">271</th><td><i> */</i></td></tr>
+<tr><th id="272">272</th><td><b>extern</b> <em>int</em><i>/*BOOL*/</i> <dfn class="decl fn" id="leapsec_autokey_tai" title='leapsec_autokey_tai' data-ref="leapsec_autokey_tai" data-ref-filename="leapsec_autokey_tai">leapsec_autokey_tai</dfn>(<em>int</em> <dfn class="local col9 decl" id="29tai_offset" title='tai_offset' data-type='int' data-ref="29tai_offset" data-ref-filename="29tai_offset">tai_offset</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="30ntpnow" title='ntpnow' data-type='uint32_t' data-ref="30ntpnow" data-ref-filename="30ntpnow">ntpnow</dfn>,</td></tr>
+<tr><th id="273">273</th><td>				       <em>const</em> <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> * <dfn class="local col1 decl" id="31pivot" title='pivot' data-type='const time_t *' data-ref="31pivot" data-ref-filename="31pivot">pivot</dfn>);</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td><i>/* reset global state for unit tests */</i></td></tr>
+<tr><th id="276">276</th><td><b>extern</b> <em>void</em> <dfn class="decl fn" id="leapsec_ut_pristine" title='leapsec_ut_pristine' data-ref="leapsec_ut_pristine" data-ref-filename="leapsec_ut_pristine">leapsec_ut_pristine</dfn>(<em>void</em>);</td></tr>
+<tr><th id="277">277</th><td></td></tr>
+<tr><th id="278">278</th><td><u>#<span data-ppcond="13">endif</span> /* !defined(NTP_LEAPSEC_H) */</u></td></tr>
+<tr><th id="279">279</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='ntp_control.c.html'>netbsd/external/bsd/ntp/dist/ntpd/ntp_control.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

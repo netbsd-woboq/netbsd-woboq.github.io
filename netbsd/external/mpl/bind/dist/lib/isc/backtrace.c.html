@@ -1,0 +1,310 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>backtrace.c source code [netbsd/external/mpl/bind/dist/lib/isc/backtrace.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/mpl/bind/dist/lib/isc/backtrace.c'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>external</a>/<a href='../../../..'>mpl</a>/<a href='../../..'>bind</a>/<a href='../..'>dist</a>/<a href='..'>lib</a>/<a href='./'>isc</a>/<a href='backtrace.c.html'>backtrace.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: backtrace.c,v 1.3 2019/01/09 16:55:14 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (C) Internet Systems Consortium, Inc. ("ISC")</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * This Source Code Form is subject to the terms of the Mozilla Public</i></td></tr>
+<tr><th id="7">7</th><td><i> * License, v. 2.0. If a copy of the MPL was not distributed with this</i></td></tr>
+<tr><th id="8">8</th><td><i> * file, You can obtain one at <a href="http://mozilla.org/MPL/2.0/">http://mozilla.org/MPL/2.0/</a>.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * See the COPYRIGHT file distributed with this work for additional</i></td></tr>
+<tr><th id="11">11</th><td><i> * information regarding copyright ownership.</i></td></tr>
+<tr><th id="12">12</th><td><i> */</i></td></tr>
+<tr><th id="13">13</th><td></td></tr>
+<tr><th id="14">14</th><td></td></tr>
+<tr><th id="15">15</th><td><i class="doc">/*!<span class="command"> \file</span> */</i></td></tr>
+<tr><th id="16">16</th><td></td></tr>
+<tr><th id="17">17</th><td><u>#include <a href="../../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><u>#include <a href="../../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a></u></td></tr>
+<tr><th id="20">20</th><td><u>#include <a href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="21">21</th><td><u>#<span data-ppcond="21">ifdef</span> <span class="macro" data-ref="_M/HAVE_LIBCTRACE">HAVE_LIBCTRACE</span></u></td></tr>
+<tr><th id="22">22</th><td><u>#include &lt;execinfo.h&gt;</u></td></tr>
+<tr><th id="23">23</th><td><u>#<span data-ppcond="21">endif</span></u></td></tr>
+<tr><th id="24">24</th><td></td></tr>
+<tr><th id="25">25</th><td><u>#include <a href="include/isc/backtrace.h.html">&lt;isc/backtrace.h&gt;</a></u></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="include/isc/result.h.html">&lt;isc/result.h&gt;</a></u></td></tr>
+<tr><th id="27">27</th><td><u>#include <a href="include/isc/util.h.html">&lt;isc/util.h&gt;</a></u></td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><u>#<span data-ppcond="29">ifdef</span> <a class="macro" href="../../../include/config.h.html#555" data-ref="_M/USE_BACKTRACE">USE_BACKTRACE</a></u></td></tr>
+<tr><th id="30">30</th><td><i>/*</i></td></tr>
+<tr><th id="31">31</th><td><i> * Getting a back trace of a running process is tricky and highly platform</i></td></tr>
+<tr><th id="32">32</th><td><i> * dependent.  Our current approach is as follows:</i></td></tr>
+<tr><th id="33">33</th><td><i> * 1. If the system library supports the "backtrace()" function, use it.</i></td></tr>
+<tr><th id="34">34</th><td><i> * 2. Otherwise, if the compiler is gcc and the architecture is x86_64 or IA64,</i></td></tr>
+<tr><th id="35">35</th><td><i> *    then use gcc's (hidden) Unwind_Backtrace() function.  Note that this</i></td></tr>
+<tr><th id="36">36</th><td><i> *    function doesn't work for C programs on many other architectures.</i></td></tr>
+<tr><th id="37">37</th><td><i> * 3. Otherwise, if the architecture x86 or x86_64, try to unwind the stack</i></td></tr>
+<tr><th id="38">38</th><td><i> *    frame following frame pointers.  This assumes the executable binary</i></td></tr>
+<tr><th id="39">39</th><td><i> *    compiled with frame pointers; this is not always true for x86_64 (rather,</i></td></tr>
+<tr><th id="40">40</th><td><i> *    compiler optimizations often disable frame pointers).  The validation</i></td></tr>
+<tr><th id="41">41</th><td><i> *    checks in getnextframeptr() hopefully rejects bogus values stored in</i></td></tr>
+<tr><th id="42">42</th><td><i> *    the RBP register in such a case.  If the backtrace function itself crashes</i></td></tr>
+<tr><th id="43">43</th><td><i> *    due to this problem, the whole package should be rebuilt with</i></td></tr>
+<tr><th id="44">44</th><td><i> *    --disable-backtrace.</i></td></tr>
+<tr><th id="45">45</th><td><i> */</i></td></tr>
+<tr><th id="46">46</th><td><u>#<span data-ppcond="46">ifdef</span> <span class="macro" data-ref="_M/HAVE_LIBCTRACE">HAVE_LIBCTRACE</span></u></td></tr>
+<tr><th id="47">47</th><td><u>#define BACKTRACE_LIBC</u></td></tr>
+<tr><th id="48">48</th><td><u>#<span data-ppcond="46">elif</span> defined(<span class="macro" data-ref="_M/__GNUC__">__GNUC__</span>) &amp;&amp; (defined(<span class="macro" data-ref="_M/__x86_64__">__x86_64__</span>) || defined(<span class="macro" data-ref="_M/__ia64__">__ia64__</span>))</u></td></tr>
+<tr><th id="49">49</th><td><u>#define BACKTRACE_GCC</u></td></tr>
+<tr><th id="50">50</th><td><u>#<span data-ppcond="46">elif</span> defined(<span class="macro" data-ref="_M/WIN32">WIN32</span>)</u></td></tr>
+<tr><th id="51">51</th><td><u>#define BACKTRACE_WIN32</u></td></tr>
+<tr><th id="52">52</th><td><u>#<span data-ppcond="46">elif</span> defined(<span class="macro" data-ref="_M/__x86_64__">__x86_64__</span>) || defined(<span class="macro" data-ref="_M/__i386__">__i386__</span>)</u></td></tr>
+<tr><th id="53">53</th><td><u>#define <dfn class="macro" id="_M/BACKTRACE_X86STACK" data-ref="_M/BACKTRACE_X86STACK">BACKTRACE_X86STACK</dfn></u></td></tr>
+<tr><th id="54">54</th><td><u>#<span data-ppcond="46">else</span></u></td></tr>
+<tr><th id="55">55</th><td><u>#define BACKTRACE_DISABLED</u></td></tr>
+<tr><th id="56">56</th><td><u>#<span data-ppcond="46">endif</span>  /* HAVE_LIBCTRACE */</u></td></tr>
+<tr><th id="57">57</th><td><u>#<span data-ppcond="29">else</span>	/* USE_BACKTRACE */</u></td></tr>
+<tr><th id="58">58</th><td><u>#define BACKTRACE_DISABLED</u></td></tr>
+<tr><th id="59">59</th><td><u>#<span data-ppcond="29">endif</span>	/* USE_BACKTRACE */</u></td></tr>
+<tr><th id="60">60</th><td></td></tr>
+<tr><th id="61">61</th><td><u>#<span data-ppcond="61">ifdef</span> <span class="macro" data-ref="_M/BACKTRACE_LIBC">BACKTRACE_LIBC</span></u></td></tr>
+<tr><th id="62">62</th><td>isc_result_t</td></tr>
+<tr><th id="63">63</th><td>isc_backtrace_gettrace(<em>void</em> **addrs, <em>int</em> maxaddrs, <em>int</em> *nframes) {</td></tr>
+<tr><th id="64">64</th><td>	<em>int</em> n;</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td>	<i>/*</i></td></tr>
+<tr><th id="67">67</th><td><i>	 * Validate the arguments: intentionally avoid using REQUIRE().</i></td></tr>
+<tr><th id="68">68</th><td><i>	 * See notes in backtrace.h.</i></td></tr>
+<tr><th id="69">69</th><td><i>	 */</i></td></tr>
+<tr><th id="70">70</th><td>	<b>if</b> (addrs == NULL || nframes == NULL)</td></tr>
+<tr><th id="71">71</th><td>		<b>return</b> (ISC_R_FAILURE);</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td>	<i>/*</i></td></tr>
+<tr><th id="74">74</th><td><i>	 * backtrace(3) includes this function itself in the address array,</i></td></tr>
+<tr><th id="75">75</th><td><i>	 * which should be eliminated from the returned sequence.</i></td></tr>
+<tr><th id="76">76</th><td><i>	 */</i></td></tr>
+<tr><th id="77">77</th><td>	n = backtrace(addrs, maxaddrs);</td></tr>
+<tr><th id="78">78</th><td>	<b>if</b> (n &lt; <var>2</var>)</td></tr>
+<tr><th id="79">79</th><td>		<b>return</b> (ISC_R_NOTFOUND);</td></tr>
+<tr><th id="80">80</th><td>	n--;</td></tr>
+<tr><th id="81">81</th><td>	memmove(addrs, &amp;addrs[<var>1</var>], <b>sizeof</b>(<em>void</em> *) * n);</td></tr>
+<tr><th id="82">82</th><td>	*nframes = n;</td></tr>
+<tr><th id="83">83</th><td>	<b>return</b> (ISC_R_SUCCESS);</td></tr>
+<tr><th id="84">84</th><td>}</td></tr>
+<tr><th id="85">85</th><td><u>#<span data-ppcond="61">elif</span> defined(<span class="macro" data-ref="_M/BACKTRACE_GCC">BACKTRACE_GCC</span>)</u></td></tr>
+<tr><th id="86">86</th><td><b>extern</b> <em>int</em> _Unwind_Backtrace(<em>void</em>* fn, <em>void</em>* a);</td></tr>
+<tr><th id="87">87</th><td><b>extern</b> <em>void</em>* _Unwind_GetIP(<em>void</em>* ctx);</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td><b>typedef</b> <b>struct</b> {</td></tr>
+<tr><th id="90">90</th><td>	<em>void</em> **result;</td></tr>
+<tr><th id="91">91</th><td>	<em>int</em> max_depth;</td></tr>
+<tr><th id="92">92</th><td>	<em>int</em> skip_count;</td></tr>
+<tr><th id="93">93</th><td>	<em>int</em> count;</td></tr>
+<tr><th id="94">94</th><td>} trace_arg_t;</td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="97">97</th><td>btcallback(<em>void</em> *uc, <em>void</em> *opq) {</td></tr>
+<tr><th id="98">98</th><td>	trace_arg_t *arg = (trace_arg_t *)opq;</td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td>	<b>if</b> (arg-&gt;skip_count &gt; <var>0</var>)</td></tr>
+<tr><th id="101">101</th><td>		arg-&gt;skip_count--;</td></tr>
+<tr><th id="102">102</th><td>	<b>else</b></td></tr>
+<tr><th id="103">103</th><td>		arg-&gt;result[arg-&gt;count++] = (<em>void</em> *)_Unwind_GetIP(uc);</td></tr>
+<tr><th id="104">104</th><td>	<b>if</b> (arg-&gt;count == arg-&gt;max_depth)</td></tr>
+<tr><th id="105">105</th><td>		<b>return</b> (<var>5</var>); <i>/* _URC_END_OF_STACK */</i></td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td>	<b>return</b> (<var>0</var>); <i>/* _URC_NO_REASON */</i></td></tr>
+<tr><th id="108">108</th><td>}</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td>isc_result_t</td></tr>
+<tr><th id="111">111</th><td>isc_backtrace_gettrace(<em>void</em> **addrs, <em>int</em> maxaddrs, <em>int</em> *nframes) {</td></tr>
+<tr><th id="112">112</th><td>	trace_arg_t arg;</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td>	<i>/* Argument validation: see above. */</i></td></tr>
+<tr><th id="115">115</th><td>	<b>if</b> (addrs == NULL || nframes == NULL)</td></tr>
+<tr><th id="116">116</th><td>		<b>return</b> (ISC_R_FAILURE);</td></tr>
+<tr><th id="117">117</th><td></td></tr>
+<tr><th id="118">118</th><td>	arg.skip_count = <var>1</var>;</td></tr>
+<tr><th id="119">119</th><td>	arg.result = addrs;</td></tr>
+<tr><th id="120">120</th><td>	arg.max_depth = maxaddrs;</td></tr>
+<tr><th id="121">121</th><td>	arg.count = <var>0</var>;</td></tr>
+<tr><th id="122">122</th><td>	_Unwind_Backtrace(btcallback, &amp;arg);</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td>	*nframes = arg.count;</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td>	<b>return</b> (ISC_R_SUCCESS);</td></tr>
+<tr><th id="127">127</th><td>}</td></tr>
+<tr><th id="128">128</th><td><u>#<span data-ppcond="61">elif</span> defined(<span class="macro" data-ref="_M/BACKTRACE_WIN32">BACKTRACE_WIN32</span>)</u></td></tr>
+<tr><th id="129">129</th><td>isc_result_t</td></tr>
+<tr><th id="130">130</th><td>isc_backtrace_gettrace(<em>void</em> **addrs, <em>int</em> maxaddrs, <em>int</em> *nframes) {</td></tr>
+<tr><th id="131">131</th><td>	<em>unsigned</em> <em>long</em> ftc = (<em>unsigned</em> <em>long</em>)maxaddrs;</td></tr>
+<tr><th id="132">132</th><td></td></tr>
+<tr><th id="133">133</th><td>	*nframes = (<em>int</em>)CaptureStackBackTrace(<var>1</var>, ftc, addrs, NULL);</td></tr>
+<tr><th id="134">134</th><td>	<b>return</b> ISC_R_SUCCESS;</td></tr>
+<tr><th id="135">135</th><td>}</td></tr>
+<tr><th id="136">136</th><td><u>#<span data-ppcond="61">elif</span> defined(<a class="macro" href="#53" data-ref="_M/BACKTRACE_X86STACK">BACKTRACE_X86STACK</a>)</u></td></tr>
+<tr><th id="137">137</th><td><u>#<span data-ppcond="137">ifdef</span> <span class="macro" data-ref="_M/__x86_64__">__x86_64__</span></u></td></tr>
+<tr><th id="138">138</th><td><em>static</em> <em>unsigned</em> <em>long</em></td></tr>
+<tr><th id="139">139</th><td>getrbp(<em>void</em>) {</td></tr>
+<tr><th id="140">140</th><td>	<b>__asm</b>(<q>"movq %rbp, %rax\n"</q>);</td></tr>
+<tr><th id="141">141</th><td>}</td></tr>
+<tr><th id="142">142</th><td><u>#<span data-ppcond="137">endif</span></u></td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><em>static</em> <em>void</em> **</td></tr>
+<tr><th id="145">145</th><td><dfn class="tu decl def fn" id="getnextframeptr" title='getnextframeptr' data-type='void ** getnextframeptr(void ** sp)' data-ref="getnextframeptr" data-ref-filename="getnextframeptr">getnextframeptr</dfn>(<em>void</em> **<dfn class="local col1 decl" id="1sp" title='sp' data-type='void **' data-ref="1sp" data-ref-filename="1sp">sp</dfn>) {</td></tr>
+<tr><th id="146">146</th><td>	<em>void</em> **<dfn class="local col2 decl" id="2newsp" title='newsp' data-type='void **' data-ref="2newsp" data-ref-filename="2newsp">newsp</dfn> = (<em>void</em> **)*<a class="local col1 ref" href="#1sp" title='sp' data-ref="1sp" data-ref-filename="1sp">sp</a>;</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td>	<i>/*</i></td></tr>
+<tr><th id="149">149</th><td><i>	 * Perform sanity check for the new frame pointer, derived from</i></td></tr>
+<tr><th id="150">150</th><td><i>	 * google glog.  This can actually be bogus depending on compiler.</i></td></tr>
+<tr><th id="151">151</th><td><i>	 */</i></td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td>	<i>/* prohibit the stack frames from growing downwards */</i></td></tr>
+<tr><th id="154">154</th><td>	<b>if</b> (<a class="local col2 ref" href="#2newsp" title='newsp' data-ref="2newsp" data-ref-filename="2newsp">newsp</a> &lt;= <a class="local col1 ref" href="#1sp" title='sp' data-ref="1sp" data-ref-filename="1sp">sp</a>)</td></tr>
+<tr><th id="155">155</th><td>		<b>return</b> (<span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>	<i>/* A heuristics to reject "too large" frame: this actually happened. */</i></td></tr>
+<tr><th id="158">158</th><td>	<b>if</b> ((<em>char</em> *)<a class="local col2 ref" href="#2newsp" title='newsp' data-ref="2newsp" data-ref-filename="2newsp">newsp</a> - (<em>char</em> *)<a class="local col1 ref" href="#1sp" title='sp' data-ref="1sp" data-ref-filename="1sp">sp</a> &gt; <var>100000</var>)</td></tr>
+<tr><th id="159">159</th><td>		<b>return</b> (<span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td>	<i>/*</i></td></tr>
+<tr><th id="162">162</th><td><i>	 * Not sure if other checks used in glog are needed at this moment.</i></td></tr>
+<tr><th id="163">163</th><td><i>	 * For our purposes we don't have to consider non-contiguous frames,</i></td></tr>
+<tr><th id="164">164</th><td><i>	 * for example.</i></td></tr>
+<tr><th id="165">165</th><td><i>	 */</i></td></tr>
+<tr><th id="166">166</th><td></td></tr>
+<tr><th id="167">167</th><td>	<b>return</b> (<a class="local col2 ref" href="#2newsp" title='newsp' data-ref="2newsp" data-ref-filename="2newsp">newsp</a>);</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><a class="typedef" href="include/isc/types.h.html#isc_result_t" title='isc_result_t' data-type='unsigned int' data-ref="isc_result_t" data-ref-filename="isc_result_t">isc_result_t</a></td></tr>
+<tr><th id="171">171</th><td><dfn class="decl def fn" id="isc_backtrace_gettrace" title='isc_backtrace_gettrace' data-ref="isc_backtrace_gettrace" data-ref-filename="isc_backtrace_gettrace">isc_backtrace_gettrace</dfn>(<em>void</em> **<dfn class="local col3 decl" id="3addrs" title='addrs' data-type='void **' data-ref="3addrs" data-ref-filename="3addrs">addrs</dfn>, <em>int</em> <dfn class="local col4 decl" id="4maxaddrs" title='maxaddrs' data-type='int' data-ref="4maxaddrs" data-ref-filename="4maxaddrs">maxaddrs</dfn>, <em>int</em> *<dfn class="local col5 decl" id="5nframes" title='nframes' data-type='int *' data-ref="5nframes" data-ref-filename="5nframes">nframes</dfn>) {</td></tr>
+<tr><th id="172">172</th><td>	<em>int</em> <dfn class="local col6 decl" id="6i" title='i' data-type='int' data-ref="6i" data-ref-filename="6i">i</dfn> = <var>0</var>;</td></tr>
+<tr><th id="173">173</th><td>	<em>void</em> **<dfn class="local col7 decl" id="7sp" title='sp' data-type='void **' data-ref="7sp" data-ref-filename="7sp">sp</dfn>;</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td>	<i>/* Argument validation: see above. */</i></td></tr>
+<tr><th id="176">176</th><td>	<b>if</b> (<a class="local col3 ref" href="#3addrs" title='addrs' data-ref="3addrs" data-ref-filename="3addrs">addrs</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> || <a class="local col5 ref" href="#5nframes" title='nframes' data-ref="5nframes" data-ref-filename="5nframes">nframes</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="177">177</th><td>		<b>return</b> (<a class="macro" href="include/isc/result.h.html#49" title="25" data-ref="_M/ISC_R_FAILURE">ISC_R_FAILURE</a>);</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td><u>#<span data-ppcond="179">ifdef</span> <span class="macro" data-ref="_M/__x86_64__">__x86_64__</span></u></td></tr>
+<tr><th id="180">180</th><td>	sp = (<em>void</em> **)getrbp();</td></tr>
+<tr><th id="181">181</th><td>	<b>if</b> (sp == NULL)</td></tr>
+<tr><th id="182">182</th><td>		<b>return</b> (ISC_R_NOTFOUND);</td></tr>
+<tr><th id="183">183</th><td>	<i>/*</i></td></tr>
+<tr><th id="184">184</th><td><i>	 * sp is the frame ptr of this function itself due to the call to</i></td></tr>
+<tr><th id="185">185</th><td><i>	 * getrbp(), so need to unwind one frame for consistency.</i></td></tr>
+<tr><th id="186">186</th><td><i>	 */</i></td></tr>
+<tr><th id="187">187</th><td>	sp = getnextframeptr(sp);</td></tr>
+<tr><th id="188">188</th><td><u>#<span data-ppcond="179">else</span></u></td></tr>
+<tr><th id="189">189</th><td>	<i>/*</i></td></tr>
+<tr><th id="190">190</th><td><i>	 * i386: the frame pointer is stored 2 words below the address for the</i></td></tr>
+<tr><th id="191">191</th><td><i>	 * first argument.  Note that the body of this function cannot be</i></td></tr>
+<tr><th id="192">192</th><td><i>	 * inlined since it depends on the address of the function argument.</i></td></tr>
+<tr><th id="193">193</th><td><i>	 */</i></td></tr>
+<tr><th id="194">194</th><td>	<a class="local col7 ref" href="#7sp" title='sp' data-ref="7sp" data-ref-filename="7sp">sp</a> = (<em>void</em> **)(<em>void</em> *)&amp;<a class="local col3 ref" href="#3addrs" title='addrs' data-ref="3addrs" data-ref-filename="3addrs">addrs</a> - <var>2</var>;</td></tr>
+<tr><th id="195">195</th><td><u>#<span data-ppcond="179">endif</span></u></td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td>	<b>while</b> (<a class="local col7 ref" href="#7sp" title='sp' data-ref="7sp" data-ref-filename="7sp">sp</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> &amp;&amp; <a class="local col6 ref" href="#6i" title='i' data-ref="6i" data-ref-filename="6i">i</a> &lt; <a class="local col4 ref" href="#4maxaddrs" title='maxaddrs' data-ref="4maxaddrs" data-ref-filename="4maxaddrs">maxaddrs</a>) {</td></tr>
+<tr><th id="198">198</th><td>		<a class="local col3 ref" href="#3addrs" title='addrs' data-ref="3addrs" data-ref-filename="3addrs">addrs</a>[<a class="local col6 ref" href="#6i" title='i' data-ref="6i" data-ref-filename="6i">i</a>++] = *(<a class="local col7 ref" href="#7sp" title='sp' data-ref="7sp" data-ref-filename="7sp">sp</a> + <var>1</var>);</td></tr>
+<tr><th id="199">199</th><td>		<a class="local col7 ref" href="#7sp" title='sp' data-ref="7sp" data-ref-filename="7sp">sp</a> = <a class="tu ref fn" href="#getnextframeptr" title='getnextframeptr' data-use='c' data-ref="getnextframeptr" data-ref-filename="getnextframeptr">getnextframeptr</a>(<a class="local col7 ref" href="#7sp" title='sp' data-ref="7sp" data-ref-filename="7sp">sp</a>);</td></tr>
+<tr><th id="200">200</th><td>	}</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td>	*<a class="local col5 ref" href="#5nframes" title='nframes' data-ref="5nframes" data-ref-filename="5nframes">nframes</a> = <a class="local col6 ref" href="#6i" title='i' data-ref="6i" data-ref-filename="6i">i</a>;</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td>	<b>return</b> (<a class="macro" href="include/isc/result.h.html#23" title="0" data-ref="_M/ISC_R_SUCCESS">ISC_R_SUCCESS</a>);</td></tr>
+<tr><th id="205">205</th><td>}</td></tr>
+<tr><th id="206">206</th><td><u>#<span data-ppcond="61">elif</span> defined(BACKTRACE_DISABLED)</u></td></tr>
+<tr><th id="207">207</th><td>isc_result_t</td></tr>
+<tr><th id="208">208</th><td>isc_backtrace_gettrace(<em>void</em> **addrs, <em>int</em> maxaddrs, <em>int</em> *nframes) {</td></tr>
+<tr><th id="209">209</th><td>	<i>/* Argument validation: see above. */</i></td></tr>
+<tr><th id="210">210</th><td>	<b>if</b> (addrs == NULL || nframes == NULL)</td></tr>
+<tr><th id="211">211</th><td>		<b>return</b> (ISC_R_FAILURE);</td></tr>
+<tr><th id="212">212</th><td></td></tr>
+<tr><th id="213">213</th><td>	UNUSED(maxaddrs);</td></tr>
+<tr><th id="214">214</th><td></td></tr>
+<tr><th id="215">215</th><td>	<b>return</b> (ISC_R_NOTIMPLEMENTED);</td></tr>
+<tr><th id="216">216</th><td>}</td></tr>
+<tr><th id="217">217</th><td><u>#<span data-ppcond="61">endif</span></u></td></tr>
+<tr><th id="218">218</th><td></td></tr>
+<tr><th id="219">219</th><td><a class="typedef" href="include/isc/types.h.html#isc_result_t" title='isc_result_t' data-type='unsigned int' data-ref="isc_result_t" data-ref-filename="isc_result_t">isc_result_t</a></td></tr>
+<tr><th id="220">220</th><td><dfn class="decl def fn" id="isc_backtrace_getsymbolfromindex" title='isc_backtrace_getsymbolfromindex' data-ref="isc_backtrace_getsymbolfromindex" data-ref-filename="isc_backtrace_getsymbolfromindex">isc_backtrace_getsymbolfromindex</dfn>(<em>int</em> <dfn class="local col8 decl" id="8idx" title='idx' data-type='int' data-ref="8idx" data-ref-filename="8idx">idx</dfn>, <em>const</em> <em>void</em> **<dfn class="local col9 decl" id="9addrp" title='addrp' data-type='const void **' data-ref="9addrp" data-ref-filename="9addrp">addrp</dfn>,</td></tr>
+<tr><th id="221">221</th><td>				 <em>const</em> <em>char</em> **<dfn class="local col0 decl" id="10symbolp" title='symbolp' data-type='const char **' data-ref="10symbolp" data-ref-filename="10symbolp">symbolp</dfn>)</td></tr>
+<tr><th id="222">222</th><td>{</td></tr>
+<tr><th id="223">223</th><td>	<a class="macro" href="include/isc/util.h.html#229" title="((void) ( __builtin_expect(!!(addrp != ((void*)0) &amp;&amp; *addrp == ((void*)0)), 1) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/mpl/bind/lib/libisc/../../../../../../../../../external/mpl/bind/dist/lib/isc/backtrace.c&quot;, 223, isc_assertiontype_require, &quot;addrp != ((void*)0) &amp;&amp; *addrp == ((void*)0)&quot;), 0)))" data-ref="_M/REQUIRE">REQUIRE</a>(<a class="local col9 ref" href="#9addrp" title='addrp' data-ref="9addrp" data-ref-filename="9addrp">addrp</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> &amp;&amp; *<a class="local col9 ref" href="#9addrp" title='addrp' data-ref="9addrp" data-ref-filename="9addrp">addrp</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="224">224</th><td>	<a class="macro" href="include/isc/util.h.html#229" title="((void) ( __builtin_expect(!!(symbolp != ((void*)0) &amp;&amp; *symbolp == ((void*)0)), 1) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/mpl/bind/lib/libisc/../../../../../../../../../external/mpl/bind/dist/lib/isc/backtrace.c&quot;, 224, isc_assertiontype_require, &quot;symbolp != ((void*)0) &amp;&amp; *symbolp == ((void*)0)&quot;), 0)))" data-ref="_M/REQUIRE">REQUIRE</a>(<a class="local col0 ref" href="#10symbolp" title='symbolp' data-ref="10symbolp" data-ref-filename="10symbolp">symbolp</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> &amp;&amp; *<a class="local col0 ref" href="#10symbolp" title='symbolp' data-ref="10symbolp" data-ref-filename="10symbolp">symbolp</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td>	<b>if</b> (<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a> &lt; <var>0</var> || <a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a> &gt;= <a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_nsymbols" title='isc__backtrace_nsymbols' data-ref="isc__backtrace_nsymbols" data-ref-filename="isc__backtrace_nsymbols">isc__backtrace_nsymbols</a>)</td></tr>
+<tr><th id="227">227</th><td>		<b>return</b> (<a class="macro" href="include/isc/result.h.html#65" title="41" data-ref="_M/ISC_R_RANGE">ISC_R_RANGE</a>);</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td>	*<a class="local col9 ref" href="#9addrp" title='addrp' data-ref="9addrp" data-ref-filename="9addrp">addrp</a> = <a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_symtable" title='isc__backtrace_symtable' data-ref="isc__backtrace_symtable" data-ref-filename="isc__backtrace_symtable">isc__backtrace_symtable</a>[<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a>].<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::addr" title='isc_backtrace_symmap::addr' data-ref="isc_backtrace_symmap::addr" data-ref-filename="isc_backtrace_symmap..addr">addr</a>;</td></tr>
+<tr><th id="230">230</th><td>	*<a class="local col0 ref" href="#10symbolp" title='symbolp' data-ref="10symbolp" data-ref-filename="10symbolp">symbolp</a> = <a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_symtable" title='isc__backtrace_symtable' data-ref="isc__backtrace_symtable" data-ref-filename="isc__backtrace_symtable">isc__backtrace_symtable</a>[<a class="local col8 ref" href="#8idx" title='idx' data-ref="8idx" data-ref-filename="8idx">idx</a>].<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::symbol" title='isc_backtrace_symmap::symbol' data-ref="isc_backtrace_symmap::symbol" data-ref-filename="isc_backtrace_symmap..symbol">symbol</a>;</td></tr>
+<tr><th id="231">231</th><td>	<b>return</b> (<a class="macro" href="include/isc/result.h.html#23" title="0" data-ref="_M/ISC_R_SUCCESS">ISC_R_SUCCESS</a>);</td></tr>
+<tr><th id="232">232</th><td>}</td></tr>
+<tr><th id="233">233</th><td></td></tr>
+<tr><th id="234">234</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="235">235</th><td><dfn class="tu decl def fn" id="symtbl_compare" title='symtbl_compare' data-type='int symtbl_compare(const void * addr, const void * entryarg)' data-ref="symtbl_compare" data-ref-filename="symtbl_compare">symtbl_compare</dfn>(<em>const</em> <em>void</em> *<dfn class="local col1 decl" id="11addr" title='addr' data-type='const void *' data-ref="11addr" data-ref-filename="11addr">addr</dfn>, <em>const</em> <em>void</em> *<dfn class="local col2 decl" id="12entryarg" title='entryarg' data-type='const void *' data-ref="12entryarg" data-ref-filename="12entryarg">entryarg</dfn>) {</td></tr>
+<tr><th id="236">236</th><td>	<em>const</em> <a class="typedef" href="include/isc/types.h.html#isc_backtrace_symmap_t" title='isc_backtrace_symmap_t' data-type='struct isc_backtrace_symmap' data-ref="isc_backtrace_symmap_t" data-ref-filename="isc_backtrace_symmap_t">isc_backtrace_symmap_t</a> *<dfn class="local col3 decl" id="13entry" title='entry' data-type='const isc_backtrace_symmap_t *' data-ref="13entry" data-ref-filename="13entry">entry</dfn> = <a class="local col2 ref" href="#12entryarg" title='entryarg' data-ref="12entryarg" data-ref-filename="12entryarg">entryarg</a>;</td></tr>
+<tr><th id="237">237</th><td>	<em>const</em> <a class="typedef" href="include/isc/types.h.html#isc_backtrace_symmap_t" title='isc_backtrace_symmap_t' data-type='struct isc_backtrace_symmap' data-ref="isc_backtrace_symmap_t" data-ref-filename="isc_backtrace_symmap_t">isc_backtrace_symmap_t</a> *<dfn class="local col4 decl" id="14end" title='end' data-type='const isc_backtrace_symmap_t *' data-ref="14end" data-ref-filename="14end">end</dfn> =</td></tr>
+<tr><th id="238">238</th><td>		&amp;<a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_symtable" title='isc__backtrace_symtable' data-ref="isc__backtrace_symtable" data-ref-filename="isc__backtrace_symtable">isc__backtrace_symtable</a>[<a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_nsymbols" title='isc__backtrace_nsymbols' data-ref="isc__backtrace_nsymbols" data-ref-filename="isc__backtrace_nsymbols">isc__backtrace_nsymbols</a> - <var>1</var>];</td></tr>
+<tr><th id="239">239</th><td></td></tr>
+<tr><th id="240">240</th><td>	<b>if</b> (<a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_nsymbols" title='isc__backtrace_nsymbols' data-ref="isc__backtrace_nsymbols" data-ref-filename="isc__backtrace_nsymbols">isc__backtrace_nsymbols</a> == <var>1</var> || <a class="local col3 ref" href="#13entry" title='entry' data-ref="13entry" data-ref-filename="13entry">entry</a> == <a class="local col4 ref" href="#14end" title='end' data-ref="14end" data-ref-filename="14end">end</a>) {</td></tr>
+<tr><th id="241">241</th><td>		<b>if</b> (<a class="local col1 ref" href="#11addr" title='addr' data-ref="11addr" data-ref-filename="11addr">addr</a> &gt;= <a class="local col3 ref" href="#13entry" title='entry' data-ref="13entry" data-ref-filename="13entry">entry</a>-&gt;<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::addr" title='isc_backtrace_symmap::addr' data-ref="isc_backtrace_symmap::addr" data-ref-filename="isc_backtrace_symmap..addr">addr</a>) {</td></tr>
+<tr><th id="242">242</th><td>			<i>/*</i></td></tr>
+<tr><th id="243">243</th><td><i>			 * If addr is equal to or larger than that of the last</i></td></tr>
+<tr><th id="244">244</th><td><i>			 * entry of the table, we cannot be sure if this is</i></td></tr>
+<tr><th id="245">245</th><td><i>			 * within a valid range so we consider it valid.</i></td></tr>
+<tr><th id="246">246</th><td><i>			 */</i></td></tr>
+<tr><th id="247">247</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="248">248</th><td>		}</td></tr>
+<tr><th id="249">249</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="250">250</th><td>	}</td></tr>
+<tr><th id="251">251</th><td></td></tr>
+<tr><th id="252">252</th><td>	<i>/* entry + 1 is a valid entry from now on. */</i></td></tr>
+<tr><th id="253">253</th><td>	<b>if</b> (<a class="local col1 ref" href="#11addr" title='addr' data-ref="11addr" data-ref-filename="11addr">addr</a> &lt; <a class="local col3 ref" href="#13entry" title='entry' data-ref="13entry" data-ref-filename="13entry">entry</a>-&gt;<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::addr" title='isc_backtrace_symmap::addr' data-ref="isc_backtrace_symmap::addr" data-ref-filename="isc_backtrace_symmap..addr">addr</a>)</td></tr>
+<tr><th id="254">254</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="255">255</th><td>	<b>else</b> <b>if</b> (<a class="local col1 ref" href="#11addr" title='addr' data-ref="11addr" data-ref-filename="11addr">addr</a> &gt;= (<a class="local col3 ref" href="#13entry" title='entry' data-ref="13entry" data-ref-filename="13entry">entry</a> + <var>1</var>)-&gt;<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::addr" title='isc_backtrace_symmap::addr' data-ref="isc_backtrace_symmap::addr" data-ref-filename="isc_backtrace_symmap..addr">addr</a>)</td></tr>
+<tr><th id="256">256</th><td>		<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="257">257</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="258">258</th><td>}</td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td><a class="typedef" href="include/isc/types.h.html#isc_result_t" title='isc_result_t' data-type='unsigned int' data-ref="isc_result_t" data-ref-filename="isc_result_t">isc_result_t</a></td></tr>
+<tr><th id="261">261</th><td><dfn class="decl def fn" id="isc_backtrace_getsymbol" title='isc_backtrace_getsymbol' data-ref="isc_backtrace_getsymbol" data-ref-filename="isc_backtrace_getsymbol">isc_backtrace_getsymbol</dfn>(<em>const</em> <em>void</em> *<dfn class="local col5 decl" id="15addr" title='addr' data-type='const void *' data-ref="15addr" data-ref-filename="15addr">addr</dfn>, <em>const</em> <em>char</em> **<dfn class="local col6 decl" id="16symbolp" title='symbolp' data-type='const char **' data-ref="16symbolp" data-ref-filename="16symbolp">symbolp</dfn>,</td></tr>
+<tr><th id="262">262</th><td>			<em>unsigned</em> <em>long</em> *<dfn class="local col7 decl" id="17offsetp" title='offsetp' data-type='unsigned long *' data-ref="17offsetp" data-ref-filename="17offsetp">offsetp</dfn>)</td></tr>
+<tr><th id="263">263</th><td>{</td></tr>
+<tr><th id="264">264</th><td>	<a class="typedef" href="include/isc/types.h.html#isc_result_t" title='isc_result_t' data-type='unsigned int' data-ref="isc_result_t" data-ref-filename="isc_result_t">isc_result_t</a> <dfn class="local col8 decl" id="18result" title='result' data-type='isc_result_t' data-ref="18result" data-ref-filename="18result">result</dfn> = <a class="macro" href="include/isc/result.h.html#23" title="0" data-ref="_M/ISC_R_SUCCESS">ISC_R_SUCCESS</a>;</td></tr>
+<tr><th id="265">265</th><td>	<a class="typedef" href="include/isc/types.h.html#isc_backtrace_symmap_t" title='isc_backtrace_symmap_t' data-type='struct isc_backtrace_symmap' data-ref="isc_backtrace_symmap_t" data-ref-filename="isc_backtrace_symmap_t">isc_backtrace_symmap_t</a> *<dfn class="local col9 decl" id="19found" title='found' data-type='isc_backtrace_symmap_t *' data-ref="19found" data-ref-filename="19found">found</dfn>;</td></tr>
+<tr><th id="266">266</th><td></td></tr>
+<tr><th id="267">267</th><td>	<i>/*</i></td></tr>
+<tr><th id="268">268</th><td><i>	 * Validate the arguments: intentionally avoid using REQUIRE().</i></td></tr>
+<tr><th id="269">269</th><td><i>	 * See notes in backtrace.h.</i></td></tr>
+<tr><th id="270">270</th><td><i>	 */</i></td></tr>
+<tr><th id="271">271</th><td>	<b>if</b> (<a class="local col6 ref" href="#16symbolp" title='symbolp' data-ref="16symbolp" data-ref-filename="16symbolp">symbolp</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> || *<a class="local col6 ref" href="#16symbolp" title='symbolp' data-ref="16symbolp" data-ref-filename="16symbolp">symbolp</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> || <a class="local col7 ref" href="#17offsetp" title='offsetp' data-ref="17offsetp" data-ref-filename="17offsetp">offsetp</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="272">272</th><td>		<b>return</b> (<a class="macro" href="include/isc/result.h.html#49" title="25" data-ref="_M/ISC_R_FAILURE">ISC_R_FAILURE</a>);</td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td>	<b>if</b> (<a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_nsymbols" title='isc__backtrace_nsymbols' data-ref="isc__backtrace_nsymbols" data-ref-filename="isc__backtrace_nsymbols">isc__backtrace_nsymbols</a> &lt; <var>1</var>)</td></tr>
+<tr><th id="275">275</th><td>		<b>return</b> (<a class="macro" href="include/isc/result.h.html#47" title="23" data-ref="_M/ISC_R_NOTFOUND">ISC_R_NOTFOUND</a>);</td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td>	<i>/*</i></td></tr>
+<tr><th id="278">278</th><td><i>	 * Search the table for the entry that meets:</i></td></tr>
+<tr><th id="279">279</th><td><i>	 * entry.addr &lt;= addr &lt; next_entry.addr.</i></td></tr>
+<tr><th id="280">280</th><td><i>	 */</i></td></tr>
+<tr><th id="281">281</th><td>	<a class="local col9 ref" href="#19found" title='found' data-ref="19found" data-ref-filename="19found">found</a> = <a class="ref fn" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#bsearch" title='bsearch' data-ref="bsearch" data-ref-filename="bsearch">bsearch</a>(<a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a>, <a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_symtable" title='isc__backtrace_symtable' data-ref="isc__backtrace_symtable" data-ref-filename="isc__backtrace_symtable">isc__backtrace_symtable</a>, <a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_nsymbols" title='isc__backtrace_nsymbols' data-ref="isc__backtrace_nsymbols" data-ref-filename="isc__backtrace_nsymbols">isc__backtrace_nsymbols</a>,</td></tr>
+<tr><th id="282">282</th><td>			<b>sizeof</b>(<a class="ref" href="include/isc/backtrace.h.html#isc__backtrace_symtable" title='isc__backtrace_symtable' data-ref="isc__backtrace_symtable" data-ref-filename="isc__backtrace_symtable">isc__backtrace_symtable</a>[<var>0</var>]), <a class="tu ref fn" href="#symtbl_compare" title='symtbl_compare' data-use='r' data-ref="symtbl_compare" data-ref-filename="symtbl_compare">symtbl_compare</a>);</td></tr>
+<tr><th id="283">283</th><td>	<b>if</b> (<a class="local col9 ref" href="#19found" title='found' data-ref="19found" data-ref-filename="19found">found</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="284">284</th><td>		<a class="local col8 ref" href="#18result" title='result' data-ref="18result" data-ref-filename="18result">result</a> = <a class="macro" href="include/isc/result.h.html#47" title="23" data-ref="_M/ISC_R_NOTFOUND">ISC_R_NOTFOUND</a>;</td></tr>
+<tr><th id="285">285</th><td>	<b>else</b> {</td></tr>
+<tr><th id="286">286</th><td>		*<a class="local col6 ref" href="#16symbolp" title='symbolp' data-ref="16symbolp" data-ref-filename="16symbolp">symbolp</a> = <a class="local col9 ref" href="#19found" title='found' data-ref="19found" data-ref-filename="19found">found</a>-&gt;<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::symbol" title='isc_backtrace_symmap::symbol' data-ref="isc_backtrace_symmap::symbol" data-ref-filename="isc_backtrace_symmap..symbol">symbol</a>;</td></tr>
+<tr><th id="287">287</th><td>		*<a class="local col7 ref" href="#17offsetp" title='offsetp' data-ref="17offsetp" data-ref-filename="17offsetp">offsetp</a> = (<em>unsigned</em> <em>long</em>) ((<em>const</em> <em>char</em> *)<a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a> -</td></tr>
+<tr><th id="288">288</th><td>					    (<em>char</em> *)<a class="local col9 ref" href="#19found" title='found' data-ref="19found" data-ref-filename="19found">found</a>-&gt;<a class="ref field" href="include/isc/backtrace.h.html#isc_backtrace_symmap::addr" title='isc_backtrace_symmap::addr' data-ref="isc_backtrace_symmap::addr" data-ref-filename="isc_backtrace_symmap..addr">addr</a>);</td></tr>
+<tr><th id="289">289</th><td>	}</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td>	<b>return</b> (<a class="local col8 ref" href="#18result" title='result' data-ref="18result" data-ref-filename="18result">result</a>);</td></tr>
+<tr><th id="292">292</th><td>}</td></tr>
+<tr><th id="293">293</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

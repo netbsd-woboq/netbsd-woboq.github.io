@@ -1,0 +1,799 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>kern_rwlock.c source code [netbsd/sys/kern/kern_rwlock.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/kern_rwlock.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='kern_rwlock.c.html'>kern_rwlock.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: kern_rwlock.c,v 1.54 2019/05/09 05:00:31 ozaki-r Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2002, 2006, 2007, 2008, 2009 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe and Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i> * Kernel reader/writer lock implementation, modeled after those</i></td></tr>
+<tr><th id="34">34</th><td><i> * found in Solaris, a description of which can be found in:</i></td></tr>
+<tr><th id="35">35</th><td><i> *</i></td></tr>
+<tr><th id="36">36</th><td><i> *	Solaris Internals: Core Kernel Architecture, Jim Mauro and</i></td></tr>
+<tr><th id="37">37</th><td><i> *	    Richard McDougall.</i></td></tr>
+<tr><th id="38">38</th><td><i> */</i></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: kern_rwlock.c,v 1.54 2019/05/09 05:00:31 ozaki-r Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: kern_rwlock.c,v 1.54 2019/05/09 05:00:31 ozaki-r Exp $"</q>);</td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><u>#define	<dfn class="macro" id="_M/__RWLOCK_PRIVATE" data-ref="_M/__RWLOCK_PRIVATE">__RWLOCK_PRIVATE</dfn></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../sys/rwlock.h.html">&lt;sys/rwlock.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../sys/sched.h.html">&lt;sys/sched.h&gt;</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../sys/sleepq.h.html">&lt;sys/sleepq.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../sys/lockdebug.h.html">&lt;sys/lockdebug.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="../sys/lock.h.html">&lt;sys/lock.h&gt;</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="../sys/pserialize.h.html">&lt;sys/pserialize.h&gt;</a></u></td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="../dev/lockstat.h.html">&lt;dev/lockstat.h&gt;</a></u></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><i>/*</i></td></tr>
+<tr><th id="60">60</th><td><i> * LOCKDEBUG</i></td></tr>
+<tr><th id="61">61</th><td><i> */</i></td></tr>
+<tr><th id="62">62</th><td></td></tr>
+<tr><th id="63">63</th><td><u>#<span data-ppcond="63">if</span> defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="64">64</th><td></td></tr>
+<tr><th id="65">65</th><td><u>#define	RW_WANTLOCK(rw, op)						\</u></td></tr>
+<tr><th id="66">66</th><td><u>	LOCKDEBUG_WANTLOCK(RW_DEBUG_P(rw), (rw),			\</u></td></tr>
+<tr><th id="67">67</th><td><u>	    (uintptr_t)__builtin_return_address(0), op == RW_READER);</u></td></tr>
+<tr><th id="68">68</th><td><u>#define	RW_LOCKED(rw, op)						\</u></td></tr>
+<tr><th id="69">69</th><td><u>	LOCKDEBUG_LOCKED(RW_DEBUG_P(rw), (rw), NULL,			\</u></td></tr>
+<tr><th id="70">70</th><td><u>	    (uintptr_t)__builtin_return_address(0), op == RW_READER);</u></td></tr>
+<tr><th id="71">71</th><td><u>#define	RW_UNLOCKED(rw, op)						\</u></td></tr>
+<tr><th id="72">72</th><td><u>	LOCKDEBUG_UNLOCKED(RW_DEBUG_P(rw), (rw),			\</u></td></tr>
+<tr><th id="73">73</th><td><u>	    (uintptr_t)__builtin_return_address(0), op == RW_READER);</u></td></tr>
+<tr><th id="74">74</th><td><u>#define	RW_DASSERT(rw, cond)						\</u></td></tr>
+<tr><th id="75">75</th><td><u>do {									\</u></td></tr>
+<tr><th id="76">76</th><td><u>	if (__predict_false(!(cond)))					\</u></td></tr>
+<tr><th id="77">77</th><td><u>		rw_abort(__func__, __LINE__, rw, "assertion failed: " #cond);\</u></td></tr>
+<tr><th id="78">78</th><td><u>} while (/* CONSTCOND */ 0);</u></td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><u>#<span data-ppcond="63">else</span>	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><u>#define	<dfn class="macro" id="_M/RW_WANTLOCK" data-ref="_M/RW_WANTLOCK">RW_WANTLOCK</dfn>(rw, op)	/* nothing */</u></td></tr>
+<tr><th id="83">83</th><td><u>#define	<dfn class="macro" id="_M/RW_LOCKED" data-ref="_M/RW_LOCKED">RW_LOCKED</dfn>(rw, op)	/* nothing */</u></td></tr>
+<tr><th id="84">84</th><td><u>#define	<dfn class="macro" id="_M/RW_UNLOCKED" data-ref="_M/RW_UNLOCKED">RW_UNLOCKED</dfn>(rw, op)	/* nothing */</u></td></tr>
+<tr><th id="85">85</th><td><u>#define	<dfn class="macro" id="_M/RW_DASSERT" data-ref="_M/RW_DASSERT">RW_DASSERT</dfn>(rw, cond)	/* nothing */</u></td></tr>
+<tr><th id="86">86</th><td></td></tr>
+<tr><th id="87">87</th><td><u>#<span data-ppcond="63">endif</span>	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td><i>/*</i></td></tr>
+<tr><th id="90">90</th><td><i> * DIAGNOSTIC</i></td></tr>
+<tr><th id="91">91</th><td><i> */</i></td></tr>
+<tr><th id="92">92</th><td></td></tr>
+<tr><th id="93">93</th><td><u>#<span data-ppcond="93">if</span> defined(<span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span>)</u></td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><u>#define	<dfn class="macro" id="_M/RW_ASSERT" data-ref="_M/RW_ASSERT">RW_ASSERT</dfn>(rw, cond)						\</u></td></tr>
+<tr><th id="96">96</th><td><u>do {									\</u></td></tr>
+<tr><th id="97">97</th><td><u>	if (__predict_false(!(cond)))					\</u></td></tr>
+<tr><th id="98">98</th><td><u>		<a class="tu ref fn" href="#rw_abort" title='rw_abort' data-use='c' data-ref="rw_abort" data-ref-filename="rw_abort">rw_abort</a>(__func__, __LINE__, rw, "assertion failed: " #cond);\</u></td></tr>
+<tr><th id="99">99</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="100">100</th><td></td></tr>
+<tr><th id="101">101</th><td><u>#<span data-ppcond="93">else</span></u></td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><u>#define	RW_ASSERT(rw, cond)	/* nothing */</u></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td><u>#<span data-ppcond="93">endif</span>	/* DIAGNOSTIC */</u></td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><u>#define	<dfn class="macro" id="_M/RW_SETDEBUG" data-ref="_M/RW_SETDEBUG">RW_SETDEBUG</dfn>(rw, on)		((rw)-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a> |= (on) ? 0 : RW_NODEBUG)</u></td></tr>
+<tr><th id="108">108</th><td><u>#define	<dfn class="macro" id="_M/RW_DEBUG_P" data-ref="_M/RW_DEBUG_P">RW_DEBUG_P</dfn>(rw)			(((rw)-&gt;rw_owner &amp; RW_NODEBUG) == 0)</u></td></tr>
+<tr><th id="109">109</th><td><u>#<span data-ppcond="109">if</span> defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="110">110</th><td><u>#define	RW_INHERITDEBUG(n, o)		(n) |= (o) &amp; RW_NODEBUG</u></td></tr>
+<tr><th id="111">111</th><td><u>#<span data-ppcond="109">else</span> /* defined(LOCKDEBUG) */</u></td></tr>
+<tr><th id="112">112</th><td><u>#define	<dfn class="macro" id="_M/RW_INHERITDEBUG" data-ref="_M/RW_INHERITDEBUG">RW_INHERITDEBUG</dfn>(n, o)		/* nothing */</u></td></tr>
+<tr><th id="113">113</th><td><u>#<span data-ppcond="109">endif</span> /* defined(LOCKDEBUG) */</u></td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#rw_abort" title='rw_abort' data-type='void rw_abort(const char * , size_t , krwlock_t * , const char * )' data-ref="rw_abort" data-ref-filename="rw_abort">rw_abort</a>(<em>const</em> <em>char</em> *, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a>, <a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *, <em>const</em> <em>char</em> *);</td></tr>
+<tr><th id="116">116</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#rw_dump" title='rw_dump' data-type='void rw_dump(const volatile void * , lockop_printer_t )' data-ref="rw_dump" data-ref-filename="rw_dump">rw_dump</a>(<em>const</em> <em>volatile</em> <em>void</em> *, <a class="typedef" href="../sys/lockdebug.h.html#lockop_printer_t" title='lockop_printer_t' data-type='void (*)(const char *, ...)' data-ref="lockop_printer_t" data-ref-filename="lockop_printer_t">lockop_printer_t</a>);</td></tr>
+<tr><th id="117">117</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a>	*<a class="tu decl fn" href="#rw_owner" title='rw_owner' data-type='lwp_t * rw_owner(wchan_t )' data-ref="rw_owner" data-ref-filename="rw_owner">rw_owner</a>(<a class="typedef" href="../sys/syncobj.h.html#wchan_t" title='wchan_t' data-type='const volatile void *' data-ref="wchan_t" data-ref-filename="wchan_t">wchan_t</a>);</td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td><em>static</em> <b>inline</b> <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a></td></tr>
+<tr><th id="120">120</th><td><dfn class="tu decl def fn" id="rw_cas" title='rw_cas' data-type='uintptr_t rw_cas(krwlock_t * rw, uintptr_t o, uintptr_t n)' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col1 decl" id="1rw" title='rw' data-type='krwlock_t *' data-ref="1rw" data-ref-filename="1rw">rw</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col2 decl" id="2o" title='o' data-type='uintptr_t' data-ref="2o" data-ref-filename="2o">o</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col3 decl" id="3n" title='n' data-type='uintptr_t' data-ref="3n" data-ref-filename="3n">n</dfn>)</td></tr>
+<tr><th id="121">121</th><td>{</td></tr>
+<tr><th id="122">122</th><td></td></tr>
+<tr><th id="123">123</th><td>	<a class="macro" href="#112" title="" data-ref="_M/RW_INHERITDEBUG">RW_INHERITDEBUG</a>(n, o);</td></tr>
+<tr><th id="124">124</th><td>	<b>return</b> (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref fn" href="../sys/atomic.h.html#atomic_cas_ptr" title='atomic_cas_ptr' data-ref="atomic_cas_ptr" data-ref-filename="atomic_cas_ptr">atomic_cas_ptr</a>((<em>volatile</em> <em>void</em> *)&amp;<a class="local col1 ref" href="#1rw" title='rw' data-ref="1rw" data-ref-filename="1rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>,</td></tr>
+<tr><th id="125">125</th><td>	    (<em>void</em> *)<a class="local col2 ref" href="#2o" title='o' data-ref="2o" data-ref-filename="2o">o</a>, (<em>void</em> *)<a class="local col3 ref" href="#3n" title='n' data-ref="3n" data-ref-filename="3n">n</a>);</td></tr>
+<tr><th id="126">126</th><td>}</td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="129">129</th><td><dfn class="tu decl def fn" id="rw_swap" title='rw_swap' data-type='void rw_swap(krwlock_t * rw, uintptr_t o, uintptr_t n)' data-ref="rw_swap" data-ref-filename="rw_swap">rw_swap</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col4 decl" id="4rw" title='rw' data-type='krwlock_t *' data-ref="4rw" data-ref-filename="4rw">rw</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col5 decl" id="5o" title='o' data-type='uintptr_t' data-ref="5o" data-ref-filename="5o">o</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col6 decl" id="6n" title='n' data-type='uintptr_t' data-ref="6n" data-ref-filename="6n">n</dfn>)</td></tr>
+<tr><th id="130">130</th><td>{</td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td>	<a class="macro" href="#112" title="" data-ref="_M/RW_INHERITDEBUG">RW_INHERITDEBUG</a>(n, o);</td></tr>
+<tr><th id="133">133</th><td>	<a class="local col6 ref" href="#6n" title='n' data-ref="6n" data-ref-filename="6n">n</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref fn" href="../sys/atomic.h.html#atomic_swap_ptr" title='atomic_swap_ptr' data-ref="atomic_swap_ptr" data-ref-filename="atomic_swap_ptr">atomic_swap_ptr</a>((<em>volatile</em> <em>void</em> *)&amp;<a class="local col4 ref" href="#4rw" title='rw' data-ref="4rw" data-ref-filename="4rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>,</td></tr>
+<tr><th id="134">134</th><td>	    (<em>void</em> *)<a class="local col6 ref" href="#6n" title='n' data-ref="6n" data-ref-filename="6n">n</a>);</td></tr>
+<tr><th id="135">135</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, n == o);</td></tr>
+<tr><th id="136">136</th><td>}</td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><i>/*</i></td></tr>
+<tr><th id="139">139</th><td><i> * For platforms that do not provide stubs, or for the LOCKDEBUG case.</i></td></tr>
+<tr><th id="140">140</th><td><i> */</i></td></tr>
+<tr><th id="141">141</th><td><u>#<span data-ppcond="141">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="142">142</th><td><u>#undef	__HAVE_RW_STUBS</u></td></tr>
+<tr><th id="143">143</th><td><u>#<span data-ppcond="141">endif</span></u></td></tr>
+<tr><th id="144">144</th><td></td></tr>
+<tr><th id="145">145</th><td><u>#<span data-ppcond="145">ifndef</span> <a class="macro" href="../arch/x86/include/rwlock.h.html#42" data-ref="_M/__HAVE_RW_STUBS">__HAVE_RW_STUBS</a></u></td></tr>
+<tr><th id="146">146</th><td>__strong_alias(rw_enter,rw_vector_enter);</td></tr>
+<tr><th id="147">147</th><td>__strong_alias(rw_exit,rw_vector_exit);</td></tr>
+<tr><th id="148">148</th><td>__strong_alias(rw_tryenter,rw_vector_tryenter);</td></tr>
+<tr><th id="149">149</th><td><u>#<span data-ppcond="145">endif</span></u></td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td><a class="typedef" href="../sys/lockdebug.h.html#lockops_t" title='lockops_t' data-type='struct lockops' data-ref="lockops_t" data-ref-filename="lockops_t">lockops_t</a> <dfn class="decl def" id="rwlock_lockops" title='rwlock_lockops' data-ref="rwlock_lockops" data-ref-filename="rwlock_lockops">rwlock_lockops</dfn> = {</td></tr>
+<tr><th id="152">152</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_name" title='lockops::lo_name' data-ref="lockops::lo_name" data-ref-filename="lockops..lo_name">lo_name</a> = <q>"Reader / writer lock"</q>,</td></tr>
+<tr><th id="153">153</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_type" title='lockops::lo_type' data-ref="lockops::lo_type" data-ref-filename="lockops..lo_type">lo_type</a> = <a class="macro" href="../sys/lockdebug.h.html#43" title="0" data-ref="_M/LOCKOPS_SLEEP">LOCKOPS_SLEEP</a>,</td></tr>
+<tr><th id="154">154</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_dump" title='lockops::lo_dump' data-ref="lockops::lo_dump" data-ref-filename="lockops..lo_dump">lo_dump</a> = <a class="tu ref fn" href="#rw_dump" title='rw_dump' data-use='r' data-ref="rw_dump" data-ref-filename="rw_dump">rw_dump</a>,</td></tr>
+<tr><th id="155">155</th><td>};</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td><a class="typedef" href="../sys/syncobj.h.html#syncobj_t" title='syncobj_t' data-type='struct syncobj' data-ref="syncobj_t" data-ref-filename="syncobj_t">syncobj_t</a> <dfn class="decl def" id="rw_syncobj" title='rw_syncobj' data-ref="rw_syncobj" data-ref-filename="rw_syncobj">rw_syncobj</dfn> = {</td></tr>
+<tr><th id="158">158</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_flag" title='syncobj::sobj_flag' data-ref="syncobj::sobj_flag" data-ref-filename="syncobj..sobj_flag">sobj_flag</a>	= <a class="macro" href="../sys/syncobj.h.html#54" title="0x01" data-ref="_M/SOBJ_SLEEPQ_SORTED">SOBJ_SLEEPQ_SORTED</a>,</td></tr>
+<tr><th id="159">159</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_unsleep" title='syncobj::sobj_unsleep' data-ref="syncobj::sobj_unsleep" data-ref-filename="syncobj..sobj_unsleep">sobj_unsleep</a>	= <a class="ref fn" href="../sys/sleepq.h.html#turnstile_unsleep" title='turnstile_unsleep' data-ref="turnstile_unsleep" data-ref-filename="turnstile_unsleep">turnstile_unsleep</a>,</td></tr>
+<tr><th id="160">160</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_changepri" title='syncobj::sobj_changepri' data-ref="syncobj::sobj_changepri" data-ref-filename="syncobj..sobj_changepri">sobj_changepri</a>	= <a class="ref fn" href="../sys/sleepq.h.html#turnstile_changepri" title='turnstile_changepri' data-ref="turnstile_changepri" data-ref-filename="turnstile_changepri">turnstile_changepri</a>,</td></tr>
+<tr><th id="161">161</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_lendpri" title='syncobj::sobj_lendpri' data-ref="syncobj::sobj_lendpri" data-ref-filename="syncobj..sobj_lendpri">sobj_lendpri</a>	= <a class="ref fn" href="../sys/sleepq.h.html#sleepq_lendpri" title='sleepq_lendpri' data-ref="sleepq_lendpri" data-ref-filename="sleepq_lendpri">sleepq_lendpri</a>,</td></tr>
+<tr><th id="162">162</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_owner" title='syncobj::sobj_owner' data-ref="syncobj::sobj_owner" data-ref-filename="syncobj..sobj_owner">sobj_owner</a>	= <a class="tu ref fn" href="#rw_owner" title='rw_owner' data-ref="rw_owner" data-ref-filename="rw_owner">rw_owner</a>,</td></tr>
+<tr><th id="163">163</th><td>};</td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td><i  data-doc="rw_dump">/*</i></td></tr>
+<tr><th id="166">166</th><td><i  data-doc="rw_dump"> * rw_dump:</i></td></tr>
+<tr><th id="167">167</th><td><i  data-doc="rw_dump"> *</i></td></tr>
+<tr><th id="168">168</th><td><i  data-doc="rw_dump"> *	Dump the contents of a rwlock structure.</i></td></tr>
+<tr><th id="169">169</th><td><i  data-doc="rw_dump"> */</i></td></tr>
+<tr><th id="170">170</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="171">171</th><td><dfn class="tu decl def fn" id="rw_dump" title='rw_dump' data-type='void rw_dump(const volatile void * cookie, lockop_printer_t pr)' data-ref="rw_dump" data-ref-filename="rw_dump">rw_dump</dfn>(<em>const</em> <em>volatile</em> <em>void</em> *<dfn class="local col7 decl" id="7cookie" title='cookie' data-type='const volatile void *' data-ref="7cookie" data-ref-filename="7cookie">cookie</dfn>, <a class="typedef" href="../sys/lockdebug.h.html#lockop_printer_t" title='lockop_printer_t' data-type='void (*)(const char *, ...)' data-ref="lockop_printer_t" data-ref-filename="lockop_printer_t">lockop_printer_t</a> <dfn class="local col8 decl" id="8pr" title='pr' data-type='lockop_printer_t' data-ref="8pr" data-ref-filename="8pr">pr</dfn>)</td></tr>
+<tr><th id="172">172</th><td>{</td></tr>
+<tr><th id="173">173</th><td>	<em>const</em> <em>volatile</em> <a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col9 decl" id="9rw" title='rw' data-type='const volatile krwlock_t *' data-ref="9rw" data-ref-filename="9rw">rw</dfn> = <a class="local col7 ref" href="#7cookie" title='cookie' data-ref="7cookie" data-ref-filename="7cookie">cookie</a>;</td></tr>
+<tr><th id="174">174</th><td></td></tr>
+<tr><th id="175">175</th><td>	<a class="local col8 ref" href="#8pr" title='pr' data-ref="8pr" data-ref-filename="8pr">pr</a>(<q>"owner/count  : %#018lx flags    : %#018x\n"</q>,</td></tr>
+<tr><th id="176">176</th><td>	    (<em>long</em>)<a class="macro" href="../sys/rwlock.h.html#87" title="((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4)))" data-ref="_M/RW_OWNER">RW_OWNER</a>(<a class="local col9 ref" href="#9rw" title='rw' data-ref="9rw" data-ref-filename="9rw">rw</a>), (<em>int</em>)<a class="macro" href="../sys/rwlock.h.html#89" title="((rw)-&gt;rw_owner &amp; ~((uintptr_t)-(1UL &lt;&lt; 4)))" data-ref="_M/RW_FLAGS">RW_FLAGS</a>(<a class="local col9 ref" href="#9rw" title='rw' data-ref="9rw" data-ref-filename="9rw">rw</a>));</td></tr>
+<tr><th id="177">177</th><td>}</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td><i  data-doc="rw_abort">/*</i></td></tr>
+<tr><th id="180">180</th><td><i  data-doc="rw_abort"> * rw_abort:</i></td></tr>
+<tr><th id="181">181</th><td><i  data-doc="rw_abort"> *</i></td></tr>
+<tr><th id="182">182</th><td><i  data-doc="rw_abort"> *	Dump information about an error and panic the system.  This</i></td></tr>
+<tr><th id="183">183</th><td><i  data-doc="rw_abort"> *	generates a lot of machine code in the DIAGNOSTIC case, so</i></td></tr>
+<tr><th id="184">184</th><td><i  data-doc="rw_abort"> *	we ask the compiler to not inline it.</i></td></tr>
+<tr><th id="185">185</th><td><i  data-doc="rw_abort"> */</i></td></tr>
+<tr><th id="186">186</th><td><em>static</em> <em>void</em> <a class="macro" href="../sys/cdefs.h.html#236" title="__attribute__((__noinline__))" data-ref="_M/__noinline">__noinline</a></td></tr>
+<tr><th id="187">187</th><td><dfn class="tu decl def fn" id="rw_abort" title='rw_abort' data-type='void rw_abort(const char * func, size_t line, krwlock_t * rw, const char * msg)' data-ref="rw_abort" data-ref-filename="rw_abort">rw_abort</dfn>(<em>const</em> <em>char</em> *<dfn class="local col0 decl" id="10func" title='func' data-type='const char *' data-ref="10func" data-ref-filename="10func">func</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="11line" title='line' data-type='size_t' data-ref="11line" data-ref-filename="11line">line</dfn>, <a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col2 decl" id="12rw" title='rw' data-type='krwlock_t *' data-ref="12rw" data-ref-filename="12rw">rw</dfn>, <em>const</em> <em>char</em> *<dfn class="local col3 decl" id="13msg" title='msg' data-type='const char *' data-ref="13msg" data-ref-filename="13msg">msg</dfn>)</td></tr>
+<tr><th id="188">188</th><td>{</td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>	<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="191">191</th><td>		<b>return</b>;</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td>	<a class="macro" href="../sys/lockdebug.h.html#55" title="lockdebug_abort(func, line, rw, &amp;rwlock_lockops, msg)" data-ref="_M/LOCKDEBUG_ABORT">LOCKDEBUG_ABORT</a>(<a class="local col0 ref" href="#10func" title='func' data-ref="10func" data-ref-filename="10func">func</a>, <a class="local col1 ref" href="#11line" title='line' data-ref="11line" data-ref-filename="11line">line</a>, <a class="local col2 ref" href="#12rw" title='rw' data-ref="12rw" data-ref-filename="12rw">rw</a>, &amp;<a class="ref" href="#rwlock_lockops" title='rwlock_lockops' data-ref="rwlock_lockops" data-ref-filename="rwlock_lockops">rwlock_lockops</a>, <a class="local col3 ref" href="#13msg" title='msg' data-ref="13msg" data-ref-filename="13msg">msg</a>);</td></tr>
+<tr><th id="194">194</th><td>}</td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td><i>/*</i></td></tr>
+<tr><th id="197">197</th><td><i> * rw_init:</i></td></tr>
+<tr><th id="198">198</th><td><i> *</i></td></tr>
+<tr><th id="199">199</th><td><i> *	Initialize a rwlock for use.</i></td></tr>
+<tr><th id="200">200</th><td><i> */</i></td></tr>
+<tr><th id="201">201</th><td><em>void</em> <a class="decl fn" href="#_rw_init" title='_rw_init' data-ref="_rw_init" data-ref-filename="_rw_init">_rw_init</a>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>);</td></tr>
+<tr><th id="202">202</th><td><em>void</em></td></tr>
+<tr><th id="203">203</th><td><dfn class="decl def fn" id="_rw_init" title='_rw_init' data-ref="_rw_init" data-ref-filename="_rw_init">_rw_init</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col4 decl" id="14rw" title='rw' data-type='krwlock_t *' data-ref="14rw" data-ref-filename="14rw">rw</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col5 decl" id="15return_address" title='return_address' data-type='uintptr_t' data-ref="15return_address" data-ref-filename="15return_address">return_address</dfn>)</td></tr>
+<tr><th id="204">204</th><td>{</td></tr>
+<tr><th id="205">205</th><td>	<a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col6 decl" id="16dodebug" title='dodebug' data-type='_Bool' data-ref="16dodebug" data-ref-filename="16dodebug">dodebug</dfn>;</td></tr>
+<tr><th id="206">206</th><td></td></tr>
+<tr><th id="207">207</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#382" title="__builtin_memset(rw, 0, sizeof(*rw))" data-ref="_M/memset">memset</a>(<a class="local col4 ref" href="#14rw" title='rw' data-ref="14rw" data-ref-filename="14rw">rw</a>, <var>0</var>, <b>sizeof</b>(*<a class="local col4 ref" href="#14rw" title='rw' data-ref="14rw" data-ref-filename="14rw">rw</a>));</td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td>	<a class="local col6 ref" href="#16dodebug" title='dodebug' data-ref="16dodebug" data-ref-filename="16dodebug">dodebug</a> = <a class="macro" href="../sys/lockdebug.h.html#102" title="0" data-ref="_M/LOCKDEBUG_ALLOC">LOCKDEBUG_ALLOC</a>(rw, &amp;rwlock_lockops, return_address);</td></tr>
+<tr><th id="210">210</th><td>	<a class="macro" href="#107" title="((rw)-&gt;rw_owner |= (dodebug) ? 0 : 0x00UL)" data-ref="_M/RW_SETDEBUG">RW_SETDEBUG</a>(<a class="local col4 ref" href="#14rw" title='rw' data-ref="14rw" data-ref-filename="14rw">rw</a>, <a class="local col6 ref" href="#16dodebug" title='dodebug' data-ref="16dodebug" data-ref-filename="16dodebug">dodebug</a>);</td></tr>
+<tr><th id="211">211</th><td>}</td></tr>
+<tr><th id="212">212</th><td></td></tr>
+<tr><th id="213">213</th><td><em>void</em></td></tr>
+<tr><th id="214">214</th><td><dfn class="decl def fn" id="rw_init" title='rw_init' data-ref="rw_init" data-ref-filename="rw_init">rw_init</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col7 decl" id="17rw" title='rw' data-type='krwlock_t *' data-ref="17rw" data-ref-filename="17rw">rw</dfn>)</td></tr>
+<tr><th id="215">215</th><td>{</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td>	<a class="ref fn" href="#_rw_init" title='_rw_init' data-ref="_rw_init" data-ref-filename="_rw_init">_rw_init</a>(<a class="local col7 ref" href="#17rw" title='rw' data-ref="17rw" data-ref-filename="17rw">rw</a>, (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref fn" href="#217" title='__builtin_return_address' data-ref="__builtin_return_address" data-ref-filename="__builtin_return_address">__builtin_return_address</a>(<var>0</var>));</td></tr>
+<tr><th id="218">218</th><td>}</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td><i>/*</i></td></tr>
+<tr><th id="221">221</th><td><i> * rw_destroy:</i></td></tr>
+<tr><th id="222">222</th><td><i> *</i></td></tr>
+<tr><th id="223">223</th><td><i> *	Tear down a rwlock.</i></td></tr>
+<tr><th id="224">224</th><td><i> */</i></td></tr>
+<tr><th id="225">225</th><td><em>void</em></td></tr>
+<tr><th id="226">226</th><td><dfn class="decl def fn" id="rw_destroy" title='rw_destroy' data-ref="rw_destroy" data-ref-filename="rw_destroy">rw_destroy</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col8 decl" id="18rw" title='rw' data-type='krwlock_t *' data-ref="18rw" data-ref-filename="18rw">rw</dfn>)</td></tr>
+<tr><th id="227">227</th><td>{</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!((rw-&gt;rw_owner &amp; ~0x00UL) == 0)) != 0, 0)) rw_abort(__func__, 229, rw, &quot;assertion failed: &quot; &quot;(rw-&gt;rw_owner &amp; ~RW_NODEBUG) == 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col8 ref" href="#18rw" title='rw' data-ref="18rw" data-ref-filename="18rw">rw</a>, (<a class="local col8 ref" href="#18rw" title='rw' data-ref="18rw" data-ref-filename="18rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a> &amp; ~<a class="macro" href="../sys/rwlock.h.html#81" title="0x00UL" data-ref="_M/RW_NODEBUG">RW_NODEBUG</a>) == <var>0</var>);</td></tr>
+<tr><th id="230">230</th><td>	<a class="macro" href="../sys/lockdebug.h.html#103" title="" data-ref="_M/LOCKDEBUG_FREE">LOCKDEBUG_FREE</a>(RW_DEBUG_P(rw), rw);</td></tr>
+<tr><th id="231">231</th><td>}</td></tr>
+<tr><th id="232">232</th><td></td></tr>
+<tr><th id="233">233</th><td><i  data-doc="rw_oncpu">/*</i></td></tr>
+<tr><th id="234">234</th><td><i  data-doc="rw_oncpu"> * rw_oncpu:</i></td></tr>
+<tr><th id="235">235</th><td><i  data-doc="rw_oncpu"> *</i></td></tr>
+<tr><th id="236">236</th><td><i  data-doc="rw_oncpu"> *	Return true if an rwlock owner is running on a CPU in the system.</i></td></tr>
+<tr><th id="237">237</th><td><i  data-doc="rw_oncpu"> *	If the target is waiting on the kernel big lock, then we must</i></td></tr>
+<tr><th id="238">238</th><td><i  data-doc="rw_oncpu"> *	release it.  This is necessary to avoid deadlock.</i></td></tr>
+<tr><th id="239">239</th><td><i  data-doc="rw_oncpu"> */</i></td></tr>
+<tr><th id="240">240</th><td><em>static</em> <a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="241">241</th><td><dfn class="tu decl def fn" id="rw_oncpu" title='rw_oncpu' data-type='_Bool rw_oncpu(uintptr_t owner)' data-ref="rw_oncpu" data-ref-filename="rw_oncpu">rw_oncpu</dfn>(<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col9 decl" id="19owner" title='owner' data-type='uintptr_t' data-ref="19owner" data-ref-filename="19owner">owner</dfn>)</td></tr>
+<tr><th id="242">242</th><td>{</td></tr>
+<tr><th id="243">243</th><td><u>#<span data-ppcond="243">ifdef</span> <a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a></u></td></tr>
+<tr><th id="244">244</th><td>	<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col0 decl" id="20ci" title='ci' data-type='struct cpu_info *' data-ref="20ci" data-ref-filename="20ci">ci</dfn>;</td></tr>
+<tr><th id="245">245</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col1 decl" id="21l" title='l' data-type='lwp_t *' data-ref="21l" data-ref-filename="21l">l</dfn>;</td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((kpreempt_disabled())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;kpreempt_disabled()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/kern_rwlock.c&quot;, 247))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/systm.h.html#kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</a>());</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td>	<b>if</b> ((<a class="local col9 ref" href="#19owner" title='owner' data-ref="19owner" data-ref-filename="19owner">owner</a> &amp; (<a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>|<a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a>)) != <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>) {</td></tr>
+<tr><th id="250">250</th><td>		<b>return</b> <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="251">251</th><td>	}</td></tr>
+<tr><th id="252">252</th><td></td></tr>
+<tr><th id="253">253</th><td>	<i>/*</i></td></tr>
+<tr><th id="254">254</th><td><i>	 * See lwp_dtor() why dereference of the LWP pointer is safe.</i></td></tr>
+<tr><th id="255">255</th><td><i>	 * We must have kernel preemption disabled for that.</i></td></tr>
+<tr><th id="256">256</th><td><i>	 */</i></td></tr>
+<tr><th id="257">257</th><td>	<a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a> = (<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *)(<a class="local col9 ref" href="#19owner" title='owner' data-ref="19owner" data-ref-filename="19owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>);</td></tr>
+<tr><th id="258">258</th><td>	<a class="local col0 ref" href="#20ci" title='ci' data-ref="20ci" data-ref-filename="20ci">ci</a> = <a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>;</td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td>	<b>if</b> (<a class="local col0 ref" href="#20ci" title='ci' data-ref="20ci" data-ref-filename="20ci">ci</a> &amp;&amp; <a class="local col0 ref" href="#20ci" title='ci' data-ref="20ci" data-ref-filename="20ci">ci</a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_curlwp" title='cpu_info::ci_curlwp' data-ref="cpu_info::ci_curlwp" data-ref-filename="cpu_info..ci_curlwp">ci_curlwp</a> == <a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>) {</td></tr>
+<tr><th id="261">261</th><td>		<i>/* Target is running; do we need to block? */</i></td></tr>
+<tr><th id="262">262</th><td>		<b>return</b> (<a class="local col0 ref" href="#20ci" title='ci' data-ref="20ci" data-ref-filename="20ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#118" title="ci_data.cpu_biglock_wanted" data-ref="_M/ci_biglock_wanted">ci_biglock_wanted</a> != <a class="local col1 ref" href="#21l" title='l' data-ref="21l" data-ref-filename="21l">l</a>);</td></tr>
+<tr><th id="263">263</th><td>	}</td></tr>
+<tr><th id="264">264</th><td><u>#<span data-ppcond="243">endif</span></u></td></tr>
+<tr><th id="265">265</th><td>	<i>/* Not running.  It may be safe to block now. */</i></td></tr>
+<tr><th id="266">266</th><td>	<b>return</b> <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="267">267</th><td>}</td></tr>
+<tr><th id="268">268</th><td></td></tr>
+<tr><th id="269">269</th><td><i>/*</i></td></tr>
+<tr><th id="270">270</th><td><i> * rw_vector_enter:</i></td></tr>
+<tr><th id="271">271</th><td><i> *</i></td></tr>
+<tr><th id="272">272</th><td><i> *	Acquire a rwlock.</i></td></tr>
+<tr><th id="273">273</th><td><i> */</i></td></tr>
+<tr><th id="274">274</th><td><em>void</em></td></tr>
+<tr><th id="275">275</th><td><dfn class="decl def fn" id="rw_vector_enter" title='rw_vector_enter' data-ref="rw_vector_enter" data-ref-filename="rw_vector_enter">rw_vector_enter</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col2 decl" id="22rw" title='rw' data-type='krwlock_t *' data-ref="22rw" data-ref-filename="22rw">rw</dfn>, <em>const</em> <a class="typedef" href="../sys/rwlock.h.html#krw_t" title='krw_t' data-type='enum krw_t' data-ref="krw_t" data-ref-filename="krw_t">krw_t</a> <dfn class="local col3 decl" id="23op" title='op' data-type='const krw_t' data-ref="23op" data-ref-filename="23op">op</dfn>)</td></tr>
+<tr><th id="276">276</th><td>{</td></tr>
+<tr><th id="277">277</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col4 decl" id="24owner" title='owner' data-type='uintptr_t' data-ref="24owner" data-ref-filename="24owner">owner</dfn>, <dfn class="local col5 decl" id="25incr" title='incr' data-type='uintptr_t' data-ref="25incr" data-ref-filename="25incr">incr</dfn>, <dfn class="local col6 decl" id="26need_wait" title='need_wait' data-type='uintptr_t' data-ref="26need_wait" data-ref-filename="26need_wait">need_wait</dfn>, <dfn class="local col7 decl" id="27set_wait" title='set_wait' data-type='uintptr_t' data-ref="27set_wait" data-ref-filename="27set_wait">set_wait</dfn>, <dfn class="local col8 decl" id="28curthread" title='curthread' data-type='uintptr_t' data-ref="28curthread" data-ref-filename="28curthread">curthread</dfn>, <dfn class="local col9 decl" id="29next" title='next' data-type='uintptr_t' data-ref="29next" data-ref-filename="29next">next</dfn>;</td></tr>
+<tr><th id="278">278</th><td>	<a class="typedef" href="../sys/sleepq.h.html#turnstile_t" title='turnstile_t' data-type='struct turnstile' data-ref="turnstile_t" data-ref-filename="turnstile_t">turnstile_t</a> *<dfn class="local col0 decl" id="30ts" title='ts' data-type='turnstile_t *' data-ref="30ts" data-ref-filename="30ts">ts</dfn>;</td></tr>
+<tr><th id="279">279</th><td>	<em>int</em> <dfn class="local col1 decl" id="31queue" title='queue' data-type='int' data-ref="31queue" data-ref-filename="31queue">queue</dfn>;</td></tr>
+<tr><th id="280">280</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col2 decl" id="32l" title='l' data-type='lwp_t *' data-ref="32l" data-ref-filename="32l">l</dfn>;</td></tr>
+<tr><th id="281">281</th><td>	<a class="macro" href="../dev/lockstat.h.html#159" title="uint64_t slptime = 0" data-ref="_M/LOCKSTAT_TIMER">LOCKSTAT_TIMER</a>(<dfn class="local col3 decl" id="33slptime" title='slptime' data-type='uint64_t' data-ref="33slptime" data-ref-filename="33slptime">slptime</dfn>);</td></tr>
+<tr><th id="282">282</th><td>	<a class="macro" href="../dev/lockstat.h.html#159" title="uint64_t slpcnt = 0" data-ref="_M/LOCKSTAT_TIMER">LOCKSTAT_TIMER</a>(<dfn class="local col4 decl" id="34slpcnt" title='slpcnt' data-type='uint64_t' data-ref="34slpcnt" data-ref-filename="34slpcnt">slpcnt</dfn>);</td></tr>
+<tr><th id="283">283</th><td>	<a class="macro" href="../dev/lockstat.h.html#159" title="uint64_t spintime = 0" data-ref="_M/LOCKSTAT_TIMER">LOCKSTAT_TIMER</a>(<dfn class="local col5 decl" id="35spintime" title='spintime' data-type='uint64_t' data-ref="35spintime" data-ref-filename="35spintime">spintime</dfn>);</td></tr>
+<tr><th id="284">284</th><td>	<a class="macro" href="../dev/lockstat.h.html#160" title="uint64_t spincnt = 0" data-ref="_M/LOCKSTAT_COUNTER">LOCKSTAT_COUNTER</a>(<dfn class="local col6 decl" id="36spincnt" title='spincnt' data-type='uint64_t' data-ref="36spincnt" data-ref-filename="36spincnt">spincnt</dfn>);</td></tr>
+<tr><th id="285">285</th><td>	<a class="macro" href="../dev/lockstat.h.html#161" title="int lsflag" data-ref="_M/LOCKSTAT_FLAG">LOCKSTAT_FLAG</a>(<dfn class="local col7 decl" id="37lsflag" title='lsflag' data-type='int' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</dfn>);</td></tr>
+<tr><th id="286">286</th><td></td></tr>
+<tr><th id="287">287</th><td>	<a class="local col2 ref" href="#32l" title='l' data-ref="32l" data-ref-filename="32l">l</a> = <a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="288">288</th><td>	<a class="local col8 ref" href="#28curthread" title='curthread' data-ref="28curthread" data-ref-filename="28curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="local col2 ref" href="#32l" title='l' data-ref="32l" data-ref-filename="32l">l</a>;</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(!cpu_intr_p())) != 0, 0)) rw_abort(__func__, 290, rw, &quot;assertion failed: &quot; &quot;!cpu_intr_p()&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, !<a class="ref fn" href="../sys/cpu.h.html#cpu_intr_p" title='cpu_intr_p' data-ref="cpu_intr_p" data-ref-filename="cpu_intr_p">cpu_intr_p</a>());</td></tr>
+<tr><th id="291">291</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) rw_abort(__func__, 291, rw, &quot;assertion failed: &quot; &quot;curthread != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, <a class="local col8 ref" href="#28curthread" title='curthread' data-ref="28curthread" data-ref-filename="28curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="292">292</th><td>	<a class="macro" href="#82" title="" data-ref="_M/RW_WANTLOCK">RW_WANTLOCK</a>(rw, op);</td></tr>
+<tr><th id="293">293</th><td></td></tr>
+<tr><th id="294">294</th><td>	<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="295">295</th><td>		<a class="macro" href="../lib/libkern/libkern.h.html#290" title="((void)0)" data-ref="_M/KDASSERT">KDASSERT</a>(pserialize_not_in_read_section());</td></tr>
+<tr><th id="296">296</th><td>		<a class="macro" href="../sys/lockdebug.h.html#107" title="" data-ref="_M/LOCKDEBUG_BARRIER">LOCKDEBUG_BARRIER</a>(&amp;kernel_lock, <var>1</var>);</td></tr>
+<tr><th id="297">297</th><td>	}</td></tr>
+<tr><th id="298">298</th><td></td></tr>
+<tr><th id="299">299</th><td>	<i>/*</i></td></tr>
+<tr><th id="300">300</th><td><i>	 * We play a slight trick here.  If we're a reader, we want</i></td></tr>
+<tr><th id="301">301</th><td><i>	 * increment the read count.  If we're a writer, we want to</i></td></tr>
+<tr><th id="302">302</th><td><i>	 * set the owner field and the WRITE_LOCKED bit.</i></td></tr>
+<tr><th id="303">303</th><td><i>	 *</i></td></tr>
+<tr><th id="304">304</th><td><i>	 * In the latter case, we expect those bits to be zero,</i></td></tr>
+<tr><th id="305">305</th><td><i>	 * therefore we can use an add operation to set them, which</i></td></tr>
+<tr><th id="306">306</th><td><i>	 * means an add operation for both cases.</i></td></tr>
+<tr><th id="307">307</th><td><i>	 */</i></td></tr>
+<tr><th id="308">308</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((op == RW_READER) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col3 ref" href="#23op" title='op' data-ref="23op" data-ref-filename="23op">op</a> == <a class="enum" href="../sys/rwlock.h.html#RW_READER" title='RW_READER' data-ref="RW_READER" data-ref-filename="RW_READER">RW_READER</a>)) {</td></tr>
+<tr><th id="309">309</th><td>		<a class="local col5 ref" href="#25incr" title='incr' data-ref="25incr" data-ref-filename="25incr">incr</a> = <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>;</td></tr>
+<tr><th id="310">310</th><td>		<a class="local col7 ref" href="#27set_wait" title='set_wait' data-ref="27set_wait" data-ref-filename="27set_wait">set_wait</a> = <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a>;</td></tr>
+<tr><th id="311">311</th><td>		<a class="local col6 ref" href="#26need_wait" title='need_wait' data-ref="26need_wait" data-ref-filename="26need_wait">need_wait</a> = <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="312">312</th><td>		<a class="local col1 ref" href="#31queue" title='queue' data-ref="31queue" data-ref-filename="31queue">queue</a> = <a class="macro" href="../sys/sleepq.h.html#156" title="0" data-ref="_M/TS_READER_Q">TS_READER_Q</a>;</td></tr>
+<tr><th id="313">313</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="314">314</th><td>		<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, op == RW_WRITER);</td></tr>
+<tr><th id="315">315</th><td>		<a class="local col5 ref" href="#25incr" title='incr' data-ref="25incr" data-ref-filename="25incr">incr</a> = <a class="local col8 ref" href="#28curthread" title='curthread' data-ref="28curthread" data-ref-filename="28curthread">curthread</a> | <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>;</td></tr>
+<tr><th id="316">316</th><td>		<a class="local col7 ref" href="#27set_wait" title='set_wait' data-ref="27set_wait" data-ref-filename="27set_wait">set_wait</a> = <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a> | <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="317">317</th><td>		<a class="local col6 ref" href="#26need_wait" title='need_wait' data-ref="26need_wait" data-ref-filename="26need_wait">need_wait</a> = <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>;</td></tr>
+<tr><th id="318">318</th><td>		<a class="local col1 ref" href="#31queue" title='queue' data-ref="31queue" data-ref-filename="31queue">queue</a> = <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>;</td></tr>
+<tr><th id="319">319</th><td>	}</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td>	<a class="macro" href="../dev/lockstat.h.html#162" title="lsflag = lockstat_enabled" data-ref="_M/LOCKSTAT_ENTER">LOCKSTAT_ENTER</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>);</td></tr>
+<tr><th id="322">322</th><td></td></tr>
+<tr><th id="323">323</th><td>	<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_DISABLE" title='KPREEMPT_DISABLE' data-ref="KPREEMPT_DISABLE" data-ref-filename="KPREEMPT_DISABLE">KPREEMPT_DISABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="324">324</th><td>	<b>for</b> (<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> = <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>; ;) {</td></tr>
+<tr><th id="325">325</th><td>		<i>/*</i></td></tr>
+<tr><th id="326">326</th><td><i>		 * Read the lock owner field.  If the need-to-wait</i></td></tr>
+<tr><th id="327">327</th><td><i>		 * indicator is clear, then try to acquire the lock.</i></td></tr>
+<tr><th id="328">328</th><td><i>		 */</i></td></tr>
+<tr><th id="329">329</th><td>		<b>if</b> ((<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> &amp; <a class="local col6 ref" href="#26need_wait" title='need_wait' data-ref="26need_wait" data-ref-filename="26need_wait">need_wait</a>) == <var>0</var>) {</td></tr>
+<tr><th id="330">330</th><td>			<a class="local col9 ref" href="#29next" title='next' data-ref="29next" data-ref-filename="29next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, <a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>, (<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> + <a class="local col5 ref" href="#25incr" title='incr' data-ref="25incr" data-ref-filename="25incr">incr</a>) &amp;</td></tr>
+<tr><th id="331">331</th><td>			    ~<a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>);</td></tr>
+<tr><th id="332">332</th><td>			<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col9 ref" href="#29next" title='next' data-ref="29next" data-ref-filename="29next">next</a> == <a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>)) {</td></tr>
+<tr><th id="333">333</th><td>				<i>/* Got it! */</i></td></tr>
+<tr><th id="334">334</th><td>				<a class="ref fn" href="../sys/atomic.h.html#membar_enter" title='membar_enter' data-ref="membar_enter" data-ref-filename="membar_enter">membar_enter</a>();</td></tr>
+<tr><th id="335">335</th><td>				<b>break</b>;</td></tr>
+<tr><th id="336">336</th><td>			}</td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td>			<i>/*</i></td></tr>
+<tr><th id="339">339</th><td><i>			 * Didn't get it -- spin around again (we'll</i></td></tr>
+<tr><th id="340">340</th><td><i>			 * probably sleep on the next iteration).</i></td></tr>
+<tr><th id="341">341</th><td><i>			 */</i></td></tr>
+<tr><th id="342">342</th><td>			<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> = <a class="local col9 ref" href="#29next" title='next' data-ref="29next" data-ref-filename="29next">next</a>;</td></tr>
+<tr><th id="343">343</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="344">344</th><td>		}</td></tr>
+<tr><th id="345">345</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((panicstr != ((void *)0)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)) {</td></tr>
+<tr><th id="346">346</th><td>			<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="347">347</th><td>			<b>return</b>;</td></tr>
+<tr><th id="348">348</th><td>		}</td></tr>
+<tr><th id="349">349</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4))) == curthread) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="macro" href="../sys/rwlock.h.html#87" title="((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4)))" data-ref="_M/RW_OWNER">RW_OWNER</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>) == <a class="local col8 ref" href="#28curthread" title='curthread' data-ref="28curthread" data-ref-filename="28curthread">curthread</a>)) {</td></tr>
+<tr><th id="350">350</th><td>			<a class="tu ref fn" href="#rw_abort" title='rw_abort' data-use='c' data-ref="rw_abort" data-ref-filename="rw_abort">rw_abort</a>(<b>__func__</b>, <span class="macro" title="350" data-ref="_M/__LINE__">__LINE__</span>, <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>,</td></tr>
+<tr><th id="351">351</th><td>			    <q>"locking against myself"</q>);</td></tr>
+<tr><th id="352">352</th><td>		}</td></tr>
+<tr><th id="353">353</th><td>		<i>/*</i></td></tr>
+<tr><th id="354">354</th><td><i>		 * If the lock owner is running on another CPU, and</i></td></tr>
+<tr><th id="355">355</th><td><i>		 * there are no existing waiters, then spin.</i></td></tr>
+<tr><th id="356">356</th><td><i>		 */</i></td></tr>
+<tr><th id="357">357</th><td>		<b>if</b> (<a class="tu ref fn" href="#rw_oncpu" title='rw_oncpu' data-use='c' data-ref="rw_oncpu" data-ref-filename="rw_oncpu">rw_oncpu</a>(<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>)) {</td></tr>
+<tr><th id="358">358</th><td>			<a class="macro" href="../dev/lockstat.h.html#165" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) -= cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_START_TIMER">LOCKSTAT_START_TIMER</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>, <a class="local col5 ref" href="#283" title='spintime' data-ref="35spintime" data-ref-filename="35spintime">spintime</a>);</td></tr>
+<tr><th id="359">359</th><td>			<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col8 decl" id="38count" title='count' data-type='u_int' data-ref="38count" data-ref-filename="38count">count</dfn> = <a class="macro" href="../sys/lock.h.html#88" title="4" data-ref="_M/SPINLOCK_BACKOFF_MIN">SPINLOCK_BACKOFF_MIN</a>;</td></tr>
+<tr><th id="360">360</th><td>			<b>do</b> {</td></tr>
+<tr><th id="361">361</th><td>				<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="362">362</th><td>				<a class="macro" href="../sys/lock.h.html#94" title="do { int __i; for (__i = (count); __i != 0; __i--) { x86_pause(); } if ((count) &lt; 128) (count) += (count); } while ( 0);" data-ref="_M/SPINLOCK_BACKOFF">SPINLOCK_BACKOFF</a>(<a class="local col8 ref" href="#38count" title='count' data-ref="38count" data-ref-filename="38count">count</a>);</td></tr>
+<tr><th id="363">363</th><td>				<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_DISABLE" title='KPREEMPT_DISABLE' data-ref="KPREEMPT_DISABLE" data-ref-filename="KPREEMPT_DISABLE">KPREEMPT_DISABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="364">364</th><td>				<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> = <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="365">365</th><td>			} <b>while</b> (<a class="tu ref fn" href="#rw_oncpu" title='rw_oncpu' data-use='c' data-ref="rw_oncpu" data-ref-filename="rw_oncpu">rw_oncpu</a>(<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>));</td></tr>
+<tr><th id="366">366</th><td>			<a class="macro" href="../dev/lockstat.h.html#171" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) += cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_STOP_TIMER">LOCKSTAT_STOP_TIMER</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>, <a class="local col5 ref" href="#283" title='spintime' data-ref="35spintime" data-ref-filename="35spintime">spintime</a>);</td></tr>
+<tr><th id="367">367</th><td>			<a class="macro" href="../dev/lockstat.h.html#177" title="do { (spincnt) += (1); } while ( 0)" data-ref="_M/LOCKSTAT_COUNT">LOCKSTAT_COUNT</a>(<a class="local col6 ref" href="#284" title='spincnt' data-ref="36spincnt" data-ref-filename="36spincnt">spincnt</a>, <var>1</var>);</td></tr>
+<tr><th id="368">368</th><td>			<b>if</b> ((<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> &amp; <a class="local col6 ref" href="#26need_wait" title='need_wait' data-ref="26need_wait" data-ref-filename="26need_wait">need_wait</a>) == <var>0</var>)</td></tr>
+<tr><th id="369">369</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="370">370</th><td>		}</td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td>		<i>/*</i></td></tr>
+<tr><th id="373">373</th><td><i>		 * Grab the turnstile chain lock.  Once we have that, we</i></td></tr>
+<tr><th id="374">374</th><td><i>		 * can adjust the waiter bits and sleep queue.</i></td></tr>
+<tr><th id="375">375</th><td><i>		 */</i></td></tr>
+<tr><th id="376">376</th><td>		<a class="local col0 ref" href="#30ts" title='ts' data-ref="30ts" data-ref-filename="30ts">ts</a> = <a class="ref fn" href="../sys/sleepq.h.html#turnstile_lookup" title='turnstile_lookup' data-ref="turnstile_lookup" data-ref-filename="turnstile_lookup">turnstile_lookup</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>);</td></tr>
+<tr><th id="377">377</th><td></td></tr>
+<tr><th id="378">378</th><td>		<i>/*</i></td></tr>
+<tr><th id="379">379</th><td><i>		 * Mark the rwlock as having waiters.  If the set fails,</i></td></tr>
+<tr><th id="380">380</th><td><i>		 * then we may not need to sleep and should spin again.</i></td></tr>
+<tr><th id="381">381</th><td><i>		 * Reload rw_owner because turnstile_lookup() may have</i></td></tr>
+<tr><th id="382">382</th><td><i>		 * spun on the turnstile chain lock.</i></td></tr>
+<tr><th id="383">383</th><td><i>		 */</i></td></tr>
+<tr><th id="384">384</th><td>		<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> = <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="385">385</th><td>		<b>if</b> ((<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> &amp; <a class="local col6 ref" href="#26need_wait" title='need_wait' data-ref="26need_wait" data-ref-filename="26need_wait">need_wait</a>) == <var>0</var> || <a class="tu ref fn" href="#rw_oncpu" title='rw_oncpu' data-use='c' data-ref="rw_oncpu" data-ref-filename="rw_oncpu">rw_oncpu</a>(<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>)) {</td></tr>
+<tr><th id="386">386</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>);</td></tr>
+<tr><th id="387">387</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="388">388</th><td>		}</td></tr>
+<tr><th id="389">389</th><td>		<a class="local col9 ref" href="#29next" title='next' data-ref="29next" data-ref-filename="29next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, <a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>, <a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> | <a class="local col7 ref" href="#27set_wait" title='set_wait' data-ref="27set_wait" data-ref-filename="27set_wait">set_wait</a>);</td></tr>
+<tr><th id="390">390</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((next != owner) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col9 ref" href="#29next" title='next' data-ref="29next" data-ref-filename="29next">next</a> != <a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a>)) {</td></tr>
+<tr><th id="391">391</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>);</td></tr>
+<tr><th id="392">392</th><td>			<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> = <a class="local col9 ref" href="#29next" title='next' data-ref="29next" data-ref-filename="29next">next</a>;</td></tr>
+<tr><th id="393">393</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="394">394</th><td>		}</td></tr>
+<tr><th id="395">395</th><td></td></tr>
+<tr><th id="396">396</th><td>		<a class="macro" href="../dev/lockstat.h.html#165" title="do { if (__builtin_expect((lsflag) != 0, 0)) (slptime) -= cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_START_TIMER">LOCKSTAT_START_TIMER</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>, <a class="local col3 ref" href="#281" title='slptime' data-ref="33slptime" data-ref-filename="33slptime">slptime</a>);</td></tr>
+<tr><th id="397">397</th><td>		<a class="ref fn" href="../sys/sleepq.h.html#turnstile_block" title='turnstile_block' data-ref="turnstile_block" data-ref-filename="turnstile_block">turnstile_block</a>(<a class="local col0 ref" href="#30ts" title='ts' data-ref="30ts" data-ref-filename="30ts">ts</a>, <a class="local col1 ref" href="#31queue" title='queue' data-ref="31queue" data-ref-filename="31queue">queue</a>, <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, &amp;<a class="ref" href="../sys/syncobj.h.html#rw_syncobj" title='rw_syncobj' data-ref="rw_syncobj" data-ref-filename="rw_syncobj">rw_syncobj</a>);</td></tr>
+<tr><th id="398">398</th><td>		<a class="macro" href="../dev/lockstat.h.html#171" title="do { if (__builtin_expect((lsflag) != 0, 0)) (slptime) += cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_STOP_TIMER">LOCKSTAT_STOP_TIMER</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>, <a class="local col3 ref" href="#281" title='slptime' data-ref="33slptime" data-ref-filename="33slptime">slptime</a>);</td></tr>
+<tr><th id="399">399</th><td>		<a class="macro" href="../dev/lockstat.h.html#177" title="do { (slpcnt) += (1); } while ( 0)" data-ref="_M/LOCKSTAT_COUNT">LOCKSTAT_COUNT</a>(<a class="local col4 ref" href="#282" title='slpcnt' data-ref="34slpcnt" data-ref-filename="34slpcnt">slpcnt</a>, <var>1</var>);</td></tr>
+<tr><th id="400">400</th><td></td></tr>
+<tr><th id="401">401</th><td>		<i>/*</i></td></tr>
+<tr><th id="402">402</th><td><i>		 * No need for a memory barrier because of context switch.</i></td></tr>
+<tr><th id="403">403</th><td><i>		 * If not handed the lock, then spin again.</i></td></tr>
+<tr><th id="404">404</th><td><i>		 */</i></td></tr>
+<tr><th id="405">405</th><td>		<b>if</b> (<a class="local col3 ref" href="#23op" title='op' data-ref="23op" data-ref-filename="23op">op</a> == <a class="enum" href="../sys/rwlock.h.html#RW_READER" title='RW_READER' data-ref="RW_READER" data-ref-filename="RW_READER">RW_READER</a> || (<a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>) == <a class="local col8 ref" href="#28curthread" title='curthread' data-ref="28curthread" data-ref-filename="28curthread">curthread</a>)</td></tr>
+<tr><th id="406">406</th><td>			<b>break</b>;</td></tr>
+<tr><th id="407">407</th><td></td></tr>
+<tr><th id="408">408</th><td>		<a class="local col4 ref" href="#24owner" title='owner' data-ref="24owner" data-ref-filename="24owner">owner</a> = <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="409">409</th><td>	}</td></tr>
+<tr><th id="410">410</th><td>	<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="411">411</th><td></td></tr>
+<tr><th id="412">412</th><td>	<a class="macro" href="../dev/lockstat.h.html#144" title="do { if (__builtin_expect((lsflag) != 0, 0)) lockstat_event((uintptr_t)(rw), (uintptr_t)__builtin_return_address(0), (0x00000300 | (op == RW_WRITER ? 0x00000002 : 0x00000003)), (slpcnt), (slptime)); } while ( 0);" data-ref="_M/LOCKSTAT_EVENT">LOCKSTAT_EVENT</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>, <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, <a class="macro" href="../dev/lockstat.h.html#114" title="0x00000300" data-ref="_M/LB_RWLOCK">LB_RWLOCK</a> |</td></tr>
+<tr><th id="413">413</th><td>	    (<a class="local col3 ref" href="#23op" title='op' data-ref="23op" data-ref-filename="23op">op</a> == <a class="enum" href="../sys/rwlock.h.html#RW_WRITER" title='RW_WRITER' data-ref="RW_WRITER" data-ref-filename="RW_WRITER">RW_WRITER</a> ? <a class="macro" href="../dev/lockstat.h.html#103" title="0x00000002" data-ref="_M/LB_SLEEP1">LB_SLEEP1</a> : <a class="macro" href="../dev/lockstat.h.html#104" title="0x00000003" data-ref="_M/LB_SLEEP2">LB_SLEEP2</a>), <a class="local col4 ref" href="#282" title='slpcnt' data-ref="34slpcnt" data-ref-filename="34slpcnt">slpcnt</a>, <a class="local col3 ref" href="#281" title='slptime' data-ref="33slptime" data-ref-filename="33slptime">slptime</a>);</td></tr>
+<tr><th id="414">414</th><td>	<a class="macro" href="../dev/lockstat.h.html#144" title="do { if (__builtin_expect((lsflag) != 0, 0)) lockstat_event((uintptr_t)(rw), (uintptr_t)__builtin_return_address(0), (0x00000300 | 0x00000001), (spincnt), (spintime)); } while ( 0);" data-ref="_M/LOCKSTAT_EVENT">LOCKSTAT_EVENT</a>(<a class="local col7 ref" href="#285" title='lsflag' data-ref="37lsflag" data-ref-filename="37lsflag">lsflag</a>, <a class="local col2 ref" href="#22rw" title='rw' data-ref="22rw" data-ref-filename="22rw">rw</a>, <a class="macro" href="../dev/lockstat.h.html#114" title="0x00000300" data-ref="_M/LB_RWLOCK">LB_RWLOCK</a> | <a class="macro" href="../dev/lockstat.h.html#102" title="0x00000001" data-ref="_M/LB_SPIN">LB_SPIN</a>, <a class="local col6 ref" href="#284" title='spincnt' data-ref="36spincnt" data-ref-filename="36spincnt">spincnt</a>, <a class="local col5 ref" href="#283" title='spintime' data-ref="35spintime" data-ref-filename="35spintime">spintime</a>);</td></tr>
+<tr><th id="415">415</th><td>	<a class="macro" href="../dev/lockstat.h.html#163" title="" data-ref="_M/LOCKSTAT_EXIT">LOCKSTAT_EXIT</a>(lsflag);</td></tr>
+<tr><th id="416">416</th><td></td></tr>
+<tr><th id="417">417</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (op != RW_READER &amp;&amp; RW_OWNER(rw) == curthread) ||</td></tr>
+<tr><th id="418">418</th><td>	    (op == RW_READER &amp;&amp; RW_COUNT(rw) != <var>0</var>));</td></tr>
+<tr><th id="419">419</th><td>	<a class="macro" href="#83" title="" data-ref="_M/RW_LOCKED">RW_LOCKED</a>(rw, op);</td></tr>
+<tr><th id="420">420</th><td>}</td></tr>
+<tr><th id="421">421</th><td></td></tr>
+<tr><th id="422">422</th><td><i>/*</i></td></tr>
+<tr><th id="423">423</th><td><i> * rw_vector_exit:</i></td></tr>
+<tr><th id="424">424</th><td><i> *</i></td></tr>
+<tr><th id="425">425</th><td><i> *	Release a rwlock.</i></td></tr>
+<tr><th id="426">426</th><td><i> */</i></td></tr>
+<tr><th id="427">427</th><td><em>void</em></td></tr>
+<tr><th id="428">428</th><td><dfn class="decl def fn" id="rw_vector_exit" title='rw_vector_exit' data-ref="rw_vector_exit" data-ref-filename="rw_vector_exit">rw_vector_exit</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col9 decl" id="39rw" title='rw' data-type='krwlock_t *' data-ref="39rw" data-ref-filename="39rw">rw</dfn>)</td></tr>
+<tr><th id="429">429</th><td>{</td></tr>
+<tr><th id="430">430</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col0 decl" id="40curthread" title='curthread' data-type='uintptr_t' data-ref="40curthread" data-ref-filename="40curthread">curthread</dfn>, <dfn class="local col1 decl" id="41owner" title='owner' data-type='uintptr_t' data-ref="41owner" data-ref-filename="41owner">owner</dfn>, <dfn class="local col2 decl" id="42decr" title='decr' data-type='uintptr_t' data-ref="42decr" data-ref-filename="42decr">decr</dfn>, <dfn class="local col3 decl" id="43newown" title='newown' data-type='uintptr_t' data-ref="43newown" data-ref-filename="43newown">newown</dfn>, <dfn class="local col4 decl" id="44next" title='next' data-type='uintptr_t' data-ref="44next" data-ref-filename="44next">next</dfn>;</td></tr>
+<tr><th id="431">431</th><td>	<a class="typedef" href="../sys/sleepq.h.html#turnstile_t" title='turnstile_t' data-type='struct turnstile' data-ref="turnstile_t" data-ref-filename="turnstile_t">turnstile_t</a> *<dfn class="local col5 decl" id="45ts" title='ts' data-type='turnstile_t *' data-ref="45ts" data-ref-filename="45ts">ts</dfn>;</td></tr>
+<tr><th id="432">432</th><td>	<em>int</em> <dfn class="local col6 decl" id="46rcnt" title='rcnt' data-type='int' data-ref="46rcnt" data-ref-filename="46rcnt">rcnt</dfn>, <dfn class="local col7 decl" id="47wcnt" title='wcnt' data-type='int' data-ref="47wcnt" data-ref-filename="47wcnt">wcnt</dfn>;</td></tr>
+<tr><th id="433">433</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col8 decl" id="48l" title='l' data-type='lwp_t *' data-ref="48l" data-ref-filename="48l">l</dfn>;</td></tr>
+<tr><th id="434">434</th><td></td></tr>
+<tr><th id="435">435</th><td>	<a class="local col0 ref" href="#40curthread" title='curthread' data-ref="40curthread" data-ref-filename="40curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="436">436</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) rw_abort(__func__, 436, rw, &quot;assertion failed: &quot; &quot;curthread != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="local col0 ref" href="#40curthread" title='curthread' data-ref="40curthread" data-ref-filename="40curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="437">437</th><td></td></tr>
+<tr><th id="438">438</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((panicstr != ((void *)0)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>))</td></tr>
+<tr><th id="439">439</th><td>		<b>return</b>;</td></tr>
+<tr><th id="440">440</th><td></td></tr>
+<tr><th id="441">441</th><td>	<i>/*</i></td></tr>
+<tr><th id="442">442</th><td><i>	 * Again, we use a trick.  Since we used an add operation to</i></td></tr>
+<tr><th id="443">443</th><td><i>	 * set the required lock bits, we can use a subtract to clear</i></td></tr>
+<tr><th id="444">444</th><td><i>	 * them, which makes the read-release and write-release path</i></td></tr>
+<tr><th id="445">445</th><td><i>	 * the same.</i></td></tr>
+<tr><th id="446">446</th><td><i>	 */</i></td></tr>
+<tr><th id="447">447</th><td>	<a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a> = <a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="448">448</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect(((owner &amp; 0x04UL) != 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>((<a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>) != <var>0</var>)) {</td></tr>
+<tr><th id="449">449</th><td>		<a class="macro" href="#84" title="" data-ref="_M/RW_UNLOCKED">RW_UNLOCKED</a>(rw, RW_WRITER);</td></tr>
+<tr><th id="450">450</th><td>		<a class="macro" href="#95" title="do { if (__builtin_expect((!(((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4))) == curthread)) != 0, 0)) rw_abort(__func__, 450, rw, &quot;assertion failed: &quot; &quot;RW_OWNER(rw) == curthread&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="macro" href="../sys/rwlock.h.html#87" title="((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4)))" data-ref="_M/RW_OWNER">RW_OWNER</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>) == <a class="local col0 ref" href="#40curthread" title='curthread' data-ref="40curthread" data-ref-filename="40curthread">curthread</a>);</td></tr>
+<tr><th id="451">451</th><td>		<a class="local col2 ref" href="#42decr" title='decr' data-ref="42decr" data-ref-filename="42decr">decr</a> = <a class="local col0 ref" href="#40curthread" title='curthread' data-ref="40curthread" data-ref-filename="40curthread">curthread</a> | <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>;</td></tr>
+<tr><th id="452">452</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="453">453</th><td>		<a class="macro" href="#84" title="" data-ref="_M/RW_UNLOCKED">RW_UNLOCKED</a>(rw, RW_READER);</td></tr>
+<tr><th id="454">454</th><td>		<a class="macro" href="#95" title="do { if (__builtin_expect((!(((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4))) != 0)) != 0, 0)) rw_abort(__func__, 454, rw, &quot;assertion failed: &quot; &quot;RW_COUNT(rw) != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="macro" href="../sys/rwlock.h.html#88" title="((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4)))" data-ref="_M/RW_COUNT">RW_COUNT</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>) != <var>0</var>);</td></tr>
+<tr><th id="455">455</th><td>		<a class="local col2 ref" href="#42decr" title='decr' data-ref="42decr" data-ref-filename="42decr">decr</a> = <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>;</td></tr>
+<tr><th id="456">456</th><td>	}</td></tr>
+<tr><th id="457">457</th><td></td></tr>
+<tr><th id="458">458</th><td>	<i>/*</i></td></tr>
+<tr><th id="459">459</th><td><i>	 * Compute what we expect the new value of the lock to be. Only</i></td></tr>
+<tr><th id="460">460</th><td><i>	 * proceed to do direct handoff if there are waiters, and if the</i></td></tr>
+<tr><th id="461">461</th><td><i>	 * lock would become unowned.</i></td></tr>
+<tr><th id="462">462</th><td><i>	 */</i></td></tr>
+<tr><th id="463">463</th><td>	<a class="ref fn" href="../sys/atomic.h.html#membar_exit" title='membar_exit' data-ref="membar_exit" data-ref-filename="membar_exit">membar_exit</a>();</td></tr>
+<tr><th id="464">464</th><td>	<b>for</b> (;;) {</td></tr>
+<tr><th id="465">465</th><td>		<a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a> = (<a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a> - <a class="local col2 ref" href="#42decr" title='decr' data-ref="42decr" data-ref-filename="42decr">decr</a>);</td></tr>
+<tr><th id="466">466</th><td>		<b>if</b> ((<a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a> &amp; (<a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a> | <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a>)) == <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a>)</td></tr>
+<tr><th id="467">467</th><td>			<b>break</b>;</td></tr>
+<tr><th id="468">468</th><td>		<a class="local col4 ref" href="#44next" title='next' data-ref="44next" data-ref-filename="44next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a>, <a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a>);</td></tr>
+<tr><th id="469">469</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col4 ref" href="#44next" title='next' data-ref="44next" data-ref-filename="44next">next</a> == <a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a>))</td></tr>
+<tr><th id="470">470</th><td>			<b>return</b>;</td></tr>
+<tr><th id="471">471</th><td>		<a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a> = <a class="local col4 ref" href="#44next" title='next' data-ref="44next" data-ref-filename="44next">next</a>;</td></tr>
+<tr><th id="472">472</th><td>	}</td></tr>
+<tr><th id="473">473</th><td></td></tr>
+<tr><th id="474">474</th><td>	<i>/*</i></td></tr>
+<tr><th id="475">475</th><td><i>	 * Grab the turnstile chain lock.  This gets the interlock</i></td></tr>
+<tr><th id="476">476</th><td><i>	 * on the sleep queue.  Once we have that, we can adjust the</i></td></tr>
+<tr><th id="477">477</th><td><i>	 * waiter bits.</i></td></tr>
+<tr><th id="478">478</th><td><i>	 */</i></td></tr>
+<tr><th id="479">479</th><td>	<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a> = <a class="ref fn" href="../sys/sleepq.h.html#turnstile_lookup" title='turnstile_lookup' data-ref="turnstile_lookup" data-ref-filename="turnstile_lookup">turnstile_lookup</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>);</td></tr>
+<tr><th id="480">480</th><td>	<a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a> = <a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="481">481</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, ts != NULL);</td></tr>
+<tr><th id="482">482</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (owner &amp; RW_HAS_WAITERS) != <var>0</var>);</td></tr>
+<tr><th id="483">483</th><td></td></tr>
+<tr><th id="484">484</th><td>	<a class="local col7 ref" href="#47wcnt" title='wcnt' data-ref="47wcnt" data-ref-filename="47wcnt">wcnt</a> = <a class="macro" href="../sys/sleepq.h.html#159" title="(ts)-&gt;ts_waiters[(1)]" data-ref="_M/TS_WAITERS">TS_WAITERS</a>(<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>);</td></tr>
+<tr><th id="485">485</th><td>	<a class="local col6 ref" href="#46rcnt" title='rcnt' data-ref="46rcnt" data-ref-filename="46rcnt">rcnt</a> = <a class="macro" href="../sys/sleepq.h.html#159" title="(ts)-&gt;ts_waiters[(0)]" data-ref="_M/TS_WAITERS">TS_WAITERS</a>(<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#156" title="0" data-ref="_M/TS_READER_Q">TS_READER_Q</a>);</td></tr>
+<tr><th id="486">486</th><td></td></tr>
+<tr><th id="487">487</th><td>	<i>/*</i></td></tr>
+<tr><th id="488">488</th><td><i>	 * Give the lock away.</i></td></tr>
+<tr><th id="489">489</th><td><i>	 *</i></td></tr>
+<tr><th id="490">490</th><td><i>	 * If we are releasing a write lock, then prefer to wake all</i></td></tr>
+<tr><th id="491">491</th><td><i>	 * outstanding readers.  Otherwise, wake one writer if there</i></td></tr>
+<tr><th id="492">492</th><td><i>	 * are outstanding readers, or all writers if there are no</i></td></tr>
+<tr><th id="493">493</th><td><i>	 * pending readers.  If waking one specific writer, the writer</i></td></tr>
+<tr><th id="494">494</th><td><i>	 * is handed the lock here.  If waking multiple writers, we</i></td></tr>
+<tr><th id="495">495</th><td><i>	 * set WRITE_WANTED to block out new readers, and let them</i></td></tr>
+<tr><th id="496">496</th><td><i>	 * do the work of acquiring the lock in rw_vector_enter().</i></td></tr>
+<tr><th id="497">497</th><td><i>	 */</i></td></tr>
+<tr><th id="498">498</th><td>	<b>if</b> (<a class="local col6 ref" href="#46rcnt" title='rcnt' data-ref="46rcnt" data-ref-filename="46rcnt">rcnt</a> == <var>0</var> || <a class="local col2 ref" href="#42decr" title='decr' data-ref="42decr" data-ref-filename="42decr">decr</a> == <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>) {</td></tr>
+<tr><th id="499">499</th><td>		<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, wcnt != <var>0</var>);</td></tr>
+<tr><th id="500">500</th><td>		<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (owner &amp; RW_WRITE_WANTED) != <var>0</var>);</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td>		<b>if</b> (<a class="local col6 ref" href="#46rcnt" title='rcnt' data-ref="46rcnt" data-ref-filename="46rcnt">rcnt</a> != <var>0</var>) {</td></tr>
+<tr><th id="503">503</th><td>			<i>/* Give the lock to the longest waiting writer. */</i></td></tr>
+<tr><th id="504">504</th><td>			<a class="local col8 ref" href="#48l" title='l' data-ref="48l" data-ref-filename="48l">l</a> = <a class="macro" href="../sys/sleepq.h.html#166" title="(((&amp;(ts)-&gt;ts_sleepq[(1)])-&gt;tqh_first))" data-ref="_M/TS_FIRST">TS_FIRST</a>(<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>);</td></tr>
+<tr><th id="505">505</th><td>			<a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="local col8 ref" href="#48l" title='l' data-ref="48l" data-ref-filename="48l">l</a> | <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a>;</td></tr>
+<tr><th id="506">506</th><td>			<b>if</b> (<a class="local col7 ref" href="#47wcnt" title='wcnt' data-ref="47wcnt" data-ref-filename="47wcnt">wcnt</a> &gt; <var>1</var>)</td></tr>
+<tr><th id="507">507</th><td>				<a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a> |= <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="508">508</th><td>			<a class="tu ref fn" href="#rw_swap" title='rw_swap' data-use='c' data-ref="rw_swap" data-ref-filename="rw_swap">rw_swap</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a>, <a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a>);</td></tr>
+<tr><th id="509">509</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_wakeup" title='turnstile_wakeup' data-ref="turnstile_wakeup" data-ref-filename="turnstile_wakeup">turnstile_wakeup</a>(<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>, <var>1</var>, <a class="local col8 ref" href="#48l" title='l' data-ref="48l" data-ref-filename="48l">l</a>);</td></tr>
+<tr><th id="510">510</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="511">511</th><td>			<i>/* Wake all writers and let them fight it out. */</i></td></tr>
+<tr><th id="512">512</th><td>			<a class="tu ref fn" href="#rw_swap" title='rw_swap' data-use='c' data-ref="rw_swap" data-ref-filename="rw_swap">rw_swap</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a>, <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>);</td></tr>
+<tr><th id="513">513</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_wakeup" title='turnstile_wakeup' data-ref="turnstile_wakeup" data-ref-filename="turnstile_wakeup">turnstile_wakeup</a>(<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>, <a class="local col7 ref" href="#47wcnt" title='wcnt' data-ref="47wcnt" data-ref-filename="47wcnt">wcnt</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="514">514</th><td>		}</td></tr>
+<tr><th id="515">515</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="516">516</th><td>		<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, rcnt != <var>0</var>);</td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td>		<i>/*</i></td></tr>
+<tr><th id="519">519</th><td><i>		 * Give the lock to all blocked readers.  If there</i></td></tr>
+<tr><th id="520">520</th><td><i>		 * is a writer waiting, new readers that arrive</i></td></tr>
+<tr><th id="521">521</th><td><i>		 * after the release will be blocked out.</i></td></tr>
+<tr><th id="522">522</th><td><i>		 */</i></td></tr>
+<tr><th id="523">523</th><td>		<a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a> = <a class="local col6 ref" href="#46rcnt" title='rcnt' data-ref="46rcnt" data-ref-filename="46rcnt">rcnt</a> &lt;&lt; <a class="macro" href="../sys/rwlock.h.html#84" title="4" data-ref="_M/RW_READ_COUNT_SHIFT">RW_READ_COUNT_SHIFT</a>;</td></tr>
+<tr><th id="524">524</th><td>		<b>if</b> (<a class="local col7 ref" href="#47wcnt" title='wcnt' data-ref="47wcnt" data-ref-filename="47wcnt">wcnt</a> != <var>0</var>)</td></tr>
+<tr><th id="525">525</th><td>			<a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a> |= <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a> | <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="526">526</th><td>			</td></tr>
+<tr><th id="527">527</th><td>		<i>/* Wake up all sleeping readers. */</i></td></tr>
+<tr><th id="528">528</th><td>		<a class="tu ref fn" href="#rw_swap" title='rw_swap' data-use='c' data-ref="rw_swap" data-ref-filename="rw_swap">rw_swap</a>(<a class="local col9 ref" href="#39rw" title='rw' data-ref="39rw" data-ref-filename="39rw">rw</a>, <a class="local col1 ref" href="#41owner" title='owner' data-ref="41owner" data-ref-filename="41owner">owner</a>, <a class="local col3 ref" href="#43newown" title='newown' data-ref="43newown" data-ref-filename="43newown">newown</a>);</td></tr>
+<tr><th id="529">529</th><td>		<a class="ref fn" href="../sys/sleepq.h.html#turnstile_wakeup" title='turnstile_wakeup' data-ref="turnstile_wakeup" data-ref-filename="turnstile_wakeup">turnstile_wakeup</a>(<a class="local col5 ref" href="#45ts" title='ts' data-ref="45ts" data-ref-filename="45ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#156" title="0" data-ref="_M/TS_READER_Q">TS_READER_Q</a>, <a class="local col6 ref" href="#46rcnt" title='rcnt' data-ref="46rcnt" data-ref-filename="46rcnt">rcnt</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="530">530</th><td>	}</td></tr>
+<tr><th id="531">531</th><td>}</td></tr>
+<tr><th id="532">532</th><td></td></tr>
+<tr><th id="533">533</th><td><i>/*</i></td></tr>
+<tr><th id="534">534</th><td><i> * rw_vector_tryenter:</i></td></tr>
+<tr><th id="535">535</th><td><i> *</i></td></tr>
+<tr><th id="536">536</th><td><i> *	Try to acquire a rwlock.</i></td></tr>
+<tr><th id="537">537</th><td><i> */</i></td></tr>
+<tr><th id="538">538</th><td><em>int</em></td></tr>
+<tr><th id="539">539</th><td><dfn class="decl def fn" id="rw_vector_tryenter" title='rw_vector_tryenter' data-ref="rw_vector_tryenter" data-ref-filename="rw_vector_tryenter">rw_vector_tryenter</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col9 decl" id="49rw" title='rw' data-type='krwlock_t *' data-ref="49rw" data-ref-filename="49rw">rw</dfn>, <em>const</em> <a class="typedef" href="../sys/rwlock.h.html#krw_t" title='krw_t' data-type='enum krw_t' data-ref="krw_t" data-ref-filename="krw_t">krw_t</a> <dfn class="local col0 decl" id="50op" title='op' data-type='const krw_t' data-ref="50op" data-ref-filename="50op">op</dfn>)</td></tr>
+<tr><th id="540">540</th><td>{</td></tr>
+<tr><th id="541">541</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col1 decl" id="51curthread" title='curthread' data-type='uintptr_t' data-ref="51curthread" data-ref-filename="51curthread">curthread</dfn>, <dfn class="local col2 decl" id="52owner" title='owner' data-type='uintptr_t' data-ref="52owner" data-ref-filename="52owner">owner</dfn>, <dfn class="local col3 decl" id="53incr" title='incr' data-type='uintptr_t' data-ref="53incr" data-ref-filename="53incr">incr</dfn>, <dfn class="local col4 decl" id="54need_wait" title='need_wait' data-type='uintptr_t' data-ref="54need_wait" data-ref-filename="54need_wait">need_wait</dfn>, <dfn class="local col5 decl" id="55next" title='next' data-type='uintptr_t' data-ref="55next" data-ref-filename="55next">next</dfn>;</td></tr>
+<tr><th id="542">542</th><td></td></tr>
+<tr><th id="543">543</th><td>	<a class="local col1 ref" href="#51curthread" title='curthread' data-ref="51curthread" data-ref-filename="51curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="544">544</th><td></td></tr>
+<tr><th id="545">545</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) rw_abort(__func__, 545, rw, &quot;assertion failed: &quot; &quot;curthread != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col9 ref" href="#49rw" title='rw' data-ref="49rw" data-ref-filename="49rw">rw</a>, <a class="local col1 ref" href="#51curthread" title='curthread' data-ref="51curthread" data-ref-filename="51curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="546">546</th><td></td></tr>
+<tr><th id="547">547</th><td>	<b>if</b> (<a class="local col0 ref" href="#50op" title='op' data-ref="50op" data-ref-filename="50op">op</a> == <a class="enum" href="../sys/rwlock.h.html#RW_READER" title='RW_READER' data-ref="RW_READER" data-ref-filename="RW_READER">RW_READER</a>) {</td></tr>
+<tr><th id="548">548</th><td>		<a class="local col3 ref" href="#53incr" title='incr' data-ref="53incr" data-ref-filename="53incr">incr</a> = <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>;</td></tr>
+<tr><th id="549">549</th><td>		<a class="local col4 ref" href="#54need_wait" title='need_wait' data-ref="54need_wait" data-ref-filename="54need_wait">need_wait</a> = <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="550">550</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="551">551</th><td>		<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, op == RW_WRITER);</td></tr>
+<tr><th id="552">552</th><td>		<a class="local col3 ref" href="#53incr" title='incr' data-ref="53incr" data-ref-filename="53incr">incr</a> = <a class="local col1 ref" href="#51curthread" title='curthread' data-ref="51curthread" data-ref-filename="51curthread">curthread</a> | <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>;</td></tr>
+<tr><th id="553">553</th><td>		<a class="local col4 ref" href="#54need_wait" title='need_wait' data-ref="54need_wait" data-ref-filename="54need_wait">need_wait</a> = <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>;</td></tr>
+<tr><th id="554">554</th><td>	}</td></tr>
+<tr><th id="555">555</th><td></td></tr>
+<tr><th id="556">556</th><td>	<b>for</b> (<a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a> = <a class="local col9 ref" href="#49rw" title='rw' data-ref="49rw" data-ref-filename="49rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;; <a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a> = <a class="local col5 ref" href="#55next" title='next' data-ref="55next" data-ref-filename="55next">next</a>) {</td></tr>
+<tr><th id="557">557</th><td>		<a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a> = <a class="local col9 ref" href="#49rw" title='rw' data-ref="49rw" data-ref-filename="49rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="558">558</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect(((owner &amp; need_wait) != 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>((<a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a> &amp; <a class="local col4 ref" href="#54need_wait" title='need_wait' data-ref="54need_wait" data-ref-filename="54need_wait">need_wait</a>) != <var>0</var>))</td></tr>
+<tr><th id="559">559</th><td>			<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="560">560</th><td>		<a class="local col5 ref" href="#55next" title='next' data-ref="55next" data-ref-filename="55next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col9 ref" href="#49rw" title='rw' data-ref="49rw" data-ref-filename="49rw">rw</a>, <a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a>, <a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a> + <a class="local col3 ref" href="#53incr" title='incr' data-ref="53incr" data-ref-filename="53incr">incr</a>);</td></tr>
+<tr><th id="561">561</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col5 ref" href="#55next" title='next' data-ref="55next" data-ref-filename="55next">next</a> == <a class="local col2 ref" href="#52owner" title='owner' data-ref="52owner" data-ref-filename="52owner">owner</a>)) {</td></tr>
+<tr><th id="562">562</th><td>			<i>/* Got it! */</i></td></tr>
+<tr><th id="563">563</th><td>			<a class="ref fn" href="../sys/atomic.h.html#membar_enter" title='membar_enter' data-ref="membar_enter" data-ref-filename="membar_enter">membar_enter</a>();</td></tr>
+<tr><th id="564">564</th><td>			<b>break</b>;</td></tr>
+<tr><th id="565">565</th><td>		}</td></tr>
+<tr><th id="566">566</th><td>	}</td></tr>
+<tr><th id="567">567</th><td></td></tr>
+<tr><th id="568">568</th><td>	<a class="macro" href="#82" title="" data-ref="_M/RW_WANTLOCK">RW_WANTLOCK</a>(rw, op);</td></tr>
+<tr><th id="569">569</th><td>	<a class="macro" href="#83" title="" data-ref="_M/RW_LOCKED">RW_LOCKED</a>(rw, op);</td></tr>
+<tr><th id="570">570</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (op != RW_READER &amp;&amp; RW_OWNER(rw) == curthread) ||</td></tr>
+<tr><th id="571">571</th><td>	    (op == RW_READER &amp;&amp; RW_COUNT(rw) != <var>0</var>));</td></tr>
+<tr><th id="572">572</th><td></td></tr>
+<tr><th id="573">573</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="574">574</th><td>}</td></tr>
+<tr><th id="575">575</th><td></td></tr>
+<tr><th id="576">576</th><td><i>/*</i></td></tr>
+<tr><th id="577">577</th><td><i> * rw_downgrade:</i></td></tr>
+<tr><th id="578">578</th><td><i> *</i></td></tr>
+<tr><th id="579">579</th><td><i> *	Downgrade a write lock to a read lock.</i></td></tr>
+<tr><th id="580">580</th><td><i> */</i></td></tr>
+<tr><th id="581">581</th><td><em>void</em></td></tr>
+<tr><th id="582">582</th><td><dfn class="decl def fn" id="rw_downgrade" title='rw_downgrade' data-ref="rw_downgrade" data-ref-filename="rw_downgrade">rw_downgrade</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col6 decl" id="56rw" title='rw' data-type='krwlock_t *' data-ref="56rw" data-ref-filename="56rw">rw</dfn>)</td></tr>
+<tr><th id="583">583</th><td>{</td></tr>
+<tr><th id="584">584</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col7 decl" id="57owner" title='owner' data-type='uintptr_t' data-ref="57owner" data-ref-filename="57owner">owner</dfn>, <dfn class="local col8 decl" id="58curthread" title='curthread' data-type='uintptr_t' data-ref="58curthread" data-ref-filename="58curthread">curthread</dfn>, <dfn class="local col9 decl" id="59newown" title='newown' data-type='uintptr_t' data-ref="59newown" data-ref-filename="59newown">newown</dfn>, <dfn class="local col0 decl" id="60next" title='next' data-type='uintptr_t' data-ref="60next" data-ref-filename="60next">next</dfn>;</td></tr>
+<tr><th id="585">585</th><td>	<a class="typedef" href="../sys/sleepq.h.html#turnstile_t" title='turnstile_t' data-type='struct turnstile' data-ref="turnstile_t" data-ref-filename="turnstile_t">turnstile_t</a> *<dfn class="local col1 decl" id="61ts" title='ts' data-type='turnstile_t *' data-ref="61ts" data-ref-filename="61ts">ts</dfn>;</td></tr>
+<tr><th id="586">586</th><td>	<em>int</em> <dfn class="local col2 decl" id="62rcnt" title='rcnt' data-type='int' data-ref="62rcnt" data-ref-filename="62rcnt">rcnt</dfn>, <dfn class="local col3 decl" id="63wcnt" title='wcnt' data-type='int' data-ref="63wcnt" data-ref-filename="63wcnt">wcnt</dfn>;</td></tr>
+<tr><th id="587">587</th><td></td></tr>
+<tr><th id="588">588</th><td>	<a class="local col8 ref" href="#58curthread" title='curthread' data-ref="58curthread" data-ref-filename="58curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="589">589</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) rw_abort(__func__, 589, rw, &quot;assertion failed: &quot; &quot;curthread != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>, <a class="local col8 ref" href="#58curthread" title='curthread' data-ref="58curthread" data-ref-filename="58curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="590">590</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (rw-&gt;rw_owner &amp; RW_WRITE_LOCKED) != <var>0</var>);</td></tr>
+<tr><th id="591">591</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4))) == curthread)) != 0, 0)) rw_abort(__func__, 591, rw, &quot;assertion failed: &quot; &quot;RW_OWNER(rw) == curthread&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>, <a class="macro" href="../sys/rwlock.h.html#87" title="((rw)-&gt;rw_owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4)))" data-ref="_M/RW_OWNER">RW_OWNER</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>) == <a class="local col8 ref" href="#58curthread" title='curthread' data-ref="58curthread" data-ref-filename="58curthread">curthread</a>);</td></tr>
+<tr><th id="592">592</th><td>	<a class="macro" href="#84" title="" data-ref="_M/RW_UNLOCKED">RW_UNLOCKED</a>(rw, RW_WRITER);</td></tr>
+<tr><th id="593">593</th><td><u>#<span data-ppcond="593">if</span> !defined(<span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span>)</u></td></tr>
+<tr><th id="594">594</th><td>	__USE(curthread);</td></tr>
+<tr><th id="595">595</th><td><u>#<span data-ppcond="593">endif</span></u></td></tr>
+<tr><th id="596">596</th><td></td></tr>
+<tr><th id="597">597</th><td></td></tr>
+<tr><th id="598">598</th><td>	<a class="ref fn" href="../sys/atomic.h.html#membar_producer" title='membar_producer' data-ref="membar_producer" data-ref-filename="membar_producer">membar_producer</a>();</td></tr>
+<tr><th id="599">599</th><td>	<a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a> = <a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="600">600</th><td>	<b>if</b> ((<a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a>) == <var>0</var>) {</td></tr>
+<tr><th id="601">601</th><td>		<i>/*</i></td></tr>
+<tr><th id="602">602</th><td><i>		 * There are no waiters, so we can do this the easy way.</i></td></tr>
+<tr><th id="603">603</th><td><i>		 * Try swapping us down to one read hold.  If it fails, the</i></td></tr>
+<tr><th id="604">604</th><td><i>		 * lock condition has changed and we most likely now have</i></td></tr>
+<tr><th id="605">605</th><td><i>		 * waiters.</i></td></tr>
+<tr><th id="606">606</th><td><i>		 */</i></td></tr>
+<tr><th id="607">607</th><td>		<a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>, <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a>, <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>);</td></tr>
+<tr><th id="608">608</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a> == <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a>)) {</td></tr>
+<tr><th id="609">609</th><td>			<a class="macro" href="#83" title="" data-ref="_M/RW_LOCKED">RW_LOCKED</a>(rw, RW_READER);</td></tr>
+<tr><th id="610">610</th><td>			<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (rw-&gt;rw_owner &amp; RW_WRITE_LOCKED) == <var>0</var>);</td></tr>
+<tr><th id="611">611</th><td>			<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, RW_COUNT(rw) != <var>0</var>);</td></tr>
+<tr><th id="612">612</th><td>			<b>return</b>;</td></tr>
+<tr><th id="613">613</th><td>		}</td></tr>
+<tr><th id="614">614</th><td>		<a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a> = <a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a>;</td></tr>
+<tr><th id="615">615</th><td>	}</td></tr>
+<tr><th id="616">616</th><td></td></tr>
+<tr><th id="617">617</th><td>	<i>/*</i></td></tr>
+<tr><th id="618">618</th><td><i>	 * Grab the turnstile chain lock.  This gets the interlock</i></td></tr>
+<tr><th id="619">619</th><td><i>	 * on the sleep queue.  Once we have that, we can adjust the</i></td></tr>
+<tr><th id="620">620</th><td><i>	 * waiter bits.</i></td></tr>
+<tr><th id="621">621</th><td><i>	 */</i></td></tr>
+<tr><th id="622">622</th><td>	<b>for</b> (;; <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a> = <a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a>) {</td></tr>
+<tr><th id="623">623</th><td>		<a class="local col1 ref" href="#61ts" title='ts' data-ref="61ts" data-ref-filename="61ts">ts</a> = <a class="ref fn" href="../sys/sleepq.h.html#turnstile_lookup" title='turnstile_lookup' data-ref="turnstile_lookup" data-ref-filename="turnstile_lookup">turnstile_lookup</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>);</td></tr>
+<tr><th id="624">624</th><td>		<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, ts != NULL);</td></tr>
+<tr><th id="625">625</th><td></td></tr>
+<tr><th id="626">626</th><td>		<a class="local col2 ref" href="#62rcnt" title='rcnt' data-ref="62rcnt" data-ref-filename="62rcnt">rcnt</a> = <a class="macro" href="../sys/sleepq.h.html#159" title="(ts)-&gt;ts_waiters[(0)]" data-ref="_M/TS_WAITERS">TS_WAITERS</a>(<a class="local col1 ref" href="#61ts" title='ts' data-ref="61ts" data-ref-filename="61ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#156" title="0" data-ref="_M/TS_READER_Q">TS_READER_Q</a>);</td></tr>
+<tr><th id="627">627</th><td>		<a class="local col3 ref" href="#63wcnt" title='wcnt' data-ref="63wcnt" data-ref-filename="63wcnt">wcnt</a> = <a class="macro" href="../sys/sleepq.h.html#159" title="(ts)-&gt;ts_waiters[(1)]" data-ref="_M/TS_WAITERS">TS_WAITERS</a>(<a class="local col1 ref" href="#61ts" title='ts' data-ref="61ts" data-ref-filename="61ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>);</td></tr>
+<tr><th id="628">628</th><td></td></tr>
+<tr><th id="629">629</th><td>		<i>/*</i></td></tr>
+<tr><th id="630">630</th><td><i>		 * If there are no readers, just preserve the waiters</i></td></tr>
+<tr><th id="631">631</th><td><i>		 * bits, swap us down to one read hold and return.</i></td></tr>
+<tr><th id="632">632</th><td><i>		 */</i></td></tr>
+<tr><th id="633">633</th><td>		<b>if</b> (<a class="local col2 ref" href="#62rcnt" title='rcnt' data-ref="62rcnt" data-ref-filename="62rcnt">rcnt</a> == <var>0</var>) {</td></tr>
+<tr><th id="634">634</th><td>			<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, wcnt != <var>0</var>);</td></tr>
+<tr><th id="635">635</th><td>			<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (rw-&gt;rw_owner &amp; RW_WRITE_WANTED) != <var>0</var>);</td></tr>
+<tr><th id="636">636</th><td>			<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (rw-&gt;rw_owner &amp; RW_HAS_WAITERS) != <var>0</var>);</td></tr>
+<tr><th id="637">637</th><td></td></tr>
+<tr><th id="638">638</th><td>			<a class="local col9 ref" href="#59newown" title='newown' data-ref="59newown" data-ref-filename="59newown">newown</a> = <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a> | <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a> | <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="639">639</th><td>			<a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>, <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a>, <a class="local col9 ref" href="#59newown" title='newown' data-ref="59newown" data-ref-filename="59newown">newown</a>);</td></tr>
+<tr><th id="640">640</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>);</td></tr>
+<tr><th id="641">641</th><td>			<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a> == <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a>))</td></tr>
+<tr><th id="642">642</th><td>				<b>break</b>;</td></tr>
+<tr><th id="643">643</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="644">644</th><td>			<i>/*</i></td></tr>
+<tr><th id="645">645</th><td><i>			 * Give the lock to all blocked readers.  We may</i></td></tr>
+<tr><th id="646">646</th><td><i>			 * retain one read hold if downgrading.  If there</i></td></tr>
+<tr><th id="647">647</th><td><i>			 * is a writer waiting, new readers will be blocked</i></td></tr>
+<tr><th id="648">648</th><td><i>			 * out.</i></td></tr>
+<tr><th id="649">649</th><td><i>			 */</i></td></tr>
+<tr><th id="650">650</th><td>			<a class="local col9 ref" href="#59newown" title='newown' data-ref="59newown" data-ref-filename="59newown">newown</a> = (<a class="local col2 ref" href="#62rcnt" title='rcnt' data-ref="62rcnt" data-ref-filename="62rcnt">rcnt</a> &lt;&lt; <a class="macro" href="../sys/rwlock.h.html#84" title="4" data-ref="_M/RW_READ_COUNT_SHIFT">RW_READ_COUNT_SHIFT</a>) + <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>;</td></tr>
+<tr><th id="651">651</th><td>			<b>if</b> (<a class="local col3 ref" href="#63wcnt" title='wcnt' data-ref="63wcnt" data-ref-filename="63wcnt">wcnt</a> != <var>0</var>)</td></tr>
+<tr><th id="652">652</th><td>				<a class="local col9 ref" href="#59newown" title='newown' data-ref="59newown" data-ref-filename="59newown">newown</a> |= <a class="macro" href="../sys/rwlock.h.html#75" title="0x01UL" data-ref="_M/RW_HAS_WAITERS">RW_HAS_WAITERS</a> | <a class="macro" href="../sys/rwlock.h.html#76" title="0x02UL" data-ref="_M/RW_WRITE_WANTED">RW_WRITE_WANTED</a>;</td></tr>
+<tr><th id="653">653</th><td></td></tr>
+<tr><th id="654">654</th><td>			<a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>, <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a>, <a class="local col9 ref" href="#59newown" title='newown' data-ref="59newown" data-ref-filename="59newown">newown</a>);</td></tr>
+<tr><th id="655">655</th><td>			<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col0 ref" href="#60next" title='next' data-ref="60next" data-ref-filename="60next">next</a> == <a class="local col7 ref" href="#57owner" title='owner' data-ref="57owner" data-ref-filename="57owner">owner</a>)) {</td></tr>
+<tr><th id="656">656</th><td>				<i>/* Wake up all sleeping readers. */</i></td></tr>
+<tr><th id="657">657</th><td>				<a class="ref fn" href="../sys/sleepq.h.html#turnstile_wakeup" title='turnstile_wakeup' data-ref="turnstile_wakeup" data-ref-filename="turnstile_wakeup">turnstile_wakeup</a>(<a class="local col1 ref" href="#61ts" title='ts' data-ref="61ts" data-ref-filename="61ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#156" title="0" data-ref="_M/TS_READER_Q">TS_READER_Q</a>, <a class="local col2 ref" href="#62rcnt" title='rcnt' data-ref="62rcnt" data-ref-filename="62rcnt">rcnt</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="658">658</th><td>				<b>break</b>;</td></tr>
+<tr><th id="659">659</th><td>			}</td></tr>
+<tr><th id="660">660</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col6 ref" href="#56rw" title='rw' data-ref="56rw" data-ref-filename="56rw">rw</a>);</td></tr>
+<tr><th id="661">661</th><td>		}</td></tr>
+<tr><th id="662">662</th><td>	}</td></tr>
+<tr><th id="663">663</th><td></td></tr>
+<tr><th id="664">664</th><td>	<a class="macro" href="#82" title="" data-ref="_M/RW_WANTLOCK">RW_WANTLOCK</a>(rw, RW_READER);</td></tr>
+<tr><th id="665">665</th><td>	<a class="macro" href="#83" title="" data-ref="_M/RW_LOCKED">RW_LOCKED</a>(rw, RW_READER);</td></tr>
+<tr><th id="666">666</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, (rw-&gt;rw_owner &amp; RW_WRITE_LOCKED) == <var>0</var>);</td></tr>
+<tr><th id="667">667</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, RW_COUNT(rw) != <var>0</var>);</td></tr>
+<tr><th id="668">668</th><td>}</td></tr>
+<tr><th id="669">669</th><td></td></tr>
+<tr><th id="670">670</th><td><i>/*</i></td></tr>
+<tr><th id="671">671</th><td><i> * rw_tryupgrade:</i></td></tr>
+<tr><th id="672">672</th><td><i> *</i></td></tr>
+<tr><th id="673">673</th><td><i> *	Try to upgrade a read lock to a write lock.  We must be the</i></td></tr>
+<tr><th id="674">674</th><td><i> *	only reader.</i></td></tr>
+<tr><th id="675">675</th><td><i> */</i></td></tr>
+<tr><th id="676">676</th><td><em>int</em></td></tr>
+<tr><th id="677">677</th><td><dfn class="decl def fn" id="rw_tryupgrade" title='rw_tryupgrade' data-ref="rw_tryupgrade" data-ref-filename="rw_tryupgrade">rw_tryupgrade</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col4 decl" id="64rw" title='rw' data-type='krwlock_t *' data-ref="64rw" data-ref-filename="64rw">rw</dfn>)</td></tr>
+<tr><th id="678">678</th><td>{</td></tr>
+<tr><th id="679">679</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col5 decl" id="65owner" title='owner' data-type='uintptr_t' data-ref="65owner" data-ref-filename="65owner">owner</dfn>, <dfn class="local col6 decl" id="66curthread" title='curthread' data-type='uintptr_t' data-ref="66curthread" data-ref-filename="66curthread">curthread</dfn>, <dfn class="local col7 decl" id="67newown" title='newown' data-type='uintptr_t' data-ref="67newown" data-ref-filename="67newown">newown</dfn>, <dfn class="local col8 decl" id="68next" title='next' data-type='uintptr_t' data-ref="68next" data-ref-filename="68next">next</dfn>;</td></tr>
+<tr><th id="680">680</th><td></td></tr>
+<tr><th id="681">681</th><td>	<a class="local col6 ref" href="#66curthread" title='curthread' data-ref="66curthread" data-ref-filename="66curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="682">682</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) rw_abort(__func__, 682, rw, &quot;assertion failed: &quot; &quot;curthread != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>, <a class="local col6 ref" href="#66curthread" title='curthread' data-ref="66curthread" data-ref-filename="66curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="683">683</th><td>	<a class="macro" href="#95" title="do { if (__builtin_expect((!(rw_read_held(rw))) != 0, 0)) rw_abort(__func__, 683, rw, &quot;assertion failed: &quot; &quot;rw_read_held(rw)&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>, <a class="ref fn" href="#rw_read_held" title='rw_read_held' data-ref="rw_read_held" data-ref-filename="rw_read_held">rw_read_held</a>(<a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>));</td></tr>
+<tr><th id="684">684</th><td></td></tr>
+<tr><th id="685">685</th><td>	<b>for</b> (<a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a> = <a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;; <a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a> = <a class="local col8 ref" href="#68next" title='next' data-ref="68next" data-ref-filename="68next">next</a>) {</td></tr>
+<tr><th id="686">686</th><td>		<a class="macro" href="#95" title="do { if (__builtin_expect((!((owner &amp; 0x04UL) == 0)) != 0, 0)) rw_abort(__func__, 686, rw, &quot;assertion failed: &quot; &quot;(owner &amp; RW_WRITE_LOCKED) == 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>, (<a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>) == <var>0</var>);</td></tr>
+<tr><th id="687">687</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect(((owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4))) != (1UL &lt;&lt; 4)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>((<a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>) != <a class="macro" href="../sys/rwlock.h.html#85" title="(1UL &lt;&lt; 4)" data-ref="_M/RW_READ_INCR">RW_READ_INCR</a>)) {</td></tr>
+<tr><th id="688">688</th><td>			<a class="macro" href="#95" title="do { if (__builtin_expect((!((owner &amp; ((uintptr_t)-(1UL &lt;&lt; 4))) != 0)) != 0, 0)) rw_abort(__func__, 688, rw, &quot;assertion failed: &quot; &quot;(owner &amp; RW_THREAD) != 0&quot;);} while ( 0)" data-ref="_M/RW_ASSERT">RW_ASSERT</a>(<a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>, (<a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>) != <var>0</var>);</td></tr>
+<tr><th id="689">689</th><td>			<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="690">690</th><td>		}</td></tr>
+<tr><th id="691">691</th><td>		<a class="local col7 ref" href="#67newown" title='newown' data-ref="67newown" data-ref-filename="67newown">newown</a> = <a class="local col6 ref" href="#66curthread" title='curthread' data-ref="66curthread" data-ref-filename="66curthread">curthread</a> | <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | (<a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a> &amp; ~<a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>);</td></tr>
+<tr><th id="692">692</th><td>		<a class="local col8 ref" href="#68next" title='next' data-ref="68next" data-ref-filename="68next">next</a> = <a class="tu ref fn" href="#rw_cas" title='rw_cas' data-use='c' data-ref="rw_cas" data-ref-filename="rw_cas">rw_cas</a>(<a class="local col4 ref" href="#64rw" title='rw' data-ref="64rw" data-ref-filename="64rw">rw</a>, <a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a>, <a class="local col7 ref" href="#67newown" title='newown' data-ref="67newown" data-ref-filename="67newown">newown</a>);</td></tr>
+<tr><th id="693">693</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#487" title="__builtin_expect((next == owner) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>(<a class="local col8 ref" href="#68next" title='next' data-ref="68next" data-ref-filename="68next">next</a> == <a class="local col5 ref" href="#65owner" title='owner' data-ref="65owner" data-ref-filename="65owner">owner</a>)) {</td></tr>
+<tr><th id="694">694</th><td>			<a class="ref fn" href="../sys/atomic.h.html#membar_producer" title='membar_producer' data-ref="membar_producer" data-ref-filename="membar_producer">membar_producer</a>();</td></tr>
+<tr><th id="695">695</th><td>			<b>break</b>;</td></tr>
+<tr><th id="696">696</th><td>		}</td></tr>
+<tr><th id="697">697</th><td>	}</td></tr>
+<tr><th id="698">698</th><td></td></tr>
+<tr><th id="699">699</th><td>	<a class="macro" href="#84" title="" data-ref="_M/RW_UNLOCKED">RW_UNLOCKED</a>(rw, RW_READER);</td></tr>
+<tr><th id="700">700</th><td>	<a class="macro" href="#82" title="" data-ref="_M/RW_WANTLOCK">RW_WANTLOCK</a>(rw, RW_WRITER);</td></tr>
+<tr><th id="701">701</th><td>	<a class="macro" href="#83" title="" data-ref="_M/RW_LOCKED">RW_LOCKED</a>(rw, RW_WRITER);</td></tr>
+<tr><th id="702">702</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, rw-&gt;rw_owner &amp; RW_WRITE_LOCKED);</td></tr>
+<tr><th id="703">703</th><td>	<a class="macro" href="#85" title="" data-ref="_M/RW_DASSERT">RW_DASSERT</a>(rw, RW_OWNER(rw) == curthread);</td></tr>
+<tr><th id="704">704</th><td></td></tr>
+<tr><th id="705">705</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="706">706</th><td>}</td></tr>
+<tr><th id="707">707</th><td></td></tr>
+<tr><th id="708">708</th><td><i>/*</i></td></tr>
+<tr><th id="709">709</th><td><i> * rw_read_held:</i></td></tr>
+<tr><th id="710">710</th><td><i> *</i></td></tr>
+<tr><th id="711">711</th><td><i> *	Returns true if the rwlock is held for reading.  Must only be</i></td></tr>
+<tr><th id="712">712</th><td><i> *	used for diagnostic assertions, and never be used to make</i></td></tr>
+<tr><th id="713">713</th><td><i> * 	decisions about how to use a rwlock.</i></td></tr>
+<tr><th id="714">714</th><td><i> */</i></td></tr>
+<tr><th id="715">715</th><td><em>int</em></td></tr>
+<tr><th id="716">716</th><td><dfn class="decl def fn" id="rw_read_held" title='rw_read_held' data-ref="rw_read_held" data-ref-filename="rw_read_held">rw_read_held</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col9 decl" id="69rw" title='rw' data-type='krwlock_t *' data-ref="69rw" data-ref-filename="69rw">rw</dfn>)</td></tr>
+<tr><th id="717">717</th><td>{</td></tr>
+<tr><th id="718">718</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col0 decl" id="70owner" title='owner' data-type='uintptr_t' data-ref="70owner" data-ref-filename="70owner">owner</dfn>;</td></tr>
+<tr><th id="719">719</th><td></td></tr>
+<tr><th id="720">720</th><td>	<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="721">721</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="722">722</th><td>	<b>if</b> (<a class="local col9 ref" href="#69rw" title='rw' data-ref="69rw" data-ref-filename="69rw">rw</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="723">723</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="724">724</th><td>	<a class="local col0 ref" href="#70owner" title='owner' data-ref="70owner" data-ref-filename="70owner">owner</a> = <a class="local col9 ref" href="#69rw" title='rw' data-ref="69rw" data-ref-filename="69rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="725">725</th><td>	<b>return</b> (<a class="local col0 ref" href="#70owner" title='owner' data-ref="70owner" data-ref-filename="70owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>) == <var>0</var> &amp;&amp; (<a class="local col0 ref" href="#70owner" title='owner' data-ref="70owner" data-ref-filename="70owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>) != <var>0</var>;</td></tr>
+<tr><th id="726">726</th><td>}</td></tr>
+<tr><th id="727">727</th><td></td></tr>
+<tr><th id="728">728</th><td><i>/*</i></td></tr>
+<tr><th id="729">729</th><td><i> * rw_write_held:</i></td></tr>
+<tr><th id="730">730</th><td><i> *</i></td></tr>
+<tr><th id="731">731</th><td><i> *	Returns true if the rwlock is held for writing.  Must only be</i></td></tr>
+<tr><th id="732">732</th><td><i> *	used for diagnostic assertions, and never be used to make</i></td></tr>
+<tr><th id="733">733</th><td><i> *	decisions about how to use a rwlock.</i></td></tr>
+<tr><th id="734">734</th><td><i> */</i></td></tr>
+<tr><th id="735">735</th><td><em>int</em></td></tr>
+<tr><th id="736">736</th><td><dfn class="decl def fn" id="rw_write_held" title='rw_write_held' data-ref="rw_write_held" data-ref-filename="rw_write_held">rw_write_held</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col1 decl" id="71rw" title='rw' data-type='krwlock_t *' data-ref="71rw" data-ref-filename="71rw">rw</dfn>)</td></tr>
+<tr><th id="737">737</th><td>{</td></tr>
+<tr><th id="738">738</th><td></td></tr>
+<tr><th id="739">739</th><td>	<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="740">740</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="741">741</th><td>	<b>if</b> (<a class="local col1 ref" href="#71rw" title='rw' data-ref="71rw" data-ref-filename="71rw">rw</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="742">742</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="743">743</th><td>	<b>return</b> (<a class="local col1 ref" href="#71rw" title='rw' data-ref="71rw" data-ref-filename="71rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a> &amp; (<a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>)) ==</td></tr>
+<tr><th id="744">744</th><td>	    (<a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a> | (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="745">745</th><td>}</td></tr>
+<tr><th id="746">746</th><td></td></tr>
+<tr><th id="747">747</th><td><i>/*</i></td></tr>
+<tr><th id="748">748</th><td><i> * rw_lock_held:</i></td></tr>
+<tr><th id="749">749</th><td><i> *</i></td></tr>
+<tr><th id="750">750</th><td><i> *	Returns true if the rwlock is held for reading or writing.  Must</i></td></tr>
+<tr><th id="751">751</th><td><i> *	only be used for diagnostic assertions, and never be used to make</i></td></tr>
+<tr><th id="752">752</th><td><i> *	decisions about how to use a rwlock.</i></td></tr>
+<tr><th id="753">753</th><td><i> */</i></td></tr>
+<tr><th id="754">754</th><td><em>int</em></td></tr>
+<tr><th id="755">755</th><td><dfn class="decl def fn" id="rw_lock_held" title='rw_lock_held' data-ref="rw_lock_held" data-ref-filename="rw_lock_held">rw_lock_held</dfn>(<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col2 decl" id="72rw" title='rw' data-type='krwlock_t *' data-ref="72rw" data-ref-filename="72rw">rw</dfn>)</td></tr>
+<tr><th id="756">756</th><td>{</td></tr>
+<tr><th id="757">757</th><td></td></tr>
+<tr><th id="758">758</th><td>	<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="759">759</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="760">760</th><td>	<b>if</b> (<a class="local col2 ref" href="#72rw" title='rw' data-ref="72rw" data-ref-filename="72rw">rw</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="761">761</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="762">762</th><td>	<b>return</b> (<a class="local col2 ref" href="#72rw" title='rw' data-ref="72rw" data-ref-filename="72rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>) != <var>0</var>;</td></tr>
+<tr><th id="763">763</th><td>}</td></tr>
+<tr><th id="764">764</th><td></td></tr>
+<tr><th id="765">765</th><td><i  data-doc="rw_owner">/*</i></td></tr>
+<tr><th id="766">766</th><td><i  data-doc="rw_owner"> * rw_owner:</i></td></tr>
+<tr><th id="767">767</th><td><i  data-doc="rw_owner"> *</i></td></tr>
+<tr><th id="768">768</th><td><i  data-doc="rw_owner"> *	Return the current owner of an RW lock, but only if it is write</i></td></tr>
+<tr><th id="769">769</th><td><i  data-doc="rw_owner"> *	held.  Used for priority inheritance.</i></td></tr>
+<tr><th id="770">770</th><td><i  data-doc="rw_owner"> */</i></td></tr>
+<tr><th id="771">771</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *</td></tr>
+<tr><th id="772">772</th><td><dfn class="tu decl def fn" id="rw_owner" title='rw_owner' data-type='lwp_t * rw_owner(wchan_t obj)' data-ref="rw_owner" data-ref-filename="rw_owner">rw_owner</dfn>(<a class="typedef" href="../sys/syncobj.h.html#wchan_t" title='wchan_t' data-type='const volatile void *' data-ref="wchan_t" data-ref-filename="wchan_t">wchan_t</a> <dfn class="local col3 decl" id="73obj" title='obj' data-type='wchan_t' data-ref="73obj" data-ref-filename="73obj">obj</dfn>)</td></tr>
+<tr><th id="773">773</th><td>{</td></tr>
+<tr><th id="774">774</th><td>	<a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col4 decl" id="74rw" title='rw' data-type='krwlock_t *' data-ref="74rw" data-ref-filename="74rw">rw</dfn> = (<em>void</em> *)(<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="local col3 ref" href="#73obj" title='obj' data-ref="73obj" data-ref-filename="73obj">obj</a>; <i>/* discard qualifiers */</i></td></tr>
+<tr><th id="775">775</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col5 decl" id="75owner" title='owner' data-type='uintptr_t' data-ref="75owner" data-ref-filename="75owner">owner</dfn> = <a class="local col4 ref" href="#74rw" title='rw' data-ref="74rw" data-ref-filename="74rw">rw</a>-&gt;<a class="ref field" href="../arch/x86/include/rwlock.h.html#krwlock::rw_owner" title='krwlock::rw_owner' data-ref="krwlock::rw_owner" data-ref-filename="krwlock..rw_owner">rw_owner</a>;</td></tr>
+<tr><th id="776">776</th><td></td></tr>
+<tr><th id="777">777</th><td>	<b>if</b> ((<a class="local col5 ref" href="#75owner" title='owner' data-ref="75owner" data-ref-filename="75owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#77" title="0x04UL" data-ref="_M/RW_WRITE_LOCKED">RW_WRITE_LOCKED</a>) == <var>0</var>)</td></tr>
+<tr><th id="778">778</th><td>		<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="779">779</th><td></td></tr>
+<tr><th id="780">780</th><td>	<b>return</b> (<em>void</em> *)(<a class="local col5 ref" href="#75owner" title='owner' data-ref="75owner" data-ref-filename="75owner">owner</a> &amp; <a class="macro" href="../sys/rwlock.h.html#86" title="((uintptr_t)-(1UL &lt;&lt; 4))" data-ref="_M/RW_THREAD">RW_THREAD</a>);</td></tr>
+<tr><th id="781">781</th><td>}</td></tr>
+<tr><th id="782">782</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

@@ -1,0 +1,523 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>locks.c source code [netbsd/sys/rump/librump/rumpkern/locks.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/rump/librump/rumpkern/locks.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>rump</a>/<a href='..'>librump</a>/<a href='./'>rumpkern</a>/<a href='locks.c.html'>locks.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: locks.c,v 1.80 2018/02/05 05:00:48 ozaki-r Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007-2011 Antti Kantee.  All Rights Reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="7">7</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="8">8</th><td><i> * are met:</i></td></tr>
+<tr><th id="9">9</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="10">10</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="11">11</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="12">12</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="13">13</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="14">14</th><td><i> *</i></td></tr>
+<tr><th id="15">15</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS</i></td></tr>
+<tr><th id="16">16</th><td><i> * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</i></td></tr>
+<tr><th id="17">17</th><td><i> * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE</i></td></tr>
+<tr><th id="18">18</th><td><i> * DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="19">19</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="20">20</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR</i></td></tr>
+<tr><th id="21">21</th><td><i> * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="22">22</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="23">23</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="24">24</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="26">26</th><td><i> */</i></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="29">29</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: locks.c,v 1.80 2018/02/05 05:00:48 ozaki-r Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: locks.c,v 1.80 2018/02/05 05:00:48 ozaki-r Exp $"</q>);</td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><u>#include <a href="../../../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="../../../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="33">33</th><td><u>#include <a href="../../../sys/mutex.h.html">&lt;sys/mutex.h&gt;</a></u></td></tr>
+<tr><th id="34">34</th><td><u>#include <a href="../../../sys/rwlock.h.html">&lt;sys/rwlock.h&gt;</a></u></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="../../include/rump-sys/kern.h.html">&lt;rump-sys/kern.h&gt;</a></u></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="../../include/rump/rumpuser.h.html">&lt;rump/rumpuser.h&gt;</a></u></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#<span data-ppcond="40">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="41">41</th><td><em>const</em> <em>int</em> rump_lockdebug = <var>1</var>;</td></tr>
+<tr><th id="42">42</th><td><u>#<span data-ppcond="40">else</span></u></td></tr>
+<tr><th id="43">43</th><td><em>const</em> <em>int</em> <dfn class="decl def" id="rump_lockdebug" title='rump_lockdebug' data-ref="rump_lockdebug" data-ref-filename="rump_lockdebug">rump_lockdebug</dfn> = <var>0</var>;</td></tr>
+<tr><th id="44">44</th><td><u>#<span data-ppcond="40">endif</span></u></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><i>/*</i></td></tr>
+<tr><th id="47">47</th><td><i> * Simple lockdebug.  If it's compiled in, it's always active.</i></td></tr>
+<tr><th id="48">48</th><td><i> * Currently available only for mtx/rwlock.</i></td></tr>
+<tr><th id="49">49</th><td><i> */</i></td></tr>
+<tr><th id="50">50</th><td><u>#<span data-ppcond="50">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="51">51</th><td><u>#include &lt;sys/lockdebug.h&gt;</u></td></tr>
+<tr><th id="52">52</th><td></td></tr>
+<tr><th id="53">53</th><td><em>static</em> lockops_t mutex_spin_lockops = {</td></tr>
+<tr><th id="54">54</th><td>	.lo_name = <q>"mutex"</q>,</td></tr>
+<tr><th id="55">55</th><td>	.lo_type = LOCKOPS_SPIN,</td></tr>
+<tr><th id="56">56</th><td>	.lo_dump = NULL,</td></tr>
+<tr><th id="57">57</th><td>};</td></tr>
+<tr><th id="58">58</th><td><em>static</em> lockops_t mutex_adaptive_lockops = {</td></tr>
+<tr><th id="59">59</th><td>	.lo_name = <q>"mutex"</q>,</td></tr>
+<tr><th id="60">60</th><td>	.lo_type = LOCKOPS_SLEEP,</td></tr>
+<tr><th id="61">61</th><td>	.lo_dump = NULL,</td></tr>
+<tr><th id="62">62</th><td>};</td></tr>
+<tr><th id="63">63</th><td><em>static</em> lockops_t rw_lockops = {</td></tr>
+<tr><th id="64">64</th><td>	.lo_name = <q>"rwlock"</q>,</td></tr>
+<tr><th id="65">65</th><td>	.lo_type = LOCKOPS_SLEEP,</td></tr>
+<tr><th id="66">66</th><td>	.lo_dump = NULL,</td></tr>
+<tr><th id="67">67</th><td>};</td></tr>
+<tr><th id="68">68</th><td></td></tr>
+<tr><th id="69">69</th><td><u>#define ALLOCK(lock, ops, return_address)		\</u></td></tr>
+<tr><th id="70">70</th><td><u>	lockdebug_alloc(__func__, __LINE__, lock, ops,	\</u></td></tr>
+<tr><th id="71">71</th><td><u>	    return_address)</u></td></tr>
+<tr><th id="72">72</th><td><u>#define FREELOCK(lock)					\</u></td></tr>
+<tr><th id="73">73</th><td><u>	lockdebug_free(__func__, __LINE__, lock)</u></td></tr>
+<tr><th id="74">74</th><td><u>#define WANTLOCK(lock, shar)				\</u></td></tr>
+<tr><th id="75">75</th><td><u>	lockdebug_wantlock(__func__, __LINE__, lock,	\</u></td></tr>
+<tr><th id="76">76</th><td><u>	    (uintptr_t)__builtin_return_address(0), shar)</u></td></tr>
+<tr><th id="77">77</th><td><u>#define LOCKED(lock, shar)				\</u></td></tr>
+<tr><th id="78">78</th><td><u>	lockdebug_locked(__func__, __LINE__, lock, NULL,\</u></td></tr>
+<tr><th id="79">79</th><td><u>	    (uintptr_t)__builtin_return_address(0), shar)</u></td></tr>
+<tr><th id="80">80</th><td><u>#define UNLOCKED(lock, shar)				\</u></td></tr>
+<tr><th id="81">81</th><td><u>	lockdebug_unlocked(__func__, __LINE__, lock,	\</u></td></tr>
+<tr><th id="82">82</th><td><u>	    (uintptr_t)__builtin_return_address(0), shar)</u></td></tr>
+<tr><th id="83">83</th><td><u>#define BARRIER(lock, slp)				\</u></td></tr>
+<tr><th id="84">84</th><td><u>	lockdebug_barrier(__func__, __LINE__, lock, slp)</u></td></tr>
+<tr><th id="85">85</th><td><u>#<span data-ppcond="50">else</span></u></td></tr>
+<tr><th id="86">86</th><td><u>#define <dfn class="macro" id="_M/ALLOCK" data-ref="_M/ALLOCK">ALLOCK</dfn>(a, b, c)	do {} while (0)</u></td></tr>
+<tr><th id="87">87</th><td><u>#define <dfn class="macro" id="_M/FREELOCK" data-ref="_M/FREELOCK">FREELOCK</dfn>(a)	do {} while (0)</u></td></tr>
+<tr><th id="88">88</th><td><u>#define <dfn class="macro" id="_M/WANTLOCK" data-ref="_M/WANTLOCK">WANTLOCK</dfn>(a, b)	do {} while (0)</u></td></tr>
+<tr><th id="89">89</th><td><u>#define <dfn class="macro" id="_M/LOCKED" data-ref="_M/LOCKED">LOCKED</dfn>(a, b)	do {} while (0)</u></td></tr>
+<tr><th id="90">90</th><td><u>#define <dfn class="macro" id="_M/UNLOCKED" data-ref="_M/UNLOCKED">UNLOCKED</dfn>(a, b)	do {} while (0)</u></td></tr>
+<tr><th id="91">91</th><td><u>#define <dfn class="macro" id="_M/BARRIER" data-ref="_M/BARRIER">BARRIER</dfn>(a, b)	do {} while (0)</u></td></tr>
+<tr><th id="92">92</th><td><u>#<span data-ppcond="50">endif</span></u></td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><i>/*</i></td></tr>
+<tr><th id="95">95</th><td><i> * We map locks to pthread routines.  The difference between kernel</i></td></tr>
+<tr><th id="96">96</th><td><i> * and rumpuser routines is that while the kernel uses static</i></td></tr>
+<tr><th id="97">97</th><td><i> * storage, rumpuser allocates the object from the heap.  This</i></td></tr>
+<tr><th id="98">98</th><td><i> * indirection is necessary because we don't know the size of</i></td></tr>
+<tr><th id="99">99</th><td><i> * pthread objects here.  It is also beneficial, since we can</i></td></tr>
+<tr><th id="100">100</th><td><i> * be easily compatible with the kernel ABI because all kernel</i></td></tr>
+<tr><th id="101">101</th><td><i> * objects regardless of machine architecture are always at least</i></td></tr>
+<tr><th id="102">102</th><td><i> * the size of a pointer.  The downside, of course, is a performance</i></td></tr>
+<tr><th id="103">103</th><td><i> * penalty.</i></td></tr>
+<tr><th id="104">104</th><td><i> */</i></td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><u>#define <dfn class="macro" id="_M/RUMPMTX" data-ref="_M/RUMPMTX">RUMPMTX</dfn>(mtx) (*(struct <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_mtx" title='rumpuser_mtx' data-ref="rumpuser_mtx" data-ref-filename="rumpuser_mtx">rumpuser_mtx</a> *const*)(mtx))</u></td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td><em>void</em> <a class="decl fn" href="#_mutex_init" title='_mutex_init' data-ref="_mutex_init" data-ref-filename="_mutex_init">_mutex_init</a>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a>, <em>int</em>, <a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>);</td></tr>
+<tr><th id="109">109</th><td><em>void</em></td></tr>
+<tr><th id="110">110</th><td><dfn class="decl def fn" id="_mutex_init" title='_mutex_init' data-ref="_mutex_init" data-ref-filename="_mutex_init">_mutex_init</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col1 decl" id="1mtx" title='mtx' data-type='kmutex_t *' data-ref="1mtx" data-ref-filename="1mtx">mtx</dfn>, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a> <dfn class="local col2 decl" id="2type" title='type' data-type='kmutex_type_t' data-ref="2type" data-ref-filename="2type">type</dfn>, <em>int</em> <dfn class="local col3 decl" id="3ipl" title='ipl' data-type='int' data-ref="3ipl" data-ref-filename="3ipl">ipl</dfn>, <a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col4 decl" id="4return_address" title='return_address' data-type='uintptr_t' data-ref="4return_address" data-ref-filename="4return_address">return_address</dfn>)</td></tr>
+<tr><th id="111">111</th><td>{</td></tr>
+<tr><th id="112">112</th><td>	<em>int</em> <dfn class="local col5 decl" id="5ruflags" title='ruflags' data-type='int' data-ref="5ruflags" data-ref-filename="5ruflags">ruflags</dfn> = <a class="macro" href="../../include/rump/rumpuser.h.html#189" title="0x02" data-ref="_M/RUMPUSER_MTX_KMUTEX">RUMPUSER_MTX_KMUTEX</a>;</td></tr>
+<tr><th id="113">113</th><td>	<em>int</em> <dfn class="local col6 decl" id="6isspin" title='isspin' data-type='int' data-ref="6isspin" data-ref-filename="6isspin">isspin</dfn>;</td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#254" title="typedef char __ctassert10[ (sizeof(kmutex_t) &gt;= sizeof(void *)) ? 1 : -1] __attribute__((__unused__))" data-ref="_M/CTASSERT">CTASSERT</a>(<b>sizeof</b>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a>) &gt;= <b>sizeof</b>(<em>void</em> *));</td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td>	<i>/*</i></td></tr>
+<tr><th id="118">118</th><td><i>	 * Try to figure out if the caller wanted a spin mutex or</i></td></tr>
+<tr><th id="119">119</th><td><i>	 * not with this easy set of conditionals.  The difference</i></td></tr>
+<tr><th id="120">120</th><td><i>	 * between a spin mutex and an adaptive mutex for a rump</i></td></tr>
+<tr><th id="121">121</th><td><i>	 * kernel is that the hypervisor does not relinquish the</i></td></tr>
+<tr><th id="122">122</th><td><i>	 * rump kernel CPU context for a spin mutex.  The</i></td></tr>
+<tr><th id="123">123</th><td><i>	 * hypervisor itself may block even when "spinning".</i></td></tr>
+<tr><th id="124">124</th><td><i>	 */</i></td></tr>
+<tr><th id="125">125</th><td>	<b>if</b> (<a class="local col2 ref" href="#2type" title='type' data-ref="2type" data-ref-filename="2type">type</a> == <a class="enum" href="../../../sys/mutex.h.html#MUTEX_SPIN" title='MUTEX_SPIN' data-ref="MUTEX_SPIN" data-ref-filename="MUTEX_SPIN">MUTEX_SPIN</a>) {</td></tr>
+<tr><th id="126">126</th><td>		<a class="local col6 ref" href="#6isspin" title='isspin' data-ref="6isspin" data-ref-filename="6isspin">isspin</a> = <var>1</var>;</td></tr>
+<tr><th id="127">127</th><td>	} <b>else</b> <b>if</b> (<a class="local col3 ref" href="#3ipl" title='ipl' data-ref="3ipl" data-ref-filename="3ipl">ipl</a> == <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a> || <a class="local col3 ref" href="#3ipl" title='ipl' data-ref="3ipl" data-ref-filename="3ipl">ipl</a> == <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#9" title="0x2" data-ref="_M/IPL_SOFTCLOCK">IPL_SOFTCLOCK</a> ||</td></tr>
+<tr><th id="128">128</th><td>	    <a class="local col3 ref" href="#3ipl" title='ipl' data-ref="3ipl" data-ref-filename="3ipl">ipl</a> == <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#10" title="0x3" data-ref="_M/IPL_SOFTBIO">IPL_SOFTBIO</a> || <a class="local col3 ref" href="#3ipl" title='ipl' data-ref="3ipl" data-ref-filename="3ipl">ipl</a> == <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#11" title="0x4" data-ref="_M/IPL_SOFTNET">IPL_SOFTNET</a> ||</td></tr>
+<tr><th id="129">129</th><td>	    <a class="local col3 ref" href="#3ipl" title='ipl' data-ref="3ipl" data-ref-filename="3ipl">ipl</a> == <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#12" title="0x5" data-ref="_M/IPL_SOFTSERIAL">IPL_SOFTSERIAL</a>) {</td></tr>
+<tr><th id="130">130</th><td>		<a class="local col6 ref" href="#6isspin" title='isspin' data-ref="6isspin" data-ref-filename="6isspin">isspin</a> = <var>0</var>;</td></tr>
+<tr><th id="131">131</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="132">132</th><td>		<a class="local col6 ref" href="#6isspin" title='isspin' data-ref="6isspin" data-ref-filename="6isspin">isspin</a> = <var>1</var>;</td></tr>
+<tr><th id="133">133</th><td>	}</td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td>	<b>if</b> (<a class="local col6 ref" href="#6isspin" title='isspin' data-ref="6isspin" data-ref-filename="6isspin">isspin</a>)</td></tr>
+<tr><th id="136">136</th><td>		<a class="local col5 ref" href="#5ruflags" title='ruflags' data-ref="5ruflags" data-ref-filename="5ruflags">ruflags</a> |= <a class="macro" href="../../include/rump/rumpuser.h.html#188" title="0x01" data-ref="_M/RUMPUSER_MTX_SPIN">RUMPUSER_MTX_SPIN</a>;</td></tr>
+<tr><th id="137">137</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_init" title='rumpuser_mutex_init' data-ref="rumpuser_mutex_init" data-ref-filename="rumpuser_mutex_init">rumpuser_mutex_init</a>((<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_mtx" title='rumpuser_mtx' data-ref="rumpuser_mtx" data-ref-filename="rumpuser_mtx">rumpuser_mtx</a> **)<a class="local col1 ref" href="#1mtx" title='mtx' data-ref="1mtx" data-ref-filename="1mtx">mtx</a>, <a class="local col5 ref" href="#5ruflags" title='ruflags' data-ref="5ruflags" data-ref-filename="5ruflags">ruflags</a>);</td></tr>
+<tr><th id="138">138</th><td>	<b>if</b> (<a class="local col6 ref" href="#6isspin" title='isspin' data-ref="6isspin" data-ref-filename="6isspin">isspin</a>)</td></tr>
+<tr><th id="139">139</th><td>		<a class="macro" href="#86" title="do {} while (0)" data-ref="_M/ALLOCK">ALLOCK</a>(mtx, &amp;mutex_spin_lockops, return_address);</td></tr>
+<tr><th id="140">140</th><td>	<b>else</b></td></tr>
+<tr><th id="141">141</th><td>		<a class="macro" href="#86" title="do {} while (0)" data-ref="_M/ALLOCK">ALLOCK</a>(mtx, &amp;mutex_adaptive_lockops, return_address);</td></tr>
+<tr><th id="142">142</th><td>}</td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><em>void</em></td></tr>
+<tr><th id="145">145</th><td><dfn class="decl def fn" id="mutex_init" title='mutex_init' data-ref="mutex_init" data-ref-filename="mutex_init">mutex_init</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col7 decl" id="7mtx" title='mtx' data-type='kmutex_t *' data-ref="7mtx" data-ref-filename="7mtx">mtx</dfn>, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a> <dfn class="local col8 decl" id="8type" title='type' data-type='kmutex_type_t' data-ref="8type" data-ref-filename="8type">type</dfn>, <em>int</em> <dfn class="local col9 decl" id="9ipl" title='ipl' data-type='int' data-ref="9ipl" data-ref-filename="9ipl">ipl</dfn>)</td></tr>
+<tr><th id="146">146</th><td>{</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td>	<a class="ref fn" href="#_mutex_init" title='_mutex_init' data-ref="_mutex_init" data-ref-filename="_mutex_init">_mutex_init</a>(<a class="local col7 ref" href="#7mtx" title='mtx' data-ref="7mtx" data-ref-filename="7mtx">mtx</a>, <a class="local col8 ref" href="#8type" title='type' data-ref="8type" data-ref-filename="8type">type</a>, <a class="local col9 ref" href="#9ipl" title='ipl' data-ref="9ipl" data-ref-filename="9ipl">ipl</a>, (<a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref fn" href="#148" title='__builtin_return_address' data-ref="__builtin_return_address" data-ref-filename="__builtin_return_address">__builtin_return_address</a>(<var>0</var>));</td></tr>
+<tr><th id="149">149</th><td>}</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td><em>void</em></td></tr>
+<tr><th id="152">152</th><td><dfn class="decl def fn" id="mutex_destroy" title='mutex_destroy' data-ref="mutex_destroy" data-ref-filename="mutex_destroy">mutex_destroy</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col0 decl" id="10mtx" title='mtx' data-type='kmutex_t *' data-ref="10mtx" data-ref-filename="10mtx">mtx</dfn>)</td></tr>
+<tr><th id="153">153</th><td>{</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td>	<a class="macro" href="#87" title="do {} while (0)" data-ref="_M/FREELOCK">FREELOCK</a>(mtx);</td></tr>
+<tr><th id="156">156</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_destroy" title='rumpuser_mutex_destroy' data-ref="rumpuser_mutex_destroy" data-ref-filename="rumpuser_mutex_destroy">rumpuser_mutex_destroy</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col0 ref" href="#10mtx" title='mtx' data-ref="10mtx" data-ref-filename="10mtx">mtx</a>));</td></tr>
+<tr><th id="157">157</th><td>}</td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><em>void</em></td></tr>
+<tr><th id="160">160</th><td><dfn class="decl def fn" id="mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col1 decl" id="11mtx" title='mtx' data-type='kmutex_t *' data-ref="11mtx" data-ref-filename="11mtx">mtx</dfn>)</td></tr>
+<tr><th id="161">161</th><td>{</td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td>	<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(mtx, <var>0</var>);</td></tr>
+<tr><th id="164">164</th><td>	<b>if</b> (!<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_spin_p" title='rumpuser_mutex_spin_p' data-ref="rumpuser_mutex_spin_p" data-ref-filename="rumpuser_mutex_spin_p">rumpuser_mutex_spin_p</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col1 ref" href="#11mtx" title='mtx' data-ref="11mtx" data-ref-filename="11mtx">mtx</a>)))</td></tr>
+<tr><th id="165">165</th><td>		<a class="macro" href="#91" title="do {} while (0)" data-ref="_M/BARRIER">BARRIER</a>(mtx, <var>1</var>);</td></tr>
+<tr><th id="166">166</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter" title='rumpuser_mutex_enter' data-ref="rumpuser_mutex_enter" data-ref-filename="rumpuser_mutex_enter">rumpuser_mutex_enter</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col1 ref" href="#11mtx" title='mtx' data-ref="11mtx" data-ref-filename="11mtx">mtx</a>));</td></tr>
+<tr><th id="167">167</th><td>	<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(mtx, false);</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><em>void</em></td></tr>
+<tr><th id="171">171</th><td><dfn class="decl def fn" id="mutex_spin_enter" title='mutex_spin_enter' data-ref="mutex_spin_enter" data-ref-filename="mutex_spin_enter">mutex_spin_enter</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col2 decl" id="12mtx" title='mtx' data-type='kmutex_t *' data-ref="12mtx" data-ref-filename="12mtx">mtx</dfn>)</td></tr>
+<tr><th id="172">172</th><td>{</td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((rumpuser_mutex_spin_p((*(struct rumpuser_mtx *const*)(mtx))))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;rumpuser_mutex_spin_p(RUMPMTX(mtx))&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/locks.c&quot;, 174))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_spin_p" title='rumpuser_mutex_spin_p' data-ref="rumpuser_mutex_spin_p" data-ref-filename="rumpuser_mutex_spin_p">rumpuser_mutex_spin_p</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col2 ref" href="#12mtx" title='mtx' data-ref="12mtx" data-ref-filename="12mtx">mtx</a>)));</td></tr>
+<tr><th id="175">175</th><td>	<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(mtx, <var>0</var>);</td></tr>
+<tr><th id="176">176</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col2 ref" href="#12mtx" title='mtx' data-ref="12mtx" data-ref-filename="12mtx">mtx</a>));</td></tr>
+<tr><th id="177">177</th><td>	<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(mtx, false);</td></tr>
+<tr><th id="178">178</th><td>}</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td><em>int</em></td></tr>
+<tr><th id="181">181</th><td><dfn class="decl def fn" id="mutex_tryenter" title='mutex_tryenter' data-ref="mutex_tryenter" data-ref-filename="mutex_tryenter">mutex_tryenter</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="13mtx" title='mtx' data-type='kmutex_t *' data-ref="13mtx" data-ref-filename="13mtx">mtx</dfn>)</td></tr>
+<tr><th id="182">182</th><td>{</td></tr>
+<tr><th id="183">183</th><td>	<em>int</em> <dfn class="local col4 decl" id="14error" title='error' data-type='int' data-ref="14error" data-ref-filename="14error">error</dfn>;</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>	<a class="local col4 ref" href="#14error" title='error' data-ref="14error" data-ref-filename="14error">error</a> = <a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_tryenter" title='rumpuser_mutex_tryenter' data-ref="rumpuser_mutex_tryenter" data-ref-filename="rumpuser_mutex_tryenter">rumpuser_mutex_tryenter</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col3 ref" href="#13mtx" title='mtx' data-ref="13mtx" data-ref-filename="13mtx">mtx</a>));</td></tr>
+<tr><th id="186">186</th><td>	<b>if</b> (<a class="local col4 ref" href="#14error" title='error' data-ref="14error" data-ref-filename="14error">error</a> == <var>0</var>) {</td></tr>
+<tr><th id="187">187</th><td>		<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(mtx, <var>0</var>);</td></tr>
+<tr><th id="188">188</th><td>		<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(mtx, false);</td></tr>
+<tr><th id="189">189</th><td>	}</td></tr>
+<tr><th id="190">190</th><td>	<b>return</b> <a class="local col4 ref" href="#14error" title='error' data-ref="14error" data-ref-filename="14error">error</a> == <var>0</var>;</td></tr>
+<tr><th id="191">191</th><td>}</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td><em>void</em></td></tr>
+<tr><th id="194">194</th><td><dfn class="decl def fn" id="mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</dfn>(<a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col5 decl" id="15mtx" title='mtx' data-type='kmutex_t *' data-ref="15mtx" data-ref-filename="15mtx">mtx</dfn>)</td></tr>
+<tr><th id="195">195</th><td>{</td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td><u>#<span data-ppcond="197">ifndef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="198">198</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((mutex_owned(mtx))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;mutex_owned(mtx)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/locks.c&quot;, 198))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="#mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</a>(<a class="local col5 ref" href="#15mtx" title='mtx' data-ref="15mtx" data-ref-filename="15mtx">mtx</a>));</td></tr>
+<tr><th id="199">199</th><td><u>#<span data-ppcond="197">endif</span></u></td></tr>
+<tr><th id="200">200</th><td>	<a class="macro" href="#90" title="do {} while (0)" data-ref="_M/UNLOCKED">UNLOCKED</a>(mtx, false);</td></tr>
+<tr><th id="201">201</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col5 ref" href="#15mtx" title='mtx' data-ref="15mtx" data-ref-filename="15mtx">mtx</a>));</td></tr>
+<tr><th id="202">202</th><td>}</td></tr>
+<tr><th id="203">203</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#55" title="__asm(&quot;.global &quot; &quot;mutex_spin_exit&quot; &quot;\n&quot; &quot;mutex_spin_exit&quot; &quot; = &quot; &quot;mutex_exit&quot;);" data-ref="_M/__strong_alias">__strong_alias</a>(mutex_spin_exit,mutex_exit);</td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td><em>int</em></td></tr>
+<tr><th id="206">206</th><td><dfn class="decl def fn" id="mutex_ownable" title='mutex_ownable' data-ref="mutex_ownable" data-ref-filename="mutex_ownable">mutex_ownable</dfn>(<em>const</em> <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col6 decl" id="16mtx" title='mtx' data-type='const kmutex_t *' data-ref="16mtx" data-ref-filename="16mtx">mtx</dfn>)</td></tr>
+<tr><th id="207">207</th><td>{</td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td><u>#<span data-ppcond="209">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="210">210</th><td>	WANTLOCK(mtx, -<var>1</var>);</td></tr>
+<tr><th id="211">211</th><td><u>#<span data-ppcond="209">endif</span></u></td></tr>
+<tr><th id="212">212</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="213">213</th><td>}</td></tr>
+<tr><th id="214">214</th><td></td></tr>
+<tr><th id="215">215</th><td><em>int</em></td></tr>
+<tr><th id="216">216</th><td><dfn class="decl def fn" id="mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</dfn>(<em>const</em> <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col7 decl" id="17mtx" title='mtx' data-type='const kmutex_t *' data-ref="17mtx" data-ref-filename="17mtx">mtx</dfn>)</td></tr>
+<tr><th id="217">217</th><td>{</td></tr>
+<tr><th id="218">218</th><td></td></tr>
+<tr><th id="219">219</th><td>	<b>return</b> <a class="ref fn" href="#mutex_owner" title='mutex_owner' data-ref="mutex_owner" data-ref-filename="mutex_owner">mutex_owner</a>(<a class="local col7 ref" href="#17mtx" title='mtx' data-ref="17mtx" data-ref-filename="17mtx">mtx</a>) == <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="220">220</th><td>}</td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td><a class="typedef" href="../../../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *</td></tr>
+<tr><th id="223">223</th><td><dfn class="decl def fn" id="mutex_owner" title='mutex_owner' data-ref="mutex_owner" data-ref-filename="mutex_owner">mutex_owner</dfn>(<em>const</em> <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col8 decl" id="18mtx" title='mtx' data-type='const kmutex_t *' data-ref="18mtx" data-ref-filename="18mtx">mtx</dfn>)</td></tr>
+<tr><th id="224">224</th><td>{</td></tr>
+<tr><th id="225">225</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col9 decl" id="19l" title='l' data-type='struct lwp *' data-ref="19l" data-ref-filename="19l">l</dfn>;</td></tr>
+<tr><th id="226">226</th><td></td></tr>
+<tr><th id="227">227</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_owner" title='rumpuser_mutex_owner' data-ref="rumpuser_mutex_owner" data-ref-filename="rumpuser_mutex_owner">rumpuser_mutex_owner</a>(<a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col8 ref" href="#18mtx" title='mtx' data-ref="18mtx" data-ref-filename="18mtx">mtx</a>), &amp;<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>);</td></tr>
+<tr><th id="228">228</th><td>	<b>return</b> <a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>;</td></tr>
+<tr><th id="229">229</th><td>}</td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td><u>#define <dfn class="macro" id="_M/RUMPRW" data-ref="_M/RUMPRW">RUMPRW</dfn>(rw) (*(struct <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_rw" title='rumpuser_rw' data-ref="rumpuser_rw" data-ref-filename="rumpuser_rw">rumpuser_rw</a> **)(rw))</u></td></tr>
+<tr><th id="232">232</th><td></td></tr>
+<tr><th id="233">233</th><td><i  data-doc="krw2rumprw">/* reader/writer locks */</i></td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td><em>static</em> <b>enum</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumprwlock" title='rumprwlock' data-ref="rumprwlock" data-ref-filename="rumprwlock">rumprwlock</a></td></tr>
+<tr><th id="236">236</th><td><dfn class="tu decl def fn" id="krw2rumprw" title='krw2rumprw' data-type='enum rumprwlock krw2rumprw(const krw_t op)' data-ref="krw2rumprw" data-ref-filename="krw2rumprw">krw2rumprw</dfn>(<em>const</em> <a class="typedef" href="../../../sys/rwlock.h.html#krw_t" title='krw_t' data-type='enum krw_t' data-ref="krw_t" data-ref-filename="krw_t">krw_t</a> <dfn class="local col0 decl" id="20op" title='op' data-type='const krw_t' data-ref="20op" data-ref-filename="20op">op</dfn>)</td></tr>
+<tr><th id="237">237</th><td>{</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<b>switch</b> (<a class="local col0 ref" href="#20op" title='op' data-ref="20op" data-ref-filename="20op">op</a>) {</td></tr>
+<tr><th id="240">240</th><td>	<b>case</b> <a class="enum" href="../../../sys/rwlock.h.html#RW_READER" title='RW_READER' data-ref="RW_READER" data-ref-filename="RW_READER">RW_READER</a>:</td></tr>
+<tr><th id="241">241</th><td>		<b>return</b> <a class="enum" href="../../include/rump/rumpuser.h.html#RUMPUSER_RW_READER" title='RUMPUSER_RW_READER' data-ref="RUMPUSER_RW_READER" data-ref-filename="RUMPUSER_RW_READER">RUMPUSER_RW_READER</a>;</td></tr>
+<tr><th id="242">242</th><td>	<b>case</b> <a class="enum" href="../../../sys/rwlock.h.html#RW_WRITER" title='RW_WRITER' data-ref="RW_WRITER" data-ref-filename="RW_WRITER">RW_WRITER</a>:</td></tr>
+<tr><th id="243">243</th><td>		<b>return</b> <a class="enum" href="../../include/rump/rumpuser.h.html#RUMPUSER_RW_WRITER" title='RUMPUSER_RW_WRITER' data-ref="RUMPUSER_RW_WRITER" data-ref-filename="RUMPUSER_RW_WRITER">RUMPUSER_RW_WRITER</a>;</td></tr>
+<tr><th id="244">244</th><td>	<b>default</b>:</td></tr>
+<tr><th id="245">245</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"unknown rwlock type"</q>);</td></tr>
+<tr><th id="246">246</th><td>	}</td></tr>
+<tr><th id="247">247</th><td>}</td></tr>
+<tr><th id="248">248</th><td></td></tr>
+<tr><th id="249">249</th><td><em>void</em> <a class="decl fn" href="#_rw_init" title='_rw_init' data-ref="_rw_init" data-ref-filename="_rw_init">_rw_init</a>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *, <a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>);</td></tr>
+<tr><th id="250">250</th><td><em>void</em></td></tr>
+<tr><th id="251">251</th><td><dfn class="decl def fn" id="_rw_init" title='_rw_init' data-ref="_rw_init" data-ref-filename="_rw_init">_rw_init</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col1 decl" id="21rw" title='rw' data-type='krwlock_t *' data-ref="21rw" data-ref-filename="21rw">rw</dfn>, <a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col2 decl" id="22return_address" title='return_address' data-type='uintptr_t' data-ref="22return_address" data-ref-filename="22return_address">return_address</dfn>)</td></tr>
+<tr><th id="252">252</th><td>{</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#254" title="typedef char __ctassert12[ (sizeof(krwlock_t) &gt;= sizeof(void *)) ? 1 : -1] __attribute__((__unused__))" data-ref="_M/CTASSERT">CTASSERT</a>(<b>sizeof</b>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a>) &gt;= <b>sizeof</b>(<em>void</em> *));</td></tr>
+<tr><th id="255">255</th><td></td></tr>
+<tr><th id="256">256</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_init" title='rumpuser_rw_init' data-ref="rumpuser_rw_init" data-ref-filename="rumpuser_rw_init">rumpuser_rw_init</a>((<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_rw" title='rumpuser_rw' data-ref="rumpuser_rw" data-ref-filename="rumpuser_rw">rumpuser_rw</a> **)<a class="local col1 ref" href="#21rw" title='rw' data-ref="21rw" data-ref-filename="21rw">rw</a>);</td></tr>
+<tr><th id="257">257</th><td>	<a class="macro" href="#86" title="do {} while (0)" data-ref="_M/ALLOCK">ALLOCK</a>(rw, &amp;rw_lockops, return_address);</td></tr>
+<tr><th id="258">258</th><td>}</td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td><em>void</em></td></tr>
+<tr><th id="261">261</th><td><dfn class="decl def fn" id="rw_init" title='rw_init' data-ref="rw_init" data-ref-filename="rw_init">rw_init</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col3 decl" id="23rw" title='rw' data-type='krwlock_t *' data-ref="23rw" data-ref-filename="23rw">rw</dfn>)</td></tr>
+<tr><th id="262">262</th><td>{</td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td>	<a class="ref fn" href="#_rw_init" title='_rw_init' data-ref="_rw_init" data-ref-filename="_rw_init">_rw_init</a>(<a class="local col3 ref" href="#23rw" title='rw' data-ref="23rw" data-ref-filename="23rw">rw</a>, (<a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref fn" href="#148" title='__builtin_return_address' data-ref="__builtin_return_address" data-ref-filename="__builtin_return_address">__builtin_return_address</a>(<var>0</var>));</td></tr>
+<tr><th id="265">265</th><td>}</td></tr>
+<tr><th id="266">266</th><td></td></tr>
+<tr><th id="267">267</th><td><em>void</em></td></tr>
+<tr><th id="268">268</th><td><dfn class="decl def fn" id="rw_destroy" title='rw_destroy' data-ref="rw_destroy" data-ref-filename="rw_destroy">rw_destroy</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col4 decl" id="24rw" title='rw' data-type='krwlock_t *' data-ref="24rw" data-ref-filename="24rw">rw</dfn>)</td></tr>
+<tr><th id="269">269</th><td>{</td></tr>
+<tr><th id="270">270</th><td></td></tr>
+<tr><th id="271">271</th><td>	<a class="macro" href="#87" title="do {} while (0)" data-ref="_M/FREELOCK">FREELOCK</a>(rw);</td></tr>
+<tr><th id="272">272</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_destroy" title='rumpuser_rw_destroy' data-ref="rumpuser_rw_destroy" data-ref-filename="rumpuser_rw_destroy">rumpuser_rw_destroy</a>(<a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col4 ref" href="#24rw" title='rw' data-ref="24rw" data-ref-filename="24rw">rw</a>));</td></tr>
+<tr><th id="273">273</th><td>}</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td><em>void</em></td></tr>
+<tr><th id="276">276</th><td><dfn class="decl def fn" id="rw_enter" title='rw_enter' data-ref="rw_enter" data-ref-filename="rw_enter">rw_enter</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col5 decl" id="25rw" title='rw' data-type='krwlock_t *' data-ref="25rw" data-ref-filename="25rw">rw</dfn>, <em>const</em> <a class="typedef" href="../../../sys/rwlock.h.html#krw_t" title='krw_t' data-type='enum krw_t' data-ref="krw_t" data-ref-filename="krw_t">krw_t</a> <dfn class="local col6 decl" id="26op" title='op' data-type='const krw_t' data-ref="26op" data-ref-filename="26op">op</dfn>)</td></tr>
+<tr><th id="277">277</th><td>{</td></tr>
+<tr><th id="278">278</th><td></td></tr>
+<tr><th id="279">279</th><td>	<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(rw, op == RW_READER);</td></tr>
+<tr><th id="280">280</th><td>	<a class="macro" href="#91" title="do {} while (0)" data-ref="_M/BARRIER">BARRIER</a>(rw, <var>1</var>);</td></tr>
+<tr><th id="281">281</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_enter" title='rumpuser_rw_enter' data-ref="rumpuser_rw_enter" data-ref-filename="rumpuser_rw_enter">rumpuser_rw_enter</a>(<a class="tu ref fn" href="#krw2rumprw" title='krw2rumprw' data-use='c' data-ref="krw2rumprw" data-ref-filename="krw2rumprw">krw2rumprw</a>(<a class="local col6 ref" href="#26op" title='op' data-ref="26op" data-ref-filename="26op">op</a>), <a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col5 ref" href="#25rw" title='rw' data-ref="25rw" data-ref-filename="25rw">rw</a>));</td></tr>
+<tr><th id="282">282</th><td>	<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(rw, op == RW_READER);</td></tr>
+<tr><th id="283">283</th><td>}</td></tr>
+<tr><th id="284">284</th><td></td></tr>
+<tr><th id="285">285</th><td><em>int</em></td></tr>
+<tr><th id="286">286</th><td><dfn class="decl def fn" id="rw_tryenter" title='rw_tryenter' data-ref="rw_tryenter" data-ref-filename="rw_tryenter">rw_tryenter</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col7 decl" id="27rw" title='rw' data-type='krwlock_t *' data-ref="27rw" data-ref-filename="27rw">rw</dfn>, <em>const</em> <a class="typedef" href="../../../sys/rwlock.h.html#krw_t" title='krw_t' data-type='enum krw_t' data-ref="krw_t" data-ref-filename="krw_t">krw_t</a> <dfn class="local col8 decl" id="28op" title='op' data-type='const krw_t' data-ref="28op" data-ref-filename="28op">op</dfn>)</td></tr>
+<tr><th id="287">287</th><td>{</td></tr>
+<tr><th id="288">288</th><td>	<em>int</em> <dfn class="local col9 decl" id="29error" title='error' data-type='int' data-ref="29error" data-ref-filename="29error">error</dfn>;</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td>	<a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a> = <a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_tryenter" title='rumpuser_rw_tryenter' data-ref="rumpuser_rw_tryenter" data-ref-filename="rumpuser_rw_tryenter">rumpuser_rw_tryenter</a>(<a class="tu ref fn" href="#krw2rumprw" title='krw2rumprw' data-use='c' data-ref="krw2rumprw" data-ref-filename="krw2rumprw">krw2rumprw</a>(<a class="local col8 ref" href="#28op" title='op' data-ref="28op" data-ref-filename="28op">op</a>), <a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col7 ref" href="#27rw" title='rw' data-ref="27rw" data-ref-filename="27rw">rw</a>));</td></tr>
+<tr><th id="291">291</th><td>	<b>if</b> (<a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a> == <var>0</var>) {</td></tr>
+<tr><th id="292">292</th><td>		<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(rw, op == RW_READER);</td></tr>
+<tr><th id="293">293</th><td>		<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(rw, op == RW_READER);</td></tr>
+<tr><th id="294">294</th><td>	}</td></tr>
+<tr><th id="295">295</th><td>	<b>return</b> <a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a> == <var>0</var>;</td></tr>
+<tr><th id="296">296</th><td>}</td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td><em>void</em></td></tr>
+<tr><th id="299">299</th><td><dfn class="decl def fn" id="rw_exit" title='rw_exit' data-ref="rw_exit" data-ref-filename="rw_exit">rw_exit</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col0 decl" id="30rw" title='rw' data-type='krwlock_t *' data-ref="30rw" data-ref-filename="30rw">rw</dfn>)</td></tr>
+<tr><th id="300">300</th><td>{</td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td><u>#<span data-ppcond="302">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="303">303</th><td>	bool shared = !rw_write_held(rw);</td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td>	<b>if</b> (shared)</td></tr>
+<tr><th id="306">306</th><td>		KASSERT(rw_read_held(rw));</td></tr>
+<tr><th id="307">307</th><td>	UNLOCKED(rw, shared);</td></tr>
+<tr><th id="308">308</th><td><u>#<span data-ppcond="302">endif</span></u></td></tr>
+<tr><th id="309">309</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_exit" title='rumpuser_rw_exit' data-ref="rumpuser_rw_exit" data-ref-filename="rumpuser_rw_exit">rumpuser_rw_exit</a>(<a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col0 ref" href="#30rw" title='rw' data-ref="30rw" data-ref-filename="30rw">rw</a>));</td></tr>
+<tr><th id="310">310</th><td>}</td></tr>
+<tr><th id="311">311</th><td></td></tr>
+<tr><th id="312">312</th><td><em>int</em></td></tr>
+<tr><th id="313">313</th><td><dfn class="decl def fn" id="rw_tryupgrade" title='rw_tryupgrade' data-ref="rw_tryupgrade" data-ref-filename="rw_tryupgrade">rw_tryupgrade</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col1 decl" id="31rw" title='rw' data-type='krwlock_t *' data-ref="31rw" data-ref-filename="31rw">rw</dfn>)</td></tr>
+<tr><th id="314">314</th><td>{</td></tr>
+<tr><th id="315">315</th><td>	<em>int</em> <dfn class="local col2 decl" id="32rv" title='rv' data-type='int' data-ref="32rv" data-ref-filename="32rv">rv</dfn>;</td></tr>
+<tr><th id="316">316</th><td></td></tr>
+<tr><th id="317">317</th><td>	<a class="local col2 ref" href="#32rv" title='rv' data-ref="32rv" data-ref-filename="32rv">rv</a> = <a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_tryupgrade" title='rumpuser_rw_tryupgrade' data-ref="rumpuser_rw_tryupgrade" data-ref-filename="rumpuser_rw_tryupgrade">rumpuser_rw_tryupgrade</a>(<a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col1 ref" href="#31rw" title='rw' data-ref="31rw" data-ref-filename="31rw">rw</a>));</td></tr>
+<tr><th id="318">318</th><td>	<b>if</b> (<a class="local col2 ref" href="#32rv" title='rv' data-ref="32rv" data-ref-filename="32rv">rv</a> == <var>0</var>) {</td></tr>
+<tr><th id="319">319</th><td>		<a class="macro" href="#90" title="do {} while (0)" data-ref="_M/UNLOCKED">UNLOCKED</a>(rw, <var>1</var>);</td></tr>
+<tr><th id="320">320</th><td>		<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(rw, <var>0</var>);</td></tr>
+<tr><th id="321">321</th><td>		<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(rw, <var>0</var>);</td></tr>
+<tr><th id="322">322</th><td>	}</td></tr>
+<tr><th id="323">323</th><td>	<b>return</b> <a class="local col2 ref" href="#32rv" title='rv' data-ref="32rv" data-ref-filename="32rv">rv</a> == <var>0</var>;</td></tr>
+<tr><th id="324">324</th><td>}</td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td><em>void</em></td></tr>
+<tr><th id="327">327</th><td><dfn class="decl def fn" id="rw_downgrade" title='rw_downgrade' data-ref="rw_downgrade" data-ref-filename="rw_downgrade">rw_downgrade</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col3 decl" id="33rw" title='rw' data-type='krwlock_t *' data-ref="33rw" data-ref-filename="33rw">rw</dfn>)</td></tr>
+<tr><th id="328">328</th><td>{</td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_downgrade" title='rumpuser_rw_downgrade' data-ref="rumpuser_rw_downgrade" data-ref-filename="rumpuser_rw_downgrade">rumpuser_rw_downgrade</a>(<a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col3 ref" href="#33rw" title='rw' data-ref="33rw" data-ref-filename="33rw">rw</a>));</td></tr>
+<tr><th id="331">331</th><td>	<a class="macro" href="#90" title="do {} while (0)" data-ref="_M/UNLOCKED">UNLOCKED</a>(rw, <var>0</var>);</td></tr>
+<tr><th id="332">332</th><td>	<a class="macro" href="#88" title="do {} while (0)" data-ref="_M/WANTLOCK">WANTLOCK</a>(rw, <var>1</var>);</td></tr>
+<tr><th id="333">333</th><td>	<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(rw, <var>1</var>);</td></tr>
+<tr><th id="334">334</th><td>}</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td><em>int</em></td></tr>
+<tr><th id="337">337</th><td><dfn class="decl def fn" id="rw_read_held" title='rw_read_held' data-ref="rw_read_held" data-ref-filename="rw_read_held">rw_read_held</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col4 decl" id="34rw" title='rw' data-type='krwlock_t *' data-ref="34rw" data-ref-filename="34rw">rw</dfn>)</td></tr>
+<tr><th id="338">338</th><td>{</td></tr>
+<tr><th id="339">339</th><td>	<em>int</em> <dfn class="local col5 decl" id="35rv" title='rv' data-type='int' data-ref="35rv" data-ref-filename="35rv">rv</dfn>;</td></tr>
+<tr><th id="340">340</th><td></td></tr>
+<tr><th id="341">341</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_held" title='rumpuser_rw_held' data-ref="rumpuser_rw_held" data-ref-filename="rumpuser_rw_held">rumpuser_rw_held</a>(<a class="enum" href="../../include/rump/rumpuser.h.html#RUMPUSER_RW_READER" title='RUMPUSER_RW_READER' data-ref="RUMPUSER_RW_READER" data-ref-filename="RUMPUSER_RW_READER">RUMPUSER_RW_READER</a>, <a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col4 ref" href="#34rw" title='rw' data-ref="34rw" data-ref-filename="34rw">rw</a>), &amp;<a class="local col5 ref" href="#35rv" title='rv' data-ref="35rv" data-ref-filename="35rv">rv</a>);</td></tr>
+<tr><th id="342">342</th><td>	<b>return</b> <a class="local col5 ref" href="#35rv" title='rv' data-ref="35rv" data-ref-filename="35rv">rv</a>;</td></tr>
+<tr><th id="343">343</th><td>}</td></tr>
+<tr><th id="344">344</th><td></td></tr>
+<tr><th id="345">345</th><td><em>int</em></td></tr>
+<tr><th id="346">346</th><td><dfn class="decl def fn" id="rw_write_held" title='rw_write_held' data-ref="rw_write_held" data-ref-filename="rw_write_held">rw_write_held</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col6 decl" id="36rw" title='rw' data-type='krwlock_t *' data-ref="36rw" data-ref-filename="36rw">rw</dfn>)</td></tr>
+<tr><th id="347">347</th><td>{</td></tr>
+<tr><th id="348">348</th><td>	<em>int</em> <dfn class="local col7 decl" id="37rv" title='rv' data-type='int' data-ref="37rv" data-ref-filename="37rv">rv</dfn>;</td></tr>
+<tr><th id="349">349</th><td></td></tr>
+<tr><th id="350">350</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_rw_held" title='rumpuser_rw_held' data-ref="rumpuser_rw_held" data-ref-filename="rumpuser_rw_held">rumpuser_rw_held</a>(<a class="enum" href="../../include/rump/rumpuser.h.html#RUMPUSER_RW_WRITER" title='RUMPUSER_RW_WRITER' data-ref="RUMPUSER_RW_WRITER" data-ref-filename="RUMPUSER_RW_WRITER">RUMPUSER_RW_WRITER</a>, <a class="macro" href="#231" title="(*(struct rumpuser_rw **)(rw))" data-ref="_M/RUMPRW">RUMPRW</a>(<a class="local col6 ref" href="#36rw" title='rw' data-ref="36rw" data-ref-filename="36rw">rw</a>), &amp;<a class="local col7 ref" href="#37rv" title='rv' data-ref="37rv" data-ref-filename="37rv">rv</a>);</td></tr>
+<tr><th id="351">351</th><td>	<b>return</b> <a class="local col7 ref" href="#37rv" title='rv' data-ref="37rv" data-ref-filename="37rv">rv</a>;</td></tr>
+<tr><th id="352">352</th><td>}</td></tr>
+<tr><th id="353">353</th><td></td></tr>
+<tr><th id="354">354</th><td><em>int</em></td></tr>
+<tr><th id="355">355</th><td><dfn class="decl def fn" id="rw_lock_held" title='rw_lock_held' data-ref="rw_lock_held" data-ref-filename="rw_lock_held">rw_lock_held</dfn>(<a class="typedef" href="../../../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a> *<dfn class="local col8 decl" id="38rw" title='rw' data-type='krwlock_t *' data-ref="38rw" data-ref-filename="38rw">rw</dfn>)</td></tr>
+<tr><th id="356">356</th><td>{</td></tr>
+<tr><th id="357">357</th><td></td></tr>
+<tr><th id="358">358</th><td>	<b>return</b> <a class="ref fn" href="#rw_read_held" title='rw_read_held' data-ref="rw_read_held" data-ref-filename="rw_read_held">rw_read_held</a>(<a class="local col8 ref" href="#38rw" title='rw' data-ref="38rw" data-ref-filename="38rw">rw</a>) || <a class="ref fn" href="#rw_write_held" title='rw_write_held' data-ref="rw_write_held" data-ref-filename="rw_write_held">rw_write_held</a>(<a class="local col8 ref" href="#38rw" title='rw' data-ref="38rw" data-ref-filename="38rw">rw</a>);</td></tr>
+<tr><th id="359">359</th><td>}</td></tr>
+<tr><th id="360">360</th><td></td></tr>
+<tr><th id="361">361</th><td><i>/* curriculum vitaes */</i></td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td><u>#define <dfn class="macro" id="_M/RUMPCV" data-ref="_M/RUMPCV">RUMPCV</dfn>(cv) (*(struct <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_cv" title='rumpuser_cv' data-ref="rumpuser_cv" data-ref-filename="rumpuser_cv">rumpuser_cv</a> **)(cv))</u></td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td><em>void</em></td></tr>
+<tr><th id="366">366</th><td><dfn class="decl def fn" id="cv_init" title='cv_init' data-ref="cv_init" data-ref-filename="cv_init">cv_init</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col9 decl" id="39cv" title='cv' data-type='kcondvar_t *' data-ref="39cv" data-ref-filename="39cv">cv</dfn>, <em>const</em> <em>char</em> *<dfn class="local col0 decl" id="40msg" title='msg' data-type='const char *' data-ref="40msg" data-ref-filename="40msg">msg</dfn>)</td></tr>
+<tr><th id="367">367</th><td>{</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#254" title="typedef char __ctassert14[ (sizeof(kcondvar_t) &gt;= sizeof(void *)) ? 1 : -1] __attribute__((__unused__))" data-ref="_M/CTASSERT">CTASSERT</a>(<b>sizeof</b>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a>) &gt;= <b>sizeof</b>(<em>void</em> *));</td></tr>
+<tr><th id="370">370</th><td></td></tr>
+<tr><th id="371">371</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_init" title='rumpuser_cv_init' data-ref="rumpuser_cv_init" data-ref-filename="rumpuser_cv_init">rumpuser_cv_init</a>((<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_cv" title='rumpuser_cv' data-ref="rumpuser_cv" data-ref-filename="rumpuser_cv">rumpuser_cv</a> **)<a class="local col9 ref" href="#39cv" title='cv' data-ref="39cv" data-ref-filename="39cv">cv</a>);</td></tr>
+<tr><th id="372">372</th><td>}</td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td><em>void</em></td></tr>
+<tr><th id="375">375</th><td><dfn class="decl def fn" id="cv_destroy" title='cv_destroy' data-ref="cv_destroy" data-ref-filename="cv_destroy">cv_destroy</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col1 decl" id="41cv" title='cv' data-type='kcondvar_t *' data-ref="41cv" data-ref-filename="41cv">cv</dfn>)</td></tr>
+<tr><th id="376">376</th><td>{</td></tr>
+<tr><th id="377">377</th><td></td></tr>
+<tr><th id="378">378</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_destroy" title='rumpuser_cv_destroy' data-ref="rumpuser_cv_destroy" data-ref-filename="rumpuser_cv_destroy">rumpuser_cv_destroy</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col1 ref" href="#41cv" title='cv' data-ref="41cv" data-ref-filename="41cv">cv</a>));</td></tr>
+<tr><th id="379">379</th><td>}</td></tr>
+<tr><th id="380">380</th><td></td></tr>
+<tr><th id="381">381</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="382">382</th><td><dfn class="tu decl def fn" id="docvwait" title='docvwait' data-type='int docvwait(kcondvar_t * cv, kmutex_t * mtx, struct timespec * ts)' data-ref="docvwait" data-ref-filename="docvwait">docvwait</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col2 decl" id="42cv" title='cv' data-type='kcondvar_t *' data-ref="42cv" data-ref-filename="42cv">cv</dfn>, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="43mtx" title='mtx' data-type='kmutex_t *' data-ref="43mtx" data-ref-filename="43mtx">mtx</dfn>, <b>struct</b> <a class="type" href="../../../sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> *<dfn class="local col4 decl" id="44ts" title='ts' data-type='struct timespec *' data-ref="44ts" data-ref-filename="44ts">ts</dfn>)</td></tr>
+<tr><th id="383">383</th><td>{</td></tr>
+<tr><th id="384">384</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col5 decl" id="45l" title='l' data-type='struct lwp *' data-ref="45l" data-ref-filename="45l">l</dfn> = <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="385">385</th><td>	<em>int</em> <dfn class="local col6 decl" id="46rv" title='rv' data-type='int' data-ref="46rv" data-ref-filename="46rv">rv</dfn>;</td></tr>
+<tr><th id="386">386</th><td></td></tr>
+<tr><th id="387">387</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((l-&gt;l_flag &amp; 0x80000000) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col5 ref" href="#45l" title='l' data-ref="45l" data-ref-filename="45l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#248" title="0x80000000" data-ref="_M/LW_RUMP_QEXIT">LW_RUMP_QEXIT</a>)) {</td></tr>
+<tr><th id="388">388</th><td>		<i>/*</i></td></tr>
+<tr><th id="389">389</th><td><i>		 * yield() here, someone might want the cpu</i></td></tr>
+<tr><th id="390">390</th><td><i>		 * to set a condition.  otherwise we'll just</i></td></tr>
+<tr><th id="391">391</th><td><i>		 * loop forever.</i></td></tr>
+<tr><th id="392">392</th><td><i>		 */</i></td></tr>
+<tr><th id="393">393</th><td>		<a class="ref fn" href="../../../sys/sched.h.html#yield" title='yield' data-ref="yield" data-ref-filename="yield">yield</a>();</td></tr>
+<tr><th id="394">394</th><td>		<b>return</b> <a class="macro" href="../../../sys/errno.h.html#45" title="4" data-ref="_M/EINTR">EINTR</a>;</td></tr>
+<tr><th id="395">395</th><td>	}</td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td>	<a class="macro" href="#90" title="do {} while (0)" data-ref="_M/UNLOCKED">UNLOCKED</a>(mtx, false);</td></tr>
+<tr><th id="398">398</th><td></td></tr>
+<tr><th id="399">399</th><td>	<a class="local col5 ref" href="#45l" title='l' data-ref="45l" data-ref-filename="45l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_private" title='lwp::l_private' data-ref="lwp::l_private" data-ref-filename="lwp..l_private">l_private</a> = <a class="local col2 ref" href="#42cv" title='cv' data-ref="42cv" data-ref-filename="42cv">cv</a>;</td></tr>
+<tr><th id="400">400</th><td>	<a class="local col6 ref" href="#46rv" title='rv' data-ref="46rv" data-ref-filename="46rv">rv</a> = <var>0</var>;</td></tr>
+<tr><th id="401">401</th><td>	<b>if</b> (<a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a>) {</td></tr>
+<tr><th id="402">402</th><td>		<b>if</b> (<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_timedwait" title='rumpuser_cv_timedwait' data-ref="rumpuser_cv_timedwait" data-ref-filename="rumpuser_cv_timedwait">rumpuser_cv_timedwait</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col2 ref" href="#42cv" title='cv' data-ref="42cv" data-ref-filename="42cv">cv</a>), <a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>),</td></tr>
+<tr><th id="403">403</th><td>		    <a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a>, <a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a>))</td></tr>
+<tr><th id="404">404</th><td>			<a class="local col6 ref" href="#46rv" title='rv' data-ref="46rv" data-ref-filename="46rv">rv</a> = <a class="macro" href="../../../sys/errno.h.html#82" title="35" data-ref="_M/EWOULDBLOCK">EWOULDBLOCK</a>;</td></tr>
+<tr><th id="405">405</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="406">406</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_wait" title='rumpuser_cv_wait' data-ref="rumpuser_cv_wait" data-ref-filename="rumpuser_cv_wait">rumpuser_cv_wait</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col2 ref" href="#42cv" title='cv' data-ref="42cv" data-ref-filename="42cv">cv</a>), <a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(mtx))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>));</td></tr>
+<tr><th id="407">407</th><td>	}</td></tr>
+<tr><th id="408">408</th><td></td></tr>
+<tr><th id="409">409</th><td>	<a class="macro" href="#89" title="do {} while (0)" data-ref="_M/LOCKED">LOCKED</a>(mtx, false);</td></tr>
+<tr><th id="410">410</th><td></td></tr>
+<tr><th id="411">411</th><td>	<i>/*</i></td></tr>
+<tr><th id="412">412</th><td><i>	 * Check for QEXIT.  if so, we need to wait here until we</i></td></tr>
+<tr><th id="413">413</th><td><i>	 * are allowed to exit.</i></td></tr>
+<tr><th id="414">414</th><td><i>	 */</i></td></tr>
+<tr><th id="415">415</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((l-&gt;l_flag &amp; 0x80000000) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col5 ref" href="#45l" title='l' data-ref="45l" data-ref-filename="45l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#248" title="0x80000000" data-ref="_M/LW_RUMP_QEXIT">LW_RUMP_QEXIT</a>)) {</td></tr>
+<tr><th id="416">416</th><td>		<b>struct</b> <a class="type" href="../../../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col7 decl" id="47p" title='p' data-type='struct proc *' data-ref="47p" data-ref-filename="47p">p</dfn> = <a class="local col5 ref" href="#45l" title='l' data-ref="45l" data-ref-filename="45l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_proc" title='lwp::l_proc' data-ref="lwp::l_proc" data-ref-filename="lwp..l_proc">l_proc</a>;</td></tr>
+<tr><th id="417">417</th><td></td></tr>
+<tr><th id="418">418</th><td>		<a class="ref fn" href="#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>); <i>/* drop and retake later */</i></td></tr>
+<tr><th id="419">419</th><td></td></tr>
+<tr><th id="420">420</th><td>		<a class="ref fn" href="#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="local col7 ref" href="#47p" title='p' data-ref="47p" data-ref-filename="47p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="421">421</th><td>		<b>while</b> ((<a class="local col7 ref" href="#47p" title='p' data-ref="47p" data-ref-filename="47p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_sflag" title='proc::p_sflag' data-ref="proc::p_sflag" data-ref-filename="proc..p_sflag">p_sflag</a> &amp; <a class="macro" href="../../../sys/proc.h.html#392" title="0x00000400" data-ref="_M/PS_RUMP_LWPEXIT">PS_RUMP_LWPEXIT</a>) == <var>0</var>) {</td></tr>
+<tr><th id="422">422</th><td>			<i>/* avoid recursion */</i></td></tr>
+<tr><th id="423">423</th><td>			<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_wait" title='rumpuser_cv_wait' data-ref="rumpuser_cv_wait" data-ref-filename="rumpuser_cv_wait">rumpuser_cv_wait</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(&amp;p-&gt;p_waitcv))" data-ref="_M/RUMPCV">RUMPCV</a>(&amp;<a class="local col7 ref" href="#47p" title='p' data-ref="47p" data-ref-filename="47p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_waitcv" title='proc::p_waitcv' data-ref="proc::p_waitcv" data-ref-filename="proc..p_waitcv">p_waitcv</a>),</td></tr>
+<tr><th id="424">424</th><td>			    <a class="macro" href="#106" title="(*(struct rumpuser_mtx *const*)(p-&gt;p_lock))" data-ref="_M/RUMPMTX">RUMPMTX</a>(<a class="local col7 ref" href="#47p" title='p' data-ref="47p" data-ref-filename="47p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>));</td></tr>
+<tr><th id="425">425</th><td>		}</td></tr>
+<tr><th id="426">426</th><td>		<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((p-&gt;p_sflag &amp; 0x00000400)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;p-&gt;p_sflag &amp; PS_RUMP_LWPEXIT&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/locks.c&quot;, 426))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col7 ref" href="#47p" title='p' data-ref="47p" data-ref-filename="47p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_sflag" title='proc::p_sflag' data-ref="proc::p_sflag" data-ref-filename="proc..p_sflag">p_sflag</a> &amp; <a class="macro" href="../../../sys/proc.h.html#392" title="0x00000400" data-ref="_M/PS_RUMP_LWPEXIT">PS_RUMP_LWPEXIT</a>);</td></tr>
+<tr><th id="427">427</th><td>		<a class="ref fn" href="#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col7 ref" href="#47p" title='p' data-ref="47p" data-ref-filename="47p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td>		<i>/* ok, we can exit and remove "reference" to l-&gt;private */</i></td></tr>
+<tr><th id="430">430</th><td></td></tr>
+<tr><th id="431">431</th><td>		<a class="ref fn" href="#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="432">432</th><td>		<a class="local col6 ref" href="#46rv" title='rv' data-ref="46rv" data-ref-filename="46rv">rv</a> = <a class="macro" href="../../../sys/errno.h.html#45" title="4" data-ref="_M/EINTR">EINTR</a>;</td></tr>
+<tr><th id="433">433</th><td>	}</td></tr>
+<tr><th id="434">434</th><td>	<a class="local col5 ref" href="#45l" title='l' data-ref="45l" data-ref-filename="45l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_private" title='lwp::l_private' data-ref="lwp::l_private" data-ref-filename="lwp..l_private">l_private</a> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="435">435</th><td></td></tr>
+<tr><th id="436">436</th><td>	<b>return</b> <a class="local col6 ref" href="#46rv" title='rv' data-ref="46rv" data-ref-filename="46rv">rv</a>;</td></tr>
+<tr><th id="437">437</th><td>}</td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td><em>void</em></td></tr>
+<tr><th id="440">440</th><td><dfn class="decl def fn" id="cv_wait" title='cv_wait' data-ref="cv_wait" data-ref-filename="cv_wait">cv_wait</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col8 decl" id="48cv" title='cv' data-type='kcondvar_t *' data-ref="48cv" data-ref-filename="48cv">cv</dfn>, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col9 decl" id="49mtx" title='mtx' data-type='kmutex_t *' data-ref="49mtx" data-ref-filename="49mtx">mtx</dfn>)</td></tr>
+<tr><th id="441">441</th><td>{</td></tr>
+<tr><th id="442">442</th><td></td></tr>
+<tr><th id="443">443</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((rump_threads == 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../../include/rump-sys/kern.h.html#rump_threads" title='rump_threads' data-ref="rump_threads" data-ref-filename="rump_threads">rump_threads</a> == <var>0</var>))</td></tr>
+<tr><th id="444">444</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"cv_wait without threads"</q>);</td></tr>
+<tr><th id="445">445</th><td>	(<em>void</em>) <a class="tu ref fn" href="#docvwait" title='docvwait' data-use='c' data-ref="docvwait" data-ref-filename="docvwait">docvwait</a>(<a class="local col8 ref" href="#48cv" title='cv' data-ref="48cv" data-ref-filename="48cv">cv</a>, <a class="local col9 ref" href="#49mtx" title='mtx' data-ref="49mtx" data-ref-filename="49mtx">mtx</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="446">446</th><td>}</td></tr>
+<tr><th id="447">447</th><td></td></tr>
+<tr><th id="448">448</th><td><em>int</em></td></tr>
+<tr><th id="449">449</th><td><dfn class="decl def fn" id="cv_wait_sig" title='cv_wait_sig' data-ref="cv_wait_sig" data-ref-filename="cv_wait_sig">cv_wait_sig</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col0 decl" id="50cv" title='cv' data-type='kcondvar_t *' data-ref="50cv" data-ref-filename="50cv">cv</dfn>, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col1 decl" id="51mtx" title='mtx' data-type='kmutex_t *' data-ref="51mtx" data-ref-filename="51mtx">mtx</dfn>)</td></tr>
+<tr><th id="450">450</th><td>{</td></tr>
+<tr><th id="451">451</th><td></td></tr>
+<tr><th id="452">452</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((rump_threads == 0) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../../include/rump-sys/kern.h.html#rump_threads" title='rump_threads' data-ref="rump_threads" data-ref-filename="rump_threads">rump_threads</a> == <var>0</var>))</td></tr>
+<tr><th id="453">453</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"cv_wait without threads"</q>);</td></tr>
+<tr><th id="454">454</th><td>	<b>return</b> <a class="tu ref fn" href="#docvwait" title='docvwait' data-use='c' data-ref="docvwait" data-ref-filename="docvwait">docvwait</a>(<a class="local col0 ref" href="#50cv" title='cv' data-ref="50cv" data-ref-filename="50cv">cv</a>, <a class="local col1 ref" href="#51mtx" title='mtx' data-ref="51mtx" data-ref-filename="51mtx">mtx</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="455">455</th><td>}</td></tr>
+<tr><th id="456">456</th><td></td></tr>
+<tr><th id="457">457</th><td><em>int</em></td></tr>
+<tr><th id="458">458</th><td><dfn class="decl def fn" id="cv_timedwait" title='cv_timedwait' data-ref="cv_timedwait" data-ref-filename="cv_timedwait">cv_timedwait</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col2 decl" id="52cv" title='cv' data-type='kcondvar_t *' data-ref="52cv" data-ref-filename="52cv">cv</dfn>, <a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="53mtx" title='mtx' data-type='kmutex_t *' data-ref="53mtx" data-ref-filename="53mtx">mtx</dfn>, <em>int</em> <dfn class="local col4 decl" id="54ticks" title='ticks' data-type='int' data-ref="54ticks" data-ref-filename="54ticks">ticks</dfn>)</td></tr>
+<tr><th id="459">459</th><td>{</td></tr>
+<tr><th id="460">460</th><td>	<b>struct</b> <a class="type" href="../../../sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col5 decl" id="55ts" title='ts' data-type='struct timespec' data-ref="55ts" data-ref-filename="55ts">ts</dfn>;</td></tr>
+<tr><th id="461">461</th><td>	<b>extern</b> <em>int</em> <dfn class="decl" id="hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</dfn>;</td></tr>
+<tr><th id="462">462</th><td>	<em>int</em> <dfn class="local col6 decl" id="56rv" title='rv' data-type='int' data-ref="56rv" data-ref-filename="56rv">rv</dfn>;</td></tr>
+<tr><th id="463">463</th><td></td></tr>
+<tr><th id="464">464</th><td>	<b>if</b> (<a class="local col4 ref" href="#54ticks" title='ticks' data-ref="54ticks" data-ref-filename="54ticks">ticks</a> == <var>0</var>) {</td></tr>
+<tr><th id="465">465</th><td>		<a class="local col6 ref" href="#56rv" title='rv' data-ref="56rv" data-ref-filename="56rv">rv</a> = <a class="ref fn" href="#cv_wait_sig" title='cv_wait_sig' data-ref="cv_wait_sig" data-ref-filename="cv_wait_sig">cv_wait_sig</a>(<a class="local col2 ref" href="#52cv" title='cv' data-ref="52cv" data-ref-filename="52cv">cv</a>, <a class="local col3 ref" href="#53mtx" title='mtx' data-ref="53mtx" data-ref-filename="53mtx">mtx</a>);</td></tr>
+<tr><th id="466">466</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="467">467</th><td>		<a class="local col5 ref" href="#55ts" title='ts' data-ref="55ts" data-ref-filename="55ts">ts</a>.<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a> = <a class="local col4 ref" href="#54ticks" title='ticks' data-ref="54ticks" data-ref-filename="54ticks">ticks</a> / <a class="ref" href="#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>;</td></tr>
+<tr><th id="468">468</th><td>		<a class="local col5 ref" href="#55ts" title='ts' data-ref="55ts" data-ref-filename="55ts">ts</a>.<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> = (<a class="local col4 ref" href="#54ticks" title='ticks' data-ref="54ticks" data-ref-filename="54ticks">ticks</a> % <a class="ref" href="#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>) * (<var>1000000000</var>/<a class="ref" href="#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>);</td></tr>
+<tr><th id="469">469</th><td>		<a class="local col6 ref" href="#56rv" title='rv' data-ref="56rv" data-ref-filename="56rv">rv</a> = <a class="tu ref fn" href="#docvwait" title='docvwait' data-use='c' data-ref="docvwait" data-ref-filename="docvwait">docvwait</a>(<a class="local col2 ref" href="#52cv" title='cv' data-ref="52cv" data-ref-filename="52cv">cv</a>, <a class="local col3 ref" href="#53mtx" title='mtx' data-ref="53mtx" data-ref-filename="53mtx">mtx</a>, &amp;<a class="local col5 ref" href="#55ts" title='ts' data-ref="55ts" data-ref-filename="55ts">ts</a>);</td></tr>
+<tr><th id="470">470</th><td>	}</td></tr>
+<tr><th id="471">471</th><td></td></tr>
+<tr><th id="472">472</th><td>	<b>return</b> <a class="local col6 ref" href="#56rv" title='rv' data-ref="56rv" data-ref-filename="56rv">rv</a>;</td></tr>
+<tr><th id="473">473</th><td>}</td></tr>
+<tr><th id="474">474</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#55" title="__asm(&quot;.global &quot; &quot;cv_timedwait_sig&quot; &quot;\n&quot; &quot;cv_timedwait_sig&quot; &quot; = &quot; &quot;cv_timedwait&quot;);" data-ref="_M/__strong_alias">__strong_alias</a>(cv_timedwait_sig,cv_timedwait);</td></tr>
+<tr><th id="475">475</th><td></td></tr>
+<tr><th id="476">476</th><td><em>void</em></td></tr>
+<tr><th id="477">477</th><td><dfn class="decl def fn" id="cv_signal" title='cv_signal' data-ref="cv_signal" data-ref-filename="cv_signal">cv_signal</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col7 decl" id="57cv" title='cv' data-type='kcondvar_t *' data-ref="57cv" data-ref-filename="57cv">cv</dfn>)</td></tr>
+<tr><th id="478">478</th><td>{</td></tr>
+<tr><th id="479">479</th><td></td></tr>
+<tr><th id="480">480</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_signal" title='rumpuser_cv_signal' data-ref="rumpuser_cv_signal" data-ref-filename="rumpuser_cv_signal">rumpuser_cv_signal</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col7 ref" href="#57cv" title='cv' data-ref="57cv" data-ref-filename="57cv">cv</a>));</td></tr>
+<tr><th id="481">481</th><td>}</td></tr>
+<tr><th id="482">482</th><td></td></tr>
+<tr><th id="483">483</th><td><em>void</em></td></tr>
+<tr><th id="484">484</th><td><dfn class="decl def fn" id="cv_broadcast" title='cv_broadcast' data-ref="cv_broadcast" data-ref-filename="cv_broadcast">cv_broadcast</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col8 decl" id="58cv" title='cv' data-type='kcondvar_t *' data-ref="58cv" data-ref-filename="58cv">cv</dfn>)</td></tr>
+<tr><th id="485">485</th><td>{</td></tr>
+<tr><th id="486">486</th><td></td></tr>
+<tr><th id="487">487</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_broadcast" title='rumpuser_cv_broadcast' data-ref="rumpuser_cv_broadcast" data-ref-filename="rumpuser_cv_broadcast">rumpuser_cv_broadcast</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col8 ref" href="#58cv" title='cv' data-ref="58cv" data-ref-filename="58cv">cv</a>));</td></tr>
+<tr><th id="488">488</th><td>}</td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td><a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="491">491</th><td><dfn class="decl def fn" id="cv_has_waiters" title='cv_has_waiters' data-ref="cv_has_waiters" data-ref-filename="cv_has_waiters">cv_has_waiters</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col9 decl" id="59cv" title='cv' data-type='kcondvar_t *' data-ref="59cv" data-ref-filename="59cv">cv</dfn>)</td></tr>
+<tr><th id="492">492</th><td>{</td></tr>
+<tr><th id="493">493</th><td>	<em>int</em> <dfn class="local col0 decl" id="60rv" title='rv' data-type='int' data-ref="60rv" data-ref-filename="60rv">rv</dfn>;</td></tr>
+<tr><th id="494">494</th><td></td></tr>
+<tr><th id="495">495</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_has_waiters" title='rumpuser_cv_has_waiters' data-ref="rumpuser_cv_has_waiters" data-ref-filename="rumpuser_cv_has_waiters">rumpuser_cv_has_waiters</a>(<a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col9 ref" href="#59cv" title='cv' data-ref="59cv" data-ref-filename="59cv">cv</a>), &amp;<a class="local col0 ref" href="#60rv" title='rv' data-ref="60rv" data-ref-filename="60rv">rv</a>);</td></tr>
+<tr><th id="496">496</th><td>	<b>return</b> <a class="local col0 ref" href="#60rv" title='rv' data-ref="60rv" data-ref-filename="60rv">rv</a> != <var>0</var>;</td></tr>
+<tr><th id="497">497</th><td>}</td></tr>
+<tr><th id="498">498</th><td></td></tr>
+<tr><th id="499">499</th><td><i>/* this is not much of an attempt, but ... */</i></td></tr>
+<tr><th id="500">500</th><td><a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="501">501</th><td><dfn class="decl def fn" id="cv_is_valid" title='cv_is_valid' data-ref="cv_is_valid" data-ref-filename="cv_is_valid">cv_is_valid</dfn>(<a class="typedef" href="../../../sys/condvar.h.html#kcondvar_t" title='kcondvar_t' data-type='struct kcondvar' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> *<dfn class="local col1 decl" id="61cv" title='cv' data-type='kcondvar_t *' data-ref="61cv" data-ref-filename="61cv">cv</dfn>)</td></tr>
+<tr><th id="502">502</th><td>{</td></tr>
+<tr><th id="503">503</th><td></td></tr>
+<tr><th id="504">504</th><td>	<b>return</b> <a class="macro" href="#363" title="(*(struct rumpuser_cv **)(cv))" data-ref="_M/RUMPCV">RUMPCV</a>(<a class="local col1 ref" href="#61cv" title='cv' data-ref="61cv" data-ref-filename="61cv">cv</a>) != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="505">505</th><td>}</td></tr>
+<tr><th id="506">506</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

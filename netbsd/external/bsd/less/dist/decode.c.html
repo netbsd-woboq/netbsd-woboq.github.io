@@ -1,0 +1,867 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>decode.c source code [netbsd/external/bsd/less/dist/decode.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="tablelist "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/less/dist/decode.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>external</a>/<a href='../..'>bsd</a>/<a href='..'>less</a>/<a href='./'>dist</a>/<a href='decode.c.html'>decode.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: decode.c,v 1.4 2013/09/04 19:44:21 tron Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (C) 1984-2012  Mark Nudelman</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * You may distribute under the terms of either the GNU General Public</i></td></tr>
+<tr><th id="7">7</th><td><i> * License or the Less License, as specified in the README file.</i></td></tr>
+<tr><th id="8">8</th><td><i> *</i></td></tr>
+<tr><th id="9">9</th><td><i> * For more information, see the README file.</i></td></tr>
+<tr><th id="10">10</th><td><i> */</i></td></tr>
+<tr><th id="11">11</th><td></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><i>/*</i></td></tr>
+<tr><th id="14">14</th><td><i> * Routines to decode user commands.</i></td></tr>
+<tr><th id="15">15</th><td><i> *</i></td></tr>
+<tr><th id="16">16</th><td><i> * This is all table driven.</i></td></tr>
+<tr><th id="17">17</th><td><i> * A command table is a sequence of command descriptors.</i></td></tr>
+<tr><th id="18">18</th><td><i> * Each command descriptor is a sequence of bytes with the following format:</i></td></tr>
+<tr><th id="19">19</th><td><i> *	&lt;c1&gt;&lt;c2&gt;...&lt;cN&gt;&lt;0&gt;&lt;action&gt;</i></td></tr>
+<tr><th id="20">20</th><td><i> * The characters c1,c2,...,cN are the command string; that is,</i></td></tr>
+<tr><th id="21">21</th><td><i> * the characters which the user must type.</i></td></tr>
+<tr><th id="22">22</th><td><i> * It is terminated by a null &lt;0&gt; byte.</i></td></tr>
+<tr><th id="23">23</th><td><i> * The byte after the null byte is the action code associated</i></td></tr>
+<tr><th id="24">24</th><td><i> * with the command string.</i></td></tr>
+<tr><th id="25">25</th><td><i> * If an action byte is OR-ed with A_EXTRA, this indicates</i></td></tr>
+<tr><th id="26">26</th><td><i> * that the option byte is followed by an extra string.</i></td></tr>
+<tr><th id="27">27</th><td><i> *</i></td></tr>
+<tr><th id="28">28</th><td><i> * There may be many command tables.</i></td></tr>
+<tr><th id="29">29</th><td><i> * The first (default) table is built-in.</i></td></tr>
+<tr><th id="30">30</th><td><i> * Other tables are read in from "lesskey" files.</i></td></tr>
+<tr><th id="31">31</th><td><i> * All the tables are linked together and are searched in order.</i></td></tr>
+<tr><th id="32">32</th><td><i> */</i></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><u>#include <a href="less.h.html">"less.h"</a></u></td></tr>
+<tr><th id="35">35</th><td><u>#include <a href="cmd.h.html">"cmd.h"</a></u></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="lesskey.h.html">"lesskey.h"</a></u></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><b>extern</b> <em>int</em> <dfn class="decl" id="erase_char" title='erase_char' data-ref="erase_char" data-ref-filename="erase_char">erase_char</dfn>, <dfn class="decl" id="erase2_char" title='erase2_char' data-ref="erase2_char" data-ref-filename="erase2_char">erase2_char</dfn>, <dfn class="decl" id="kill_char" title='kill_char' data-ref="kill_char" data-ref-filename="kill_char">kill_char</dfn>;</td></tr>
+<tr><th id="39">39</th><td><b>extern</b> <em>int</em> <dfn class="decl" id="secure" title='secure' data-ref="secure" data-ref-filename="secure">secure</dfn>;</td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td><u>#define <dfn class="macro" id="_M/SK" data-ref="_M/SK">SK</dfn>(k) \</u></td></tr>
+<tr><th id="42">42</th><td><u>	SK_SPECIAL_KEY, (k), 6, 1, 1, 1</u></td></tr>
+<tr><th id="43">43</th><td><i  data-doc="cmdtable">/*</i></td></tr>
+<tr><th id="44">44</th><td><i  data-doc="cmdtable"> * Command table is ordered roughly according to expected</i></td></tr>
+<tr><th id="45">45</th><td><i  data-doc="cmdtable"> * frequency of use, so the common commands are near the beginning.</i></td></tr>
+<tr><th id="46">46</th><td><i  data-doc="cmdtable"> */</i></td></tr>
+<tr><th id="47">47</th><td></td></tr>
+<tr><th id="48">48</th><td><em>static</em> <em>unsigned</em> <em>char</em> <dfn class="tu decl def" id="cmdtable" title='cmdtable' data-type='unsigned char [452]' data-ref="cmdtable" data-ref-filename="cmdtable">cmdtable</dfn>[] =</td></tr>
+<tr><th id="49">49</th><td>{</td></tr>
+<tr><th id="50">50</th><td>	<kbd>'\r'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="51">51</th><td>	<kbd>'\n'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="52">52</th><td>	<kbd>'e'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="53">53</th><td>	<kbd>'j'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="54">54</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (4), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#122" title="4" data-ref="_M/SK_DOWN_ARROW">SK_DOWN_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="55">55</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;E&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'E'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="56">56</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;N&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'N'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#26" title="12" data-ref="_M/A_F_LINE">A_F_LINE</a>,</td></tr>
+<tr><th id="57">57</th><td>	<kbd>'k'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#16" title="2" data-ref="_M/A_B_LINE">A_B_LINE</a>,</td></tr>
+<tr><th id="58">58</th><td>	<kbd>'y'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#16" title="2" data-ref="_M/A_B_LINE">A_B_LINE</a>,</td></tr>
+<tr><th id="59">59</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;Y&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'Y'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#16" title="2" data-ref="_M/A_B_LINE">A_B_LINE</a>,</td></tr>
+<tr><th id="60">60</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (40), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#135" title="40" data-ref="_M/SK_CONTROL_K">SK_CONTROL_K</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#16" title="2" data-ref="_M/A_B_LINE">A_B_LINE</a>,</td></tr>
+<tr><th id="61">61</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;P&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'P'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#16" title="2" data-ref="_M/A_B_LINE">A_B_LINE</a>,</td></tr>
+<tr><th id="62">62</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (3), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#121" title="3" data-ref="_M/SK_UP_ARROW">SK_UP_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#16" title="2" data-ref="_M/A_B_LINE">A_B_LINE</a>,</td></tr>
+<tr><th id="63">63</th><td>	<kbd>'J'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#43" title="29" data-ref="_M/A_FF_LINE">A_FF_LINE</a>,</td></tr>
+<tr><th id="64">64</th><td>	<kbd>'K'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#44" title="30" data-ref="_M/A_BF_LINE">A_BF_LINE</a>,</td></tr>
+<tr><th id="65">65</th><td>	<kbd>'Y'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#44" title="30" data-ref="_M/A_BF_LINE">A_BF_LINE</a>,</td></tr>
+<tr><th id="66">66</th><td>	<kbd>'d'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#28" title="14" data-ref="_M/A_F_SCROLL">A_F_SCROLL</a>,</td></tr>
+<tr><th id="67">67</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;D&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'D'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#28" title="14" data-ref="_M/A_F_SCROLL">A_F_SCROLL</a>,</td></tr>
+<tr><th id="68">68</th><td>	<kbd>'u'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#18" title="4" data-ref="_M/A_B_SCROLL">A_B_SCROLL</a>,</td></tr>
+<tr><th id="69">69</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;U&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'U'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#18" title="4" data-ref="_M/A_B_SCROLL">A_B_SCROLL</a>,</td></tr>
+<tr><th id="70">70</th><td>	<kbd>' '</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#27" title="13" data-ref="_M/A_F_SCREEN">A_F_SCREEN</a>,</td></tr>
+<tr><th id="71">71</th><td>	<kbd>'f'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#27" title="13" data-ref="_M/A_F_SCREEN">A_F_SCREEN</a>,</td></tr>
+<tr><th id="72">72</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;F&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'F'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#27" title="13" data-ref="_M/A_F_SCREEN">A_F_SCREEN</a>,</td></tr>
+<tr><th id="73">73</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;V&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'V'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#27" title="13" data-ref="_M/A_F_SCREEN">A_F_SCREEN</a>,</td></tr>
+<tr><th id="74">74</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (6), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#124" title="6" data-ref="_M/SK_PAGE_DOWN">SK_PAGE_DOWN</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#27" title="13" data-ref="_M/A_F_SCREEN">A_F_SCREEN</a>,</td></tr>
+<tr><th id="75">75</th><td>	<kbd>'b'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#17" title="3" data-ref="_M/A_B_SCREEN">A_B_SCREEN</a>,</td></tr>
+<tr><th id="76">76</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;B&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'B'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#17" title="3" data-ref="_M/A_B_SCREEN">A_B_SCREEN</a>,</td></tr>
+<tr><th id="77">77</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'v'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#17" title="3" data-ref="_M/A_B_SCREEN">A_B_SCREEN</a>,</td></tr>
+<tr><th id="78">78</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (5), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#123" title="5" data-ref="_M/SK_PAGE_UP">SK_PAGE_UP</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#17" title="3" data-ref="_M/A_B_SCREEN">A_B_SCREEN</a>,</td></tr>
+<tr><th id="79">79</th><td>	<kbd>'z'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#47" title="33" data-ref="_M/A_F_WINDOW">A_F_WINDOW</a>,</td></tr>
+<tr><th id="80">80</th><td>	<kbd>'w'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#48" title="34" data-ref="_M/A_B_WINDOW">A_B_WINDOW</a>,</td></tr>
+<tr><th id="81">81</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>' '</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#54" title="40" data-ref="_M/A_FF_SCREEN">A_FF_SCREEN</a>,</td></tr>
+<tr><th id="82">82</th><td>	<kbd>'F'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#64" title="50" data-ref="_M/A_F_FOREVER">A_F_FOREVER</a>,</td></tr>
+<tr><th id="83">83</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'F'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#70" title="56" data-ref="_M/A_F_UNTIL_HILITE">A_F_UNTIL_HILITE</a>,</td></tr>
+<tr><th id="84">84</th><td>	<kbd>'R'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#25" title="11" data-ref="_M/A_FREPAINT">A_FREPAINT</a>,</td></tr>
+<tr><th id="85">85</th><td>	<kbd>'r'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#39" title="25" data-ref="_M/A_REPAINT">A_REPAINT</a>,</td></tr>
+<tr><th id="86">86</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;R&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'R'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#39" title="25" data-ref="_M/A_REPAINT">A_REPAINT</a>,</td></tr>
+<tr><th id="87">87</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;L&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'L'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#39" title="25" data-ref="_M/A_REPAINT">A_REPAINT</a>,</td></tr>
+<tr><th id="88">88</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'u'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#53" title="39" data-ref="_M/A_UNDO_SEARCH">A_UNDO_SEARCH</a>,</td></tr>
+<tr><th id="89">89</th><td>	<kbd>'g'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#31" title="17" data-ref="_M/A_GOLINE">A_GOLINE</a>,</td></tr>
+<tr><th id="90">90</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (7), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#125" title="7" data-ref="_M/SK_HOME">SK_HOME</a>),<var>0</var>,			<a class="macro" href="cmd.h.html#31" title="17" data-ref="_M/A_GOLINE">A_GOLINE</a>,</td></tr>
+<tr><th id="91">91</th><td>	<kbd>'&lt;'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#31" title="17" data-ref="_M/A_GOLINE">A_GOLINE</a>,</td></tr>
+<tr><th id="92">92</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'&lt;'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#31" title="17" data-ref="_M/A_GOLINE">A_GOLINE</a>,</td></tr>
+<tr><th id="93">93</th><td>	<kbd>'p'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#35" title="21" data-ref="_M/A_PERCENT">A_PERCENT</a>,</td></tr>
+<tr><th id="94">94</th><td>	<kbd>'%'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#35" title="21" data-ref="_M/A_PERCENT">A_PERCENT</a>,</td></tr>
+<tr><th id="95">95</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'['</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#55" title="41" data-ref="_M/A_LSHIFT">A_LSHIFT</a>,</td></tr>
+<tr><th id="96">96</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>']'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#56" title="42" data-ref="_M/A_RSHIFT">A_RSHIFT</a>,</td></tr>
+<tr><th id="97">97</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'('</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#55" title="41" data-ref="_M/A_LSHIFT">A_LSHIFT</a>,</td></tr>
+<tr><th id="98">98</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>')'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#56" title="42" data-ref="_M/A_RSHIFT">A_RSHIFT</a>,</td></tr>
+<tr><th id="99">99</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (1), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#119" title="1" data-ref="_M/SK_RIGHT_ARROW">SK_RIGHT_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#56" title="42" data-ref="_M/A_RSHIFT">A_RSHIFT</a>,</td></tr>
+<tr><th id="100">100</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (2), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#120" title="2" data-ref="_M/SK_LEFT_ARROW">SK_LEFT_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#55" title="41" data-ref="_M/A_LSHIFT">A_LSHIFT</a>,</td></tr>
+<tr><th id="101">101</th><td>	<kbd>'{'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#49" title="35" data-ref="_M/A_F_BRACKET">A_F_BRACKET</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'{'</kbd>,<kbd>'}'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="102">102</th><td>	<kbd>'}'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#50" title="36" data-ref="_M/A_B_BRACKET">A_B_BRACKET</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'{'</kbd>,<kbd>'}'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="103">103</th><td>	<kbd>'('</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#49" title="35" data-ref="_M/A_F_BRACKET">A_F_BRACKET</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'('</kbd>,<kbd>')'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="104">104</th><td>	<kbd>')'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#50" title="36" data-ref="_M/A_B_BRACKET">A_B_BRACKET</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'('</kbd>,<kbd>')'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="105">105</th><td>	<kbd>'['</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#49" title="35" data-ref="_M/A_F_BRACKET">A_F_BRACKET</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'['</kbd>,<kbd>']'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="106">106</th><td>	<kbd>']'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#50" title="36" data-ref="_M/A_B_BRACKET">A_B_BRACKET</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'['</kbd>,<kbd>']'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="107">107</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<a class="macro" href="less.h.html#445" title="((&apos;F&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'F'</kbd>),<var>0</var>,		<a class="macro" href="cmd.h.html#49" title="35" data-ref="_M/A_F_BRACKET">A_F_BRACKET</a>,</td></tr>
+<tr><th id="108">108</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<a class="macro" href="less.h.html#445" title="((&apos;B&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'B'</kbd>),<var>0</var>,		<a class="macro" href="cmd.h.html#50" title="36" data-ref="_M/A_B_BRACKET">A_B_BRACKET</a>,</td></tr>
+<tr><th id="109">109</th><td>	<kbd>'G'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#30" title="16" data-ref="_M/A_GOEND">A_GOEND</a>,</td></tr>
+<tr><th id="110">110</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'&gt;'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#30" title="16" data-ref="_M/A_GOEND">A_GOEND</a>,</td></tr>
+<tr><th id="111">111</th><td>	<kbd>'&gt;'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#30" title="16" data-ref="_M/A_GOEND">A_GOEND</a>,</td></tr>
+<tr><th id="112">112</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (8), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#126" title="8" data-ref="_M/SK_END">SK_END</a>),<var>0</var>,			<a class="macro" href="cmd.h.html#30" title="16" data-ref="_M/A_GOEND">A_GOEND</a>,</td></tr>
+<tr><th id="113">113</th><td>	<kbd>'P'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#65" title="51" data-ref="_M/A_GOPOS">A_GOPOS</a>,</td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td>	<kbd>'0'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="116">116</th><td>	<kbd>'1'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="117">117</th><td>	<kbd>'2'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="118">118</th><td>	<kbd>'3'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="119">119</th><td>	<kbd>'4'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="120">120</th><td>	<kbd>'5'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="121">121</th><td>	<kbd>'6'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="122">122</th><td>	<kbd>'7'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="123">123</th><td>	<kbd>'8'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="124">124</th><td>	<kbd>'9'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="125">125</th><td>	<kbd>'.'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#20" title="6" data-ref="_M/A_DIGIT">A_DIGIT</a>,</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td>	<kbd>'='</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#42" title="28" data-ref="_M/A_STAT">A_STAT</a>,</td></tr>
+<tr><th id="128">128</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;G&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'G'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#42" title="28" data-ref="_M/A_STAT">A_STAT</a>,</td></tr>
+<tr><th id="129">129</th><td>	<kbd>':'</kbd>,<kbd>'f'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#42" title="28" data-ref="_M/A_STAT">A_STAT</a>,</td></tr>
+<tr><th id="130">130</th><td>	<kbd>'/'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#29" title="15" data-ref="_M/A_F_SEARCH">A_F_SEARCH</a>,</td></tr>
+<tr><th id="131">131</th><td>	<kbd>'?'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#19" title="5" data-ref="_M/A_B_SEARCH">A_B_SEARCH</a>,</td></tr>
+<tr><th id="132">132</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'/'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#29" title="15" data-ref="_M/A_F_SEARCH">A_F_SEARCH</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'*'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="133">133</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'?'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#19" title="5" data-ref="_M/A_B_SEARCH">A_B_SEARCH</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'*'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="134">134</th><td>	<kbd>'n'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#57" title="43" data-ref="_M/A_AGAIN_SEARCH">A_AGAIN_SEARCH</a>,</td></tr>
+<tr><th id="135">135</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'n'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#58" title="44" data-ref="_M/A_T_AGAIN_SEARCH">A_T_AGAIN_SEARCH</a>,</td></tr>
+<tr><th id="136">136</th><td>	<kbd>'N'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#59" title="45" data-ref="_M/A_REVERSE_SEARCH">A_REVERSE_SEARCH</a>,</td></tr>
+<tr><th id="137">137</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'N'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#60" title="46" data-ref="_M/A_T_REVERSE_SEARCH">A_T_REVERSE_SEARCH</a>,</td></tr>
+<tr><th id="138">138</th><td>	<kbd>'&amp;'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#69" title="55" data-ref="_M/A_FILTER">A_FILTER</a>,</td></tr>
+<tr><th id="139">139</th><td>	<kbd>'m'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#40" title="26" data-ref="_M/A_SETMARK">A_SETMARK</a>,</td></tr>
+<tr><th id="140">140</th><td>	<kbd>'\''</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#32" title="18" data-ref="_M/A_GOMARK">A_GOMARK</a>,</td></tr>
+<tr><th id="141">141</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;X&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'X'</kbd>),<a class="macro" href="less.h.html#445" title="((&apos;X&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'X'</kbd>),<var>0</var>,	<a class="macro" href="cmd.h.html#32" title="18" data-ref="_M/A_GOMARK">A_GOMARK</a>,</td></tr>
+<tr><th id="142">142</th><td>	<kbd>'E'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#23" title="9" data-ref="_M/A_EXAMINE">A_EXAMINE</a>,</td></tr>
+<tr><th id="143">143</th><td>	<kbd>':'</kbd>,<kbd>'e'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#23" title="9" data-ref="_M/A_EXAMINE">A_EXAMINE</a>,</td></tr>
+<tr><th id="144">144</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;X&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'X'</kbd>),<a class="macro" href="less.h.html#445" title="((&apos;V&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'V'</kbd>),<var>0</var>,	<a class="macro" href="cmd.h.html#23" title="9" data-ref="_M/A_EXAMINE">A_EXAMINE</a>,</td></tr>
+<tr><th id="145">145</th><td>	<kbd>':'</kbd>,<kbd>'n'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#34" title="20" data-ref="_M/A_NEXT_FILE">A_NEXT_FILE</a>,</td></tr>
+<tr><th id="146">146</th><td>	<kbd>':'</kbd>,<kbd>'p'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#37" title="23" data-ref="_M/A_PREV_FILE">A_PREV_FILE</a>,</td></tr>
+<tr><th id="147">147</th><td>	<kbd>'t'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#67" title="53" data-ref="_M/A_NEXT_TAG">A_NEXT_TAG</a>,</td></tr>
+<tr><th id="148">148</th><td>	<kbd>'T'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#68" title="54" data-ref="_M/A_PREV_TAG">A_PREV_TAG</a>,</td></tr>
+<tr><th id="149">149</th><td>	<kbd>':'</kbd>,<kbd>'x'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#52" title="38" data-ref="_M/A_INDEX_FILE">A_INDEX_FILE</a>,</td></tr>
+<tr><th id="150">150</th><td>	<kbd>':'</kbd>,<kbd>'d'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#66" title="52" data-ref="_M/A_REMOVE_FILE">A_REMOVE_FILE</a>,</td></tr>
+<tr><th id="151">151</th><td>	<kbd>'-'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#61" title="47" data-ref="_M/A_OPT_TOGGLE">A_OPT_TOGGLE</a>,</td></tr>
+<tr><th id="152">152</th><td>	<kbd>':'</kbd>,<kbd>'t'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#61" title="47" data-ref="_M/A_OPT_TOGGLE">A_OPT_TOGGLE</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'t'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="153">153</th><td>	<kbd>'s'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#61" title="47" data-ref="_M/A_OPT_TOGGLE">A_OPT_TOGGLE</a>|<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>,	<kbd>'o'</kbd>,<var>0</var>,</td></tr>
+<tr><th id="154">154</th><td>	<kbd>'_'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#21" title="7" data-ref="_M/A_DISP_OPTION">A_DISP_OPTION</a>,</td></tr>
+<tr><th id="155">155</th><td>	<kbd>'|'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#51" title="37" data-ref="_M/A_PIPE">A_PIPE</a>,</td></tr>
+<tr><th id="156">156</th><td>	<kbd>'v'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#46" title="32" data-ref="_M/A_VISUAL">A_VISUAL</a>,</td></tr>
+<tr><th id="157">157</th><td>	<kbd>'!'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#41" title="27" data-ref="_M/A_SHELL">A_SHELL</a>,</td></tr>
+<tr><th id="158">158</th><td>	<kbd>'+'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#24" title="10" data-ref="_M/A_FIRSTCMD">A_FIRSTCMD</a>,</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td>	<kbd>'H'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#33" title="19" data-ref="_M/A_HELP">A_HELP</a>,</td></tr>
+<tr><th id="161">161</th><td>	<kbd>'h'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#33" title="19" data-ref="_M/A_HELP">A_HELP</a>,</td></tr>
+<tr><th id="162">162</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (14), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#132" title="14" data-ref="_M/SK_F1">SK_F1</a>),<var>0</var>,			<a class="macro" href="cmd.h.html#33" title="19" data-ref="_M/A_HELP">A_HELP</a>,</td></tr>
+<tr><th id="163">163</th><td>	<kbd>'V'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#45" title="31" data-ref="_M/A_VERSION">A_VERSION</a>,</td></tr>
+<tr><th id="164">164</th><td>	<kbd>'q'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#38" title="24" data-ref="_M/A_QUIT">A_QUIT</a>,</td></tr>
+<tr><th id="165">165</th><td>	<kbd>'Q'</kbd>,<var>0</var>,				<a class="macro" href="cmd.h.html#38" title="24" data-ref="_M/A_QUIT">A_QUIT</a>,</td></tr>
+<tr><th id="166">166</th><td>	<kbd>':'</kbd>,<kbd>'q'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#38" title="24" data-ref="_M/A_QUIT">A_QUIT</a>,</td></tr>
+<tr><th id="167">167</th><td>	<kbd>':'</kbd>,<kbd>'Q'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#38" title="24" data-ref="_M/A_QUIT">A_QUIT</a>,</td></tr>
+<tr><th id="168">168</th><td>	<kbd>'Z'</kbd>,<kbd>'Z'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#38" title="24" data-ref="_M/A_QUIT">A_QUIT</a></td></tr>
+<tr><th id="169">169</th><td>};</td></tr>
+<tr><th id="170">170</th><td></td></tr>
+<tr><th id="171">171</th><td><em>static</em> <em>unsigned</em> <em>char</em> <dfn class="tu decl def" id="edittable" title='edittable' data-type='unsigned char [201]' data-ref="edittable" data-ref-filename="edittable">edittable</dfn>[] =</td></tr>
+<tr><th id="172">172</th><td>{</td></tr>
+<tr><th id="173">173</th><td>	<kbd>'\t'</kbd>,<var>0</var>,	    			<a class="macro" href="cmd.h.html#100" title="17" data-ref="_M/EC_F_COMPLETE">EC_F_COMPLETE</a>,	<i>/* TAB */</i></td></tr>
+<tr><th id="174">174</th><td>	<kbd>'\17'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#101" title="18" data-ref="_M/EC_B_COMPLETE">EC_B_COMPLETE</a>,	<i>/* BACKTAB */</i></td></tr>
+<tr><th id="175">175</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (15), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#133" title="15" data-ref="_M/SK_BACKTAB">SK_BACKTAB</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#101" title="18" data-ref="_M/EC_B_COMPLETE">EC_B_COMPLETE</a>,	<i>/* BACKTAB */</i></td></tr>
+<tr><th id="176">176</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'\t'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#101" title="18" data-ref="_M/EC_B_COMPLETE">EC_B_COMPLETE</a>,	<i>/* ESC TAB */</i></td></tr>
+<tr><th id="177">177</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;L&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'L'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#99" title="15" data-ref="_M/EC_EXPAND">EC_EXPAND</a>,	<i>/* CTRL-L */</i></td></tr>
+<tr><th id="178">178</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;V&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'V'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#102" title="19" data-ref="_M/EC_LITERAL">EC_LITERAL</a>,	<i>/* BACKSLASH */</i></td></tr>
+<tr><th id="179">179</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;A&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'A'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#102" title="19" data-ref="_M/EC_LITERAL">EC_LITERAL</a>,	<i>/* BACKSLASH */</i></td></tr>
+<tr><th id="180">180</th><td>   	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'l'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#87" title="3" data-ref="_M/EC_RIGHT">EC_RIGHT</a>,	<i>/* ESC l */</i></td></tr>
+<tr><th id="181">181</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (1), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#119" title="1" data-ref="_M/SK_RIGHT_ARROW">SK_RIGHT_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#87" title="3" data-ref="_M/EC_RIGHT">EC_RIGHT</a>,	<i>/* RIGHTARROW */</i></td></tr>
+<tr><th id="182">182</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'h'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#88" title="4" data-ref="_M/EC_LEFT">EC_LEFT</a>,	<i>/* ESC h */</i></td></tr>
+<tr><th id="183">183</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (2), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#120" title="2" data-ref="_M/SK_LEFT_ARROW">SK_LEFT_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#88" title="4" data-ref="_M/EC_LEFT">EC_LEFT</a>,	<i>/* LEFTARROW */</i></td></tr>
+<tr><th id="184">184</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'b'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#89" title="5" data-ref="_M/EC_W_LEFT">EC_W_LEFT</a>,	<i>/* ESC b */</i></td></tr>
+<tr><th id="185">185</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (2), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#120" title="2" data-ref="_M/SK_LEFT_ARROW">SK_LEFT_ARROW</a>),<var>0</var>,	<a class="macro" href="cmd.h.html#89" title="5" data-ref="_M/EC_W_LEFT">EC_W_LEFT</a>,	<i>/* ESC LEFTARROW */</i></td></tr>
+<tr><th id="186">186</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (11), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#129" title="11" data-ref="_M/SK_CTL_LEFT_ARROW">SK_CTL_LEFT_ARROW</a>),<var>0</var>,	<a class="macro" href="cmd.h.html#89" title="5" data-ref="_M/EC_W_LEFT">EC_W_LEFT</a>,	<i>/* CTRL-LEFTARROW */</i></td></tr>
+<tr><th id="187">187</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'w'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#90" title="6" data-ref="_M/EC_W_RIGHT">EC_W_RIGHT</a>,	<i>/* ESC w */</i></td></tr>
+<tr><th id="188">188</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (1), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#119" title="1" data-ref="_M/SK_RIGHT_ARROW">SK_RIGHT_ARROW</a>),<var>0</var>,	<a class="macro" href="cmd.h.html#90" title="6" data-ref="_M/EC_W_RIGHT">EC_W_RIGHT</a>,	<i>/* ESC RIGHTARROW */</i></td></tr>
+<tr><th id="189">189</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (12), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#130" title="12" data-ref="_M/SK_CTL_RIGHT_ARROW">SK_CTL_RIGHT_ARROW</a>),<var>0</var>,	<a class="macro" href="cmd.h.html#90" title="6" data-ref="_M/EC_W_RIGHT">EC_W_RIGHT</a>,	<i>/* CTRL-RIGHTARROW */</i></td></tr>
+<tr><th id="190">190</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'i'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#91" title="7" data-ref="_M/EC_INSERT">EC_INSERT</a>,	<i>/* ESC i */</i></td></tr>
+<tr><th id="191">191</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (10), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#128" title="10" data-ref="_M/SK_INSERT">SK_INSERT</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#91" title="7" data-ref="_M/EC_INSERT">EC_INSERT</a>,	<i>/* INSERT */</i></td></tr>
+<tr><th id="192">192</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'x'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#92" title="8" data-ref="_M/EC_DELETE">EC_DELETE</a>,	<i>/* ESC x */</i></td></tr>
+<tr><th id="193">193</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (9), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#127" title="9" data-ref="_M/SK_DELETE">SK_DELETE</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#92" title="8" data-ref="_M/EC_DELETE">EC_DELETE</a>,	<i>/* DELETE */</i></td></tr>
+<tr><th id="194">194</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'X'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#96" title="12" data-ref="_M/EC_W_DELETE">EC_W_DELETE</a>,	<i>/* ESC X */</i></td></tr>
+<tr><th id="195">195</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (9), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#127" title="9" data-ref="_M/SK_DELETE">SK_DELETE</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#96" title="12" data-ref="_M/EC_W_DELETE">EC_W_DELETE</a>,	<i>/* ESC DELETE */</i></td></tr>
+<tr><th id="196">196</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (13), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#131" title="13" data-ref="_M/SK_CTL_DELETE">SK_CTL_DELETE</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#96" title="12" data-ref="_M/EC_W_DELETE">EC_W_DELETE</a>,	<i>/* CTRL-DELETE */</i></td></tr>
+<tr><th id="197">197</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (16), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#134" title="16" data-ref="_M/SK_CTL_BACKSPACE">SK_CTL_BACKSPACE</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#95" title="11" data-ref="_M/EC_W_BACKSPACE">EC_W_BACKSPACE</a>, <i>/* CTRL-BACKSPACE */</i></td></tr>
+<tr><th id="198">198</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'\b'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#95" title="11" data-ref="_M/EC_W_BACKSPACE">EC_W_BACKSPACE</a>,	<i>/* ESC BACKSPACE */</i></td></tr>
+<tr><th id="199">199</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'0'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#93" title="9" data-ref="_M/EC_HOME">EC_HOME</a>,	<i>/* ESC 0 */</i></td></tr>
+<tr><th id="200">200</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (7), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#125" title="7" data-ref="_M/SK_HOME">SK_HOME</a>),<var>0</var>,			<a class="macro" href="cmd.h.html#93" title="9" data-ref="_M/EC_HOME">EC_HOME</a>,	<i>/* HOME */</i></td></tr>
+<tr><th id="201">201</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'$'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#94" title="10" data-ref="_M/EC_END">EC_END</a>,		<i>/* ESC $ */</i></td></tr>
+<tr><th id="202">202</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (8), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#126" title="8" data-ref="_M/SK_END">SK_END</a>),<var>0</var>,			<a class="macro" href="cmd.h.html#94" title="10" data-ref="_M/EC_END">EC_END</a>,		<i>/* END */</i></td></tr>
+<tr><th id="203">203</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'k'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#97" title="13" data-ref="_M/EC_UP">EC_UP</a>,		<i>/* ESC k */</i></td></tr>
+<tr><th id="204">204</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (3), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#121" title="3" data-ref="_M/SK_UP_ARROW">SK_UP_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#97" title="13" data-ref="_M/EC_UP">EC_UP</a>,		<i>/* UPARROW */</i></td></tr>
+<tr><th id="205">205</th><td>	<a class="macro" href="less.h.html#448" title="((&apos;[&apos;)&amp;037)" data-ref="_M/ESC">ESC</a>,<kbd>'j'</kbd>,<var>0</var>,			<a class="macro" href="cmd.h.html#98" title="14" data-ref="_M/EC_DOWN">EC_DOWN</a>,	<i>/* ESC j */</i></td></tr>
+<tr><th id="206">206</th><td>	<a class="macro" href="#41" title="((&apos;K&apos;)&amp;037), (4), 6, 1, 1, 1" data-ref="_M/SK">SK</a>(<a class="macro" href="cmd.h.html#122" title="4" data-ref="_M/SK_DOWN_ARROW">SK_DOWN_ARROW</a>),<var>0</var>,		<a class="macro" href="cmd.h.html#98" title="14" data-ref="_M/EC_DOWN">EC_DOWN</a>,	<i>/* DOWNARROW */</i></td></tr>
+<tr><th id="207">207</th><td>	<a class="macro" href="less.h.html#445" title="((&apos;G&apos;)&amp;037)" data-ref="_M/CONTROL">CONTROL</a>(<kbd>'G'</kbd>),<var>0</var>,			<a class="macro" href="cmd.h.html#103" title="20" data-ref="_M/EC_ABORT">EC_ABORT</a>,	<i>/* CTRL-G */</i></td></tr>
+<tr><th id="208">208</th><td>};</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><i>/*</i></td></tr>
+<tr><th id="211">211</th><td><i> * Structure to support a list of command tables.</i></td></tr>
+<tr><th id="212">212</th><td><i> */</i></td></tr>
+<tr><th id="213">213</th><td><b>struct</b> <dfn class="type def" id="tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</dfn></td></tr>
+<tr><th id="214">214</th><td>{</td></tr>
+<tr><th id="215">215</th><td>	<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="tu decl field" id="tablelist::t_next" title='tablelist::t_next' data-type='struct tablelist *' data-ref="tablelist::t_next" data-ref-filename="tablelist..t_next">t_next</dfn>;</td></tr>
+<tr><th id="216">216</th><td>	<em>char</em> *<dfn class="tu decl field" id="tablelist::t_start" title='tablelist::t_start' data-type='char *' data-ref="tablelist::t_start" data-ref-filename="tablelist..t_start">t_start</dfn>;</td></tr>
+<tr><th id="217">217</th><td>	<em>char</em> *<dfn class="tu decl field" id="tablelist::t_end" title='tablelist::t_end' data-type='char *' data-ref="tablelist::t_end" data-ref-filename="tablelist..t_end">t_end</dfn>;</td></tr>
+<tr><th id="218">218</th><td>};</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td><i  data-doc="list_fcmd_tables">/*</i></td></tr>
+<tr><th id="221">221</th><td><i  data-doc="list_fcmd_tables"> * List of command tables and list of line-edit tables.</i></td></tr>
+<tr><th id="222">222</th><td><i  data-doc="list_fcmd_tables"> */</i></td></tr>
+<tr><th id="223">223</th><td><em>static</em> <b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="tu decl def" id="list_fcmd_tables" title='list_fcmd_tables' data-type='struct tablelist *' data-ref="list_fcmd_tables" data-ref-filename="list_fcmd_tables">list_fcmd_tables</dfn> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="224">224</th><td><em>static</em> <b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="tu decl def" id="list_ecmd_tables" title='list_ecmd_tables' data-type='struct tablelist *' data-ref="list_ecmd_tables" data-ref-filename="list_ecmd_tables">list_ecmd_tables</dfn> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="225">225</th><td><em>static</em> <b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="tu decl def" id="list_var_tables" title='list_var_tables' data-type='struct tablelist *' data-ref="list_var_tables" data-ref-filename="list_var_tables">list_var_tables</dfn> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="226">226</th><td><em>static</em> <b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="tu decl def" id="list_sysvar_tables" title='list_sysvar_tables' data-type='struct tablelist *' data-ref="list_sysvar_tables" data-ref-filename="list_sysvar_tables">list_sysvar_tables</dfn> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="227">227</th><td></td></tr>
+<tr><th id="228">228</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#add_cmd_table" title='add_cmd_table' data-type='int add_cmd_table(struct tablelist ** , char * , int )' data-ref="add_cmd_table" data-ref-filename="add_cmd_table">add_cmd_table</a> <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#97" title="(struct tablelist **, char *, int)" data-ref="_M/__P">__P</a>((<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> **, <em>char</em> *, <em>int</em>));</td></tr>
+<tr><th id="229">229</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#cmd_decode" title='cmd_decode' data-type='int cmd_decode(struct tablelist * , char * , char ** )' data-ref="cmd_decode" data-ref-filename="cmd_decode">cmd_decode</a> <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#97" title="(struct tablelist *, char *, char **)" data-ref="_M/__P">__P</a>((<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *, <em>char</em> *, <em>char</em> **));</td></tr>
+<tr><th id="230">230</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#gint" title='gint' data-type='int gint(char ** )' data-ref="gint" data-ref-filename="gint">gint</a> <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#97" title="(char **)" data-ref="_M/__P">__P</a>((<em>char</em> **));</td></tr>
+<tr><th id="231">231</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#old_lesskey" title='old_lesskey' data-type='int old_lesskey(char * , int )' data-ref="old_lesskey" data-ref-filename="old_lesskey">old_lesskey</a> <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#97" title="(char *, int)" data-ref="_M/__P">__P</a>((<em>char</em> *, <em>int</em>));</td></tr>
+<tr><th id="232">232</th><td><em>static</em> <em>int</em> <a class="tu decl fn" href="#new_lesskey" title='new_lesskey' data-type='int new_lesskey(char * , int , int )' data-ref="new_lesskey" data-ref-filename="new_lesskey">new_lesskey</a> <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html#97" title="(char *, int, int)" data-ref="_M/__P">__P</a>((<em>char</em> *, <em>int</em>, <em>int</em>));</td></tr>
+<tr><th id="233">233</th><td></td></tr>
+<tr><th id="234">234</th><td><i  data-doc="expand_special_keys">/*</i></td></tr>
+<tr><th id="235">235</th><td><i  data-doc="expand_special_keys"> * Expand special key abbreviations in a command table.</i></td></tr>
+<tr><th id="236">236</th><td><i  data-doc="expand_special_keys"> */</i></td></tr>
+<tr><th id="237">237</th><td>	<em>static</em> <em>void</em></td></tr>
+<tr><th id="238">238</th><td><dfn class="tu decl def fn" id="expand_special_keys" title='expand_special_keys' data-type='void expand_special_keys(char * table, int len)' data-ref="expand_special_keys" data-ref-filename="expand_special_keys">expand_special_keys</dfn>(table, len)</td></tr>
+<tr><th id="239">239</th><td>	<em>char</em> *<dfn class="local col1 decl" id="1table" title='table' data-type='char *' data-ref="1table" data-ref-filename="1table">table</dfn>;</td></tr>
+<tr><th id="240">240</th><td>	<em>int</em> <dfn class="local col2 decl" id="2len" title='len' data-type='int' data-ref="2len" data-ref-filename="2len">len</dfn>;</td></tr>
+<tr><th id="241">241</th><td>{</td></tr>
+<tr><th id="242">242</th><td>	<em>register</em> <em>char</em> *<dfn class="local col3 decl" id="3fm" title='fm' data-type='char *' data-ref="3fm" data-ref-filename="3fm">fm</dfn>;</td></tr>
+<tr><th id="243">243</th><td>	<em>register</em> <em>char</em> *<dfn class="local col4 decl" id="4to" title='to' data-type='char *' data-ref="4to" data-ref-filename="4to">to</dfn>;</td></tr>
+<tr><th id="244">244</th><td>	<em>register</em> <em>int</em> <dfn class="local col5 decl" id="5a" title='a' data-type='int' data-ref="5a" data-ref-filename="5a">a</dfn>;</td></tr>
+<tr><th id="245">245</th><td>	<em>char</em> *<dfn class="local col6 decl" id="6repl" title='repl' data-type='char *' data-ref="6repl" data-ref-filename="6repl">repl</dfn>;</td></tr>
+<tr><th id="246">246</th><td>	<em>int</em> <dfn class="local col7 decl" id="7klen" title='klen' data-type='int' data-ref="7klen" data-ref-filename="7klen">klen</dfn>;</td></tr>
+<tr><th id="247">247</th><td></td></tr>
+<tr><th id="248">248</th><td>	<b>for</b> (<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a> = <a class="local col1 ref" href="#1table" title='table' data-ref="1table" data-ref-filename="1table">table</a>;  <a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a> &lt; <a class="local col1 ref" href="#1table" title='table' data-ref="1table" data-ref-filename="1table">table</a> + <a class="local col2 ref" href="#2len" title='len' data-ref="2len" data-ref-filename="2len">len</a>; )</td></tr>
+<tr><th id="249">249</th><td>	{</td></tr>
+<tr><th id="250">250</th><td>		<i>/*</i></td></tr>
+<tr><th id="251">251</th><td><i>		 * Rewrite each command in the table with any</i></td></tr>
+<tr><th id="252">252</th><td><i>		 * special key abbreviations expanded.</i></td></tr>
+<tr><th id="253">253</th><td><i>		 */</i></td></tr>
+<tr><th id="254">254</th><td>		<b>for</b> (<a class="local col4 ref" href="#4to" title='to' data-ref="4to" data-ref-filename="4to">to</a> = <a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>;  *<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a> != <kbd>'\0'</kbd>; )</td></tr>
+<tr><th id="255">255</th><td>		{</td></tr>
+<tr><th id="256">256</th><td>			<b>if</b> (*<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a> != <a class="macro" href="cmd.h.html#118" title="((&apos;K&apos;)&amp;037)" data-ref="_M/SK_SPECIAL_KEY">SK_SPECIAL_KEY</a>)</td></tr>
+<tr><th id="257">257</th><td>			{</td></tr>
+<tr><th id="258">258</th><td>				*<a class="local col4 ref" href="#4to" title='to' data-ref="4to" data-ref-filename="4to">to</a>++ = *<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>++;</td></tr>
+<tr><th id="259">259</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="260">260</th><td>			}</td></tr>
+<tr><th id="261">261</th><td>			<i>/*</i></td></tr>
+<tr><th id="262">262</th><td><i>			 * After SK_SPECIAL_KEY, next byte is the type</i></td></tr>
+<tr><th id="263">263</th><td><i>			 * of special key (one of the SK_* contants),</i></td></tr>
+<tr><th id="264">264</th><td><i>			 * and the byte after that is the number of bytes,</i></td></tr>
+<tr><th id="265">265</th><td><i>			 * N, reserved by the abbreviation (including the</i></td></tr>
+<tr><th id="266">266</th><td><i>			 * SK_SPECIAL_KEY and key type bytes).</i></td></tr>
+<tr><th id="267">267</th><td><i>			 * Replace all N bytes with the actual bytes</i></td></tr>
+<tr><th id="268">268</th><td><i>			 * output by the special key on this terminal.</i></td></tr>
+<tr><th id="269">269</th><td><i>			 */</i></td></tr>
+<tr><th id="270">270</th><td>			<a class="local col6 ref" href="#6repl" title='repl' data-ref="6repl" data-ref-filename="6repl">repl</a> = <a class="ref fn" href="funcs.h.html#special_key_str" title='special_key_str' data-ref="special_key_str" data-ref-filename="special_key_str">special_key_str</a>(<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>[<var>1</var>]);</td></tr>
+<tr><th id="271">271</th><td>			<a class="local col7 ref" href="#7klen" title='klen' data-ref="7klen" data-ref-filename="7klen">klen</a> = <a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>[<var>2</var>] &amp; <var>0377</var>;</td></tr>
+<tr><th id="272">272</th><td>			<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a> += <a class="local col7 ref" href="#7klen" title='klen' data-ref="7klen" data-ref-filename="7klen">klen</a>;</td></tr>
+<tr><th id="273">273</th><td>			<b>if</b> (<a class="local col6 ref" href="#6repl" title='repl' data-ref="6repl" data-ref-filename="6repl">repl</a> == <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> || (<em>int</em>) <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="local col6 ref" href="#6repl" title='repl' data-ref="6repl" data-ref-filename="6repl">repl</a>) &gt; <a class="local col7 ref" href="#7klen" title='klen' data-ref="7klen" data-ref-filename="7klen">klen</a>)</td></tr>
+<tr><th id="274">274</th><td>				<a class="local col6 ref" href="#6repl" title='repl' data-ref="6repl" data-ref-filename="6repl">repl</a> = <q>"\377"</q>;</td></tr>
+<tr><th id="275">275</th><td>			<b>while</b> (*<a class="local col6 ref" href="#6repl" title='repl' data-ref="6repl" data-ref-filename="6repl">repl</a> != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="276">276</th><td>				*<a class="local col4 ref" href="#4to" title='to' data-ref="4to" data-ref-filename="4to">to</a>++ = *<a class="local col6 ref" href="#6repl" title='repl' data-ref="6repl" data-ref-filename="6repl">repl</a>++;</td></tr>
+<tr><th id="277">277</th><td>		}</td></tr>
+<tr><th id="278">278</th><td>		*<a class="local col4 ref" href="#4to" title='to' data-ref="4to" data-ref-filename="4to">to</a>++ = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="279">279</th><td>		<i>/*</i></td></tr>
+<tr><th id="280">280</th><td><i>		 * Fill any unused bytes between end of command and </i></td></tr>
+<tr><th id="281">281</th><td><i>		 * the action byte with A_SKIP.</i></td></tr>
+<tr><th id="282">282</th><td><i>		 */</i></td></tr>
+<tr><th id="283">283</th><td>		<b>while</b> (<a class="local col4 ref" href="#4to" title='to' data-ref="4to" data-ref-filename="4to">to</a> &lt;= <a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>)</td></tr>
+<tr><th id="284">284</th><td>			*<a class="local col4 ref" href="#4to" title='to' data-ref="4to" data-ref-filename="4to">to</a>++ = <a class="macro" href="cmd.h.html#78" title="127" data-ref="_M/A_SKIP">A_SKIP</a>;</td></tr>
+<tr><th id="285">285</th><td>		<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>++;</td></tr>
+<tr><th id="286">286</th><td>		<a class="local col5 ref" href="#5a" title='a' data-ref="5a" data-ref-filename="5a">a</a> = *<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>++ &amp; <var>0377</var>;</td></tr>
+<tr><th id="287">287</th><td>		<b>if</b> (<a class="local col5 ref" href="#5a" title='a' data-ref="5a" data-ref-filename="5a">a</a> &amp; <a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>)</td></tr>
+<tr><th id="288">288</th><td>		{</td></tr>
+<tr><th id="289">289</th><td>			<b>while</b> (*<a class="local col3 ref" href="#3fm" title='fm' data-ref="3fm" data-ref-filename="3fm">fm</a>++ != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="290">290</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="291">291</th><td>		}</td></tr>
+<tr><th id="292">292</th><td>	}</td></tr>
+<tr><th id="293">293</th><td>}</td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td><i>/*</i></td></tr>
+<tr><th id="296">296</th><td><i> * Initialize the command lists.</i></td></tr>
+<tr><th id="297">297</th><td><i> */</i></td></tr>
+<tr><th id="298">298</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>void</em></td></tr>
+<tr><th id="299">299</th><td><dfn class="decl def fn" id="init_cmds" title='init_cmds' data-ref="init_cmds" data-ref-filename="init_cmds">init_cmds</dfn>()</td></tr>
+<tr><th id="300">300</th><td>{</td></tr>
+<tr><th id="301">301</th><td>	<i>/*</i></td></tr>
+<tr><th id="302">302</th><td><i>	 * Add the default command tables.</i></td></tr>
+<tr><th id="303">303</th><td><i>	 */</i></td></tr>
+<tr><th id="304">304</th><td>	<a class="ref fn" href="#add_fcmd_table" title='add_fcmd_table' data-ref="add_fcmd_table" data-ref-filename="add_fcmd_table">add_fcmd_table</a>((<em>char</em>*)<a class="tu ref" href="#cmdtable" title='cmdtable' data-ref="cmdtable" data-ref-filename="cmdtable">cmdtable</a>, <b>sizeof</b>(<a class="tu ref" href="#cmdtable" title='cmdtable' data-ref="cmdtable" data-ref-filename="cmdtable">cmdtable</a>));</td></tr>
+<tr><th id="305">305</th><td>	<a class="ref fn" href="#add_ecmd_table" title='add_ecmd_table' data-ref="add_ecmd_table" data-ref-filename="add_ecmd_table">add_ecmd_table</a>((<em>char</em>*)<a class="tu ref" href="#edittable" title='edittable' data-ref="edittable" data-ref-filename="edittable">edittable</a>, <b>sizeof</b>(<a class="tu ref" href="#edittable" title='edittable' data-ref="edittable" data-ref-filename="edittable">edittable</a>));</td></tr>
+<tr><th id="306">306</th><td><u>#<span data-ppcond="306">if</span> <a class="macro" href="defines.h.html#73" title="(!0)" data-ref="_M/USERFILE">USERFILE</a></u></td></tr>
+<tr><th id="307">307</th><td>	<i>/*</i></td></tr>
+<tr><th id="308">308</th><td><i>	 * For backwards compatibility,</i></td></tr>
+<tr><th id="309">309</th><td><i>	 * try to add tables in the OLD system lesskey file.</i></td></tr>
+<tr><th id="310">310</th><td><i>	 */</i></td></tr>
+<tr><th id="311">311</th><td><u>#<span data-ppcond="311">ifdef</span> <span class="macro" data-ref="_M/BINDIR">BINDIR</span></u></td></tr>
+<tr><th id="312">312</th><td>	<a class="ref fn" href="#add_hometable" title='add_hometable' data-ref="add_hometable" data-ref-filename="add_hometable">add_hometable</a>(<a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <span class="macro" title="&quot;/usr/bin&quot;" data-ref="_M/BINDIR">BINDIR</span> <q>"/.sysless"</q>, <var>1</var>);</td></tr>
+<tr><th id="313">313</th><td><u>#<span data-ppcond="311">endif</span></u></td></tr>
+<tr><th id="314">314</th><td>	<i>/*</i></td></tr>
+<tr><th id="315">315</th><td><i>	 * Try to add the tables in the system lesskey file.</i></td></tr>
+<tr><th id="316">316</th><td><i>	 */</i></td></tr>
+<tr><th id="317">317</th><td>	<a class="ref fn" href="#add_hometable" title='add_hometable' data-ref="add_hometable" data-ref-filename="add_hometable">add_hometable</a>(<q>"LESSKEY_SYSTEM"</q>, <a class="macro" href="defines.h.html#116" title="&quot;/etc&quot; &quot;/sysless&quot;" data-ref="_M/LESSKEYFILE_SYS">LESSKEYFILE_SYS</a>, <var>1</var>);</td></tr>
+<tr><th id="318">318</th><td>	<i>/*</i></td></tr>
+<tr><th id="319">319</th><td><i>	 * Try to add the tables in the standard lesskey file "$HOME/.less".</i></td></tr>
+<tr><th id="320">320</th><td><i>	 */</i></td></tr>
+<tr><th id="321">321</th><td>	<a class="ref fn" href="#add_hometable" title='add_hometable' data-ref="add_hometable" data-ref-filename="add_hometable">add_hometable</a>(<q>"LESSKEY"</q>, <a class="macro" href="defines.h.html#115" title="&quot;.less&quot;" data-ref="_M/LESSKEYFILE">LESSKEYFILE</a>, <var>0</var>);</td></tr>
+<tr><th id="322">322</th><td><u>#<span data-ppcond="306">endif</span></u></td></tr>
+<tr><th id="323">323</th><td>}</td></tr>
+<tr><th id="324">324</th><td></td></tr>
+<tr><th id="325">325</th><td><i  data-doc="add_cmd_table">/*</i></td></tr>
+<tr><th id="326">326</th><td><i  data-doc="add_cmd_table"> * Add a command table.</i></td></tr>
+<tr><th id="327">327</th><td><i  data-doc="add_cmd_table"> */</i></td></tr>
+<tr><th id="328">328</th><td>	<em>static</em> <em>int</em></td></tr>
+<tr><th id="329">329</th><td><dfn class="tu decl def fn" id="add_cmd_table" title='add_cmd_table' data-type='int add_cmd_table(struct tablelist ** tlist, char * buf, int len)' data-ref="add_cmd_table" data-ref-filename="add_cmd_table">add_cmd_table</dfn>(tlist, buf, len)</td></tr>
+<tr><th id="330">330</th><td>	<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> **<dfn class="local col8 decl" id="8tlist" title='tlist' data-type='struct tablelist **' data-ref="8tlist" data-ref-filename="8tlist">tlist</dfn>;</td></tr>
+<tr><th id="331">331</th><td>	<em>char</em> *<dfn class="local col9 decl" id="9buf" title='buf' data-type='char *' data-ref="9buf" data-ref-filename="9buf">buf</dfn>;</td></tr>
+<tr><th id="332">332</th><td>	<em>int</em> <dfn class="local col0 decl" id="10len" title='len' data-type='int' data-ref="10len" data-ref-filename="10len">len</dfn>;</td></tr>
+<tr><th id="333">333</th><td>{</td></tr>
+<tr><th id="334">334</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="local col1 decl" id="11t" title='t' data-type='struct tablelist *' data-ref="11t" data-ref-filename="11t">t</dfn>;</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td>	<b>if</b> (<a class="local col0 ref" href="#10len" title='len' data-ref="10len" data-ref-filename="10len">len</a> == <var>0</var>)</td></tr>
+<tr><th id="337">337</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="338">338</th><td>	<i>/*</i></td></tr>
+<tr><th id="339">339</th><td><i>	 * Allocate a tablelist structure, initialize it, </i></td></tr>
+<tr><th id="340">340</th><td><i>	 * and link it into the list of tables.</i></td></tr>
+<tr><th id="341">341</th><td><i>	 */</i></td></tr>
+<tr><th id="342">342</th><td>	<b>if</b> ((<a class="local col1 ref" href="#11t" title='t' data-ref="11t" data-ref-filename="11t">t</a> = (<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *) </td></tr>
+<tr><th id="343">343</th><td>			<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#calloc" title='calloc' data-ref="calloc" data-ref-filename="calloc">calloc</a>(<var>1</var>, <b>sizeof</b>(<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a>))) == <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="344">344</th><td>	{</td></tr>
+<tr><th id="345">345</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="346">346</th><td>	}</td></tr>
+<tr><th id="347">347</th><td>	<a class="tu ref fn" href="#expand_special_keys" title='expand_special_keys' data-use='c' data-ref="expand_special_keys" data-ref-filename="expand_special_keys">expand_special_keys</a>(<a class="local col9 ref" href="#9buf" title='buf' data-ref="9buf" data-ref-filename="9buf">buf</a>, <a class="local col0 ref" href="#10len" title='len' data-ref="10len" data-ref-filename="10len">len</a>);</td></tr>
+<tr><th id="348">348</th><td>	<a class="local col1 ref" href="#11t" title='t' data-ref="11t" data-ref-filename="11t">t</a>-&gt;<a class="tu ref field" href="#tablelist::t_start" title='tablelist::t_start' data-use='w' data-ref="tablelist::t_start" data-ref-filename="tablelist..t_start">t_start</a> = <a class="local col9 ref" href="#9buf" title='buf' data-ref="9buf" data-ref-filename="9buf">buf</a>;</td></tr>
+<tr><th id="349">349</th><td>	<a class="local col1 ref" href="#11t" title='t' data-ref="11t" data-ref-filename="11t">t</a>-&gt;<a class="tu ref field" href="#tablelist::t_end" title='tablelist::t_end' data-use='w' data-ref="tablelist::t_end" data-ref-filename="tablelist..t_end">t_end</a> = <a class="local col9 ref" href="#9buf" title='buf' data-ref="9buf" data-ref-filename="9buf">buf</a> + <a class="local col0 ref" href="#10len" title='len' data-ref="10len" data-ref-filename="10len">len</a>;</td></tr>
+<tr><th id="350">350</th><td>	<a class="local col1 ref" href="#11t" title='t' data-ref="11t" data-ref-filename="11t">t</a>-&gt;<a class="tu ref field" href="#tablelist::t_next" title='tablelist::t_next' data-use='w' data-ref="tablelist::t_next" data-ref-filename="tablelist..t_next">t_next</a> = *<a class="local col8 ref" href="#8tlist" title='tlist' data-ref="8tlist" data-ref-filename="8tlist">tlist</a>;</td></tr>
+<tr><th id="351">351</th><td>	*<a class="local col8 ref" href="#8tlist" title='tlist' data-ref="8tlist" data-ref-filename="8tlist">tlist</a> = <a class="local col1 ref" href="#11t" title='t' data-ref="11t" data-ref-filename="11t">t</a>;</td></tr>
+<tr><th id="352">352</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="353">353</th><td>}</td></tr>
+<tr><th id="354">354</th><td></td></tr>
+<tr><th id="355">355</th><td><i>/*</i></td></tr>
+<tr><th id="356">356</th><td><i> * Add a command table.</i></td></tr>
+<tr><th id="357">357</th><td><i> */</i></td></tr>
+<tr><th id="358">358</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>void</em></td></tr>
+<tr><th id="359">359</th><td><dfn class="decl def fn" id="add_fcmd_table" title='add_fcmd_table' data-ref="add_fcmd_table" data-ref-filename="add_fcmd_table">add_fcmd_table</dfn>(buf, len)</td></tr>
+<tr><th id="360">360</th><td>	<em>char</em> *<dfn class="local col2 decl" id="12buf" title='buf' data-type='char *' data-ref="12buf" data-ref-filename="12buf">buf</dfn>;</td></tr>
+<tr><th id="361">361</th><td>	<em>int</em> <dfn class="local col3 decl" id="13len" title='len' data-type='int' data-ref="13len" data-ref-filename="13len">len</dfn>;</td></tr>
+<tr><th id="362">362</th><td>{</td></tr>
+<tr><th id="363">363</th><td>	<b>if</b> (<a class="tu ref fn" href="#add_cmd_table" title='add_cmd_table' data-use='c' data-ref="add_cmd_table" data-ref-filename="add_cmd_table">add_cmd_table</a>(&amp;<a class="tu ref" href="#list_fcmd_tables" title='list_fcmd_tables' data-use='a' data-ref="list_fcmd_tables" data-ref-filename="list_fcmd_tables">list_fcmd_tables</a>, <a class="local col2 ref" href="#12buf" title='buf' data-ref="12buf" data-ref-filename="12buf">buf</a>, <a class="local col3 ref" href="#13len" title='len' data-ref="13len" data-ref-filename="13len">len</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="364">364</th><td>		<a class="ref fn" href="funcs.h.html#error" title='error' data-ref="error" data-ref-filename="error">error</a>(<q>"Warning: some commands disabled"</q>, <a class="macro" href="less.h.html#307" title="((PARG *)((void *)0))" data-ref="_M/NULL_PARG">NULL_PARG</a>);</td></tr>
+<tr><th id="365">365</th><td>}</td></tr>
+<tr><th id="366">366</th><td></td></tr>
+<tr><th id="367">367</th><td><i>/*</i></td></tr>
+<tr><th id="368">368</th><td><i> * Add an editing command table.</i></td></tr>
+<tr><th id="369">369</th><td><i> */</i></td></tr>
+<tr><th id="370">370</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>void</em></td></tr>
+<tr><th id="371">371</th><td><dfn class="decl def fn" id="add_ecmd_table" title='add_ecmd_table' data-ref="add_ecmd_table" data-ref-filename="add_ecmd_table">add_ecmd_table</dfn>(buf, len)</td></tr>
+<tr><th id="372">372</th><td>	<em>char</em> *<dfn class="local col4 decl" id="14buf" title='buf' data-type='char *' data-ref="14buf" data-ref-filename="14buf">buf</dfn>;</td></tr>
+<tr><th id="373">373</th><td>	<em>int</em> <dfn class="local col5 decl" id="15len" title='len' data-type='int' data-ref="15len" data-ref-filename="15len">len</dfn>;</td></tr>
+<tr><th id="374">374</th><td>{</td></tr>
+<tr><th id="375">375</th><td>	<b>if</b> (<a class="tu ref fn" href="#add_cmd_table" title='add_cmd_table' data-use='c' data-ref="add_cmd_table" data-ref-filename="add_cmd_table">add_cmd_table</a>(&amp;<a class="tu ref" href="#list_ecmd_tables" title='list_ecmd_tables' data-use='a' data-ref="list_ecmd_tables" data-ref-filename="list_ecmd_tables">list_ecmd_tables</a>, <a class="local col4 ref" href="#14buf" title='buf' data-ref="14buf" data-ref-filename="14buf">buf</a>, <a class="local col5 ref" href="#15len" title='len' data-ref="15len" data-ref-filename="15len">len</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="376">376</th><td>		<a class="ref fn" href="funcs.h.html#error" title='error' data-ref="error" data-ref-filename="error">error</a>(<q>"Warning: some edit commands disabled"</q>, <a class="macro" href="less.h.html#307" title="((PARG *)((void *)0))" data-ref="_M/NULL_PARG">NULL_PARG</a>);</td></tr>
+<tr><th id="377">377</th><td>}</td></tr>
+<tr><th id="378">378</th><td></td></tr>
+<tr><th id="379">379</th><td><i  data-doc="add_var_table">/*</i></td></tr>
+<tr><th id="380">380</th><td><i  data-doc="add_var_table"> * Add an environment variable table.</i></td></tr>
+<tr><th id="381">381</th><td><i  data-doc="add_var_table"> */</i></td></tr>
+<tr><th id="382">382</th><td>	<em>static</em> <em>void</em></td></tr>
+<tr><th id="383">383</th><td><dfn class="tu decl def fn" id="add_var_table" title='add_var_table' data-type='void add_var_table(struct tablelist ** tlist, char * buf, int len)' data-ref="add_var_table" data-ref-filename="add_var_table">add_var_table</dfn>(tlist, buf, len)</td></tr>
+<tr><th id="384">384</th><td>	<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> **<dfn class="local col6 decl" id="16tlist" title='tlist' data-type='struct tablelist **' data-ref="16tlist" data-ref-filename="16tlist">tlist</dfn>;</td></tr>
+<tr><th id="385">385</th><td>	<em>char</em> *<dfn class="local col7 decl" id="17buf" title='buf' data-type='char *' data-ref="17buf" data-ref-filename="17buf">buf</dfn>;</td></tr>
+<tr><th id="386">386</th><td>	<em>int</em> <dfn class="local col8 decl" id="18len" title='len' data-type='int' data-ref="18len" data-ref-filename="18len">len</dfn>;</td></tr>
+<tr><th id="387">387</th><td>{</td></tr>
+<tr><th id="388">388</th><td>	<b>if</b> (<a class="tu ref fn" href="#add_cmd_table" title='add_cmd_table' data-use='c' data-ref="add_cmd_table" data-ref-filename="add_cmd_table">add_cmd_table</a>(<a class="local col6 ref" href="#16tlist" title='tlist' data-ref="16tlist" data-ref-filename="16tlist">tlist</a>, <a class="local col7 ref" href="#17buf" title='buf' data-ref="17buf" data-ref-filename="17buf">buf</a>, <a class="local col8 ref" href="#18len" title='len' data-ref="18len" data-ref-filename="18len">len</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="389">389</th><td>		<a class="ref fn" href="funcs.h.html#error" title='error' data-ref="error" data-ref-filename="error">error</a>(<q>"Warning: environment variables from lesskey file unavailable"</q>, <a class="macro" href="less.h.html#307" title="((PARG *)((void *)0))" data-ref="_M/NULL_PARG">NULL_PARG</a>);</td></tr>
+<tr><th id="390">390</th><td>}</td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td><i  data-doc="cmd_search">/*</i></td></tr>
+<tr><th id="393">393</th><td><i  data-doc="cmd_search"> * Search a single command table for the command string in cmd.</i></td></tr>
+<tr><th id="394">394</th><td><i  data-doc="cmd_search"> */</i></td></tr>
+<tr><th id="395">395</th><td>	<em>static</em> <em>int</em></td></tr>
+<tr><th id="396">396</th><td><dfn class="tu decl def fn" id="cmd_search" title='cmd_search' data-type='int cmd_search(char * cmd, char * table, char * endtable, char ** sp)' data-ref="cmd_search" data-ref-filename="cmd_search">cmd_search</dfn>(cmd, table, endtable, sp)</td></tr>
+<tr><th id="397">397</th><td>	<em>char</em> *<dfn class="local col9 decl" id="19cmd" title='cmd' data-type='char *' data-ref="19cmd" data-ref-filename="19cmd">cmd</dfn>;</td></tr>
+<tr><th id="398">398</th><td>	<em>char</em> *<dfn class="local col0 decl" id="20table" title='table' data-type='char *' data-ref="20table" data-ref-filename="20table">table</dfn>;</td></tr>
+<tr><th id="399">399</th><td>	<em>char</em> *<dfn class="local col1 decl" id="21endtable" title='endtable' data-type='char *' data-ref="21endtable" data-ref-filename="21endtable">endtable</dfn>;</td></tr>
+<tr><th id="400">400</th><td>	<em>char</em> **<dfn class="local col2 decl" id="22sp" title='sp' data-type='char **' data-ref="22sp" data-ref-filename="22sp">sp</dfn>;</td></tr>
+<tr><th id="401">401</th><td>{</td></tr>
+<tr><th id="402">402</th><td>	<em>register</em> <em>char</em> *<dfn class="local col3 decl" id="23p" title='p' data-type='char *' data-ref="23p" data-ref-filename="23p">p</dfn>;</td></tr>
+<tr><th id="403">403</th><td>	<em>register</em> <em>char</em> *<dfn class="local col4 decl" id="24q" title='q' data-type='char *' data-ref="24q" data-ref-filename="24q">q</dfn>;</td></tr>
+<tr><th id="404">404</th><td>	<em>register</em> <em>int</em> <dfn class="local col5 decl" id="25a" title='a' data-type='int' data-ref="25a" data-ref-filename="25a">a</dfn>;</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td>	*<a class="local col2 ref" href="#22sp" title='sp' data-ref="22sp" data-ref-filename="22sp">sp</a> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="407">407</th><td>	<b>for</b> (<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> = <a class="local col0 ref" href="#20table" title='table' data-ref="20table" data-ref-filename="20table">table</a>, <a class="local col4 ref" href="#24q" title='q' data-ref="24q" data-ref-filename="24q">q</a> = <a class="local col9 ref" href="#19cmd" title='cmd' data-ref="19cmd" data-ref-filename="19cmd">cmd</a>;  <a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> &lt; <a class="local col1 ref" href="#21endtable" title='endtable' data-ref="21endtable" data-ref-filename="21endtable">endtable</a>;  <a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a>++, <a class="local col4 ref" href="#24q" title='q' data-ref="24q" data-ref-filename="24q">q</a>++)</td></tr>
+<tr><th id="408">408</th><td>	{</td></tr>
+<tr><th id="409">409</th><td>		<b>if</b> (*<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> == *<a class="local col4 ref" href="#24q" title='q' data-ref="24q" data-ref-filename="24q">q</a>)</td></tr>
+<tr><th id="410">410</th><td>		{</td></tr>
+<tr><th id="411">411</th><td>			<i>/*</i></td></tr>
+<tr><th id="412">412</th><td><i>			 * Current characters match.</i></td></tr>
+<tr><th id="413">413</th><td><i>			 * If we're at the end of the string, we've found it.</i></td></tr>
+<tr><th id="414">414</th><td><i>			 * Return the action code, which is the character</i></td></tr>
+<tr><th id="415">415</th><td><i>			 * after the null at the end of the string</i></td></tr>
+<tr><th id="416">416</th><td><i>			 * in the command table.</i></td></tr>
+<tr><th id="417">417</th><td><i>			 */</i></td></tr>
+<tr><th id="418">418</th><td>			<b>if</b> (*<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> == <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="419">419</th><td>			{</td></tr>
+<tr><th id="420">420</th><td>				<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a> = *++<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> &amp; <var>0377</var>;</td></tr>
+<tr><th id="421">421</th><td>				<b>while</b> (<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a> == <a class="macro" href="cmd.h.html#78" title="127" data-ref="_M/A_SKIP">A_SKIP</a>)</td></tr>
+<tr><th id="422">422</th><td>					<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a> = *++<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> &amp; <var>0377</var>;</td></tr>
+<tr><th id="423">423</th><td>				<b>if</b> (<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a> == <a class="macro" href="cmd.h.html#75" title="103" data-ref="_M/A_END_LIST">A_END_LIST</a>)</td></tr>
+<tr><th id="424">424</th><td>				{</td></tr>
+<tr><th id="425">425</th><td>					<i>/*</i></td></tr>
+<tr><th id="426">426</th><td><i>					 * We get here only if the original</i></td></tr>
+<tr><th id="427">427</th><td><i>					 * cmd string passed in was empty ("").</i></td></tr>
+<tr><th id="428">428</th><td><i>					 * I don't think that can happen,</i></td></tr>
+<tr><th id="429">429</th><td><i>					 * but just in case ...</i></td></tr>
+<tr><th id="430">430</th><td><i>					 */</i></td></tr>
+<tr><th id="431">431</th><td>					<b>return</b> (<a class="macro" href="cmd.h.html#74" title="102" data-ref="_M/A_UINVALID">A_UINVALID</a>);</td></tr>
+<tr><th id="432">432</th><td>				}</td></tr>
+<tr><th id="433">433</th><td>				<i>/*</i></td></tr>
+<tr><th id="434">434</th><td><i>				 * Check for an "extra" string.</i></td></tr>
+<tr><th id="435">435</th><td><i>				 */</i></td></tr>
+<tr><th id="436">436</th><td>				<b>if</b> (<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a> &amp; <a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>)</td></tr>
+<tr><th id="437">437</th><td>				{</td></tr>
+<tr><th id="438">438</th><td>					*<a class="local col2 ref" href="#22sp" title='sp' data-ref="22sp" data-ref-filename="22sp">sp</a> = ++<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a>;</td></tr>
+<tr><th id="439">439</th><td>					<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a> &amp;= ~<a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>;</td></tr>
+<tr><th id="440">440</th><td>				}</td></tr>
+<tr><th id="441">441</th><td>				<b>return</b> (<a class="local col5 ref" href="#25a" title='a' data-ref="25a" data-ref-filename="25a">a</a>);</td></tr>
+<tr><th id="442">442</th><td>			}</td></tr>
+<tr><th id="443">443</th><td>		} <b>else</b> <b>if</b> (*<a class="local col4 ref" href="#24q" title='q' data-ref="24q" data-ref-filename="24q">q</a> == <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="444">444</th><td>		{</td></tr>
+<tr><th id="445">445</th><td>			<i>/*</i></td></tr>
+<tr><th id="446">446</th><td><i>			 * Hit the end of the user's command,</i></td></tr>
+<tr><th id="447">447</th><td><i>			 * but not the end of the string in the command table.</i></td></tr>
+<tr><th id="448">448</th><td><i>			 * The user's command is incomplete.</i></td></tr>
+<tr><th id="449">449</th><td><i>			 */</i></td></tr>
+<tr><th id="450">450</th><td>			<b>return</b> (<a class="macro" href="cmd.h.html#36" title="22" data-ref="_M/A_PREFIX">A_PREFIX</a>);</td></tr>
+<tr><th id="451">451</th><td>		} <b>else</b></td></tr>
+<tr><th id="452">452</th><td>		{</td></tr>
+<tr><th id="453">453</th><td>			<i>/*</i></td></tr>
+<tr><th id="454">454</th><td><i>			 * Not a match.</i></td></tr>
+<tr><th id="455">455</th><td><i>			 * Skip ahead to the next command in the</i></td></tr>
+<tr><th id="456">456</th><td><i>			 * command table, and reset the pointer</i></td></tr>
+<tr><th id="457">457</th><td><i>			 * to the beginning of the user's command.</i></td></tr>
+<tr><th id="458">458</th><td><i>			 */</i></td></tr>
+<tr><th id="459">459</th><td>			<b>if</b> (*<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> == <kbd>'\0'</kbd> &amp;&amp; <a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a>[<var>1</var>] == <a class="macro" href="cmd.h.html#75" title="103" data-ref="_M/A_END_LIST">A_END_LIST</a>)</td></tr>
+<tr><th id="460">460</th><td>			{</td></tr>
+<tr><th id="461">461</th><td>				<i>/*</i></td></tr>
+<tr><th id="462">462</th><td><i>				 * A_END_LIST is a special marker that tells </i></td></tr>
+<tr><th id="463">463</th><td><i>				 * us to abort the cmd search.</i></td></tr>
+<tr><th id="464">464</th><td><i>				 */</i></td></tr>
+<tr><th id="465">465</th><td>				<b>return</b> (<a class="macro" href="cmd.h.html#74" title="102" data-ref="_M/A_UINVALID">A_UINVALID</a>);</td></tr>
+<tr><th id="466">466</th><td>			}</td></tr>
+<tr><th id="467">467</th><td>			<b>while</b> (*<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a>++ != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="468">468</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="469">469</th><td>			<b>while</b> (*<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> == <a class="macro" href="cmd.h.html#78" title="127" data-ref="_M/A_SKIP">A_SKIP</a>)</td></tr>
+<tr><th id="470">470</th><td>				<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a>++;</td></tr>
+<tr><th id="471">471</th><td>			<b>if</b> (*<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> &amp; <a class="macro" href="cmd.h.html#80" title="0200" data-ref="_M/A_EXTRA">A_EXTRA</a>)</td></tr>
+<tr><th id="472">472</th><td>				<b>while</b> (*++<a class="local col3 ref" href="#23p" title='p' data-ref="23p" data-ref-filename="23p">p</a> != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="473">473</th><td>					<b>continue</b>;</td></tr>
+<tr><th id="474">474</th><td>			<a class="local col4 ref" href="#24q" title='q' data-ref="24q" data-ref-filename="24q">q</a> = <a class="local col9 ref" href="#19cmd" title='cmd' data-ref="19cmd" data-ref-filename="19cmd">cmd</a>-<var>1</var>;</td></tr>
+<tr><th id="475">475</th><td>		}</td></tr>
+<tr><th id="476">476</th><td>	}</td></tr>
+<tr><th id="477">477</th><td>	<i>/*</i></td></tr>
+<tr><th id="478">478</th><td><i>	 * No match found in the entire command table.</i></td></tr>
+<tr><th id="479">479</th><td><i>	 */</i></td></tr>
+<tr><th id="480">480</th><td>	<b>return</b> (<a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>);</td></tr>
+<tr><th id="481">481</th><td>}</td></tr>
+<tr><th id="482">482</th><td></td></tr>
+<tr><th id="483">483</th><td><i  data-doc="cmd_decode">/*</i></td></tr>
+<tr><th id="484">484</th><td><i  data-doc="cmd_decode"> * Decode a command character and return the associated action.</i></td></tr>
+<tr><th id="485">485</th><td><i  data-doc="cmd_decode"> * The "extra" string, if any, is returned in sp.</i></td></tr>
+<tr><th id="486">486</th><td><i  data-doc="cmd_decode"> */</i></td></tr>
+<tr><th id="487">487</th><td>	<em>static</em> <em>int</em></td></tr>
+<tr><th id="488">488</th><td><dfn class="tu decl def fn" id="cmd_decode" title='cmd_decode' data-type='int cmd_decode(struct tablelist * tlist, char * cmd, char ** sp)' data-ref="cmd_decode" data-ref-filename="cmd_decode">cmd_decode</dfn>(tlist, cmd, sp)</td></tr>
+<tr><th id="489">489</th><td>	<b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="local col6 decl" id="26tlist" title='tlist' data-type='struct tablelist *' data-ref="26tlist" data-ref-filename="26tlist">tlist</dfn>;</td></tr>
+<tr><th id="490">490</th><td>	<em>char</em> *<dfn class="local col7 decl" id="27cmd" title='cmd' data-type='char *' data-ref="27cmd" data-ref-filename="27cmd">cmd</dfn>;</td></tr>
+<tr><th id="491">491</th><td>	<em>char</em> **<dfn class="local col8 decl" id="28sp" title='sp' data-type='char **' data-ref="28sp" data-ref-filename="28sp">sp</dfn>;</td></tr>
+<tr><th id="492">492</th><td>{</td></tr>
+<tr><th id="493">493</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#tablelist" title='tablelist' data-ref="tablelist" data-ref-filename="tablelist">tablelist</a> *<dfn class="local col9 decl" id="29t" title='t' data-type='struct tablelist *' data-ref="29t" data-ref-filename="29t">t</dfn>;</td></tr>
+<tr><th id="494">494</th><td>	<em>register</em> <em>int</em> <dfn class="local col0 decl" id="30action" title='action' data-type='int' data-ref="30action" data-ref-filename="30action">action</dfn> = <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>;</td></tr>
+<tr><th id="495">495</th><td></td></tr>
+<tr><th id="496">496</th><td>	<i>/*</i></td></tr>
+<tr><th id="497">497</th><td><i>	 * Search thru all the command tables.</i></td></tr>
+<tr><th id="498">498</th><td><i>	 * Stop when we find an action which is not A_INVALID.</i></td></tr>
+<tr><th id="499">499</th><td><i>	 */</i></td></tr>
+<tr><th id="500">500</th><td>	<b>for</b> (<a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a> = <a class="local col6 ref" href="#26tlist" title='tlist' data-ref="26tlist" data-ref-filename="26tlist">tlist</a>;  <a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a> != <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;  <a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a> = <a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a>-&gt;<a class="tu ref field" href="#tablelist::t_next" title='tablelist::t_next' data-use='r' data-ref="tablelist::t_next" data-ref-filename="tablelist..t_next">t_next</a>)</td></tr>
+<tr><th id="501">501</th><td>	{</td></tr>
+<tr><th id="502">502</th><td>		<a class="local col0 ref" href="#30action" title='action' data-ref="30action" data-ref-filename="30action">action</a> = <a class="tu ref fn" href="#cmd_search" title='cmd_search' data-use='c' data-ref="cmd_search" data-ref-filename="cmd_search">cmd_search</a>(<a class="local col7 ref" href="#27cmd" title='cmd' data-ref="27cmd" data-ref-filename="27cmd">cmd</a>, <a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a>-&gt;<a class="tu ref field" href="#tablelist::t_start" title='tablelist::t_start' data-use='r' data-ref="tablelist::t_start" data-ref-filename="tablelist..t_start">t_start</a>, <a class="local col9 ref" href="#29t" title='t' data-ref="29t" data-ref-filename="29t">t</a>-&gt;<a class="tu ref field" href="#tablelist::t_end" title='tablelist::t_end' data-use='r' data-ref="tablelist::t_end" data-ref-filename="tablelist..t_end">t_end</a>, <a class="local col8 ref" href="#28sp" title='sp' data-ref="28sp" data-ref-filename="28sp">sp</a>);</td></tr>
+<tr><th id="503">503</th><td>		<b>if</b> (<a class="local col0 ref" href="#30action" title='action' data-ref="30action" data-ref-filename="30action">action</a> != <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>)</td></tr>
+<tr><th id="504">504</th><td>			<b>break</b>;</td></tr>
+<tr><th id="505">505</th><td>	}</td></tr>
+<tr><th id="506">506</th><td>	<b>if</b> (<a class="local col0 ref" href="#30action" title='action' data-ref="30action" data-ref-filename="30action">action</a> == <a class="macro" href="cmd.h.html#74" title="102" data-ref="_M/A_UINVALID">A_UINVALID</a>)</td></tr>
+<tr><th id="507">507</th><td>		<a class="local col0 ref" href="#30action" title='action' data-ref="30action" data-ref-filename="30action">action</a> = <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>;</td></tr>
+<tr><th id="508">508</th><td>	<b>return</b> (<a class="local col0 ref" href="#30action" title='action' data-ref="30action" data-ref-filename="30action">action</a>);</td></tr>
+<tr><th id="509">509</th><td>}</td></tr>
+<tr><th id="510">510</th><td></td></tr>
+<tr><th id="511">511</th><td><i>/*</i></td></tr>
+<tr><th id="512">512</th><td><i> * Decode a command from the cmdtables list.</i></td></tr>
+<tr><th id="513">513</th><td><i> */</i></td></tr>
+<tr><th id="514">514</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>int</em></td></tr>
+<tr><th id="515">515</th><td><dfn class="decl def fn" id="fcmd_decode" title='fcmd_decode' data-ref="fcmd_decode" data-ref-filename="fcmd_decode">fcmd_decode</dfn>(cmd, sp)</td></tr>
+<tr><th id="516">516</th><td>	<em>char</em> *<dfn class="local col1 decl" id="31cmd" title='cmd' data-type='char *' data-ref="31cmd" data-ref-filename="31cmd">cmd</dfn>;</td></tr>
+<tr><th id="517">517</th><td>	<em>char</em> **<dfn class="local col2 decl" id="32sp" title='sp' data-type='char **' data-ref="32sp" data-ref-filename="32sp">sp</dfn>;</td></tr>
+<tr><th id="518">518</th><td>{</td></tr>
+<tr><th id="519">519</th><td>	<b>return</b> (<a class="tu ref fn" href="#cmd_decode" title='cmd_decode' data-use='c' data-ref="cmd_decode" data-ref-filename="cmd_decode">cmd_decode</a>(<a class="tu ref" href="#list_fcmd_tables" title='list_fcmd_tables' data-use='r' data-ref="list_fcmd_tables" data-ref-filename="list_fcmd_tables">list_fcmd_tables</a>, <a class="local col1 ref" href="#31cmd" title='cmd' data-ref="31cmd" data-ref-filename="31cmd">cmd</a>, <a class="local col2 ref" href="#32sp" title='sp' data-ref="32sp" data-ref-filename="32sp">sp</a>));</td></tr>
+<tr><th id="520">520</th><td>}</td></tr>
+<tr><th id="521">521</th><td></td></tr>
+<tr><th id="522">522</th><td><i>/*</i></td></tr>
+<tr><th id="523">523</th><td><i> * Decode a command from the edittables list.</i></td></tr>
+<tr><th id="524">524</th><td><i> */</i></td></tr>
+<tr><th id="525">525</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>int</em></td></tr>
+<tr><th id="526">526</th><td><dfn class="decl def fn" id="ecmd_decode" title='ecmd_decode' data-ref="ecmd_decode" data-ref-filename="ecmd_decode">ecmd_decode</dfn>(cmd, sp)</td></tr>
+<tr><th id="527">527</th><td>	<em>char</em> *<dfn class="local col3 decl" id="33cmd" title='cmd' data-type='char *' data-ref="33cmd" data-ref-filename="33cmd">cmd</dfn>;</td></tr>
+<tr><th id="528">528</th><td>	<em>char</em> **<dfn class="local col4 decl" id="34sp" title='sp' data-type='char **' data-ref="34sp" data-ref-filename="34sp">sp</dfn>;</td></tr>
+<tr><th id="529">529</th><td>{</td></tr>
+<tr><th id="530">530</th><td>	<b>return</b> (<a class="tu ref fn" href="#cmd_decode" title='cmd_decode' data-use='c' data-ref="cmd_decode" data-ref-filename="cmd_decode">cmd_decode</a>(<a class="tu ref" href="#list_ecmd_tables" title='list_ecmd_tables' data-use='r' data-ref="list_ecmd_tables" data-ref-filename="list_ecmd_tables">list_ecmd_tables</a>, <a class="local col3 ref" href="#33cmd" title='cmd' data-ref="33cmd" data-ref-filename="33cmd">cmd</a>, <a class="local col4 ref" href="#34sp" title='sp' data-ref="34sp" data-ref-filename="34sp">sp</a>));</td></tr>
+<tr><th id="531">531</th><td>}</td></tr>
+<tr><th id="532">532</th><td></td></tr>
+<tr><th id="533">533</th><td><i>/*</i></td></tr>
+<tr><th id="534">534</th><td><i> * Get the value of an environment variable.</i></td></tr>
+<tr><th id="535">535</th><td><i> * Looks first in the lesskey file, then in the real environment.</i></td></tr>
+<tr><th id="536">536</th><td><i> */</i></td></tr>
+<tr><th id="537">537</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>char</em> *</td></tr>
+<tr><th id="538">538</th><td><dfn class="decl def fn" id="lgetenv" title='lgetenv' data-ref="lgetenv" data-ref-filename="lgetenv">lgetenv</dfn>(var)</td></tr>
+<tr><th id="539">539</th><td>	<em>char</em> *<dfn class="local col5 decl" id="35var" title='var' data-type='char *' data-ref="35var" data-ref-filename="35var">var</dfn>;</td></tr>
+<tr><th id="540">540</th><td>{</td></tr>
+<tr><th id="541">541</th><td>	<em>int</em> <dfn class="local col6 decl" id="36a" title='a' data-type='int' data-ref="36a" data-ref-filename="36a">a</dfn>;</td></tr>
+<tr><th id="542">542</th><td>	<em>char</em> *<dfn class="local col7 decl" id="37s" title='s' data-type='char *' data-ref="37s" data-ref-filename="37s">s</dfn>;</td></tr>
+<tr><th id="543">543</th><td></td></tr>
+<tr><th id="544">544</th><td>	<a class="local col6 ref" href="#36a" title='a' data-ref="36a" data-ref-filename="36a">a</a> = <a class="tu ref fn" href="#cmd_decode" title='cmd_decode' data-use='c' data-ref="cmd_decode" data-ref-filename="cmd_decode">cmd_decode</a>(<a class="tu ref" href="#list_var_tables" title='list_var_tables' data-use='r' data-ref="list_var_tables" data-ref-filename="list_var_tables">list_var_tables</a>, <a class="local col5 ref" href="#35var" title='var' data-ref="35var" data-ref-filename="35var">var</a>, &amp;<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a>);</td></tr>
+<tr><th id="545">545</th><td>	<b>if</b> (<a class="local col6 ref" href="#36a" title='a' data-ref="36a" data-ref-filename="36a">a</a> == <a class="macro" href="cmd.h.html#115" title="01" data-ref="_M/EV_OK">EV_OK</a>)</td></tr>
+<tr><th id="546">546</th><td>		<b>return</b> (<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a>);</td></tr>
+<tr><th id="547">547</th><td>	<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#getenv" title='getenv' data-ref="getenv" data-ref-filename="getenv">getenv</a>(<a class="local col5 ref" href="#35var" title='var' data-ref="35var" data-ref-filename="35var">var</a>);</td></tr>
+<tr><th id="548">548</th><td>	<b>if</b> (<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a> != <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> &amp;&amp; *<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a> != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="549">549</th><td>		<b>return</b> (<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a>);</td></tr>
+<tr><th id="550">550</th><td>	<a class="local col6 ref" href="#36a" title='a' data-ref="36a" data-ref-filename="36a">a</a> = <a class="tu ref fn" href="#cmd_decode" title='cmd_decode' data-use='c' data-ref="cmd_decode" data-ref-filename="cmd_decode">cmd_decode</a>(<a class="tu ref" href="#list_sysvar_tables" title='list_sysvar_tables' data-use='r' data-ref="list_sysvar_tables" data-ref-filename="list_sysvar_tables">list_sysvar_tables</a>, <a class="local col5 ref" href="#35var" title='var' data-ref="35var" data-ref-filename="35var">var</a>, &amp;<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a>);</td></tr>
+<tr><th id="551">551</th><td>	<b>if</b> (<a class="local col6 ref" href="#36a" title='a' data-ref="36a" data-ref-filename="36a">a</a> == <a class="macro" href="cmd.h.html#115" title="01" data-ref="_M/EV_OK">EV_OK</a>)</td></tr>
+<tr><th id="552">552</th><td>		<b>return</b> (<a class="local col7 ref" href="#37s" title='s' data-ref="37s" data-ref-filename="37s">s</a>);</td></tr>
+<tr><th id="553">553</th><td>	<b>return</b> (<a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="554">554</th><td>}</td></tr>
+<tr><th id="555">555</th><td></td></tr>
+<tr><th id="556">556</th><td><u>#<span data-ppcond="556">if</span> <a class="macro" href="defines.h.html#73" title="(!0)" data-ref="_M/USERFILE">USERFILE</a></u></td></tr>
+<tr><th id="557">557</th><td><i  data-doc="gint">/*</i></td></tr>
+<tr><th id="558">558</th><td><i  data-doc="gint"> * Get an "integer" from a lesskey file.</i></td></tr>
+<tr><th id="559">559</th><td><i  data-doc="gint"> * Integers are stored in a funny format: </i></td></tr>
+<tr><th id="560">560</th><td><i  data-doc="gint"> * two bytes, low order first, in radix KRADIX.</i></td></tr>
+<tr><th id="561">561</th><td><i  data-doc="gint"> */</i></td></tr>
+<tr><th id="562">562</th><td>	<em>static</em> <em>int</em></td></tr>
+<tr><th id="563">563</th><td><dfn class="tu decl def fn" id="gint" title='gint' data-type='int gint(char ** sp)' data-ref="gint" data-ref-filename="gint">gint</dfn>(sp)</td></tr>
+<tr><th id="564">564</th><td>	<em>char</em> **<dfn class="local col8 decl" id="38sp" title='sp' data-type='char **' data-ref="38sp" data-ref-filename="38sp">sp</dfn>;</td></tr>
+<tr><th id="565">565</th><td>{</td></tr>
+<tr><th id="566">566</th><td>	<em>int</em> <dfn class="local col9 decl" id="39n" title='n' data-type='int' data-ref="39n" data-ref-filename="39n">n</dfn>;</td></tr>
+<tr><th id="567">567</th><td></td></tr>
+<tr><th id="568">568</th><td>	<a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a> = *(*<a class="local col8 ref" href="#38sp" title='sp' data-ref="38sp" data-ref-filename="38sp">sp</a>)++;</td></tr>
+<tr><th id="569">569</th><td>	<a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a> += *(*<a class="local col8 ref" href="#38sp" title='sp' data-ref="38sp" data-ref-filename="38sp">sp</a>)++ * <a class="macro" href="lesskey.h.html#41" title="64" data-ref="_M/KRADIX">KRADIX</a>;</td></tr>
+<tr><th id="570">570</th><td>	<b>return</b> (<a class="local col9 ref" href="#39n" title='n' data-ref="39n" data-ref-filename="39n">n</a>);</td></tr>
+<tr><th id="571">571</th><td>}</td></tr>
+<tr><th id="572">572</th><td></td></tr>
+<tr><th id="573">573</th><td><i  data-doc="old_lesskey">/*</i></td></tr>
+<tr><th id="574">574</th><td><i  data-doc="old_lesskey"> * Process an old (pre-v241) lesskey file.</i></td></tr>
+<tr><th id="575">575</th><td><i  data-doc="old_lesskey"> */</i></td></tr>
+<tr><th id="576">576</th><td>	<em>static</em> <em>int</em></td></tr>
+<tr><th id="577">577</th><td><dfn class="tu decl def fn" id="old_lesskey" title='old_lesskey' data-type='int old_lesskey(char * buf, int len)' data-ref="old_lesskey" data-ref-filename="old_lesskey">old_lesskey</dfn>(buf, len)</td></tr>
+<tr><th id="578">578</th><td>	<em>char</em> *<dfn class="local col0 decl" id="40buf" title='buf' data-type='char *' data-ref="40buf" data-ref-filename="40buf">buf</dfn>;</td></tr>
+<tr><th id="579">579</th><td>	<em>int</em> <dfn class="local col1 decl" id="41len" title='len' data-type='int' data-ref="41len" data-ref-filename="41len">len</dfn>;</td></tr>
+<tr><th id="580">580</th><td>{</td></tr>
+<tr><th id="581">581</th><td>	<i>/*</i></td></tr>
+<tr><th id="582">582</th><td><i>	 * Old-style lesskey file.</i></td></tr>
+<tr><th id="583">583</th><td><i>	 * The file must end with either </i></td></tr>
+<tr><th id="584">584</th><td><i>	 *     ...,cmd,0,action</i></td></tr>
+<tr><th id="585">585</th><td><i>	 * or  ...,cmd,0,action|A_EXTRA,string,0</i></td></tr>
+<tr><th id="586">586</th><td><i>	 * So the last byte or the second to last byte must be zero.</i></td></tr>
+<tr><th id="587">587</th><td><i>	 */</i></td></tr>
+<tr><th id="588">588</th><td>	<b>if</b> (<a class="local col0 ref" href="#40buf" title='buf' data-ref="40buf" data-ref-filename="40buf">buf</a>[<a class="local col1 ref" href="#41len" title='len' data-ref="41len" data-ref-filename="41len">len</a>-<var>1</var>] != <kbd>'\0'</kbd> &amp;&amp; <a class="local col0 ref" href="#40buf" title='buf' data-ref="40buf" data-ref-filename="40buf">buf</a>[<a class="local col1 ref" href="#41len" title='len' data-ref="41len" data-ref-filename="41len">len</a>-<var>2</var>] != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="589">589</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="590">590</th><td>	<a class="ref fn" href="#add_fcmd_table" title='add_fcmd_table' data-ref="add_fcmd_table" data-ref-filename="add_fcmd_table">add_fcmd_table</a>(<a class="local col0 ref" href="#40buf" title='buf' data-ref="40buf" data-ref-filename="40buf">buf</a>, <a class="local col1 ref" href="#41len" title='len' data-ref="41len" data-ref-filename="41len">len</a>);</td></tr>
+<tr><th id="591">591</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="592">592</th><td>}</td></tr>
+<tr><th id="593">593</th><td></td></tr>
+<tr><th id="594">594</th><td><i  data-doc="new_lesskey">/* </i></td></tr>
+<tr><th id="595">595</th><td><i  data-doc="new_lesskey"> * Process a new (post-v241) lesskey file.</i></td></tr>
+<tr><th id="596">596</th><td><i  data-doc="new_lesskey"> */</i></td></tr>
+<tr><th id="597">597</th><td>	<em>static</em> <em>int</em></td></tr>
+<tr><th id="598">598</th><td><dfn class="tu decl def fn" id="new_lesskey" title='new_lesskey' data-type='int new_lesskey(char * buf, int len, int sysvar)' data-ref="new_lesskey" data-ref-filename="new_lesskey">new_lesskey</dfn>(buf, len, sysvar)</td></tr>
+<tr><th id="599">599</th><td>	<em>char</em> *<dfn class="local col2 decl" id="42buf" title='buf' data-type='char *' data-ref="42buf" data-ref-filename="42buf">buf</dfn>;</td></tr>
+<tr><th id="600">600</th><td>	<em>int</em> <dfn class="local col3 decl" id="43len" title='len' data-type='int' data-ref="43len" data-ref-filename="43len">len</dfn>;</td></tr>
+<tr><th id="601">601</th><td>	<em>int</em> <dfn class="local col4 decl" id="44sysvar" title='sysvar' data-type='int' data-ref="44sysvar" data-ref-filename="44sysvar">sysvar</dfn>;</td></tr>
+<tr><th id="602">602</th><td>{</td></tr>
+<tr><th id="603">603</th><td>	<em>char</em> *<dfn class="local col5 decl" id="45p" title='p' data-type='char *' data-ref="45p" data-ref-filename="45p">p</dfn>;</td></tr>
+<tr><th id="604">604</th><td>	<em>register</em> <em>int</em> <dfn class="local col6 decl" id="46c" title='c' data-type='int' data-ref="46c" data-ref-filename="46c">c</dfn>;</td></tr>
+<tr><th id="605">605</th><td>	<em>register</em> <em>int</em> <dfn class="local col7 decl" id="47n" title='n' data-type='int' data-ref="47n" data-ref-filename="47n">n</dfn>;</td></tr>
+<tr><th id="606">606</th><td></td></tr>
+<tr><th id="607">607</th><td>	<i>/*</i></td></tr>
+<tr><th id="608">608</th><td><i>	 * New-style lesskey file.</i></td></tr>
+<tr><th id="609">609</th><td><i>	 * Extract the pieces.</i></td></tr>
+<tr><th id="610">610</th><td><i>	 */</i></td></tr>
+<tr><th id="611">611</th><td>	<b>if</b> (<a class="local col2 ref" href="#42buf" title='buf' data-ref="42buf" data-ref-filename="42buf">buf</a>[<a class="local col3 ref" href="#43len" title='len' data-ref="43len" data-ref-filename="43len">len</a>-<var>3</var>] != <a class="macro" href="lesskey.h.html#36" title="&apos;E&apos;" data-ref="_M/C0_END_LESSKEY_MAGIC">C0_END_LESSKEY_MAGIC</a> ||</td></tr>
+<tr><th id="612">612</th><td>	    <a class="local col2 ref" href="#42buf" title='buf' data-ref="42buf" data-ref-filename="42buf">buf</a>[<a class="local col3 ref" href="#43len" title='len' data-ref="43len" data-ref-filename="43len">len</a>-<var>2</var>] != <a class="macro" href="lesskey.h.html#37" title="&apos;n&apos;" data-ref="_M/C1_END_LESSKEY_MAGIC">C1_END_LESSKEY_MAGIC</a> ||</td></tr>
+<tr><th id="613">613</th><td>	    <a class="local col2 ref" href="#42buf" title='buf' data-ref="42buf" data-ref-filename="42buf">buf</a>[<a class="local col3 ref" href="#43len" title='len' data-ref="43len" data-ref-filename="43len">len</a>-<var>1</var>] != <a class="macro" href="lesskey.h.html#38" title="&apos;d&apos;" data-ref="_M/C2_END_LESSKEY_MAGIC">C2_END_LESSKEY_MAGIC</a>)</td></tr>
+<tr><th id="614">614</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="615">615</th><td>	<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a> = <a class="local col2 ref" href="#42buf" title='buf' data-ref="42buf" data-ref-filename="42buf">buf</a> + <var>4</var>;</td></tr>
+<tr><th id="616">616</th><td>	<b>for</b> (;;)</td></tr>
+<tr><th id="617">617</th><td>	{</td></tr>
+<tr><th id="618">618</th><td>		<a class="local col6 ref" href="#46c" title='c' data-ref="46c" data-ref-filename="46c">c</a> = *<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>++;</td></tr>
+<tr><th id="619">619</th><td>		<b>switch</b> (<a class="local col6 ref" href="#46c" title='c' data-ref="46c" data-ref-filename="46c">c</a>)</td></tr>
+<tr><th id="620">620</th><td>		{</td></tr>
+<tr><th id="621">621</th><td>		<b>case</b> <a class="macro" href="lesskey.h.html#31" title="&apos;c&apos;" data-ref="_M/CMD_SECTION">CMD_SECTION</a>:</td></tr>
+<tr><th id="622">622</th><td>			<a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a> = <a class="tu ref fn" href="#gint" title='gint' data-use='c' data-ref="gint" data-ref-filename="gint">gint</a>(&amp;<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>);</td></tr>
+<tr><th id="623">623</th><td>			<a class="ref fn" href="#add_fcmd_table" title='add_fcmd_table' data-ref="add_fcmd_table" data-ref-filename="add_fcmd_table">add_fcmd_table</a>(<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>, <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>);</td></tr>
+<tr><th id="624">624</th><td>			<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a> += <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>;</td></tr>
+<tr><th id="625">625</th><td>			<b>break</b>;</td></tr>
+<tr><th id="626">626</th><td>		<b>case</b> <a class="macro" href="lesskey.h.html#32" title="&apos;e&apos;" data-ref="_M/EDIT_SECTION">EDIT_SECTION</a>:</td></tr>
+<tr><th id="627">627</th><td>			<a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a> = <a class="tu ref fn" href="#gint" title='gint' data-use='c' data-ref="gint" data-ref-filename="gint">gint</a>(&amp;<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>);</td></tr>
+<tr><th id="628">628</th><td>			<a class="ref fn" href="#add_ecmd_table" title='add_ecmd_table' data-ref="add_ecmd_table" data-ref-filename="add_ecmd_table">add_ecmd_table</a>(<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>, <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>);</td></tr>
+<tr><th id="629">629</th><td>			<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a> += <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>;</td></tr>
+<tr><th id="630">630</th><td>			<b>break</b>;</td></tr>
+<tr><th id="631">631</th><td>		<b>case</b> <a class="macro" href="lesskey.h.html#33" title="&apos;v&apos;" data-ref="_M/VAR_SECTION">VAR_SECTION</a>:</td></tr>
+<tr><th id="632">632</th><td>			<a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a> = <a class="tu ref fn" href="#gint" title='gint' data-use='c' data-ref="gint" data-ref-filename="gint">gint</a>(&amp;<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>);</td></tr>
+<tr><th id="633">633</th><td>			<a class="tu ref fn" href="#add_var_table" title='add_var_table' data-use='c' data-ref="add_var_table" data-ref-filename="add_var_table">add_var_table</a>((<a class="local col4 ref" href="#44sysvar" title='sysvar' data-ref="44sysvar" data-ref-filename="44sysvar">sysvar</a>) ? </td></tr>
+<tr><th id="634">634</th><td>				&amp;<a class="tu ref" href="#list_sysvar_tables" title='list_sysvar_tables' data-use='a' data-ref="list_sysvar_tables" data-ref-filename="list_sysvar_tables">list_sysvar_tables</a> : &amp;<a class="tu ref" href="#list_var_tables" title='list_var_tables' data-use='a' data-ref="list_var_tables" data-ref-filename="list_var_tables">list_var_tables</a>, <a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a>, <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>);</td></tr>
+<tr><th id="635">635</th><td>			<a class="local col5 ref" href="#45p" title='p' data-ref="45p" data-ref-filename="45p">p</a> += <a class="local col7 ref" href="#47n" title='n' data-ref="47n" data-ref-filename="47n">n</a>;</td></tr>
+<tr><th id="636">636</th><td>			<b>break</b>;</td></tr>
+<tr><th id="637">637</th><td>		<b>case</b> <a class="macro" href="lesskey.h.html#34" title="&apos;x&apos;" data-ref="_M/END_SECTION">END_SECTION</a>:</td></tr>
+<tr><th id="638">638</th><td>			<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="639">639</th><td>		<b>default</b>:</td></tr>
+<tr><th id="640">640</th><td>			<i>/*</i></td></tr>
+<tr><th id="641">641</th><td><i>			 * Unrecognized section type.</i></td></tr>
+<tr><th id="642">642</th><td><i>			 */</i></td></tr>
+<tr><th id="643">643</th><td>			<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="644">644</th><td>		}</td></tr>
+<tr><th id="645">645</th><td>	}</td></tr>
+<tr><th id="646">646</th><td>}</td></tr>
+<tr><th id="647">647</th><td></td></tr>
+<tr><th id="648">648</th><td><i>/*</i></td></tr>
+<tr><th id="649">649</th><td><i> * Set up a user command table, based on a "lesskey" file.</i></td></tr>
+<tr><th id="650">650</th><td><i> */</i></td></tr>
+<tr><th id="651">651</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>int</em></td></tr>
+<tr><th id="652">652</th><td><dfn class="decl def fn" id="lesskey" title='lesskey' data-ref="lesskey" data-ref-filename="lesskey">lesskey</dfn>(filename, sysvar)</td></tr>
+<tr><th id="653">653</th><td>	<em>char</em> *<dfn class="local col8 decl" id="48filename" title='filename' data-type='char *' data-ref="48filename" data-ref-filename="48filename">filename</dfn>;</td></tr>
+<tr><th id="654">654</th><td>	<em>int</em> <dfn class="local col9 decl" id="49sysvar" title='sysvar' data-type='int' data-ref="49sysvar" data-ref-filename="49sysvar">sysvar</dfn>;</td></tr>
+<tr><th id="655">655</th><td>{</td></tr>
+<tr><th id="656">656</th><td>	<em>register</em> <em>char</em> *<dfn class="local col0 decl" id="50buf" title='buf' data-type='char *' data-ref="50buf" data-ref-filename="50buf">buf</dfn>;</td></tr>
+<tr><th id="657">657</th><td>	<em>register</em> <a class="typedef" href="less.h.html#POSITION" title='POSITION' data-type='__off_t' data-ref="POSITION" data-ref-filename="POSITION">POSITION</a> <dfn class="local col1 decl" id="51len" title='len' data-type='POSITION' data-ref="51len" data-ref-filename="51len">len</dfn>;</td></tr>
+<tr><th id="658">658</th><td>	<em>register</em> <em>long</em> <dfn class="local col2 decl" id="52n" title='n' data-type='long' data-ref="52n" data-ref-filename="52n">n</dfn>;</td></tr>
+<tr><th id="659">659</th><td>	<em>register</em> <em>int</em> <dfn class="local col3 decl" id="53f" title='f' data-type='int' data-ref="53f" data-ref-filename="53f">f</dfn>;</td></tr>
+<tr><th id="660">660</th><td></td></tr>
+<tr><th id="661">661</th><td>	<b>if</b> (<a class="ref" href="#secure" title='secure' data-ref="secure" data-ref-filename="secure">secure</a>)</td></tr>
+<tr><th id="662">662</th><td>		<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="663">663</th><td>	<i>/*</i></td></tr>
+<tr><th id="664">664</th><td><i>	 * Try to open the lesskey file.</i></td></tr>
+<tr><th id="665">665</th><td><i>	 */</i></td></tr>
+<tr><th id="666">666</th><td>	<a class="local col8 ref" href="#48filename" title='filename' data-ref="48filename" data-ref-filename="48filename">filename</a> = <a class="ref fn" href="funcs.h.html#shell_unquote" title='shell_unquote' data-ref="shell_unquote" data-ref-filename="shell_unquote">shell_unquote</a>(<a class="local col8 ref" href="#48filename" title='filename' data-ref="48filename" data-ref-filename="48filename">filename</a>);</td></tr>
+<tr><th id="667">667</th><td>	<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="local col8 ref" href="#48filename" title='filename' data-ref="48filename" data-ref-filename="48filename">filename</a>, <a class="macro" href="less.h.html#240" title="(0x00000000)" data-ref="_M/OPEN_READ">OPEN_READ</a>);</td></tr>
+<tr><th id="668">668</th><td>	<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col8 ref" href="#48filename" title='filename' data-ref="48filename" data-ref-filename="48filename">filename</a>);</td></tr>
+<tr><th id="669">669</th><td>	<b>if</b> (<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="670">670</th><td>		<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="671">671</th><td></td></tr>
+<tr><th id="672">672</th><td>	<i>/*</i></td></tr>
+<tr><th id="673">673</th><td><i>	 * Read the file into a buffer.</i></td></tr>
+<tr><th id="674">674</th><td><i>	 * We first figure out the size of the file and allocate space for it.</i></td></tr>
+<tr><th id="675">675</th><td><i>	 * {{ Minimal error checking is done here.</i></td></tr>
+<tr><th id="676">676</th><td><i>	 *    A garbage .less file will produce strange results.</i></td></tr>
+<tr><th id="677">677</th><td><i>	 *    To avoid a large amount of error checking code here, we</i></td></tr>
+<tr><th id="678">678</th><td><i>	 *    rely on the lesskey program to generate a good .less file. }}</i></td></tr>
+<tr><th id="679">679</th><td><i>	 */</i></td></tr>
+<tr><th id="680">680</th><td>	<a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a> = <a class="ref fn" href="funcs.h.html#filesize" title='filesize' data-ref="filesize" data-ref-filename="filesize">filesize</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>);</td></tr>
+<tr><th id="681">681</th><td>	<b>if</b> (<a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a> == <a class="macro" href="less.h.html#228" title="((POSITION)(-1))" data-ref="_M/NULL_POSITION">NULL_POSITION</a> || <a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a> &lt; <var>3</var>)</td></tr>
+<tr><th id="682">682</th><td>	{</td></tr>
+<tr><th id="683">683</th><td>		<i>/*</i></td></tr>
+<tr><th id="684">684</th><td><i>		 * Bad file (valid file must have at least 3 chars).</i></td></tr>
+<tr><th id="685">685</th><td><i>		 */</i></td></tr>
+<tr><th id="686">686</th><td>		<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>);</td></tr>
+<tr><th id="687">687</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="688">688</th><td>	}</td></tr>
+<tr><th id="689">689</th><td>	<b>if</b> ((<a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a> = (<em>char</em> *) <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#calloc" title='calloc' data-ref="calloc" data-ref-filename="calloc">calloc</a>((<em>int</em>)<a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a>, <b>sizeof</b>(<em>char</em>))) == <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="690">690</th><td>	{</td></tr>
+<tr><th id="691">691</th><td>		<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>);</td></tr>
+<tr><th id="692">692</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="693">693</th><td>	}</td></tr>
+<tr><th id="694">694</th><td>	<b>if</b> (<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#lseek" title='lseek' data-ref="lseek" data-ref-filename="lseek">lseek</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>, (<a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>)<var>0</var>, <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/unistd.h.html#178" title="0" data-ref="_M/SEEK_SET">SEEK_SET</a>) == <a class="macro" href="less.h.html#199" title="((__off_t)-1)" data-ref="_M/BAD_LSEEK">BAD_LSEEK</a>)</td></tr>
+<tr><th id="695">695</th><td>	{</td></tr>
+<tr><th id="696">696</th><td>		<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>);</td></tr>
+<tr><th id="697">697</th><td>		<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>);</td></tr>
+<tr><th id="698">698</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="699">699</th><td>	}</td></tr>
+<tr><th id="700">700</th><td>	<a class="local col2 ref" href="#52n" title='n' data-ref="52n" data-ref-filename="52n">n</a> = <a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#read" title='read' data-ref="read" data-ref-filename="read">read</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>, <a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>, (<em>unsigned</em> <em>int</em>) <a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a>);</td></tr>
+<tr><th id="701">701</th><td>	<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col3 ref" href="#53f" title='f' data-ref="53f" data-ref-filename="53f">f</a>);</td></tr>
+<tr><th id="702">702</th><td>	<b>if</b> (<a class="local col2 ref" href="#52n" title='n' data-ref="52n" data-ref-filename="52n">n</a> != <a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a>)</td></tr>
+<tr><th id="703">703</th><td>	{</td></tr>
+<tr><th id="704">704</th><td>		<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>);</td></tr>
+<tr><th id="705">705</th><td>		<b>return</b> (-<var>1</var>);</td></tr>
+<tr><th id="706">706</th><td>	}</td></tr>
+<tr><th id="707">707</th><td></td></tr>
+<tr><th id="708">708</th><td>	<i>/*</i></td></tr>
+<tr><th id="709">709</th><td><i>	 * Figure out if this is an old-style (before version 241)</i></td></tr>
+<tr><th id="710">710</th><td><i>	 * or new-style lesskey file format.</i></td></tr>
+<tr><th id="711">711</th><td><i>	 */</i></td></tr>
+<tr><th id="712">712</th><td>	<b>if</b> (<a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>[<var>0</var>] != <a class="macro" href="lesskey.h.html#26" title="&apos;\0&apos;" data-ref="_M/C0_LESSKEY_MAGIC">C0_LESSKEY_MAGIC</a> || <a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>[<var>1</var>] != <a class="macro" href="lesskey.h.html#27" title="&apos;M&apos;" data-ref="_M/C1_LESSKEY_MAGIC">C1_LESSKEY_MAGIC</a> ||</td></tr>
+<tr><th id="713">713</th><td>	    <a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>[<var>2</var>] != <a class="macro" href="lesskey.h.html#28" title="&apos;+&apos;" data-ref="_M/C2_LESSKEY_MAGIC">C2_LESSKEY_MAGIC</a> || <a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>[<var>3</var>] != <a class="macro" href="lesskey.h.html#29" title="&apos;G&apos;" data-ref="_M/C3_LESSKEY_MAGIC">C3_LESSKEY_MAGIC</a>)</td></tr>
+<tr><th id="714">714</th><td>		<b>return</b> (<a class="tu ref fn" href="#old_lesskey" title='old_lesskey' data-use='c' data-ref="old_lesskey" data-ref-filename="old_lesskey">old_lesskey</a>(<a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>, (<em>int</em>)<a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a>));</td></tr>
+<tr><th id="715">715</th><td>	<b>return</b> (<a class="tu ref fn" href="#new_lesskey" title='new_lesskey' data-use='c' data-ref="new_lesskey" data-ref-filename="new_lesskey">new_lesskey</a>(<a class="local col0 ref" href="#50buf" title='buf' data-ref="50buf" data-ref-filename="50buf">buf</a>, (<em>int</em>)<a class="local col1 ref" href="#51len" title='len' data-ref="51len" data-ref-filename="51len">len</a>, <a class="local col9 ref" href="#49sysvar" title='sysvar' data-ref="49sysvar" data-ref-filename="49sysvar">sysvar</a>));</td></tr>
+<tr><th id="716">716</th><td>}</td></tr>
+<tr><th id="717">717</th><td></td></tr>
+<tr><th id="718">718</th><td><i>/*</i></td></tr>
+<tr><th id="719">719</th><td><i> * Add the standard lesskey file "$HOME/.less"</i></td></tr>
+<tr><th id="720">720</th><td><i> */</i></td></tr>
+<tr><th id="721">721</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>void</em></td></tr>
+<tr><th id="722">722</th><td><dfn class="decl def fn" id="add_hometable" title='add_hometable' data-ref="add_hometable" data-ref-filename="add_hometable">add_hometable</dfn>(envname, def_filename, sysvar)</td></tr>
+<tr><th id="723">723</th><td>	<em>char</em> *<dfn class="local col4 decl" id="54envname" title='envname' data-type='char *' data-ref="54envname" data-ref-filename="54envname">envname</dfn>;</td></tr>
+<tr><th id="724">724</th><td>	<em>char</em> *<dfn class="local col5 decl" id="55def_filename" title='def_filename' data-type='char *' data-ref="55def_filename" data-ref-filename="55def_filename">def_filename</dfn>;</td></tr>
+<tr><th id="725">725</th><td>	<em>int</em> <dfn class="local col6 decl" id="56sysvar" title='sysvar' data-type='int' data-ref="56sysvar" data-ref-filename="56sysvar">sysvar</dfn>;</td></tr>
+<tr><th id="726">726</th><td>{</td></tr>
+<tr><th id="727">727</th><td>	<em>char</em> *<dfn class="local col7 decl" id="57filename" title='filename' data-type='char *' data-ref="57filename" data-ref-filename="57filename">filename</dfn>;</td></tr>
+<tr><th id="728">728</th><td>	<a class="typedef" href="less.h.html#PARG" title='PARG' data-type='union parg' data-ref="PARG" data-ref-filename="PARG">PARG</a> <dfn class="local col8 decl" id="58parg" title='parg' data-type='PARG' data-ref="58parg" data-ref-filename="58parg">parg</dfn>;</td></tr>
+<tr><th id="729">729</th><td></td></tr>
+<tr><th id="730">730</th><td>	<b>if</b> (<a class="local col4 ref" href="#54envname" title='envname' data-ref="54envname" data-ref-filename="54envname">envname</a> != <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> &amp;&amp; (<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a> = <a class="ref fn" href="#lgetenv" title='lgetenv' data-ref="lgetenv" data-ref-filename="lgetenv">lgetenv</a>(<a class="local col4 ref" href="#54envname" title='envname' data-ref="54envname" data-ref-filename="54envname">envname</a>)) != <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="731">731</th><td>		<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a> = <a class="ref fn" href="funcs.h.html#save" title='save' data-ref="save" data-ref-filename="save">save</a>(<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a>);</td></tr>
+<tr><th id="732">732</th><td>	<b>else</b> <b>if</b> (<a class="local col6 ref" href="#56sysvar" title='sysvar' data-ref="56sysvar" data-ref-filename="56sysvar">sysvar</a>)</td></tr>
+<tr><th id="733">733</th><td>		<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a> = <a class="ref fn" href="funcs.h.html#save" title='save' data-ref="save" data-ref-filename="save">save</a>(<a class="local col5 ref" href="#55def_filename" title='def_filename' data-ref="55def_filename" data-ref-filename="55def_filename">def_filename</a>);</td></tr>
+<tr><th id="734">734</th><td>	<b>else</b></td></tr>
+<tr><th id="735">735</th><td>		<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a> = <a class="ref fn" href="funcs.h.html#homefile" title='homefile' data-ref="homefile" data-ref-filename="homefile">homefile</a>(<a class="local col5 ref" href="#55def_filename" title='def_filename' data-ref="55def_filename" data-ref-filename="55def_filename">def_filename</a>);</td></tr>
+<tr><th id="736">736</th><td>	<b>if</b> (<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a> == <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="737">737</th><td>		<b>return</b>;</td></tr>
+<tr><th id="738">738</th><td>	<b>if</b> (<a class="ref fn" href="#lesskey" title='lesskey' data-ref="lesskey" data-ref-filename="lesskey">lesskey</a>(<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a>, <a class="local col6 ref" href="#56sysvar" title='sysvar' data-ref="56sysvar" data-ref-filename="56sysvar">sysvar</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="739">739</th><td>	{</td></tr>
+<tr><th id="740">740</th><td>		<a class="local col8 ref" href="#58parg" title='parg' data-ref="58parg" data-ref-filename="58parg">parg</a>.<a class="ref field" href="less.h.html#parg::p_string" title='parg::p_string' data-ref="parg::p_string" data-ref-filename="parg..p_string">p_string</a> = <a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a>;</td></tr>
+<tr><th id="741">741</th><td>		<a class="ref fn" href="funcs.h.html#error" title='error' data-ref="error" data-ref-filename="error">error</a>(<q>"Cannot use lesskey file \"%s\""</q>, &amp;<a class="local col8 ref" href="#58parg" title='parg' data-ref="58parg" data-ref-filename="58parg">parg</a>);</td></tr>
+<tr><th id="742">742</th><td>	}</td></tr>
+<tr><th id="743">743</th><td>	<a class="ref fn" href="../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col7 ref" href="#57filename" title='filename' data-ref="57filename" data-ref-filename="57filename">filename</a>);</td></tr>
+<tr><th id="744">744</th><td>}</td></tr>
+<tr><th id="745">745</th><td><u>#<span data-ppcond="556">endif</span></u></td></tr>
+<tr><th id="746">746</th><td></td></tr>
+<tr><th id="747">747</th><td><i>/*</i></td></tr>
+<tr><th id="748">748</th><td><i> * See if a char is a special line-editing command.</i></td></tr>
+<tr><th id="749">749</th><td><i> */</i></td></tr>
+<tr><th id="750">750</th><td>	<a class="macro" href="less.h.html#56" title="" data-ref="_M/public">public</a> <em>int</em></td></tr>
+<tr><th id="751">751</th><td><dfn class="decl def fn" id="editchar" title='editchar' data-ref="editchar" data-ref-filename="editchar">editchar</dfn>(c, flags)</td></tr>
+<tr><th id="752">752</th><td>	<em>int</em> <dfn class="local col9 decl" id="59c" title='c' data-type='int' data-ref="59c" data-ref-filename="59c">c</dfn>;</td></tr>
+<tr><th id="753">753</th><td>	<em>int</em> <dfn class="local col0 decl" id="60flags" title='flags' data-type='int' data-ref="60flags" data-ref-filename="60flags">flags</dfn>;</td></tr>
+<tr><th id="754">754</th><td>{</td></tr>
+<tr><th id="755">755</th><td>	<em>int</em> <dfn class="local col1 decl" id="61action" title='action' data-type='int' data-ref="61action" data-ref-filename="61action">action</dfn>;</td></tr>
+<tr><th id="756">756</th><td>	<em>int</em> <dfn class="local col2 decl" id="62nch" title='nch' data-type='int' data-ref="62nch" data-ref-filename="62nch">nch</dfn>;</td></tr>
+<tr><th id="757">757</th><td>	<em>char</em> *<dfn class="local col3 decl" id="63s" title='s' data-type='char *' data-ref="63s" data-ref-filename="63s">s</dfn> = <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;	<i>/* XXX: GCC */</i></td></tr>
+<tr><th id="758">758</th><td>	<em>char</em> <dfn class="local col4 decl" id="64usercmd" title='usercmd' data-type='char [17]' data-ref="64usercmd" data-ref-filename="64usercmd">usercmd</dfn>[<a class="macro" href="cmd.h.html#14" title="16" data-ref="_M/MAX_CMDLEN">MAX_CMDLEN</a>+<var>1</var>];</td></tr>
+<tr><th id="759">759</th><td>	</td></tr>
+<tr><th id="760">760</th><td>	<i>/*</i></td></tr>
+<tr><th id="761">761</th><td><i>	 * An editing character could actually be a sequence of characters;</i></td></tr>
+<tr><th id="762">762</th><td><i>	 * for example, an escape sequence sent by pressing the uparrow key.</i></td></tr>
+<tr><th id="763">763</th><td><i>	 * To match the editing string, we use the command decoder</i></td></tr>
+<tr><th id="764">764</th><td><i>	 * but give it the edit-commands command table</i></td></tr>
+<tr><th id="765">765</th><td><i>	 * This table is constructed to match the user's keyboard.</i></td></tr>
+<tr><th id="766">766</th><td><i>	 */</i></td></tr>
+<tr><th id="767">767</th><td>	<b>if</b> (<a class="local col9 ref" href="#59c" title='c' data-ref="59c" data-ref-filename="59c">c</a> == <a class="ref" href="#erase_char" title='erase_char' data-ref="erase_char" data-ref-filename="erase_char">erase_char</a> || <a class="local col9 ref" href="#59c" title='c' data-ref="59c" data-ref-filename="59c">c</a> == <a class="ref" href="#erase2_char" title='erase2_char' data-ref="erase2_char" data-ref-filename="erase2_char">erase2_char</a>)</td></tr>
+<tr><th id="768">768</th><td>		<b>return</b> (<a class="macro" href="cmd.h.html#85" title="1" data-ref="_M/EC_BACKSPACE">EC_BACKSPACE</a>);</td></tr>
+<tr><th id="769">769</th><td>	<b>if</b> (<a class="local col9 ref" href="#59c" title='c' data-ref="59c" data-ref-filename="59c">c</a> == <a class="ref" href="#kill_char" title='kill_char' data-ref="kill_char" data-ref-filename="kill_char">kill_char</a>)</td></tr>
+<tr><th id="770">770</th><td>		<b>return</b> (<a class="macro" href="cmd.h.html#86" title="2" data-ref="_M/EC_LINEKILL">EC_LINEKILL</a>);</td></tr>
+<tr><th id="771">771</th><td>		</td></tr>
+<tr><th id="772">772</th><td>	<i>/*</i></td></tr>
+<tr><th id="773">773</th><td><i>	 * Collect characters in a buffer.</i></td></tr>
+<tr><th id="774">774</th><td><i>	 * Start with the one we have, and get more if we need them.</i></td></tr>
+<tr><th id="775">775</th><td><i>	 */</i></td></tr>
+<tr><th id="776">776</th><td>	<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a> = <var>0</var>;</td></tr>
+<tr><th id="777">777</th><td>	<b>do</b> {</td></tr>
+<tr><th id="778">778</th><td>	  	<b>if</b> (<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="779">779</th><td>			<a class="local col9 ref" href="#59c" title='c' data-ref="59c" data-ref-filename="59c">c</a> = <a class="ref fn" href="funcs.h.html#getcc" title='getcc' data-ref="getcc" data-ref-filename="getcc">getcc</a>();</td></tr>
+<tr><th id="780">780</th><td>		<a class="local col4 ref" href="#64usercmd" title='usercmd' data-ref="64usercmd" data-ref-filename="64usercmd">usercmd</a>[<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a>] = <a class="local col9 ref" href="#59c" title='c' data-ref="59c" data-ref-filename="59c">c</a>;</td></tr>
+<tr><th id="781">781</th><td>		<a class="local col4 ref" href="#64usercmd" title='usercmd' data-ref="64usercmd" data-ref-filename="64usercmd">usercmd</a>[<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a>+<var>1</var>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="782">782</th><td>		<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a>++;</td></tr>
+<tr><th id="783">783</th><td>		<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a> = <a class="ref fn" href="#ecmd_decode" title='ecmd_decode' data-ref="ecmd_decode" data-ref-filename="ecmd_decode">ecmd_decode</a>(<a class="local col4 ref" href="#64usercmd" title='usercmd' data-ref="64usercmd" data-ref-filename="64usercmd">usercmd</a>, &amp;<a class="local col3 ref" href="#63s" title='s' data-ref="63s" data-ref-filename="63s">s</a>);</td></tr>
+<tr><th id="784">784</th><td>	} <b>while</b> (<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a> == <a class="macro" href="cmd.h.html#36" title="22" data-ref="_M/A_PREFIX">A_PREFIX</a>);</td></tr>
+<tr><th id="785">785</th><td>	</td></tr>
+<tr><th id="786">786</th><td>	<b>if</b> (<a class="local col0 ref" href="#60flags" title='flags' data-ref="60flags" data-ref-filename="60flags">flags</a> &amp; <a class="macro" href="cmd.h.html#112" title="010" data-ref="_M/EC_NORIGHTLEFT">EC_NORIGHTLEFT</a>)</td></tr>
+<tr><th id="787">787</th><td>	{</td></tr>
+<tr><th id="788">788</th><td>		<b>switch</b> (<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a>)</td></tr>
+<tr><th id="789">789</th><td>		{</td></tr>
+<tr><th id="790">790</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#87" title="3" data-ref="_M/EC_RIGHT">EC_RIGHT</a>:</td></tr>
+<tr><th id="791">791</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#88" title="4" data-ref="_M/EC_LEFT">EC_LEFT</a>:</td></tr>
+<tr><th id="792">792</th><td>			<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a> = <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>;</td></tr>
+<tr><th id="793">793</th><td>			<b>break</b>;</td></tr>
+<tr><th id="794">794</th><td>		}</td></tr>
+<tr><th id="795">795</th><td>	}</td></tr>
+<tr><th id="796">796</th><td><u>#<span data-ppcond="796">if</span> <a class="macro" href="defines.h.html#49" title="1" data-ref="_M/CMD_HISTORY">CMD_HISTORY</a></u></td></tr>
+<tr><th id="797">797</th><td>	<b>if</b> (<a class="local col0 ref" href="#60flags" title='flags' data-ref="60flags" data-ref-filename="60flags">flags</a> &amp; <a class="macro" href="cmd.h.html#110" title="02" data-ref="_M/EC_NOHISTORY">EC_NOHISTORY</a>) </td></tr>
+<tr><th id="798">798</th><td>	{</td></tr>
+<tr><th id="799">799</th><td>		<i>/*</i></td></tr>
+<tr><th id="800">800</th><td><i>		 * The caller says there is no history list.</i></td></tr>
+<tr><th id="801">801</th><td><i>		 * Reject any history-manipulation action.</i></td></tr>
+<tr><th id="802">802</th><td><i>		 */</i></td></tr>
+<tr><th id="803">803</th><td>		<b>switch</b> (<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a>)</td></tr>
+<tr><th id="804">804</th><td>		{</td></tr>
+<tr><th id="805">805</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#97" title="13" data-ref="_M/EC_UP">EC_UP</a>:</td></tr>
+<tr><th id="806">806</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#98" title="14" data-ref="_M/EC_DOWN">EC_DOWN</a>:</td></tr>
+<tr><th id="807">807</th><td>			<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a> = <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>;</td></tr>
+<tr><th id="808">808</th><td>			<b>break</b>;</td></tr>
+<tr><th id="809">809</th><td>		}</td></tr>
+<tr><th id="810">810</th><td>	}</td></tr>
+<tr><th id="811">811</th><td><u>#<span data-ppcond="796">endif</span></u></td></tr>
+<tr><th id="812">812</th><td><u>#<span data-ppcond="812">if</span> <a class="macro" href="defines.h.html#43" title="(!0)" data-ref="_M/TAB_COMPLETE_FILENAME">TAB_COMPLETE_FILENAME</a></u></td></tr>
+<tr><th id="813">813</th><td>	<b>if</b> (<a class="local col0 ref" href="#60flags" title='flags' data-ref="60flags" data-ref-filename="60flags">flags</a> &amp; <a class="macro" href="cmd.h.html#111" title="04" data-ref="_M/EC_NOCOMPLETE">EC_NOCOMPLETE</a>) </td></tr>
+<tr><th id="814">814</th><td>	{</td></tr>
+<tr><th id="815">815</th><td>		<i>/*</i></td></tr>
+<tr><th id="816">816</th><td><i>		 * The caller says we don't want any filename completion cmds.</i></td></tr>
+<tr><th id="817">817</th><td><i>		 * Reject them.</i></td></tr>
+<tr><th id="818">818</th><td><i>		 */</i></td></tr>
+<tr><th id="819">819</th><td>		<b>switch</b> (<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a>)</td></tr>
+<tr><th id="820">820</th><td>		{</td></tr>
+<tr><th id="821">821</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#100" title="17" data-ref="_M/EC_F_COMPLETE">EC_F_COMPLETE</a>:</td></tr>
+<tr><th id="822">822</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#101" title="18" data-ref="_M/EC_B_COMPLETE">EC_B_COMPLETE</a>:</td></tr>
+<tr><th id="823">823</th><td>		<b>case</b> <a class="macro" href="cmd.h.html#99" title="15" data-ref="_M/EC_EXPAND">EC_EXPAND</a>:</td></tr>
+<tr><th id="824">824</th><td>			<a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a> = <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>;</td></tr>
+<tr><th id="825">825</th><td>			<b>break</b>;</td></tr>
+<tr><th id="826">826</th><td>		}</td></tr>
+<tr><th id="827">827</th><td>	}</td></tr>
+<tr><th id="828">828</th><td><u>#<span data-ppcond="812">endif</span></u></td></tr>
+<tr><th id="829">829</th><td>	<b>if</b> ((<a class="local col0 ref" href="#60flags" title='flags' data-ref="60flags" data-ref-filename="60flags">flags</a> &amp; <a class="macro" href="cmd.h.html#109" title="01" data-ref="_M/EC_PEEK">EC_PEEK</a>) || <a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a> == <a class="macro" href="cmd.h.html#72" title="100" data-ref="_M/A_INVALID">A_INVALID</a>)</td></tr>
+<tr><th id="830">830</th><td>	{</td></tr>
+<tr><th id="831">831</th><td>		<i>/*</i></td></tr>
+<tr><th id="832">832</th><td><i>		 * We're just peeking, or we didn't understand the command.</i></td></tr>
+<tr><th id="833">833</th><td><i>		 * Unget all the characters we read in the loop above.</i></td></tr>
+<tr><th id="834">834</th><td><i>		 * This does NOT include the original character that was </i></td></tr>
+<tr><th id="835">835</th><td><i>		 * passed in as a parameter.</i></td></tr>
+<tr><th id="836">836</th><td><i>		 */</i></td></tr>
+<tr><th id="837">837</th><td>		<b>while</b> (<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a> &gt; <var>1</var>) </td></tr>
+<tr><th id="838">838</th><td>		{</td></tr>
+<tr><th id="839">839</th><td>			<a class="ref fn" href="funcs.h.html#ungetcc" title='ungetcc' data-ref="ungetcc" data-ref-filename="ungetcc">ungetcc</a>(<a class="local col4 ref" href="#64usercmd" title='usercmd' data-ref="64usercmd" data-ref-filename="64usercmd">usercmd</a>[--<a class="local col2 ref" href="#62nch" title='nch' data-ref="62nch" data-ref-filename="62nch">nch</a>]);</td></tr>
+<tr><th id="840">840</th><td>		}</td></tr>
+<tr><th id="841">841</th><td>	} <b>else</b></td></tr>
+<tr><th id="842">842</th><td>	{</td></tr>
+<tr><th id="843">843</th><td>		<b>if</b> (<a class="local col3 ref" href="#63s" title='s' data-ref="63s" data-ref-filename="63s">s</a> != <a class="macro" href="../../../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="844">844</th><td>			<a class="ref fn" href="funcs.h.html#ungetsc" title='ungetsc' data-ref="ungetsc" data-ref-filename="ungetsc">ungetsc</a>(<a class="local col3 ref" href="#63s" title='s' data-ref="63s" data-ref-filename="63s">s</a>);</td></tr>
+<tr><th id="845">845</th><td>	}</td></tr>
+<tr><th id="846">846</th><td>	<b>return</b> <a class="local col1 ref" href="#61action" title='action' data-ref="61action" data-ref-filename="61action">action</a>;</td></tr>
+<tr><th id="847">847</th><td>}</td></tr>
+<tr><th id="848">848</th><td></td></tr>
+<tr><th id="849">849</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

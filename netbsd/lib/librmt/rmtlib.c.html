@@ -1,0 +1,914 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>rmtlib.c source code [netbsd/lib/librmt/rmtlib.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/lib/librmt/rmtlib.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>lib</a>/<a href='./'>librmt</a>/<a href='rmtlib.c.html'>rmtlib.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: rmtlib.c,v 1.26 2012/03/21 10:10:37 matt Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> *	rmt --- remote tape emulator subroutines</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> *	Originally written by Jeff Lee, modified some by Arnold Robbins</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> *	WARNING:  The man page rmt(8) for /etc/rmt documents the remote mag</i></td></tr>
+<tr><th id="9">9</th><td><i> *	tape protocol which rdump and rrestore use.  Unfortunately, the man</i></td></tr>
+<tr><th id="10">10</th><td><i> *	page is *WRONG*.  The author of the routines I'm including originally</i></td></tr>
+<tr><th id="11">11</th><td><i> *	wrote his code just based on the man page, and it didn't work, so he</i></td></tr>
+<tr><th id="12">12</th><td><i> *	went to the rdump source to figure out why.  The only thing he had to</i></td></tr>
+<tr><th id="13">13</th><td><i> *	change was to check for the 'F' return code in addition to the 'E',</i></td></tr>
+<tr><th id="14">14</th><td><i> *	and to separate the various arguments with \n instead of a space.  I</i></td></tr>
+<tr><th id="15">15</th><td><i> *	personally don't think that this is much of a problem, but I wanted to</i></td></tr>
+<tr><th id="16">16</th><td><i> *	point it out.</i></td></tr>
+<tr><th id="17">17</th><td><i> *	-- Arnold Robbins</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> *	Redone as a library that can replace open, read, write, etc, by</i></td></tr>
+<tr><th id="20">20</th><td><i> *	Fred Fish, with some additional work by Arnold Robbins.</i></td></tr>
+<tr><th id="21">21</th><td><i> */</i></td></tr>
+<tr><th id="22">22</th><td></td></tr>
+<tr><th id="23">23</th><td><i>/*</i></td></tr>
+<tr><th id="24">24</th><td><i> *	MAXUNIT --- Maximum number of remote tape file units</i></td></tr>
+<tr><th id="25">25</th><td><i> *</i></td></tr>
+<tr><th id="26">26</th><td><i> *	READ --- Return the number of the read side file descriptor</i></td></tr>
+<tr><th id="27">27</th><td><i> *	WRITE --- Return the number of the write side file descriptor</i></td></tr>
+<tr><th id="28">28</th><td><i> */</i></td></tr>
+<tr><th id="29">29</th><td></td></tr>
+<tr><th id="30">30</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="31">31</th><td><a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: rmtlib.c,v 1.26 2012/03/21 10:10:37 matt Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: rmtlib.c,v 1.26 2012/03/21 10:10:37 matt Exp $"</q>);</td></tr>
+<tr><th id="32">32</th><td></td></tr>
+<tr><th id="33">33</th><td><u>#define <dfn class="macro" id="_M/RMTIOCTL" data-ref="_M/RMTIOCTL">RMTIOCTL</dfn>	1</u></td></tr>
+<tr><th id="34">34</th><td><i>/* #define USE_REXEC	1 */</i>	<i>/* rexec code courtesy of Dan Kegel, srs!dan */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="37">37</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html">&lt;sys/stat.h&gt;</a></u></td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><u>#<span data-ppcond="39">ifdef</span> <a class="macro" href="#33" data-ref="_M/RMTIOCTL">RMTIOCTL</a></u></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/ioctl.h.html">&lt;sys/ioctl.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html">&lt;sys/mtio.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#<span data-ppcond="39">endif</span></u></td></tr>
+<tr><th id="43">43</th><td></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html">&lt;assert.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html">&lt;errno.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html">&lt;fcntl.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/signal.h.html">&lt;signal.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include &lt;stdarg.h&gt;</u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html">&lt;unistd.h&gt;</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/err.h.html">&lt;err.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><u>#<span data-ppcond="55">ifdef</span> <span class="macro" data-ref="_M/USE_REXEC">USE_REXEC</span></u></td></tr>
+<tr><th id="56">56</th><td><u>#include &lt;netdb.h&gt;</u></td></tr>
+<tr><th id="57">57</th><td><u>#<span data-ppcond="55">endif</span></u></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><u>#define <dfn class="macro" id="_M/__RMTLIB_PRIVATE" data-ref="_M/__RMTLIB_PRIVATE">__RMTLIB_PRIVATE</dfn></u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/rmt.h.html">&lt;rmt.h&gt;</a>		/* get prototypes for remapped functions */</u></td></tr>
+<tr><th id="61">61</th><td></td></tr>
+<tr><th id="62">62</th><td><u>#include <a href="pathnames.h.html">"pathnames.h"</a></u></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#_rmt_close" title='_rmt_close' data-type='int _rmt_close(int )' data-ref="_rmt_close" data-ref-filename="_rmt_close">_rmt_close</a>(<em>int</em>);</td></tr>
+<tr><th id="65">65</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#_rmt_ioctl" title='_rmt_ioctl' data-type='int _rmt_ioctl(int , unsigned long , void * )' data-ref="_rmt_ioctl" data-ref-filename="_rmt_ioctl">_rmt_ioctl</a>(<em>int</em>, <em>unsigned</em> <em>long</em>, <em>void</em> *);</td></tr>
+<tr><th id="66">66</th><td><em>static</em>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>	<a class="tu decl fn" href="#_rmt_lseek" title='_rmt_lseek' data-type='__off_t _rmt_lseek(int , __off_t , int )' data-ref="_rmt_lseek" data-ref-filename="_rmt_lseek">_rmt_lseek</a>(<em>int</em>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>, <em>int</em>);</td></tr>
+<tr><th id="67">67</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#_rmt_open" title='_rmt_open' data-type='int _rmt_open(const char * , int , int )' data-ref="_rmt_open" data-ref-filename="_rmt_open">_rmt_open</a>(<em>const</em> <em>char</em> *, <em>int</em>, <em>int</em>);</td></tr>
+<tr><th id="68">68</th><td><em>static</em>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a>	<a class="tu decl fn" href="#_rmt_read" title='_rmt_read' data-type='ssize_t _rmt_read(int , void * , size_t )' data-ref="_rmt_read" data-ref-filename="_rmt_read">_rmt_read</a>(<em>int</em>, <em>void</em> *, <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a>);</td></tr>
+<tr><th id="69">69</th><td><em>static</em>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a>	<a class="tu decl fn" href="#_rmt_write" title='_rmt_write' data-type='ssize_t _rmt_write(int , const void * , size_t )' data-ref="_rmt_write" data-ref-filename="_rmt_write">_rmt_write</a>(<em>int</em>, <em>const</em> <em>void</em> *, <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a>);</td></tr>
+<tr><th id="70">70</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#command" title='command' data-type='int command(int , const char * )' data-ref="command" data-ref-filename="command">command</a>(<em>int</em>, <em>const</em> <em>char</em> *);</td></tr>
+<tr><th id="71">71</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#remdev" title='remdev' data-type='int remdev(const char * )' data-ref="remdev" data-ref-filename="remdev">remdev</a>(<em>const</em> <em>char</em> *);</td></tr>
+<tr><th id="72">72</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#rmtabort" title='rmtabort' data-type='void rmtabort(int )' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<em>int</em>);</td></tr>
+<tr><th id="73">73</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#status" title='status' data-type='int status(int )' data-ref="status" data-ref-filename="status">status</a>(<em>int</em>);</td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><u>#define <dfn class="macro" id="_M/BUFMAGIC" data-ref="_M/BUFMAGIC">BUFMAGIC</dfn>	64	/* a magic number for buffer sizes */</u></td></tr>
+<tr><th id="77">77</th><td><u>#define <dfn class="macro" id="_M/MAXUNIT" data-ref="_M/MAXUNIT">MAXUNIT</dfn>		4</u></td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td><u>#define <dfn class="macro" id="_M/READ" data-ref="_M/READ">READ</dfn>(fd)	(<a class="tu ref" href="#Ctp" title='Ctp' data-use='r' data-ref="Ctp" data-ref-filename="Ctp"><a class="tu ref" href="#Ctp" title='Ctp' data-use='w' data-ref="Ctp" data-ref-filename="Ctp">Ctp</a></a>[fd][0])</u></td></tr>
+<tr><th id="80">80</th><td><u>#define <dfn class="macro" id="_M/WRITE" data-ref="_M/WRITE">WRITE</dfn>(fd)	(<a class="tu ref" href="#Ptc" title='Ptc' data-use='r' data-ref="Ptc" data-ref-filename="Ptc"><a class="tu ref" href="#Ptc" title='Ptc' data-use='w' data-ref="Ptc" data-ref-filename="Ptc">Ptc</a></a>[fd][1])</u></td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="Ctp" title='Ctp' data-type='int [4][2]' data-ref="Ctp" data-ref-filename="Ctp">Ctp</dfn>[<a class="macro" href="#77" title="4" data-ref="_M/MAXUNIT">MAXUNIT</a>][<var>2</var>] = { {-<var>1</var>, -<var>1</var>}, {-<var>1</var>, -<var>1</var>}, {-<var>1</var>, -<var>1</var>}, {-<var>1</var>, -<var>1</var>} };</td></tr>
+<tr><th id="83">83</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="Ptc" title='Ptc' data-type='int [4][2]' data-ref="Ptc" data-ref-filename="Ptc">Ptc</dfn>[<a class="macro" href="#77" title="4" data-ref="_M/MAXUNIT">MAXUNIT</a>][<var>2</var>] = { {-<var>1</var>, -<var>1</var>}, {-<var>1</var>, -<var>1</var>}, {-<var>1</var>, -<var>1</var>}, {-<var>1</var>, -<var>1</var>} };</td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><i  data-doc="rmtabort">/*</i></td></tr>
+<tr><th id="87">87</th><td><i  data-doc="rmtabort"> *	rmtabort --- close off a remote tape connection</i></td></tr>
+<tr><th id="88">88</th><td><i  data-doc="rmtabort"> */</i></td></tr>
+<tr><th id="89">89</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="90">90</th><td><dfn class="tu decl def fn" id="rmtabort" title='rmtabort' data-type='void rmtabort(int fildes)' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</dfn>(<em>int</em> <dfn class="local col1 decl" id="1fildes" title='fildes' data-type='int' data-ref="1fildes" data-ref-filename="1fildes">fildes</dfn>)</td></tr>
+<tr><th id="91">91</th><td>{</td></tr>
+<tr><th id="92">92</th><td></td></tr>
+<tr><th id="93">93</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="macro" href="#79" title="(Ctp[fildes][0])" data-ref="_M/READ">READ</a>(<a class="local col1 ref" href="#1fildes" title='fildes' data-ref="1fildes" data-ref-filename="1fildes">fildes</a>));</td></tr>
+<tr><th id="94">94</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="macro" href="#80" title="(Ptc[fildes][1])" data-ref="_M/WRITE">WRITE</a>(<a class="local col1 ref" href="#1fildes" title='fildes' data-ref="1fildes" data-ref-filename="1fildes">fildes</a>));</td></tr>
+<tr><th id="95">95</th><td>	<a class="macro" href="#79" title="(Ctp[fildes][0])" data-ref="_M/READ">READ</a>(<a class="local col1 ref" href="#1fildes" title='fildes' data-ref="1fildes" data-ref-filename="1fildes">fildes</a>) = -<var>1</var>;</td></tr>
+<tr><th id="96">96</th><td>	<a class="macro" href="#80" title="(Ptc[fildes][1])" data-ref="_M/WRITE">WRITE</a>(<a class="local col1 ref" href="#1fildes" title='fildes' data-ref="1fildes" data-ref-filename="1fildes">fildes</a>) = -<var>1</var>;</td></tr>
+<tr><th id="97">97</th><td>}</td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td><i  data-doc="command">/*</i></td></tr>
+<tr><th id="101">101</th><td><i  data-doc="command"> *	command --- attempt to perform a remote tape command</i></td></tr>
+<tr><th id="102">102</th><td><i  data-doc="command"> */</i></td></tr>
+<tr><th id="103">103</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="104">104</th><td><dfn class="tu decl def fn" id="command" title='command' data-type='int command(int fildes, const char * buf)' data-ref="command" data-ref-filename="command">command</dfn>(<em>int</em> <dfn class="local col2 decl" id="2fildes" title='fildes' data-type='int' data-ref="2fildes" data-ref-filename="2fildes">fildes</dfn>, <em>const</em> <em>char</em> *<dfn class="local col3 decl" id="3buf" title='buf' data-type='const char *' data-ref="3buf" data-ref-filename="3buf">buf</dfn>)</td></tr>
+<tr><th id="105">105</th><td>{</td></tr>
+<tr><th id="106">106</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="4blen" title='blen' data-type='size_t' data-ref="4blen" data-ref-filename="4blen">blen</dfn>;</td></tr>
+<tr><th id="107">107</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#sig_t" title='sig_t' data-type='void (*)(int)' data-ref="sig_t" data-ref-filename="sig_t">sig_t</a> <dfn class="local col5 decl" id="5pstat" title='pstat' data-type='sig_t' data-ref="5pstat" data-ref-filename="5pstat">pstat</dfn>;</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td><i>/*</i></td></tr>
+<tr><th id="112">112</th><td><i> *	save current pipe status and try to make the request</i></td></tr>
+<tr><th id="113">113</th><td><i> */</i></td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td>	<a class="local col4 ref" href="#4blen" title='blen' data-ref="4blen" data-ref-filename="4blen">blen</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a>(<a class="local col3 ref" href="#3buf" title='buf' data-ref="3buf" data-ref-filename="3buf">buf</a>);</td></tr>
+<tr><th id="116">116</th><td>	<a class="local col5 ref" href="#5pstat" title='pstat' data-ref="5pstat" data-ref-filename="5pstat">pstat</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#signal" title='signal' data-ref="signal" data-ref-filename="signal">signal</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#65" title="13" data-ref="_M/SIGPIPE">SIGPIPE</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#93" title="((void (*)(int)) 1)" data-ref="_M/SIG_IGN">SIG_IGN</a>);</td></tr>
+<tr><th id="117">117</th><td>	<b>if</b> ((<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a>)<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="macro" href="#80" title="(Ptc[fildes][1])" data-ref="_M/WRITE">WRITE</a>(<a class="local col2 ref" href="#2fildes" title='fildes' data-ref="2fildes" data-ref-filename="2fildes">fildes</a>), <a class="local col3 ref" href="#3buf" title='buf' data-ref="3buf" data-ref-filename="3buf">buf</a>, <a class="local col4 ref" href="#4blen" title='blen' data-ref="4blen" data-ref-filename="4blen">blen</a>) == <a class="local col4 ref" href="#4blen" title='blen' data-ref="4blen" data-ref-filename="4blen">blen</a>) {</td></tr>
+<tr><th id="118">118</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#signal" title='signal' data-ref="signal" data-ref-filename="signal">signal</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#65" title="13" data-ref="_M/SIGPIPE">SIGPIPE</a>, <a class="local col5 ref" href="#5pstat" title='pstat' data-ref="5pstat" data-ref-filename="5pstat">pstat</a>);</td></tr>
+<tr><th id="119">119</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="120">120</th><td>	}</td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td><i>/*</i></td></tr>
+<tr><th id="123">123</th><td><i> *	something went wrong. close down and go home</i></td></tr>
+<tr><th id="124">124</th><td><i> */</i></td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#signal" title='signal' data-ref="signal" data-ref-filename="signal">signal</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#65" title="13" data-ref="_M/SIGPIPE">SIGPIPE</a>, <a class="local col5 ref" href="#5pstat" title='pstat' data-ref="5pstat" data-ref-filename="5pstat">pstat</a>);</td></tr>
+<tr><th id="127">127</th><td>	<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col2 ref" href="#2fildes" title='fildes' data-ref="2fildes" data-ref-filename="2fildes">fildes</a>);</td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="130">130</th><td>	<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="131">131</th><td>}</td></tr>
+<tr><th id="132">132</th><td></td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td><i  data-doc="status">/*</i></td></tr>
+<tr><th id="135">135</th><td><i  data-doc="status"> *	status --- retrieve the status from the pipe</i></td></tr>
+<tr><th id="136">136</th><td><i  data-doc="status"> */</i></td></tr>
+<tr><th id="137">137</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="138">138</th><td><dfn class="tu decl def fn" id="status" title='status' data-type='int status(int fildes)' data-ref="status" data-ref-filename="status">status</dfn>(<em>int</em> <dfn class="local col6 decl" id="6fildes" title='fildes' data-type='int' data-ref="6fildes" data-ref-filename="6fildes">fildes</dfn>)</td></tr>
+<tr><th id="139">139</th><td>{</td></tr>
+<tr><th id="140">140</th><td>	<em>int</em> <dfn class="local col7 decl" id="7i" title='i' data-type='int' data-ref="7i" data-ref-filename="7i">i</dfn>;</td></tr>
+<tr><th id="141">141</th><td>	<em>char</em> <dfn class="local col8 decl" id="8c" title='c' data-type='char' data-ref="8c" data-ref-filename="8c">c</dfn>, *<dfn class="local col9 decl" id="9cp" title='cp' data-type='char *' data-ref="9cp" data-ref-filename="9cp">cp</dfn>;</td></tr>
+<tr><th id="142">142</th><td>	<em>char</em> <dfn class="local col0 decl" id="10buffer" title='buffer' data-type='char [64]' data-ref="10buffer" data-ref-filename="10buffer">buffer</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><i>/*</i></td></tr>
+<tr><th id="145">145</th><td><i> *	read the reply command line</i></td></tr>
+<tr><th id="146">146</th><td><i> */</i></td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td>	<b>for</b> (<a class="local col7 ref" href="#7i" title='i' data-ref="7i" data-ref-filename="7i">i</a> = <var>0</var>, <a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> = <a class="local col0 ref" href="#10buffer" title='buffer' data-ref="10buffer" data-ref-filename="10buffer">buffer</a>; <a class="local col7 ref" href="#7i" title='i' data-ref="7i" data-ref-filename="7i">i</a> &lt; <a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>; <a class="local col7 ref" href="#7i" title='i' data-ref="7i" data-ref-filename="7i">i</a>++, <a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a>++) {</td></tr>
+<tr><th id="149">149</th><td>		<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/unistd.h.html#39" title='read' data-ref="__ssp_protected_read" data-ref-filename="__ssp_protected_read">read</a>(<a class="macro" href="#79" title="(Ctp[fildes][0])" data-ref="_M/READ">READ</a>(<a class="local col6 ref" href="#6fildes" title='fildes' data-ref="6fildes" data-ref-filename="6fildes">fildes</a>), <a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a>, <var>1</var>) != <var>1</var>) {</td></tr>
+<tr><th id="150">150</th><td>			<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col6 ref" href="#6fildes" title='fildes' data-ref="6fildes" data-ref-filename="6fildes">fildes</a>);</td></tr>
+<tr><th id="151">151</th><td>			<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="152">152</th><td>			<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="153">153</th><td>		}</td></tr>
+<tr><th id="154">154</th><td>		<b>if</b> (*<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> == <kbd>'\n'</kbd>) {</td></tr>
+<tr><th id="155">155</th><td>			*<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> = <var>0</var>;</td></tr>
+<tr><th id="156">156</th><td>			<b>break</b>;</td></tr>
+<tr><th id="157">157</th><td>		}</td></tr>
+<tr><th id="158">158</th><td>	}</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td>	<b>if</b> (<a class="local col7 ref" href="#7i" title='i' data-ref="7i" data-ref-filename="7i">i</a> == <a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>) {</td></tr>
+<tr><th id="161">161</th><td>		<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col6 ref" href="#6fildes" title='fildes' data-ref="6fildes" data-ref-filename="6fildes">fildes</a>);</td></tr>
+<tr><th id="162">162</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="163">163</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="164">164</th><td>	}</td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td><i>/*</i></td></tr>
+<tr><th id="167">167</th><td><i> *	check the return status</i></td></tr>
+<tr><th id="168">168</th><td><i> */</i></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>	<b>for</b> (<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> = <a class="local col0 ref" href="#10buffer" title='buffer' data-ref="10buffer" data-ref-filename="10buffer">buffer</a>; *<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a>; <a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a>++)</td></tr>
+<tr><th id="171">171</th><td>		<b>if</b> (*<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> != <kbd>' '</kbd>)</td></tr>
+<tr><th id="172">172</th><td>			<b>break</b>;</td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td>	<b>if</b> (*<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> == <kbd>'E'</kbd> || *<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> == <kbd>'F'</kbd>) {</td></tr>
+<tr><th id="175">175</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> + <var>1</var>);</td></tr>
+<tr><th id="176">176</th><td>		<b>while</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/unistd.h.html#39" title='read' data-ref="__ssp_protected_read" data-ref-filename="__ssp_protected_read">read</a>(<a class="macro" href="#79" title="(Ctp[fildes][0])" data-ref="_M/READ">READ</a>(<a class="local col6 ref" href="#6fildes" title='fildes' data-ref="6fildes" data-ref-filename="6fildes">fildes</a>), &amp;<a class="local col8 ref" href="#8c" title='c' data-ref="8c" data-ref-filename="8c">c</a>, <var>1</var>) == <var>1</var>)</td></tr>
+<tr><th id="177">177</th><td>			<b>if</b> (<a class="local col8 ref" href="#8c" title='c' data-ref="8c" data-ref-filename="8c">c</a> == <kbd>'\n'</kbd>)</td></tr>
+<tr><th id="178">178</th><td>				<b>break</b>;</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td>		<b>if</b> (*<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> == <kbd>'F'</kbd>)</td></tr>
+<tr><th id="181">181</th><td>			<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col6 ref" href="#6fildes" title='fildes' data-ref="6fildes" data-ref-filename="6fildes">fildes</a>);</td></tr>
+<tr><th id="182">182</th><td></td></tr>
+<tr><th id="183">183</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="184">184</th><td>	}</td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td><i>/*</i></td></tr>
+<tr><th id="187">187</th><td><i> *	check for mis-synced pipes</i></td></tr>
+<tr><th id="188">188</th><td><i> */</i></td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>	<b>if</b> (*<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> != <kbd>'A'</kbd>) {</td></tr>
+<tr><th id="191">191</th><td>		<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col6 ref" href="#6fildes" title='fildes' data-ref="6fildes" data-ref-filename="6fildes">fildes</a>);</td></tr>
+<tr><th id="192">192</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="193">193</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="194">194</th><td>	}</td></tr>
+<tr><th id="195">195</th><td></td></tr>
+<tr><th id="196">196</th><td>	<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="local col9 ref" href="#9cp" title='cp' data-ref="9cp" data-ref-filename="9cp">cp</a> + <var>1</var>);</td></tr>
+<tr><th id="197">197</th><td>}</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td></td></tr>
+<tr><th id="200">200</th><td><u>#<span data-ppcond="200">ifdef</span> <span class="macro" data-ref="_M/USE_REXEC">USE_REXEC</span></u></td></tr>
+<tr><th id="201">201</th><td><i>/*</i></td></tr>
+<tr><th id="202">202</th><td><i> * _rmt_rexec</i></td></tr>
+<tr><th id="203">203</th><td><i> *</i></td></tr>
+<tr><th id="204">204</th><td><i> * execute /etc/rmt on a remote system using rexec().</i></td></tr>
+<tr><th id="205">205</th><td><i> * Return file descriptor of bidirectional socket for stdin and stdout</i></td></tr>
+<tr><th id="206">206</th><td><i> * If username is NULL, or an empty string, uses current username.</i></td></tr>
+<tr><th id="207">207</th><td><i> *</i></td></tr>
+<tr><th id="208">208</th><td><i> * ADR: By default, this code is not used, since it requires that</i></td></tr>
+<tr><th id="209">209</th><td><i> * the user have a .netrc file in his/her home directory, or that the</i></td></tr>
+<tr><th id="210">210</th><td><i> * application designer be willing to have rexec prompt for login and</i></td></tr>
+<tr><th id="211">211</th><td><i> * password info. This may be unacceptable, and .rhosts files for use</i></td></tr>
+<tr><th id="212">212</th><td><i> * with rsh are much more common on BSD systems.</i></td></tr>
+<tr><th id="213">213</th><td><i> */</i></td></tr>
+<tr><th id="214">214</th><td></td></tr>
+<tr><th id="215">215</th><td><em>static</em>	<em>int</em>	_rmt_rexec(<em>const</em> <em>char</em> *, <em>const</em> <em>char</em> *);</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="218">218</th><td>_rmt_rexec(<em>const</em> <em>char</em> *host, <em>const</em> <em>char</em> *user)</td></tr>
+<tr><th id="219">219</th><td>{</td></tr>
+<tr><th id="220">220</th><td>	<b>struct</b> servent *rexecserv;</td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td>	_DIAGASSERT(host != NULL);</td></tr>
+<tr><th id="223">223</th><td>	<i>/* user may be NULL */</i></td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td>	rexecserv = getservbyname(<q>"exec"</q>, <q>"tcp"</q>);</td></tr>
+<tr><th id="226">226</th><td>	<b>if</b> (rexecserv == NULL)</td></tr>
+<tr><th id="227">227</th><td>		errx(<var>1</var>, <q>"exec/tcp: service not available."</q>);</td></tr>
+<tr><th id="228">228</th><td>	<b>if</b> ((user != NULL) &amp;&amp; *user == <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="229">229</th><td>		user = NULL;</td></tr>
+<tr><th id="230">230</th><td>	<b>return</b> rexec(&amp;host, rexecserv-&gt;s_port, user, NULL,</td></tr>
+<tr><th id="231">231</th><td>	    <q>"/etc/rmt"</q>, NULL);</td></tr>
+<tr><th id="232">232</th><td>}</td></tr>
+<tr><th id="233">233</th><td><u>#<span data-ppcond="200">endif</span> /* USE_REXEC */</u></td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td><i>/*</i></td></tr>
+<tr><th id="237">237</th><td><i> *	_rmt_open --- open a magtape device on system specified, as given user</i></td></tr>
+<tr><th id="238">238</th><td><i> *</i></td></tr>
+<tr><th id="239">239</th><td><i> *	file name has the form [user@]system:/dev/????</i></td></tr>
+<tr><th id="240">240</th><td><i>#ifdef COMPAT</i></td></tr>
+<tr><th id="241">241</th><td><i> *	file name has the form system[.user]:/dev/????</i></td></tr>
+<tr><th id="242">242</th><td><i>#endif</i></td></tr>
+<tr><th id="243">243</th><td><i> */</i></td></tr>
+<tr><th id="244">244</th><td></td></tr>
+<tr><th id="245">245</th><td><u>#define <dfn class="macro" id="_M/MAXHOSTLEN" data-ref="_M/MAXHOSTLEN">MAXHOSTLEN</dfn>	257	/* BSD allows very long host names... */</u></td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="248">248</th><td><i>/*ARGSUSED*/</i></td></tr>
+<tr><th id="249">249</th><td><dfn class="tu decl def fn" id="_rmt_open" title='_rmt_open' data-type='int _rmt_open(const char * path, int oflag, int mode)' data-ref="_rmt_open" data-ref-filename="_rmt_open">_rmt_open</dfn>(<em>const</em> <em>char</em> *<dfn class="local col1 decl" id="11path" title='path' data-type='const char *' data-ref="11path" data-ref-filename="11path">path</dfn>, <em>int</em> <dfn class="local col2 decl" id="12oflag" title='oflag' data-type='int' data-ref="12oflag" data-ref-filename="12oflag">oflag</dfn>, <em>int</em> <dfn class="local col3 decl" id="13mode" title='mode' data-type='int' data-ref="13mode" data-ref-filename="13mode">mode</dfn>)</td></tr>
+<tr><th id="250">250</th><td>{</td></tr>
+<tr><th id="251">251</th><td>	<em>int</em> <dfn class="local col4 decl" id="14i" title='i' data-type='int' data-ref="14i" data-ref-filename="14i">i</dfn>;</td></tr>
+<tr><th id="252">252</th><td>	<em>char</em> <dfn class="local col5 decl" id="15buffer" title='buffer' data-type='char [64]' data-ref="15buffer" data-ref-filename="15buffer">buffer</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="253">253</th><td>	<em>char</em> <dfn class="local col6 decl" id="16host" title='host' data-type='char [257]' data-ref="16host" data-ref-filename="16host">host</dfn>[<a class="macro" href="#245" title="257" data-ref="_M/MAXHOSTLEN">MAXHOSTLEN</a>];</td></tr>
+<tr><th id="254">254</th><td>	<em>char</em> <dfn class="local col7 decl" id="17device" title='device' data-type='char [64]' data-ref="17device" data-ref-filename="17device">device</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="255">255</th><td>	<em>char</em> <dfn class="local col8 decl" id="18login" title='login' data-type='char [64]' data-ref="18login" data-ref-filename="18login">login</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="256">256</th><td>	<em>char</em> *<dfn class="local col9 decl" id="19sys" title='sys' data-type='char *' data-ref="19sys" data-ref-filename="19sys">sys</dfn>, *<dfn class="local col0 decl" id="20dev" title='dev' data-type='char *' data-ref="20dev" data-ref-filename="20dev">dev</dfn>, *<dfn class="local col1 decl" id="21user" title='user' data-type='char *' data-ref="21user" data-ref-filename="21user">user</dfn>;</td></tr>
+<tr><th id="257">257</th><td>	<em>const</em> <em>char</em> *<dfn class="local col2 decl" id="22rshpath" title='rshpath' data-type='const char *' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</dfn>, *<dfn class="local col3 decl" id="23rsh" title='rsh' data-type='const char *' data-ref="23rsh" data-ref-filename="23rsh">rsh</dfn>;</td></tr>
+<tr><th id="258">258</th><td></td></tr>
+<tr><th id="259">259</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="260">260</th><td></td></tr>
+<tr><th id="261">261</th><td>	<a class="local col9 ref" href="#19sys" title='sys' data-ref="19sys" data-ref-filename="19sys">sys</a> = <a class="local col6 ref" href="#16host" title='host' data-ref="16host" data-ref-filename="16host">host</a>;</td></tr>
+<tr><th id="262">262</th><td>	<a class="local col0 ref" href="#20dev" title='dev' data-ref="20dev" data-ref-filename="20dev">dev</a> = <a class="local col7 ref" href="#17device" title='device' data-ref="17device" data-ref-filename="17device">device</a>;</td></tr>
+<tr><th id="263">263</th><td>	<a class="local col1 ref" href="#21user" title='user' data-ref="21user" data-ref-filename="21user">user</a> = <a class="local col8 ref" href="#18login" title='login' data-ref="18login" data-ref-filename="18login">login</a>;</td></tr>
+<tr><th id="264">264</th><td></td></tr>
+<tr><th id="265">265</th><td><i>/*</i></td></tr>
+<tr><th id="266">266</th><td><i> *	first, find an open pair of file descriptors</i></td></tr>
+<tr><th id="267">267</th><td><i> */</i></td></tr>
+<tr><th id="268">268</th><td></td></tr>
+<tr><th id="269">269</th><td>	<b>for</b> (<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a> = <var>0</var>; <a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a> &lt; <a class="macro" href="#77" title="4" data-ref="_M/MAXUNIT">MAXUNIT</a>; <a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>++)</td></tr>
+<tr><th id="270">270</th><td>		<b>if</b> (<a class="macro" href="#79" title="(Ctp[i][0])" data-ref="_M/READ">READ</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>) == -<var>1</var> &amp;&amp; <a class="macro" href="#80" title="(Ptc[i][1])" data-ref="_M/WRITE">WRITE</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>) == -<var>1</var>)</td></tr>
+<tr><th id="271">271</th><td>			<b>break</b>;</td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td>	<b>if</b> (<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a> == <a class="macro" href="#77" title="4" data-ref="_M/MAXUNIT">MAXUNIT</a>) {</td></tr>
+<tr><th id="274">274</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#66" title="24" data-ref="_M/EMFILE">EMFILE</a>;</td></tr>
+<tr><th id="275">275</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="276">276</th><td>	}</td></tr>
+<tr><th id="277">277</th><td></td></tr>
+<tr><th id="278">278</th><td><i>/*</i></td></tr>
+<tr><th id="279">279</th><td><i> *	pull apart system and device, and optional user</i></td></tr>
+<tr><th id="280">280</th><td><i> *	don't munge original string</i></td></tr>
+<tr><th id="281">281</th><td><i> *	if COMPAT is defined, also handle old (4.2) style person.site notation.</i></td></tr>
+<tr><th id="282">282</th><td><i> */</i></td></tr>
+<tr><th id="283">283</th><td></td></tr>
+<tr><th id="284">284</th><td>	<b>while</b> (*<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a> != <kbd>'@'</kbd></td></tr>
+<tr><th id="285">285</th><td><u>#<span data-ppcond="285">ifdef</span> <span class="macro" data-ref="_M/COMPAT">COMPAT</span></u></td></tr>
+<tr><th id="286">286</th><td>			&amp;&amp; *path != <kbd>'.'</kbd></td></tr>
+<tr><th id="287">287</th><td><u>#<span data-ppcond="285">endif</span></u></td></tr>
+<tr><th id="288">288</th><td>			&amp;&amp; *<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a> != <kbd>':'</kbd>) {</td></tr>
+<tr><th id="289">289</th><td>		*<a class="local col9 ref" href="#19sys" title='sys' data-ref="19sys" data-ref-filename="19sys">sys</a>++ = *<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a>++;</td></tr>
+<tr><th id="290">290</th><td>	}</td></tr>
+<tr><th id="291">291</th><td>	*<a class="local col9 ref" href="#19sys" title='sys' data-ref="19sys" data-ref-filename="19sys">sys</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="292">292</th><td>	<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a>++;</td></tr>
+<tr><th id="293">293</th><td></td></tr>
+<tr><th id="294">294</th><td>	<b>if</b> (*(<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a> - <var>1</var>) == <kbd>'@'</kbd>) {</td></tr>
+<tr><th id="295">295</th><td>		(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/string.h.html#104" title="((__builtin_object_size(user, 0) != (size_t)-1) ? __builtin___strncpy_chk(user, host, sizeof(login) - 1, __builtin_object_size(user, 0)) : __strncpy_ichk(user, host, sizeof(login) - 1))" data-ref="_M/strncpy">strncpy</a>(<a class="local col1 ref" href="#21user" title='user' data-ref="21user" data-ref-filename="21user">user</a>, <a class="local col6 ref" href="#16host" title='host' data-ref="16host" data-ref-filename="16host">host</a>, <b>sizeof</b>(<a class="local col8 ref" href="#18login" title='login' data-ref="18login" data-ref-filename="18login">login</a>) - <var>1</var>);</td></tr>
+<tr><th id="296">296</th><td>				<i>/* saw user part of user@host */</i></td></tr>
+<tr><th id="297">297</th><td>		<a class="local col9 ref" href="#19sys" title='sys' data-ref="19sys" data-ref-filename="19sys">sys</a> = <a class="local col6 ref" href="#16host" title='host' data-ref="16host" data-ref-filename="16host">host</a>;			<i>/* start over */</i></td></tr>
+<tr><th id="298">298</th><td>		<b>while</b> (*<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a> != <kbd>':'</kbd>) {</td></tr>
+<tr><th id="299">299</th><td>			*<a class="local col9 ref" href="#19sys" title='sys' data-ref="19sys" data-ref-filename="19sys">sys</a>++ = *<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a>++;</td></tr>
+<tr><th id="300">300</th><td>		}</td></tr>
+<tr><th id="301">301</th><td>		*<a class="local col9 ref" href="#19sys" title='sys' data-ref="19sys" data-ref-filename="19sys">sys</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="302">302</th><td>		<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a>++;</td></tr>
+<tr><th id="303">303</th><td>	}</td></tr>
+<tr><th id="304">304</th><td><u>#<span data-ppcond="304">ifdef</span> <span class="macro" data-ref="_M/COMPAT">COMPAT</span></u></td></tr>
+<tr><th id="305">305</th><td>	<b>else</b> <b>if</b> (*(path - <var>1</var>) == <kbd>'.'</kbd>) {</td></tr>
+<tr><th id="306">306</th><td>		<b>while</b> (*path != <kbd>':'</kbd>) {</td></tr>
+<tr><th id="307">307</th><td>			*user++ = *path++;</td></tr>
+<tr><th id="308">308</th><td>		}</td></tr>
+<tr><th id="309">309</th><td>		*user = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="310">310</th><td>		path++;</td></tr>
+<tr><th id="311">311</th><td>	}</td></tr>
+<tr><th id="312">312</th><td><u>#<span data-ppcond="304">endif</span></u></td></tr>
+<tr><th id="313">313</th><td>	<b>else</b></td></tr>
+<tr><th id="314">314</th><td>		*<a class="local col1 ref" href="#21user" title='user' data-ref="21user" data-ref-filename="21user">user</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="315">315</th><td></td></tr>
+<tr><th id="316">316</th><td>	<b>while</b> (*<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a>) {</td></tr>
+<tr><th id="317">317</th><td>		*<a class="local col0 ref" href="#20dev" title='dev' data-ref="20dev" data-ref-filename="20dev">dev</a>++ = *<a class="local col1 ref" href="#11path" title='path' data-ref="11path" data-ref-filename="11path">path</a>++;</td></tr>
+<tr><th id="318">318</th><td>	}</td></tr>
+<tr><th id="319">319</th><td>	*<a class="local col0 ref" href="#20dev" title='dev' data-ref="20dev" data-ref-filename="20dev">dev</a> = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td><u>#<span data-ppcond="321">ifdef</span> <span class="macro" data-ref="_M/USE_REXEC">USE_REXEC</span></u></td></tr>
+<tr><th id="322">322</th><td><i>/*</i></td></tr>
+<tr><th id="323">323</th><td><i> *	Execute the remote command using rexec</i></td></tr>
+<tr><th id="324">324</th><td><i> */</i></td></tr>
+<tr><th id="325">325</th><td>	READ(i) = WRITE(i) = _rmt_rexec(host, login);</td></tr>
+<tr><th id="326">326</th><td>	<b>if</b> (READ(i) &lt; <var>0</var>)</td></tr>
+<tr><th id="327">327</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="328">328</th><td><u>#<span data-ppcond="321">else</span></u></td></tr>
+<tr><th id="329">329</th><td><i>/*</i></td></tr>
+<tr><th id="330">330</th><td><i> *	setup the pipes for the 'rsh' command and fork</i></td></tr>
+<tr><th id="331">331</th><td><i> */</i></td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td>	<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#pipe" title='pipe' data-ref="pipe" data-ref-filename="pipe">pipe</a>(<a class="tu ref" href="#Ptc" title='Ptc' data-use='r' data-ref="Ptc" data-ref-filename="Ptc">Ptc</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>]) == -<var>1</var> || <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#pipe" title='pipe' data-ref="pipe" data-ref-filename="pipe">pipe</a>(<a class="tu ref" href="#Ctp" title='Ctp' data-use='r' data-ref="Ctp" data-ref-filename="Ctp">Ctp</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>]) == -<var>1</var>)</td></tr>
+<tr><th id="334">334</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td>	<b>switch</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#fork" title='fork' data-ref="fork" data-ref-filename="fork">fork</a>()) {</td></tr>
+<tr><th id="337">337</th><td>	<b>case</b> -<var>1</var>:</td></tr>
+<tr><th id="338">338</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="339">339</th><td></td></tr>
+<tr><th id="340">340</th><td>	<b>case</b> <var>0</var>:</td></tr>
+<tr><th id="341">341</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<var>0</var>);</td></tr>
+<tr><th id="342">342</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#dup" title='dup' data-ref="dup" data-ref-filename="dup">dup</a>(<a class="tu ref" href="#Ptc" title='Ptc' data-use='r' data-ref="Ptc" data-ref-filename="Ptc">Ptc</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>0</var>]);</td></tr>
+<tr><th id="343">343</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#Ptc" title='Ptc' data-use='r' data-ref="Ptc" data-ref-filename="Ptc">Ptc</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>0</var>]); <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#Ptc" title='Ptc' data-use='r' data-ref="Ptc" data-ref-filename="Ptc">Ptc</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>1</var>]);</td></tr>
+<tr><th id="344">344</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<var>1</var>);</td></tr>
+<tr><th id="345">345</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#dup" title='dup' data-ref="dup" data-ref-filename="dup">dup</a>(<a class="tu ref" href="#Ctp" title='Ctp' data-use='r' data-ref="Ctp" data-ref-filename="Ctp">Ctp</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>1</var>]);</td></tr>
+<tr><th id="346">346</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#Ctp" title='Ctp' data-use='r' data-ref="Ctp" data-ref-filename="Ctp">Ctp</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>0</var>]); <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#Ctp" title='Ctp' data-use='r' data-ref="Ctp" data-ref-filename="Ctp">Ctp</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>1</var>]);</td></tr>
+<tr><th id="347">347</th><td>		(<em>void</em>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#setuid" title='setuid' data-ref="setuid" data-ref-filename="setuid">setuid</a>(<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#getuid" title='getuid' data-ref="getuid" data-ref-filename="getuid">getuid</a>());</td></tr>
+<tr><th id="348">348</th><td>		(<em>void</em>) <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#setgid" title='setgid' data-ref="setgid" data-ref-filename="setgid">setgid</a>(<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#getgid" title='getgid' data-ref="getgid" data-ref-filename="getgid">getgid</a>());</td></tr>
+<tr><th id="349">349</th><td></td></tr>
+<tr><th id="350">350</th><td>		<b>if</b> ((<a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#getenv" title='getenv' data-ref="getenv" data-ref-filename="getenv">getenv</a>(<q>"RCMD_CMD"</q>)) == <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="351">351</th><td>			<a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a> = <a class="macro" href="pathnames.h.html#29" title="&quot;/usr/bin/rsh&quot;" data-ref="_M/_PATH_RSH">_PATH_RSH</a>;</td></tr>
+<tr><th id="352">352</th><td>		<b>if</b> ((<a class="local col3 ref" href="#23rsh" title='rsh' data-ref="23rsh" data-ref-filename="23rsh">rsh</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strrchr" title='strrchr' data-ref="strrchr" data-ref-filename="strrchr">strrchr</a>(<a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a>, <kbd>'/'</kbd>)) == <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="353">353</th><td>			<a class="local col3 ref" href="#23rsh" title='rsh' data-ref="23rsh" data-ref-filename="23rsh">rsh</a> = <a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a>;</td></tr>
+<tr><th id="354">354</th><td>		<b>else</b></td></tr>
+<tr><th id="355">355</th><td>			<a class="local col3 ref" href="#23rsh" title='rsh' data-ref="23rsh" data-ref-filename="23rsh">rsh</a>++;</td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td>		<b>if</b> (*<a class="local col8 ref" href="#18login" title='login' data-ref="18login" data-ref-filename="18login">login</a>) {</td></tr>
+<tr><th id="358">358</th><td>			<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#execl" title='execl' data-ref="execl" data-ref-filename="execl">execl</a>(<a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a>, <a class="local col3 ref" href="#23rsh" title='rsh' data-ref="23rsh" data-ref-filename="23rsh">rsh</a>, <a class="local col6 ref" href="#16host" title='host' data-ref="16host" data-ref-filename="16host">host</a>, <q>"-l"</q>, <a class="local col8 ref" href="#18login" title='login' data-ref="18login" data-ref-filename="18login">login</a>, <a class="macro" href="pathnames.h.html#30" title="&quot;/etc/rmt&quot;" data-ref="_M/_PATH_RMT">_PATH_RMT</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="359">359</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="360">360</th><td>			<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#execl" title='execl' data-ref="execl" data-ref-filename="execl">execl</a>(<a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a>, <a class="local col3 ref" href="#23rsh" title='rsh' data-ref="23rsh" data-ref-filename="23rsh">rsh</a>, <a class="local col6 ref" href="#16host" title='host' data-ref="16host" data-ref-filename="16host">host</a>, <a class="macro" href="pathnames.h.html#30" title="&quot;/etc/rmt&quot;" data-ref="_M/_PATH_RMT">_PATH_RMT</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="361">361</th><td>		}</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td><i>/*</i></td></tr>
+<tr><th id="364">364</th><td><i> *	bad problems if we get here</i></td></tr>
+<tr><th id="365">365</th><td><i> */</i></td></tr>
+<tr><th id="366">366</th><td></td></tr>
+<tr><th id="367">367</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/err.h.html#err" title='err' data-ref="err" data-ref-filename="err">err</a>(<var>1</var>, <q>"Cannnot exec %s"</q>, <a class="local col2 ref" href="#22rshpath" title='rshpath' data-ref="22rshpath" data-ref-filename="22rshpath">rshpath</a>);</td></tr>
+<tr><th id="368">368</th><td>		<i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="369">369</th><td>	<b>default</b>:</td></tr>
+<tr><th id="370">370</th><td>		<b>break</b>;</td></tr>
+<tr><th id="371">371</th><td>	}</td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#Ptc" title='Ptc' data-use='r' data-ref="Ptc" data-ref-filename="Ptc">Ptc</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>0</var>]); <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="tu ref" href="#Ctp" title='Ctp' data-use='r' data-ref="Ctp" data-ref-filename="Ctp">Ctp</a>[<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>][<var>1</var>]);</td></tr>
+<tr><th id="374">374</th><td><u>#<span data-ppcond="321">endif</span></u></td></tr>
+<tr><th id="375">375</th><td></td></tr>
+<tr><th id="376">376</th><td><i>/*</i></td></tr>
+<tr><th id="377">377</th><td><i> *	now attempt to open the tape device</i></td></tr>
+<tr><th id="378">378</th><td><i> */</i></td></tr>
+<tr><th id="379">379</th><td></td></tr>
+<tr><th id="380">380</th><td>	(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/stdio.h.html#61" title="__builtin___snprintf_chk(buffer, sizeof(buffer), 0, __builtin_object_size(buffer, 2 &gt; 1), &quot;O%s\n%d\n&quot;, device, oflag)" data-ref="_M/snprintf">snprintf</a>(<a class="local col5 ref" href="#15buffer" title='buffer' data-ref="15buffer" data-ref-filename="15buffer">buffer</a>, <b>sizeof</b>(<a class="local col5 ref" href="#15buffer" title='buffer' data-ref="15buffer" data-ref-filename="15buffer">buffer</a>), <q>"O%s\n%d\n"</q>, <a class="local col7 ref" href="#17device" title='device' data-ref="17device" data-ref-filename="17device">device</a>, <a class="local col2 ref" href="#12oflag" title='oflag' data-ref="12oflag" data-ref-filename="12oflag">oflag</a>);</td></tr>
+<tr><th id="381">381</th><td>	<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>, <a class="local col5 ref" href="#15buffer" title='buffer' data-ref="15buffer" data-ref-filename="15buffer">buffer</a>) == -<var>1</var> || <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>) == -<var>1</var>)</td></tr>
+<tr><th id="382">382</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="383">383</th><td></td></tr>
+<tr><th id="384">384</th><td>	<b>return</b> <a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>;</td></tr>
+<tr><th id="385">385</th><td>}</td></tr>
+<tr><th id="386">386</th><td></td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td><i  data-doc="_rmt_close">/*</i></td></tr>
+<tr><th id="389">389</th><td><i  data-doc="_rmt_close"> *	_rmt_close --- close a remote magtape unit and shut down</i></td></tr>
+<tr><th id="390">390</th><td><i  data-doc="_rmt_close"> */</i></td></tr>
+<tr><th id="391">391</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="392">392</th><td><dfn class="tu decl def fn" id="_rmt_close" title='_rmt_close' data-type='int _rmt_close(int fildes)' data-ref="_rmt_close" data-ref-filename="_rmt_close">_rmt_close</dfn>(<em>int</em> <dfn class="local col4 decl" id="24fildes" title='fildes' data-type='int' data-ref="24fildes" data-ref-filename="24fildes">fildes</dfn>)</td></tr>
+<tr><th id="393">393</th><td>{</td></tr>
+<tr><th id="394">394</th><td>	<em>int</em> <dfn class="local col5 decl" id="25rc" title='rc' data-type='int' data-ref="25rc" data-ref-filename="25rc">rc</dfn>;</td></tr>
+<tr><th id="395">395</th><td></td></tr>
+<tr><th id="396">396</th><td>	<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col4 ref" href="#24fildes" title='fildes' data-ref="24fildes" data-ref-filename="24fildes">fildes</a>, <q>"C\n"</q>) != -<var>1</var>) {</td></tr>
+<tr><th id="397">397</th><td>		<a class="local col5 ref" href="#25rc" title='rc' data-ref="25rc" data-ref-filename="25rc">rc</a> = <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col4 ref" href="#24fildes" title='fildes' data-ref="24fildes" data-ref-filename="24fildes">fildes</a>);</td></tr>
+<tr><th id="398">398</th><td></td></tr>
+<tr><th id="399">399</th><td>		<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col4 ref" href="#24fildes" title='fildes' data-ref="24fildes" data-ref-filename="24fildes">fildes</a>);</td></tr>
+<tr><th id="400">400</th><td>		<b>return</b> <a class="local col5 ref" href="#25rc" title='rc' data-ref="25rc" data-ref-filename="25rc">rc</a>;</td></tr>
+<tr><th id="401">401</th><td>	}</td></tr>
+<tr><th id="402">402</th><td></td></tr>
+<tr><th id="403">403</th><td>	<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="404">404</th><td>}</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td></td></tr>
+<tr><th id="407">407</th><td><i  data-doc="_rmt_read">/*</i></td></tr>
+<tr><th id="408">408</th><td><i  data-doc="_rmt_read"> *	_rmt_read --- read a buffer from a remote tape</i></td></tr>
+<tr><th id="409">409</th><td><i  data-doc="_rmt_read"> */</i></td></tr>
+<tr><th id="410">410</th><td><em>static</em> <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a></td></tr>
+<tr><th id="411">411</th><td><dfn class="tu decl def fn" id="_rmt_read" title='_rmt_read' data-type='ssize_t _rmt_read(int fildes, void * buf, size_t nbyte)' data-ref="_rmt_read" data-ref-filename="_rmt_read">_rmt_read</dfn>(<em>int</em> <dfn class="local col6 decl" id="26fildes" title='fildes' data-type='int' data-ref="26fildes" data-ref-filename="26fildes">fildes</dfn>, <em>void</em> *<dfn class="local col7 decl" id="27buf" title='buf' data-type='void *' data-ref="27buf" data-ref-filename="27buf">buf</dfn>, <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="28nbyte" title='nbyte' data-type='size_t' data-ref="28nbyte" data-ref-filename="28nbyte">nbyte</dfn>)</td></tr>
+<tr><th id="412">412</th><td>{</td></tr>
+<tr><th id="413">413</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col9 decl" id="29rc" title='rc' data-type='size_t' data-ref="29rc" data-ref-filename="29rc">rc</dfn>;</td></tr>
+<tr><th id="414">414</th><td>	<em>int</em> <dfn class="local col0 decl" id="30rv" title='rv' data-type='int' data-ref="30rv" data-ref-filename="30rv">rv</dfn>;</td></tr>
+<tr><th id="415">415</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a> <dfn class="local col1 decl" id="31nread" title='nread' data-type='ssize_t' data-ref="31nread" data-ref-filename="31nread">nread</dfn>;</td></tr>
+<tr><th id="416">416</th><td>	<em>char</em> *<dfn class="local col2 decl" id="32p" title='p' data-type='char *' data-ref="32p" data-ref-filename="32p">p</dfn>;</td></tr>
+<tr><th id="417">417</th><td>	<em>char</em> <dfn class="local col3 decl" id="33buffer" title='buffer' data-type='char [64]' data-ref="33buffer" data-ref-filename="33buffer">buffer</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="418">418</th><td></td></tr>
+<tr><th id="419">419</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td>	(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/stdio.h.html#61" title="__builtin___snprintf_chk(buffer, sizeof buffer, 0, __builtin_object_size(buffer, 2 &gt; 1), &quot;R%zu\n&quot;, nbyte)" data-ref="_M/snprintf">snprintf</a>(<a class="local col3 ref" href="#33buffer" title='buffer' data-ref="33buffer" data-ref-filename="33buffer">buffer</a>, <b>sizeof</b> <a class="local col3 ref" href="#33buffer" title='buffer' data-ref="33buffer" data-ref-filename="33buffer">buffer</a>, <q>"R%zu\n"</q>, <a class="local col8 ref" href="#28nbyte" title='nbyte' data-ref="28nbyte" data-ref-filename="28nbyte">nbyte</a>);</td></tr>
+<tr><th id="422">422</th><td>	<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col6 ref" href="#26fildes" title='fildes' data-ref="26fildes" data-ref-filename="26fildes">fildes</a>, <a class="local col3 ref" href="#33buffer" title='buffer' data-ref="33buffer" data-ref-filename="33buffer">buffer</a>) == -<var>1</var> || (<a class="local col0 ref" href="#30rv" title='rv' data-ref="30rv" data-ref-filename="30rv">rv</a> = <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col6 ref" href="#26fildes" title='fildes' data-ref="26fildes" data-ref-filename="26fildes">fildes</a>)) == -<var>1</var>)</td></tr>
+<tr><th id="423">423</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="424">424</th><td></td></tr>
+<tr><th id="425">425</th><td>	<b>if</b> (<a class="local col0 ref" href="#30rv" title='rv' data-ref="30rv" data-ref-filename="30rv">rv</a> &gt; (<em>int</em>)<a class="local col8 ref" href="#28nbyte" title='nbyte' data-ref="28nbyte" data-ref-filename="28nbyte">nbyte</a>)</td></tr>
+<tr><th id="426">426</th><td>		<a class="local col0 ref" href="#30rv" title='rv' data-ref="30rv" data-ref-filename="30rv">rv</a> = (<em>int</em>)<a class="local col8 ref" href="#28nbyte" title='nbyte' data-ref="28nbyte" data-ref-filename="28nbyte">nbyte</a>;</td></tr>
+<tr><th id="427">427</th><td></td></tr>
+<tr><th id="428">428</th><td>	<b>for</b> (<a class="local col9 ref" href="#29rc" title='rc' data-ref="29rc" data-ref-filename="29rc">rc</a> = <a class="local col0 ref" href="#30rv" title='rv' data-ref="30rv" data-ref-filename="30rv">rv</a>, <a class="local col2 ref" href="#32p" title='p' data-ref="32p" data-ref-filename="32p">p</a> = <a class="local col7 ref" href="#27buf" title='buf' data-ref="27buf" data-ref-filename="27buf">buf</a>; <a class="local col9 ref" href="#29rc" title='rc' data-ref="29rc" data-ref-filename="29rc">rc</a> &gt; <var>0</var>; <a class="local col9 ref" href="#29rc" title='rc' data-ref="29rc" data-ref-filename="29rc">rc</a> -= <a class="local col1 ref" href="#31nread" title='nread' data-ref="31nread" data-ref-filename="31nread">nread</a>, <a class="local col2 ref" href="#32p" title='p' data-ref="32p" data-ref-filename="32p">p</a> += <a class="local col1 ref" href="#31nread" title='nread' data-ref="31nread" data-ref-filename="31nread">nread</a>) {</td></tr>
+<tr><th id="429">429</th><td>		<b>if</b> ((<a class="local col1 ref" href="#31nread" title='nread' data-ref="31nread" data-ref-filename="31nread">nread</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/unistd.h.html#39" title='read' data-ref="__ssp_protected_read" data-ref-filename="__ssp_protected_read">read</a>(<a class="macro" href="#79" title="(Ctp[fildes][0])" data-ref="_M/READ">READ</a>(<a class="local col6 ref" href="#26fildes" title='fildes' data-ref="26fildes" data-ref-filename="26fildes">fildes</a>), <a class="local col2 ref" href="#32p" title='p' data-ref="32p" data-ref-filename="32p">p</a>, <a class="local col9 ref" href="#29rc" title='rc' data-ref="29rc" data-ref-filename="29rc">rc</a>)) &lt;= <var>0</var>) {</td></tr>
+<tr><th id="430">430</th><td>			<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col6 ref" href="#26fildes" title='fildes' data-ref="26fildes" data-ref-filename="26fildes">fildes</a>);</td></tr>
+<tr><th id="431">431</th><td>			<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="432">432</th><td>			<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="433">433</th><td>		}</td></tr>
+<tr><th id="434">434</th><td>	}</td></tr>
+<tr><th id="435">435</th><td></td></tr>
+<tr><th id="436">436</th><td>	<b>return</b> <a class="local col0 ref" href="#30rv" title='rv' data-ref="30rv" data-ref-filename="30rv">rv</a>;</td></tr>
+<tr><th id="437">437</th><td>}</td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td></td></tr>
+<tr><th id="440">440</th><td><i  data-doc="_rmt_write">/*</i></td></tr>
+<tr><th id="441">441</th><td><i  data-doc="_rmt_write"> *	_rmt_write --- write a buffer to the remote tape</i></td></tr>
+<tr><th id="442">442</th><td><i  data-doc="_rmt_write"> */</i></td></tr>
+<tr><th id="443">443</th><td><em>static</em> <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a></td></tr>
+<tr><th id="444">444</th><td><dfn class="tu decl def fn" id="_rmt_write" title='_rmt_write' data-type='ssize_t _rmt_write(int fildes, const void * buf, size_t nbyte)' data-ref="_rmt_write" data-ref-filename="_rmt_write">_rmt_write</dfn>(<em>int</em> <dfn class="local col4 decl" id="34fildes" title='fildes' data-type='int' data-ref="34fildes" data-ref-filename="34fildes">fildes</dfn>, <em>const</em> <em>void</em> *<dfn class="local col5 decl" id="35buf" title='buf' data-type='const void *' data-ref="35buf" data-ref-filename="35buf">buf</dfn>, <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="36nbyte" title='nbyte' data-type='size_t' data-ref="36nbyte" data-ref-filename="36nbyte">nbyte</dfn>)</td></tr>
+<tr><th id="445">445</th><td>{</td></tr>
+<tr><th id="446">446</th><td>	<em>char</em> <dfn class="local col7 decl" id="37buffer" title='buffer' data-type='char [64]' data-ref="37buffer" data-ref-filename="37buffer">buffer</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="447">447</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#sig_t" title='sig_t' data-type='void (*)(int)' data-ref="sig_t" data-ref-filename="sig_t">sig_t</a> <dfn class="local col8 decl" id="38pstat" title='pstat' data-type='sig_t' data-ref="38pstat" data-ref-filename="38pstat">pstat</dfn>;</td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="450">450</th><td></td></tr>
+<tr><th id="451">451</th><td>	(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/stdio.h.html#61" title="__builtin___snprintf_chk(buffer, sizeof buffer, 0, __builtin_object_size(buffer, 2 &gt; 1), &quot;W%zu\n&quot;, nbyte)" data-ref="_M/snprintf">snprintf</a>(<a class="local col7 ref" href="#37buffer" title='buffer' data-ref="37buffer" data-ref-filename="37buffer">buffer</a>, <b>sizeof</b> <a class="local col7 ref" href="#37buffer" title='buffer' data-ref="37buffer" data-ref-filename="37buffer">buffer</a>, <q>"W%zu\n"</q>, <a class="local col6 ref" href="#36nbyte" title='nbyte' data-ref="36nbyte" data-ref-filename="36nbyte">nbyte</a>);</td></tr>
+<tr><th id="452">452</th><td>	<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col4 ref" href="#34fildes" title='fildes' data-ref="34fildes" data-ref-filename="34fildes">fildes</a>, <a class="local col7 ref" href="#37buffer" title='buffer' data-ref="37buffer" data-ref-filename="37buffer">buffer</a>) == -<var>1</var>)</td></tr>
+<tr><th id="453">453</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td>	<a class="local col8 ref" href="#38pstat" title='pstat' data-ref="38pstat" data-ref-filename="38pstat">pstat</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#signal" title='signal' data-ref="signal" data-ref-filename="signal">signal</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#65" title="13" data-ref="_M/SIGPIPE">SIGPIPE</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#93" title="((void (*)(int)) 1)" data-ref="_M/SIG_IGN">SIG_IGN</a>);</td></tr>
+<tr><th id="456">456</th><td>	<b>if</b> ((<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a>)<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="macro" href="#80" title="(Ptc[fildes][1])" data-ref="_M/WRITE">WRITE</a>(<a class="local col4 ref" href="#34fildes" title='fildes' data-ref="34fildes" data-ref-filename="34fildes">fildes</a>), <a class="local col5 ref" href="#35buf" title='buf' data-ref="35buf" data-ref-filename="35buf">buf</a>, <a class="local col6 ref" href="#36nbyte" title='nbyte' data-ref="36nbyte" data-ref-filename="36nbyte">nbyte</a>) == <a class="local col6 ref" href="#36nbyte" title='nbyte' data-ref="36nbyte" data-ref-filename="36nbyte">nbyte</a>) {</td></tr>
+<tr><th id="457">457</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#signal" title='signal' data-ref="signal" data-ref-filename="signal">signal</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#65" title="13" data-ref="_M/SIGPIPE">SIGPIPE</a>, <a class="local col8 ref" href="#38pstat" title='pstat' data-ref="38pstat" data-ref-filename="38pstat">pstat</a>);</td></tr>
+<tr><th id="458">458</th><td>		<b>return</b> <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col4 ref" href="#34fildes" title='fildes' data-ref="34fildes" data-ref-filename="34fildes">fildes</a>);</td></tr>
+<tr><th id="459">459</th><td>	}</td></tr>
+<tr><th id="460">460</th><td></td></tr>
+<tr><th id="461">461</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#signal" title='signal' data-ref="signal" data-ref-filename="signal">signal</a>(<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/signal.h.html#65" title="13" data-ref="_M/SIGPIPE">SIGPIPE</a>, <a class="local col8 ref" href="#38pstat" title='pstat' data-ref="38pstat" data-ref-filename="38pstat">pstat</a>);</td></tr>
+<tr><th id="462">462</th><td>	<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col4 ref" href="#34fildes" title='fildes' data-ref="34fildes" data-ref-filename="34fildes">fildes</a>);</td></tr>
+<tr><th id="463">463</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="464">464</th><td>	<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="465">465</th><td>}</td></tr>
+<tr><th id="466">466</th><td></td></tr>
+<tr><th id="467">467</th><td></td></tr>
+<tr><th id="468">468</th><td><i  data-doc="_rmt_lseek">/*</i></td></tr>
+<tr><th id="469">469</th><td><i  data-doc="_rmt_lseek"> *	_rmt_lseek --- perform an imitation lseek operation remotely</i></td></tr>
+<tr><th id="470">470</th><td><i  data-doc="_rmt_lseek"> */</i></td></tr>
+<tr><th id="471">471</th><td><em>static</em> <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a></td></tr>
+<tr><th id="472">472</th><td><dfn class="tu decl def fn" id="_rmt_lseek" title='_rmt_lseek' data-type='__off_t _rmt_lseek(int fildes, __off_t offset, int whence)' data-ref="_rmt_lseek" data-ref-filename="_rmt_lseek">_rmt_lseek</dfn>(<em>int</em> <dfn class="local col9 decl" id="39fildes" title='fildes' data-type='int' data-ref="39fildes" data-ref-filename="39fildes">fildes</dfn>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a> <dfn class="local col0 decl" id="40offset" title='offset' data-type='__off_t' data-ref="40offset" data-ref-filename="40offset">offset</dfn>, <em>int</em> <dfn class="local col1 decl" id="41whence" title='whence' data-type='int' data-ref="41whence" data-ref-filename="41whence">whence</dfn>)</td></tr>
+<tr><th id="473">473</th><td>{</td></tr>
+<tr><th id="474">474</th><td>	<em>char</em> <dfn class="local col2 decl" id="42buffer" title='buffer' data-type='char [64]' data-ref="42buffer" data-ref-filename="42buffer">buffer</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>];</td></tr>
+<tr><th id="475">475</th><td></td></tr>
+<tr><th id="476">476</th><td>	<i>/*LONGLONG*/</i></td></tr>
+<tr><th id="477">477</th><td>	(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/stdio.h.html#61" title="__builtin___snprintf_chk(buffer, sizeof buffer, 0, __builtin_object_size(buffer, 2 &gt; 1), &quot;L%lld\n%d\n&quot;, (long long)offset, whence)" data-ref="_M/snprintf">snprintf</a>(<a class="local col2 ref" href="#42buffer" title='buffer' data-ref="42buffer" data-ref-filename="42buffer">buffer</a>, <b>sizeof</b> <a class="local col2 ref" href="#42buffer" title='buffer' data-ref="42buffer" data-ref-filename="42buffer">buffer</a>, <q>"L%lld\n%d\n"</q>, (<em>long</em> <em>long</em>)<a class="local col0 ref" href="#40offset" title='offset' data-ref="40offset" data-ref-filename="40offset">offset</a>,</td></tr>
+<tr><th id="478">478</th><td>	    <a class="local col1 ref" href="#41whence" title='whence' data-ref="41whence" data-ref-filename="41whence">whence</a>);</td></tr>
+<tr><th id="479">479</th><td>	<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col9 ref" href="#39fildes" title='fildes' data-ref="39fildes" data-ref-filename="39fildes">fildes</a>, <a class="local col2 ref" href="#42buffer" title='buffer' data-ref="42buffer" data-ref-filename="42buffer">buffer</a>) == -<var>1</var>)</td></tr>
+<tr><th id="480">480</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="481">481</th><td></td></tr>
+<tr><th id="482">482</th><td>	<b>return</b> <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col9 ref" href="#39fildes" title='fildes' data-ref="39fildes" data-ref-filename="39fildes">fildes</a>);</td></tr>
+<tr><th id="483">483</th><td>}</td></tr>
+<tr><th id="484">484</th><td></td></tr>
+<tr><th id="485">485</th><td></td></tr>
+<tr><th id="486">486</th><td><i>/*</i></td></tr>
+<tr><th id="487">487</th><td><i> *	_rmt_ioctl --- perform raw tape operations remotely</i></td></tr>
+<tr><th id="488">488</th><td><i> */</i></td></tr>
+<tr><th id="489">489</th><td><u>#<span data-ppcond="489">ifdef</span> <a class="macro" href="#33" data-ref="_M/RMTIOCTL">RMTIOCTL</a></u></td></tr>
+<tr><th id="490">490</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="491">491</th><td><dfn class="tu decl def fn" id="_rmt_ioctl" title='_rmt_ioctl' data-type='int _rmt_ioctl(int fildes, unsigned long op, void * arg)' data-ref="_rmt_ioctl" data-ref-filename="_rmt_ioctl">_rmt_ioctl</dfn>(<em>int</em> <dfn class="local col3 decl" id="43fildes" title='fildes' data-type='int' data-ref="43fildes" data-ref-filename="43fildes">fildes</dfn>, <em>unsigned</em> <em>long</em> <dfn class="local col4 decl" id="44op" title='op' data-type='unsigned long' data-ref="44op" data-ref-filename="44op">op</dfn>, <em>void</em> *<dfn class="local col5 decl" id="45arg" title='arg' data-type='void *' data-ref="45arg" data-ref-filename="45arg">arg</dfn>)</td></tr>
+<tr><th id="492">492</th><td>{</td></tr>
+<tr><th id="493">493</th><td>	<em>char</em> <dfn class="local col6 decl" id="46c" title='c' data-type='char' data-ref="46c" data-ref-filename="46c">c</dfn>;</td></tr>
+<tr><th id="494">494</th><td>	<em>int</em> <dfn class="local col7 decl" id="47rv" title='rv' data-type='int' data-ref="47rv" data-ref-filename="47rv">rv</dfn>;</td></tr>
+<tr><th id="495">495</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="48rc" title='rc' data-type='size_t' data-ref="48rc" data-ref-filename="48rc">rc</dfn>;</td></tr>
+<tr><th id="496">496</th><td>	<a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a> <dfn class="local col9 decl" id="49cnt" title='cnt' data-type='ssize_t' data-ref="49cnt" data-ref-filename="49cnt">cnt</dfn>;</td></tr>
+<tr><th id="497">497</th><td>	<em>char</em> <dfn class="local col0 decl" id="50buffer" title='buffer' data-type='char [64]' data-ref="50buffer" data-ref-filename="50buffer">buffer</dfn>[<a class="macro" href="#76" title="64" data-ref="_M/BUFMAGIC">BUFMAGIC</a>], *<dfn class="local col1 decl" id="51p" title='p' data-type='char *' data-ref="51p" data-ref-filename="51p">p</dfn>;</td></tr>
+<tr><th id="498">498</th><td>	<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#mtop" title='mtop' data-ref="mtop" data-ref-filename="mtop">mtop</a> *<dfn class="local col2 decl" id="52mtop" title='mtop' data-type='struct mtop *' data-ref="52mtop" data-ref-filename="52mtop">mtop</dfn> = <a class="local col5 ref" href="#45arg" title='arg' data-ref="45arg" data-ref-filename="45arg">arg</a>;</td></tr>
+<tr><th id="499">499</th><td></td></tr>
+<tr><th id="500">500</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(arg != NULL);</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td><i>/*</i></td></tr>
+<tr><th id="503">503</th><td><i> *	MTIOCOP is the easy one. nothing is transfered in binary</i></td></tr>
+<tr><th id="504">504</th><td><i> */</i></td></tr>
+<tr><th id="505">505</th><td></td></tr>
+<tr><th id="506">506</th><td>	<b>if</b> (<a class="local col4 ref" href="#44op" title='op' data-ref="44op" data-ref-filename="44op">op</a> == <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#137" title="(((unsigned long)0x80000000) | (((sizeof(struct mtop)) &amp; 0x1fff) &lt;&lt; 16) | (((&apos;m&apos;)) &lt;&lt; 8) | ((1)))" data-ref="_M/MTIOCTOP">MTIOCTOP</a>) {</td></tr>
+<tr><th id="507">507</th><td>		(<em>void</em>)<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/stdio.h.html#61" title="__builtin___snprintf_chk(buffer, sizeof buffer, 0, __builtin_object_size(buffer, 2 &gt; 1), &quot;I%d\n%d\n&quot;, mtop-&gt;mt_op, mtop-&gt;mt_count)" data-ref="_M/snprintf">snprintf</a>(<a class="local col0 ref" href="#50buffer" title='buffer' data-ref="50buffer" data-ref-filename="50buffer">buffer</a>, <b>sizeof</b> <a class="local col0 ref" href="#50buffer" title='buffer' data-ref="50buffer" data-ref-filename="50buffer">buffer</a>, <q>"I%d\n%d\n"</q>,</td></tr>
+<tr><th id="508">508</th><td>		    <a class="local col2 ref" href="#52mtop" title='mtop' data-ref="52mtop" data-ref-filename="52mtop">mtop</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#mtop::mt_op" title='mtop::mt_op' data-ref="mtop::mt_op" data-ref-filename="mtop..mt_op">mt_op</a>, <a class="local col2 ref" href="#52mtop" title='mtop' data-ref="52mtop" data-ref-filename="52mtop">mtop</a>-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#mtop::mt_count" title='mtop::mt_count' data-ref="mtop::mt_count" data-ref-filename="mtop..mt_count">mt_count</a>);</td></tr>
+<tr><th id="509">509</th><td>		<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col3 ref" href="#43fildes" title='fildes' data-ref="43fildes" data-ref-filename="43fildes">fildes</a>, <a class="local col0 ref" href="#50buffer" title='buffer' data-ref="50buffer" data-ref-filename="50buffer">buffer</a>) == -<var>1</var>)</td></tr>
+<tr><th id="510">510</th><td>			<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="511">511</th><td>		<b>return</b> <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col3 ref" href="#43fildes" title='fildes' data-ref="43fildes" data-ref-filename="43fildes">fildes</a>);</td></tr>
+<tr><th id="512">512</th><td>	}</td></tr>
+<tr><th id="513">513</th><td></td></tr>
+<tr><th id="514">514</th><td><i>/*</i></td></tr>
+<tr><th id="515">515</th><td><i> *	we can only handle 2 ops, if not the other one, punt</i></td></tr>
+<tr><th id="516">516</th><td><i> */</i></td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td>	<b>if</b> (<a class="local col4 ref" href="#44op" title='op' data-ref="44op" data-ref-filename="44op">op</a> != <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#138" title="(((unsigned long)0x40000000) | (((sizeof(struct mtget)) &amp; 0x1fff) &lt;&lt; 16) | (((&apos;m&apos;)) &lt;&lt; 8) | ((2)))" data-ref="_M/MTIOCGET">MTIOCGET</a>) {</td></tr>
+<tr><th id="519">519</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="520">520</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="521">521</th><td>	}</td></tr>
+<tr><th id="522">522</th><td></td></tr>
+<tr><th id="523">523</th><td><i>/*</i></td></tr>
+<tr><th id="524">524</th><td><i> *	grab the status and read it directly into the structure</i></td></tr>
+<tr><th id="525">525</th><td><i> *	this assumes that the status buffer is (hopefully) not</i></td></tr>
+<tr><th id="526">526</th><td><i> *	padded and that 2 shorts fit in a long without any word</i></td></tr>
+<tr><th id="527">527</th><td><i> *	alignment problems, ie - the whole struct is contiguous</i></td></tr>
+<tr><th id="528">528</th><td><i> *	NOTE - this is probably NOT a good assumption.</i></td></tr>
+<tr><th id="529">529</th><td><i> */</i></td></tr>
+<tr><th id="530">530</th><td></td></tr>
+<tr><th id="531">531</th><td>	<b>if</b> (<a class="tu ref fn" href="#command" title='command' data-use='c' data-ref="command" data-ref-filename="command">command</a>(<a class="local col3 ref" href="#43fildes" title='fildes' data-ref="43fildes" data-ref-filename="43fildes">fildes</a>, <q>"S"</q>) == -<var>1</var> || (<a class="local col7 ref" href="#47rv" title='rv' data-ref="47rv" data-ref-filename="47rv">rv</a> = <a class="tu ref fn" href="#status" title='status' data-use='c' data-ref="status" data-ref-filename="status">status</a>(<a class="local col3 ref" href="#43fildes" title='fildes' data-ref="43fildes" data-ref-filename="43fildes">fildes</a>)) == -<var>1</var>)</td></tr>
+<tr><th id="532">532</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="533">533</th><td></td></tr>
+<tr><th id="534">534</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/string.h.html#97" title="((__builtin_object_size(arg, 0) != (size_t)-1) ? __builtin___memset_chk(arg, 0, sizeof(struct mtget), __builtin_object_size(arg, 0)) : __memset_ichk(arg, 0, sizeof(struct mtget)))" data-ref="_M/memset">memset</a>(<a class="local col5 ref" href="#45arg" title='arg' data-ref="45arg" data-ref-filename="45arg">arg</a>, <var>0</var>, <b>sizeof</b>(<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#mtget" title='mtget' data-ref="mtget" data-ref-filename="mtget">mtget</a>));</td></tr>
+<tr><th id="535">535</th><td>	<b>for</b> (<a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a> = <a class="local col7 ref" href="#47rv" title='rv' data-ref="47rv" data-ref-filename="47rv">rv</a>, <a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a> = <a class="local col5 ref" href="#45arg" title='arg' data-ref="45arg" data-ref-filename="45arg">arg</a>; <a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a> &gt; <var>0</var>; <a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a> -= <a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a>, <a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a> += <a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a>) {</td></tr>
+<tr><th id="536">536</th><td>		<b>if</b> ((<a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/unistd.h.html#39" title='read' data-ref="__ssp_protected_read" data-ref-filename="__ssp_protected_read">read</a>(<a class="macro" href="#79" title="(Ctp[fildes][0])" data-ref="_M/READ">READ</a>(<a class="local col3 ref" href="#43fildes" title='fildes' data-ref="43fildes" data-ref-filename="43fildes">fildes</a>), <a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a>, <a class="local col8 ref" href="#48rc" title='rc' data-ref="48rc" data-ref-filename="48rc">rc</a>)) &lt;= <var>0</var>) {</td></tr>
+<tr><th id="537">537</th><td>			<a class="tu ref fn" href="#rmtabort" title='rmtabort' data-use='c' data-ref="rmtabort" data-ref-filename="rmtabort">rmtabort</a>(<a class="local col3 ref" href="#43fildes" title='fildes' data-ref="43fildes" data-ref-filename="43fildes">fildes</a>);</td></tr>
+<tr><th id="538">538</th><td>			<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#46" title="5" data-ref="_M/EIO">EIO</a>;</td></tr>
+<tr><th id="539">539</th><td>			<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="540">540</th><td>		}</td></tr>
+<tr><th id="541">541</th><td>	}</td></tr>
+<tr><th id="542">542</th><td></td></tr>
+<tr><th id="543">543</th><td><i>/*</i></td></tr>
+<tr><th id="544">544</th><td><i> *	now we check for byte position. mt_type is a small integer field</i></td></tr>
+<tr><th id="545">545</th><td><i> *	(normally) so we will check its magnitude. if it is larger than</i></td></tr>
+<tr><th id="546">546</th><td><i> *	256, we will assume that the bytes are swapped and go through</i></td></tr>
+<tr><th id="547">547</th><td><i> *	and reverse all the bytes</i></td></tr>
+<tr><th id="548">548</th><td><i> */</i></td></tr>
+<tr><th id="549">549</th><td></td></tr>
+<tr><th id="550">550</th><td>	<b>if</b> (((<b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#mtget" title='mtget' data-ref="mtget" data-ref-filename="mtget">mtget</a> *)(<em>void</em> *)<a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a>)-&gt;<a class="ref field" href="../../objdir.amd64/destdir.amd64/usr/include/sys/mtio.h.html#mtget::mt_type" title='mtget::mt_type' data-ref="mtget::mt_type" data-ref-filename="mtget..mt_type">mt_type</a> &lt; <var>256</var>)</td></tr>
+<tr><th id="551">551</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="552">552</th><td></td></tr>
+<tr><th id="553">553</th><td>	<b>for</b> (<a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a> = <var>0</var>; <a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a> &lt; <a class="local col7 ref" href="#47rv" title='rv' data-ref="47rv" data-ref-filename="47rv">rv</a>; <a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a> += <var>2</var>) {</td></tr>
+<tr><th id="554">554</th><td>		<a class="local col6 ref" href="#46c" title='c' data-ref="46c" data-ref-filename="46c">c</a> = <a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a>[<a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a>];</td></tr>
+<tr><th id="555">555</th><td>		<a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a>[<a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a>] = <a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a>[<a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a> + <var>1</var>];</td></tr>
+<tr><th id="556">556</th><td>		<a class="local col1 ref" href="#51p" title='p' data-ref="51p" data-ref-filename="51p">p</a>[<a class="local col9 ref" href="#49cnt" title='cnt' data-ref="49cnt" data-ref-filename="49cnt">cnt</a> + <var>1</var>] = <a class="local col6 ref" href="#46c" title='c' data-ref="46c" data-ref-filename="46c">c</a>;</td></tr>
+<tr><th id="557">557</th><td>	}</td></tr>
+<tr><th id="558">558</th><td></td></tr>
+<tr><th id="559">559</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="560">560</th><td>}</td></tr>
+<tr><th id="561">561</th><td><u>#<span data-ppcond="489">endif</span> /* RMTIOCTL */</u></td></tr>
+<tr><th id="562">562</th><td></td></tr>
+<tr><th id="563">563</th><td></td></tr>
+<tr><th id="564">564</th><td><i>/*</i></td></tr>
+<tr><th id="565">565</th><td><i> *	Added routines to replace open(), close(), lseek(), ioctl(), etc.</i></td></tr>
+<tr><th id="566">566</th><td><i> *	The preprocessor can be used to remap these the rmtopen(), etc</i></td></tr>
+<tr><th id="567">567</th><td><i> *	thus minimizing source changes:</i></td></tr>
+<tr><th id="568">568</th><td><i> *</i></td></tr>
+<tr><th id="569">569</th><td><i> *		#ifdef &lt;something&gt;</i></td></tr>
+<tr><th id="570">570</th><td><i> *		#  define access rmtaccess</i></td></tr>
+<tr><th id="571">571</th><td><i> *		#  define close rmtclose</i></td></tr>
+<tr><th id="572">572</th><td><i> *		#  define creat rmtcreat</i></td></tr>
+<tr><th id="573">573</th><td><i> *		#  define dup rmtdup</i></td></tr>
+<tr><th id="574">574</th><td><i> *		#  define fcntl rmtfcntl</i></td></tr>
+<tr><th id="575">575</th><td><i> *		#  define fstat rmtfstat</i></td></tr>
+<tr><th id="576">576</th><td><i> *		#  define ioctl rmtioctl</i></td></tr>
+<tr><th id="577">577</th><td><i> *		#  define isatty rmtisatty</i></td></tr>
+<tr><th id="578">578</th><td><i> *		#  define lseek rmtlseek</i></td></tr>
+<tr><th id="579">579</th><td><i> *		#  define lstat rmtlstat</i></td></tr>
+<tr><th id="580">580</th><td><i> *		#  define open rmtopen</i></td></tr>
+<tr><th id="581">581</th><td><i> *		#  define read rmtread</i></td></tr>
+<tr><th id="582">582</th><td><i> *		#  define stat rmtstat</i></td></tr>
+<tr><th id="583">583</th><td><i> *		#  define write rmtwrite</i></td></tr>
+<tr><th id="584">584</th><td><i> *		#endif</i></td></tr>
+<tr><th id="585">585</th><td><i> *</i></td></tr>
+<tr><th id="586">586</th><td><i> *	-- Fred Fish</i></td></tr>
+<tr><th id="587">587</th><td><i> *</i></td></tr>
+<tr><th id="588">588</th><td><i> *	ADR --- I set up a &lt;rmt.h&gt; include file for this</i></td></tr>
+<tr><th id="589">589</th><td><i> *</i></td></tr>
+<tr><th id="590">590</th><td><i> */</i></td></tr>
+<tr><th id="591">591</th><td></td></tr>
+<tr><th id="592">592</th><td><i>/*</i></td></tr>
+<tr><th id="593">593</th><td><i> *	Note that local vs remote file descriptors are distinquished</i></td></tr>
+<tr><th id="594">594</th><td><i> *	by adding a bias to the remote descriptors.  This is a quick</i></td></tr>
+<tr><th id="595">595</th><td><i> *	and dirty trick that may not be portable to some systems.</i></td></tr>
+<tr><th id="596">596</th><td><i> */</i></td></tr>
+<tr><th id="597">597</th><td></td></tr>
+<tr><th id="598">598</th><td><u>#define <dfn class="macro" id="_M/REM_BIAS" data-ref="_M/REM_BIAS">REM_BIAS</dfn> 128</u></td></tr>
+<tr><th id="599">599</th><td></td></tr>
+<tr><th id="600">600</th><td></td></tr>
+<tr><th id="601">601</th><td><i  data-doc="remdev">/*</i></td></tr>
+<tr><th id="602">602</th><td><i  data-doc="remdev"> *	Test pathname to see if it is local or remote.  A remote device</i></td></tr>
+<tr><th id="603">603</th><td><i  data-doc="remdev"> *	is any string that contains ":/dev/".  Returns 1 if remote,</i></td></tr>
+<tr><th id="604">604</th><td><i  data-doc="remdev"> *	0 otherwise.</i></td></tr>
+<tr><th id="605">605</th><td><i  data-doc="remdev"> */</i></td></tr>
+<tr><th id="606">606</th><td></td></tr>
+<tr><th id="607">607</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="608">608</th><td><dfn class="tu decl def fn" id="remdev" title='remdev' data-type='int remdev(const char * path)' data-ref="remdev" data-ref-filename="remdev">remdev</dfn>(<em>const</em> <em>char</em> *<dfn class="local col3 decl" id="53path" title='path' data-type='const char *' data-ref="53path" data-ref-filename="53path">path</dfn>)</td></tr>
+<tr><th id="609">609</th><td>{</td></tr>
+<tr><th id="610">610</th><td></td></tr>
+<tr><th id="611">611</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="612">612</th><td></td></tr>
+<tr><th id="613">613</th><td>	<b>if</b> ((<a class="local col3 ref" href="#53path" title='path' data-ref="53path" data-ref-filename="53path">path</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strchr" title='strchr' data-ref="strchr" data-ref-filename="strchr">strchr</a>(<a class="local col3 ref" href="#53path" title='path' data-ref="53path" data-ref-filename="53path">path</a>, <kbd>':'</kbd>)) != <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="614">614</th><td>		<b>if</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strncmp" title='strncmp' data-ref="strncmp" data-ref-filename="strncmp">strncmp</a>(<a class="local col3 ref" href="#53path" title='path' data-ref="53path" data-ref-filename="53path">path</a> + <var>1</var>, <q>"/dev/"</q>, <var>5</var>) == <var>0</var>) {</td></tr>
+<tr><th id="615">615</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="616">616</th><td>		}</td></tr>
+<tr><th id="617">617</th><td>	}</td></tr>
+<tr><th id="618">618</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="619">619</th><td>}</td></tr>
+<tr><th id="620">620</th><td></td></tr>
+<tr><th id="621">621</th><td></td></tr>
+<tr><th id="622">622</th><td><i>/*</i></td></tr>
+<tr><th id="623">623</th><td><i> *	Open a local or remote file.  Looks just like open(2) to</i></td></tr>
+<tr><th id="624">624</th><td><i> *	caller.</i></td></tr>
+<tr><th id="625">625</th><td><i> */</i></td></tr>
+<tr><th id="626">626</th><td><em>int</em></td></tr>
+<tr><th id="627">627</th><td><dfn class="decl def fn" id="rmtopen" title='rmtopen' data-ref="rmtopen" data-ref-filename="rmtopen">rmtopen</dfn>(<em>const</em> <em>char</em> *<dfn class="local col4 decl" id="54path" title='path' data-type='const char *' data-ref="54path" data-ref-filename="54path">path</dfn>, <em>int</em> <dfn class="local col5 decl" id="55oflag" title='oflag' data-type='int' data-ref="55oflag" data-ref-filename="55oflag">oflag</dfn>, ...)</td></tr>
+<tr><th id="628">628</th><td>{</td></tr>
+<tr><th id="629">629</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#171" title="__mode_t" data-ref="_M/mode_t">mode_t</a> <dfn class="local col6 decl" id="56mode" title='mode' data-type='__mode_t' data-ref="56mode" data-ref-filename="56mode">mode</dfn>;</td></tr>
+<tr><th id="630">630</th><td>	<em>int</em> <dfn class="local col7 decl" id="57fd" title='fd' data-type='int' data-ref="57fd" data-ref-filename="57fd">fd</dfn>;</td></tr>
+<tr><th id="631">631</th><td>	<span class='typedef' title='va_list' data-type='__builtin_va_list' data-ref="va_list" data-ref-filename="va_list">va_list</span> <dfn class="local col8 decl" id="58ap" title='ap' data-type='va_list' data-ref="58ap" data-ref-filename="58ap">ap</dfn>;</td></tr>
+<tr><th id="632">632</th><td>	<span class="macro" title="__builtin_va_start(ap, oflag)" data-ref="_M/va_start">va_start</span>(<span class='refarg'><a class="local col8 ref" href="#58ap" title='ap' data-ref="58ap" data-ref-filename="58ap">ap</a></span>, <a class="local col5 ref" href="#55oflag" title='oflag' data-ref="55oflag" data-ref-filename="55oflag">oflag</a>);</td></tr>
+<tr><th id="633">633</th><td></td></tr>
+<tr><th id="634">634</th><td>	<a class="local col6 ref" href="#56mode" title='mode' data-ref="56mode" data-ref-filename="56mode">mode</a> = <span class="macro" title="__builtin_va_arg(ap, __mode_t)" data-ref="_M/va_arg">va_arg</span>(<a class="local col8 ref" href="#58ap" title='ap' data-ref="58ap" data-ref-filename="58ap">ap</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#171" title="__mode_t" data-ref="_M/mode_t">mode_t</a>);</td></tr>
+<tr><th id="635">635</th><td>	<span class="macro" title="__builtin_va_end(ap)" data-ref="_M/va_end">va_end</span>(<span class='refarg'><a class="local col8 ref" href="#58ap" title='ap' data-ref="58ap" data-ref-filename="58ap">ap</a></span>);</td></tr>
+<tr><th id="636">636</th><td></td></tr>
+<tr><th id="637">637</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="638">638</th><td></td></tr>
+<tr><th id="639">639</th><td>	<b>if</b> (<a class="tu ref fn" href="#remdev" title='remdev' data-use='c' data-ref="remdev" data-ref-filename="remdev">remdev</a>(<a class="local col4 ref" href="#54path" title='path' data-ref="54path" data-ref-filename="54path">path</a>)) {</td></tr>
+<tr><th id="640">640</th><td>		<a class="local col7 ref" href="#57fd" title='fd' data-ref="57fd" data-ref-filename="57fd">fd</a> = <a class="tu ref fn" href="#_rmt_open" title='_rmt_open' data-use='c' data-ref="_rmt_open" data-ref-filename="_rmt_open">_rmt_open</a>(<a class="local col4 ref" href="#54path" title='path' data-ref="54path" data-ref-filename="54path">path</a>, <a class="local col5 ref" href="#55oflag" title='oflag' data-ref="55oflag" data-ref-filename="55oflag">oflag</a>, (<em>int</em>)<a class="local col6 ref" href="#56mode" title='mode' data-ref="56mode" data-ref-filename="56mode">mode</a>);</td></tr>
+<tr><th id="641">641</th><td></td></tr>
+<tr><th id="642">642</th><td>		<b>return</b> (<a class="local col7 ref" href="#57fd" title='fd' data-ref="57fd" data-ref-filename="57fd">fd</a> == -<var>1</var>) ? -<var>1</var> : (<a class="local col7 ref" href="#57fd" title='fd' data-ref="57fd" data-ref-filename="57fd">fd</a> + <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>);</td></tr>
+<tr><th id="643">643</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="644">644</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="local col4 ref" href="#54path" title='path' data-ref="54path" data-ref-filename="54path">path</a>, <a class="local col5 ref" href="#55oflag" title='oflag' data-ref="55oflag" data-ref-filename="55oflag">oflag</a>, <a class="local col6 ref" href="#56mode" title='mode' data-ref="56mode" data-ref-filename="56mode">mode</a>);</td></tr>
+<tr><th id="645">645</th><td>	}</td></tr>
+<tr><th id="646">646</th><td>}</td></tr>
+<tr><th id="647">647</th><td></td></tr>
+<tr><th id="648">648</th><td><i>/*</i></td></tr>
+<tr><th id="649">649</th><td><i> *	Test pathname for specified access.  Looks just like access(2)</i></td></tr>
+<tr><th id="650">650</th><td><i> *	to caller.</i></td></tr>
+<tr><th id="651">651</th><td><i> */</i></td></tr>
+<tr><th id="652">652</th><td></td></tr>
+<tr><th id="653">653</th><td><em>int</em></td></tr>
+<tr><th id="654">654</th><td><dfn class="decl def fn" id="rmtaccess" title='rmtaccess' data-ref="rmtaccess" data-ref-filename="rmtaccess">rmtaccess</dfn>(<em>const</em> <em>char</em> *<dfn class="local col9 decl" id="59path" title='path' data-type='const char *' data-ref="59path" data-ref-filename="59path">path</dfn>, <em>int</em> <dfn class="local col0 decl" id="60amode" title='amode' data-type='int' data-ref="60amode" data-ref-filename="60amode">amode</dfn>)</td></tr>
+<tr><th id="655">655</th><td>{</td></tr>
+<tr><th id="656">656</th><td></td></tr>
+<tr><th id="657">657</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="658">658</th><td></td></tr>
+<tr><th id="659">659</th><td>	<b>if</b> (<a class="tu ref fn" href="#remdev" title='remdev' data-use='c' data-ref="remdev" data-ref-filename="remdev">remdev</a>(<a class="local col9 ref" href="#59path" title='path' data-ref="59path" data-ref-filename="59path">path</a>)) {</td></tr>
+<tr><th id="660">660</th><td>		<b>return</b> <var>0</var>;		<i>/* Let /etc/rmt find out */</i></td></tr>
+<tr><th id="661">661</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="662">662</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#access" title='access' data-ref="access" data-ref-filename="access">access</a>(<a class="local col9 ref" href="#59path" title='path' data-ref="59path" data-ref-filename="59path">path</a>, <a class="local col0 ref" href="#60amode" title='amode' data-ref="60amode" data-ref-filename="60amode">amode</a>);</td></tr>
+<tr><th id="663">663</th><td>	}</td></tr>
+<tr><th id="664">664</th><td>}</td></tr>
+<tr><th id="665">665</th><td></td></tr>
+<tr><th id="666">666</th><td></td></tr>
+<tr><th id="667">667</th><td><i>/*</i></td></tr>
+<tr><th id="668">668</th><td><i> *	Isrmt. Let a programmer know he has a remote device.</i></td></tr>
+<tr><th id="669">669</th><td><i> */</i></td></tr>
+<tr><th id="670">670</th><td><em>int</em></td></tr>
+<tr><th id="671">671</th><td><dfn class="decl def fn" id="isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</dfn>(<em>int</em> <dfn class="local col1 decl" id="61fd" title='fd' data-type='int' data-ref="61fd" data-ref-filename="61fd">fd</dfn>)</td></tr>
+<tr><th id="672">672</th><td>{</td></tr>
+<tr><th id="673">673</th><td>	<em>int</em> <dfn class="local col2 decl" id="62unbias" title='unbias' data-type='int' data-ref="62unbias" data-ref-filename="62unbias">unbias</dfn> = <a class="local col1 ref" href="#61fd" title='fd' data-ref="61fd" data-ref-filename="61fd">fd</a> - <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>;</td></tr>
+<tr><th id="674">674</th><td></td></tr>
+<tr><th id="675">675</th><td>	<b>return</b> (<a class="local col1 ref" href="#61fd" title='fd' data-ref="61fd" data-ref-filename="61fd">fd</a> &gt;= <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>) &amp;&amp; <a class="local col2 ref" href="#62unbias" title='unbias' data-ref="62unbias" data-ref-filename="62unbias">unbias</a> &lt; <a class="macro" href="#77" title="4" data-ref="_M/MAXUNIT">MAXUNIT</a> &amp;&amp;</td></tr>
+<tr><th id="676">676</th><td>	    (<a class="macro" href="#80" title="(Ptc[unbias][1])" data-ref="_M/WRITE">WRITE</a>(<a class="local col2 ref" href="#62unbias" title='unbias' data-ref="62unbias" data-ref-filename="62unbias">unbias</a>) != -<var>1</var> || <a class="macro" href="#79" title="(Ctp[unbias][0])" data-ref="_M/READ">READ</a>(<a class="local col2 ref" href="#62unbias" title='unbias' data-ref="62unbias" data-ref-filename="62unbias">unbias</a>) != -<var>1</var>);</td></tr>
+<tr><th id="677">677</th><td>}</td></tr>
+<tr><th id="678">678</th><td></td></tr>
+<tr><th id="679">679</th><td></td></tr>
+<tr><th id="680">680</th><td><i>/*</i></td></tr>
+<tr><th id="681">681</th><td><i> *	Read from stream.  Looks just like read(2) to caller.</i></td></tr>
+<tr><th id="682">682</th><td><i> */</i></td></tr>
+<tr><th id="683">683</th><td><a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a></td></tr>
+<tr><th id="684">684</th><td><dfn class="decl def fn" id="rmtread" title='rmtread' data-ref="rmtread" data-ref-filename="rmtread">rmtread</dfn>(<em>int</em> <dfn class="local col3 decl" id="63fildes" title='fildes' data-type='int' data-ref="63fildes" data-ref-filename="63fildes">fildes</dfn>, <em>void</em> *<dfn class="local col4 decl" id="64buf" title='buf' data-type='void *' data-ref="64buf" data-ref-filename="64buf">buf</dfn>, <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="65nbyte" title='nbyte' data-type='size_t' data-ref="65nbyte" data-ref-filename="65nbyte">nbyte</dfn>)</td></tr>
+<tr><th id="685">685</th><td>{</td></tr>
+<tr><th id="686">686</th><td></td></tr>
+<tr><th id="687">687</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="688">688</th><td></td></tr>
+<tr><th id="689">689</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col3 ref" href="#63fildes" title='fildes' data-ref="63fildes" data-ref-filename="63fildes">fildes</a>)) {</td></tr>
+<tr><th id="690">690</th><td>		<b>return</b> <a class="tu ref fn" href="#_rmt_read" title='_rmt_read' data-use='c' data-ref="_rmt_read" data-ref-filename="_rmt_read">_rmt_read</a>(<a class="local col3 ref" href="#63fildes" title='fildes' data-ref="63fildes" data-ref-filename="63fildes">fildes</a> - <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>, <a class="local col4 ref" href="#64buf" title='buf' data-ref="64buf" data-ref-filename="64buf">buf</a>, <a class="local col5 ref" href="#65nbyte" title='nbyte' data-ref="65nbyte" data-ref-filename="65nbyte">nbyte</a>);</td></tr>
+<tr><th id="691">691</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="692">692</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/ssp/unistd.h.html#39" title='read' data-ref="__ssp_protected_read" data-ref-filename="__ssp_protected_read">read</a>(<a class="local col3 ref" href="#63fildes" title='fildes' data-ref="63fildes" data-ref-filename="63fildes">fildes</a>, <a class="local col4 ref" href="#64buf" title='buf' data-ref="64buf" data-ref-filename="64buf">buf</a>, <a class="local col5 ref" href="#65nbyte" title='nbyte' data-ref="65nbyte" data-ref-filename="65nbyte">nbyte</a>);</td></tr>
+<tr><th id="693">693</th><td>	}</td></tr>
+<tr><th id="694">694</th><td>}</td></tr>
+<tr><th id="695">695</th><td></td></tr>
+<tr><th id="696">696</th><td></td></tr>
+<tr><th id="697">697</th><td><i>/*</i></td></tr>
+<tr><th id="698">698</th><td><i> *	Write to stream.  Looks just like write(2) to caller.</i></td></tr>
+<tr><th id="699">699</th><td><i> */</i></td></tr>
+<tr><th id="700">700</th><td><a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#ssize_t" title='ssize_t' data-type='int' data-ref="ssize_t" data-ref-filename="ssize_t">ssize_t</a></td></tr>
+<tr><th id="701">701</th><td><dfn class="decl def fn" id="rmtwrite" title='rmtwrite' data-ref="rmtwrite" data-ref-filename="rmtwrite">rmtwrite</dfn>(<em>int</em> <dfn class="local col6 decl" id="66fildes" title='fildes' data-type='int' data-ref="66fildes" data-ref-filename="66fildes">fildes</dfn>, <em>const</em> <em>void</em> *<dfn class="local col7 decl" id="67buf" title='buf' data-type='const void *' data-ref="67buf" data-ref-filename="67buf">buf</dfn>, <a class="typedef" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="68nbyte" title='nbyte' data-type='size_t' data-ref="68nbyte" data-ref-filename="68nbyte">nbyte</dfn>)</td></tr>
+<tr><th id="702">702</th><td>{</td></tr>
+<tr><th id="703">703</th><td></td></tr>
+<tr><th id="704">704</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="705">705</th><td></td></tr>
+<tr><th id="706">706</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col6 ref" href="#66fildes" title='fildes' data-ref="66fildes" data-ref-filename="66fildes">fildes</a>)) {</td></tr>
+<tr><th id="707">707</th><td>		<b>return</b> <a class="tu ref fn" href="#_rmt_write" title='_rmt_write' data-use='c' data-ref="_rmt_write" data-ref-filename="_rmt_write">_rmt_write</a>(<a class="local col6 ref" href="#66fildes" title='fildes' data-ref="66fildes" data-ref-filename="66fildes">fildes</a> - <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>, <a class="local col7 ref" href="#67buf" title='buf' data-ref="67buf" data-ref-filename="67buf">buf</a>, <a class="local col8 ref" href="#68nbyte" title='nbyte' data-ref="68nbyte" data-ref-filename="68nbyte">nbyte</a>);</td></tr>
+<tr><th id="708">708</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="709">709</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col6 ref" href="#66fildes" title='fildes' data-ref="66fildes" data-ref-filename="66fildes">fildes</a>, <a class="local col7 ref" href="#67buf" title='buf' data-ref="67buf" data-ref-filename="67buf">buf</a>, <a class="local col8 ref" href="#68nbyte" title='nbyte' data-ref="68nbyte" data-ref-filename="68nbyte">nbyte</a>);</td></tr>
+<tr><th id="710">710</th><td>	}</td></tr>
+<tr><th id="711">711</th><td>}</td></tr>
+<tr><th id="712">712</th><td></td></tr>
+<tr><th id="713">713</th><td><i>/*</i></td></tr>
+<tr><th id="714">714</th><td><i> *	Perform lseek on file.  Looks just like lseek(2) to caller.</i></td></tr>
+<tr><th id="715">715</th><td><i> */</i></td></tr>
+<tr><th id="716">716</th><td><a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a></td></tr>
+<tr><th id="717">717</th><td><dfn class="decl def fn" id="rmtlseek" title='rmtlseek' data-ref="rmtlseek" data-ref-filename="rmtlseek">rmtlseek</dfn>(<em>int</em> <dfn class="local col9 decl" id="69fildes" title='fildes' data-type='int' data-ref="69fildes" data-ref-filename="69fildes">fildes</dfn>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a> <dfn class="local col0 decl" id="70offset" title='offset' data-type='__off_t' data-ref="70offset" data-ref-filename="70offset">offset</dfn>, <em>int</em> <dfn class="local col1 decl" id="71whence" title='whence' data-type='int' data-ref="71whence" data-ref-filename="71whence">whence</dfn>)</td></tr>
+<tr><th id="718">718</th><td>{</td></tr>
+<tr><th id="719">719</th><td></td></tr>
+<tr><th id="720">720</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col9 ref" href="#69fildes" title='fildes' data-ref="69fildes" data-ref-filename="69fildes">fildes</a>)) {</td></tr>
+<tr><th id="721">721</th><td>		<b>return</b> <a class="tu ref fn" href="#_rmt_lseek" title='_rmt_lseek' data-use='c' data-ref="_rmt_lseek" data-ref-filename="_rmt_lseek">_rmt_lseek</a>(<a class="local col9 ref" href="#69fildes" title='fildes' data-ref="69fildes" data-ref-filename="69fildes">fildes</a> - <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>, <a class="local col0 ref" href="#70offset" title='offset' data-ref="70offset" data-ref-filename="70offset">offset</a>, <a class="local col1 ref" href="#71whence" title='whence' data-ref="71whence" data-ref-filename="71whence">whence</a>);</td></tr>
+<tr><th id="722">722</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="723">723</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#lseek" title='lseek' data-ref="lseek" data-ref-filename="lseek">lseek</a>(<a class="local col9 ref" href="#69fildes" title='fildes' data-ref="69fildes" data-ref-filename="69fildes">fildes</a>, <a class="local col0 ref" href="#70offset" title='offset' data-ref="70offset" data-ref-filename="70offset">offset</a>, <a class="local col1 ref" href="#71whence" title='whence' data-ref="71whence" data-ref-filename="71whence">whence</a>);</td></tr>
+<tr><th id="724">724</th><td>	}</td></tr>
+<tr><th id="725">725</th><td>}</td></tr>
+<tr><th id="726">726</th><td></td></tr>
+<tr><th id="727">727</th><td></td></tr>
+<tr><th id="728">728</th><td><i>/*</i></td></tr>
+<tr><th id="729">729</th><td><i> *	Close a file.  Looks just like close(2) to caller.</i></td></tr>
+<tr><th id="730">730</th><td><i> */</i></td></tr>
+<tr><th id="731">731</th><td><em>int</em></td></tr>
+<tr><th id="732">732</th><td><dfn class="decl def fn" id="rmtclose" title='rmtclose' data-ref="rmtclose" data-ref-filename="rmtclose">rmtclose</dfn>(<em>int</em> <dfn class="local col2 decl" id="72fildes" title='fildes' data-type='int' data-ref="72fildes" data-ref-filename="72fildes">fildes</dfn>)</td></tr>
+<tr><th id="733">733</th><td>{</td></tr>
+<tr><th id="734">734</th><td></td></tr>
+<tr><th id="735">735</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col2 ref" href="#72fildes" title='fildes' data-ref="72fildes" data-ref-filename="72fildes">fildes</a>)) {</td></tr>
+<tr><th id="736">736</th><td>		<b>return</b> <a class="tu ref fn" href="#_rmt_close" title='_rmt_close' data-use='c' data-ref="_rmt_close" data-ref-filename="_rmt_close">_rmt_close</a>(<a class="local col2 ref" href="#72fildes" title='fildes' data-ref="72fildes" data-ref-filename="72fildes">fildes</a> - <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>);</td></tr>
+<tr><th id="737">737</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="738">738</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col2 ref" href="#72fildes" title='fildes' data-ref="72fildes" data-ref-filename="72fildes">fildes</a>);</td></tr>
+<tr><th id="739">739</th><td>	}</td></tr>
+<tr><th id="740">740</th><td>}</td></tr>
+<tr><th id="741">741</th><td></td></tr>
+<tr><th id="742">742</th><td></td></tr>
+<tr><th id="743">743</th><td><i>/*</i></td></tr>
+<tr><th id="744">744</th><td><i> *	Do ioctl on file.  Looks just like ioctl(2) to caller.</i></td></tr>
+<tr><th id="745">745</th><td><i> */</i></td></tr>
+<tr><th id="746">746</th><td><em>int</em></td></tr>
+<tr><th id="747">747</th><td><dfn class="decl def fn" id="rmtioctl" title='rmtioctl' data-ref="rmtioctl" data-ref-filename="rmtioctl">rmtioctl</dfn>(<em>int</em> <dfn class="local col3 decl" id="73fildes" title='fildes' data-type='int' data-ref="73fildes" data-ref-filename="73fildes">fildes</dfn>, <em>unsigned</em> <em>long</em> <dfn class="local col4 decl" id="74request" title='request' data-type='unsigned long' data-ref="74request" data-ref-filename="74request">request</dfn>, ...)</td></tr>
+<tr><th id="748">748</th><td>{</td></tr>
+<tr><th id="749">749</th><td>	<em>void</em> *<dfn class="local col5 decl" id="75arg" title='arg' data-type='void *' data-ref="75arg" data-ref-filename="75arg">arg</dfn>;</td></tr>
+<tr><th id="750">750</th><td>	<span class='typedef' title='va_list' data-type='__builtin_va_list' data-ref="va_list" data-ref-filename="va_list">va_list</span> <dfn class="local col6 decl" id="76ap" title='ap' data-type='va_list' data-ref="76ap" data-ref-filename="76ap">ap</dfn>;</td></tr>
+<tr><th id="751">751</th><td>	<span class="macro" title="__builtin_va_start(ap, request)" data-ref="_M/va_start">va_start</span>(<span class='refarg'><a class="local col6 ref" href="#76ap" title='ap' data-ref="76ap" data-ref-filename="76ap">ap</a></span>, <a class="local col4 ref" href="#74request" title='request' data-ref="74request" data-ref-filename="74request">request</a>);</td></tr>
+<tr><th id="752">752</th><td></td></tr>
+<tr><th id="753">753</th><td>	<a class="local col5 ref" href="#75arg" title='arg' data-ref="75arg" data-ref-filename="75arg">arg</a> = <span class="macro" title="__builtin_va_arg(ap, void *)" data-ref="_M/va_arg">va_arg</span>(<a class="local col6 ref" href="#76ap" title='ap' data-ref="76ap" data-ref-filename="76ap">ap</a>, <em>void</em> *);</td></tr>
+<tr><th id="754">754</th><td>	<span class="macro" title="__builtin_va_end(ap)" data-ref="_M/va_end">va_end</span>(<span class='refarg'><a class="local col6 ref" href="#76ap" title='ap' data-ref="76ap" data-ref-filename="76ap">ap</a></span>);</td></tr>
+<tr><th id="755">755</th><td></td></tr>
+<tr><th id="756">756</th><td>	<i>/* XXX: arg may be NULL ? */</i></td></tr>
+<tr><th id="757">757</th><td></td></tr>
+<tr><th id="758">758</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col3 ref" href="#73fildes" title='fildes' data-ref="73fildes" data-ref-filename="73fildes">fildes</a>)) {</td></tr>
+<tr><th id="759">759</th><td><u>#<span data-ppcond="759">ifdef</span> <a class="macro" href="#33" data-ref="_M/RMTIOCTL">RMTIOCTL</a></u></td></tr>
+<tr><th id="760">760</th><td>		<b>return</b> <a class="tu ref fn" href="#_rmt_ioctl" title='_rmt_ioctl' data-use='c' data-ref="_rmt_ioctl" data-ref-filename="_rmt_ioctl">_rmt_ioctl</a>(<a class="local col3 ref" href="#73fildes" title='fildes' data-ref="73fildes" data-ref-filename="73fildes">fildes</a> - <a class="macro" href="#598" title="128" data-ref="_M/REM_BIAS">REM_BIAS</a>, <a class="local col4 ref" href="#74request" title='request' data-ref="74request" data-ref-filename="74request">request</a>, <a class="local col5 ref" href="#75arg" title='arg' data-ref="75arg" data-ref-filename="75arg">arg</a>);</td></tr>
+<tr><th id="761">761</th><td><u>#<span data-ppcond="759">else</span></u></td></tr>
+<tr><th id="762">762</th><td>		errno = EOPNOTSUPP;</td></tr>
+<tr><th id="763">763</th><td>		<b>return</b> -<var>1</var>;		<i>/* For now (fnf) */</i></td></tr>
+<tr><th id="764">764</th><td><u>#<span data-ppcond="759">endif</span></u></td></tr>
+<tr><th id="765">765</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="766">766</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/ioctl.h.html#ioctl" title='ioctl' data-ref="ioctl" data-ref-filename="ioctl">ioctl</a>(<a class="local col3 ref" href="#73fildes" title='fildes' data-ref="73fildes" data-ref-filename="73fildes">fildes</a>, <a class="local col4 ref" href="#74request" title='request' data-ref="74request" data-ref-filename="74request">request</a>, <a class="local col5 ref" href="#75arg" title='arg' data-ref="75arg" data-ref-filename="75arg">arg</a>);</td></tr>
+<tr><th id="767">767</th><td>	}</td></tr>
+<tr><th id="768">768</th><td>}</td></tr>
+<tr><th id="769">769</th><td></td></tr>
+<tr><th id="770">770</th><td></td></tr>
+<tr><th id="771">771</th><td><i>/*</i></td></tr>
+<tr><th id="772">772</th><td><i> *	Duplicate an open file descriptor.  Looks just like dup(2)</i></td></tr>
+<tr><th id="773">773</th><td><i> *	to caller.</i></td></tr>
+<tr><th id="774">774</th><td><i> */</i></td></tr>
+<tr><th id="775">775</th><td><em>int</em></td></tr>
+<tr><th id="776">776</th><td><dfn class="decl def fn" id="rmtdup" title='rmtdup' data-ref="rmtdup" data-ref-filename="rmtdup">rmtdup</dfn>(<em>int</em> <dfn class="local col7 decl" id="77fildes" title='fildes' data-type='int' data-ref="77fildes" data-ref-filename="77fildes">fildes</dfn>)</td></tr>
+<tr><th id="777">777</th><td>{</td></tr>
+<tr><th id="778">778</th><td></td></tr>
+<tr><th id="779">779</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col7 ref" href="#77fildes" title='fildes' data-ref="77fildes" data-ref-filename="77fildes">fildes</a>)) {</td></tr>
+<tr><th id="780">780</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#94" title="45" data-ref="_M/EOPNOTSUPP">EOPNOTSUPP</a>;</td></tr>
+<tr><th id="781">781</th><td>		<b>return</b> -<var>1</var>;		<i>/* For now (fnf) */</i></td></tr>
+<tr><th id="782">782</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="783">783</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#dup" title='dup' data-ref="dup" data-ref-filename="dup">dup</a>(<a class="local col7 ref" href="#77fildes" title='fildes' data-ref="77fildes" data-ref-filename="77fildes">fildes</a>);</td></tr>
+<tr><th id="784">784</th><td>	}</td></tr>
+<tr><th id="785">785</th><td>}</td></tr>
+<tr><th id="786">786</th><td></td></tr>
+<tr><th id="787">787</th><td></td></tr>
+<tr><th id="788">788</th><td><i>/*</i></td></tr>
+<tr><th id="789">789</th><td><i> *	Get file status.  Looks just like fstat(2) to caller.</i></td></tr>
+<tr><th id="790">790</th><td><i> */</i></td></tr>
+<tr><th id="791">791</th><td><em>int</em></td></tr>
+<tr><th id="792">792</th><td><dfn class="decl def fn" id="rmtfstat" title='rmtfstat' data-ref="rmtfstat" data-ref-filename="rmtfstat">rmtfstat</dfn>(<em>int</em> <dfn class="local col8 decl" id="78fildes" title='fildes' data-type='int' data-ref="78fildes" data-ref-filename="78fildes">fildes</dfn>, <b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> *<dfn class="local col9 decl" id="79buf" title='buf' data-type='struct stat *' data-ref="79buf" data-ref-filename="79buf">buf</dfn>)</td></tr>
+<tr><th id="793">793</th><td>{</td></tr>
+<tr><th id="794">794</th><td></td></tr>
+<tr><th id="795">795</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="796">796</th><td></td></tr>
+<tr><th id="797">797</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col8 ref" href="#78fildes" title='fildes' data-ref="78fildes" data-ref-filename="78fildes">fildes</a>)) {</td></tr>
+<tr><th id="798">798</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#94" title="45" data-ref="_M/EOPNOTSUPP">EOPNOTSUPP</a>;</td></tr>
+<tr><th id="799">799</th><td>		<b>return</b> -<var>1</var>;		<i>/* For now (fnf) */</i></td></tr>
+<tr><th id="800">800</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="801">801</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__fstat50" title='fstat' data-ref="__fstat50" data-ref-filename="__fstat50">fstat</a>(<a class="local col8 ref" href="#78fildes" title='fildes' data-ref="78fildes" data-ref-filename="78fildes">fildes</a>, <a class="local col9 ref" href="#79buf" title='buf' data-ref="79buf" data-ref-filename="79buf">buf</a>);</td></tr>
+<tr><th id="802">802</th><td>	}</td></tr>
+<tr><th id="803">803</th><td>}</td></tr>
+<tr><th id="804">804</th><td></td></tr>
+<tr><th id="805">805</th><td></td></tr>
+<tr><th id="806">806</th><td><i>/*</i></td></tr>
+<tr><th id="807">807</th><td><i> *	Get file status.  Looks just like stat(2) to caller.</i></td></tr>
+<tr><th id="808">808</th><td><i> */</i></td></tr>
+<tr><th id="809">809</th><td><em>int</em></td></tr>
+<tr><th id="810">810</th><td><dfn class="decl def fn" id="rmtstat" title='rmtstat' data-ref="rmtstat" data-ref-filename="rmtstat">rmtstat</dfn>(<em>const</em> <em>char</em> *<dfn class="local col0 decl" id="80path" title='path' data-type='const char *' data-ref="80path" data-ref-filename="80path">path</dfn>, <b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> *<dfn class="local col1 decl" id="81buf" title='buf' data-type='struct stat *' data-ref="81buf" data-ref-filename="81buf">buf</dfn>)</td></tr>
+<tr><th id="811">811</th><td>{</td></tr>
+<tr><th id="812">812</th><td></td></tr>
+<tr><th id="813">813</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="814">814</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="815">815</th><td></td></tr>
+<tr><th id="816">816</th><td>	<b>if</b> (<a class="tu ref fn" href="#remdev" title='remdev' data-use='c' data-ref="remdev" data-ref-filename="remdev">remdev</a>(<a class="local col0 ref" href="#80path" title='path' data-ref="80path" data-ref-filename="80path">path</a>)) {</td></tr>
+<tr><th id="817">817</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#94" title="45" data-ref="_M/EOPNOTSUPP">EOPNOTSUPP</a>;</td></tr>
+<tr><th id="818">818</th><td>		<b>return</b> -<var>1</var>;		<i>/* For now (fnf) */</i></td></tr>
+<tr><th id="819">819</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="820">820</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__stat50" title='stat' data-ref="__stat50" data-ref-filename="__stat50">stat</a>(<a class="local col0 ref" href="#80path" title='path' data-ref="80path" data-ref-filename="80path">path</a>, <a class="local col1 ref" href="#81buf" title='buf' data-ref="81buf" data-ref-filename="81buf">buf</a>);</td></tr>
+<tr><th id="821">821</th><td>	}</td></tr>
+<tr><th id="822">822</th><td>}</td></tr>
+<tr><th id="823">823</th><td></td></tr>
+<tr><th id="824">824</th><td></td></tr>
+<tr><th id="825">825</th><td><i>/*</i></td></tr>
+<tr><th id="826">826</th><td><i> *	Create a file from scratch.  Looks just like creat(2) to the caller.</i></td></tr>
+<tr><th id="827">827</th><td><i> */</i></td></tr>
+<tr><th id="828">828</th><td><em>int</em></td></tr>
+<tr><th id="829">829</th><td><dfn class="decl def fn" id="rmtcreat" title='rmtcreat' data-ref="rmtcreat" data-ref-filename="rmtcreat">rmtcreat</dfn>(<em>const</em> <em>char</em> *<dfn class="local col2 decl" id="82path" title='path' data-type='const char *' data-ref="82path" data-ref-filename="82path">path</dfn>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#171" title="__mode_t" data-ref="_M/mode_t">mode_t</a> <dfn class="local col3 decl" id="83mode" title='mode' data-type='__mode_t' data-ref="83mode" data-ref-filename="83mode">mode</dfn>)</td></tr>
+<tr><th id="830">830</th><td>{</td></tr>
+<tr><th id="831">831</th><td></td></tr>
+<tr><th id="832">832</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="833">833</th><td></td></tr>
+<tr><th id="834">834</th><td>	<b>if</b> (<a class="tu ref fn" href="#remdev" title='remdev' data-use='c' data-ref="remdev" data-ref-filename="remdev">remdev</a>(<a class="local col2 ref" href="#82path" title='path' data-ref="82path" data-ref-filename="82path">path</a>)) {</td></tr>
+<tr><th id="835">835</th><td>		<b>return</b> <a class="ref fn" href="#rmtopen" title='rmtopen' data-ref="rmtopen" data-ref-filename="rmtopen">rmtopen</a>(<a class="local col2 ref" href="#82path" title='path' data-ref="82path" data-ref-filename="82path">path</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#65" title="0x00000001" data-ref="_M/O_WRONLY">O_WRONLY</a> | <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#97" title="0x00000200" data-ref="_M/O_CREAT">O_CREAT</a>, <a class="local col3 ref" href="#83mode" title='mode' data-ref="83mode" data-ref-filename="83mode">mode</a>);</td></tr>
+<tr><th id="836">836</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="837">837</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="local col2 ref" href="#82path" title='path' data-ref="82path" data-ref-filename="82path">path</a>, <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#97" title="0x00000200" data-ref="_M/O_CREAT">O_CREAT</a> | <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#98" title="0x00000400" data-ref="_M/O_TRUNC">O_TRUNC</a> | <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#65" title="0x00000001" data-ref="_M/O_WRONLY">O_WRONLY</a>, <a class="local col3 ref" href="#83mode" title='mode' data-ref="83mode" data-ref-filename="83mode">mode</a>);</td></tr>
+<tr><th id="838">838</th><td>	}</td></tr>
+<tr><th id="839">839</th><td>}</td></tr>
+<tr><th id="840">840</th><td></td></tr>
+<tr><th id="841">841</th><td></td></tr>
+<tr><th id="842">842</th><td><i>/*</i></td></tr>
+<tr><th id="843">843</th><td><i> *	Rmtfcntl. Do a remote fcntl operation.</i></td></tr>
+<tr><th id="844">844</th><td><i> */</i></td></tr>
+<tr><th id="845">845</th><td><em>int</em></td></tr>
+<tr><th id="846">846</th><td><dfn class="decl def fn" id="rmtfcntl" title='rmtfcntl' data-ref="rmtfcntl" data-ref-filename="rmtfcntl">rmtfcntl</dfn>(<em>int</em> <dfn class="local col4 decl" id="84fd" title='fd' data-type='int' data-ref="84fd" data-ref-filename="84fd">fd</dfn>, <em>int</em> <dfn class="local col5 decl" id="85cmd" title='cmd' data-type='int' data-ref="85cmd" data-ref-filename="85cmd">cmd</dfn>, ...)</td></tr>
+<tr><th id="847">847</th><td>{</td></tr>
+<tr><th id="848">848</th><td>	<em>void</em> *<dfn class="local col6 decl" id="86arg" title='arg' data-type='void *' data-ref="86arg" data-ref-filename="86arg">arg</dfn>;</td></tr>
+<tr><th id="849">849</th><td>	<span class='typedef' title='va_list' data-type='__builtin_va_list' data-ref="va_list" data-ref-filename="va_list">va_list</span> <dfn class="local col7 decl" id="87ap" title='ap' data-type='va_list' data-ref="87ap" data-ref-filename="87ap">ap</dfn>;</td></tr>
+<tr><th id="850">850</th><td>	<span class="macro" title="__builtin_va_start(ap, cmd)" data-ref="_M/va_start">va_start</span>(<span class='refarg'><a class="local col7 ref" href="#87ap" title='ap' data-ref="87ap" data-ref-filename="87ap">ap</a></span>, <a class="local col5 ref" href="#85cmd" title='cmd' data-ref="85cmd" data-ref-filename="85cmd">cmd</a>);</td></tr>
+<tr><th id="851">851</th><td></td></tr>
+<tr><th id="852">852</th><td>	<a class="local col6 ref" href="#86arg" title='arg' data-ref="86arg" data-ref-filename="86arg">arg</a> = <span class="macro" title="__builtin_va_arg(ap, void *)" data-ref="_M/va_arg">va_arg</span>(<a class="local col7 ref" href="#87ap" title='ap' data-ref="87ap" data-ref-filename="87ap">ap</a>, <em>void</em> *);</td></tr>
+<tr><th id="853">853</th><td>	<span class="macro" title="__builtin_va_end(ap)" data-ref="_M/va_end">va_end</span>(<span class='refarg'><a class="local col7 ref" href="#87ap" title='ap' data-ref="87ap" data-ref-filename="87ap">ap</a></span>);</td></tr>
+<tr><th id="854">854</th><td></td></tr>
+<tr><th id="855">855</th><td>	<i>/* XXX: arg may be NULL ? */</i></td></tr>
+<tr><th id="856">856</th><td></td></tr>
+<tr><th id="857">857</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col4 ref" href="#84fd" title='fd' data-ref="84fd" data-ref-filename="84fd">fd</a>)) {</td></tr>
+<tr><th id="858">858</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#94" title="45" data-ref="_M/EOPNOTSUPP">EOPNOTSUPP</a>;</td></tr>
+<tr><th id="859">859</th><td>		<b>return</b> -<var>1</var>;</td></tr>
+<tr><th id="860">860</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="861">861</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#fcntl" title='fcntl' data-ref="fcntl" data-ref-filename="fcntl">fcntl</a>(<a class="local col4 ref" href="#84fd" title='fd' data-ref="84fd" data-ref-filename="84fd">fd</a>, <a class="local col5 ref" href="#85cmd" title='cmd' data-ref="85cmd" data-ref-filename="85cmd">cmd</a>, <a class="local col6 ref" href="#86arg" title='arg' data-ref="86arg" data-ref-filename="86arg">arg</a>);</td></tr>
+<tr><th id="862">862</th><td>	}</td></tr>
+<tr><th id="863">863</th><td>}</td></tr>
+<tr><th id="864">864</th><td></td></tr>
+<tr><th id="865">865</th><td></td></tr>
+<tr><th id="866">866</th><td><i>/*</i></td></tr>
+<tr><th id="867">867</th><td><i> *	Rmtisatty.  Do the isatty function.</i></td></tr>
+<tr><th id="868">868</th><td><i> */</i></td></tr>
+<tr><th id="869">869</th><td><em>int</em></td></tr>
+<tr><th id="870">870</th><td><dfn class="decl def fn" id="rmtisatty" title='rmtisatty' data-ref="rmtisatty" data-ref-filename="rmtisatty">rmtisatty</dfn>(<em>int</em> <dfn class="local col8 decl" id="88fd" title='fd' data-type='int' data-ref="88fd" data-ref-filename="88fd">fd</dfn>)</td></tr>
+<tr><th id="871">871</th><td>{</td></tr>
+<tr><th id="872">872</th><td></td></tr>
+<tr><th id="873">873</th><td>	<b>if</b> (<a class="ref fn" href="#isrmt" title='isrmt' data-ref="isrmt" data-ref-filename="isrmt">isrmt</a>(<a class="local col8 ref" href="#88fd" title='fd' data-ref="88fd" data-ref-filename="88fd">fd</a>))</td></tr>
+<tr><th id="874">874</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="875">875</th><td>	<b>else</b></td></tr>
+<tr><th id="876">876</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#isatty" title='isatty' data-ref="isatty" data-ref-filename="isatty">isatty</a>(<a class="local col8 ref" href="#88fd" title='fd' data-ref="88fd" data-ref-filename="88fd">fd</a>);</td></tr>
+<tr><th id="877">877</th><td>}</td></tr>
+<tr><th id="878">878</th><td></td></tr>
+<tr><th id="879">879</th><td></td></tr>
+<tr><th id="880">880</th><td><i>/*</i></td></tr>
+<tr><th id="881">881</th><td><i> *	Get file status, even if symlink.  Looks just like lstat(2) to caller.</i></td></tr>
+<tr><th id="882">882</th><td><i> */</i></td></tr>
+<tr><th id="883">883</th><td><em>int</em></td></tr>
+<tr><th id="884">884</th><td><dfn class="decl def fn" id="rmtlstat" title='rmtlstat' data-ref="rmtlstat" data-ref-filename="rmtlstat">rmtlstat</dfn>(<em>const</em> <em>char</em> *<dfn class="local col9 decl" id="89path" title='path' data-type='const char *' data-ref="89path" data-ref-filename="89path">path</dfn>, <b>struct</b> <a class="type" href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#stat" title='stat' data-ref="stat" data-ref-filename="stat">stat</a> *<dfn class="local col0 decl" id="90buf" title='buf' data-type='struct stat *' data-ref="90buf" data-ref-filename="90buf">buf</dfn>)</td></tr>
+<tr><th id="885">885</th><td>{</td></tr>
+<tr><th id="886">886</th><td></td></tr>
+<tr><th id="887">887</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(path != NULL);</td></tr>
+<tr><th id="888">888</th><td>	<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/assert.h.html#71" title="((void)0)" data-ref="_M/_DIAGASSERT">_DIAGASSERT</a>(buf != NULL);</td></tr>
+<tr><th id="889">889</th><td></td></tr>
+<tr><th id="890">890</th><td>	<b>if</b> (<a class="tu ref fn" href="#remdev" title='remdev' data-use='c' data-ref="remdev" data-ref-filename="remdev">remdev</a>(<a class="local col9 ref" href="#89path" title='path' data-ref="89path" data-ref-filename="89path">path</a>)) {</td></tr>
+<tr><th id="891">891</th><td>		<a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#94" title="45" data-ref="_M/EOPNOTSUPP">EOPNOTSUPP</a>;</td></tr>
+<tr><th id="892">892</th><td>		<b>return</b> -<var>1</var>;		<i>/* For now (fnf) */</i></td></tr>
+<tr><th id="893">893</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="894">894</th><td>		<b>return</b> <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sys/stat.h.html#__lstat50" title='lstat' data-ref="__lstat50" data-ref-filename="__lstat50">lstat</a>(<a class="local col9 ref" href="#89path" title='path' data-ref="89path" data-ref-filename="89path">path</a>, <a class="local col0 ref" href="#90buf" title='buf' data-ref="90buf" data-ref-filename="90buf">buf</a>);</td></tr>
+<tr><th id="895">895</th><td>	}</td></tr>
+<tr><th id="896">896</th><td>}</td></tr>
+<tr><th id="897">897</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

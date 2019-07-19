@@ -1,0 +1,703 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>systime.c source code [netbsd/external/bsd/ntp/dist/libntp/systime.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/libntp/systime.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>libntp</a>/<a href='systime.c.html'>systime.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: systime.c,v 1.6 2018/04/07 00:19:52 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * systime -- routines to fiddle a UNIX clock.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * ATTENTION: Get approval from Dave Mills on all changes to this file!</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> */</i></td></tr>
+<tr><th id="9">9</th><td><u>#include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="10">10</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/math.h.html">&lt;math.h&gt;</a></u></td></tr>
+<tr><th id="11">11</th><td></td></tr>
+<tr><th id="12">12</th><td><u>#include <a href="../include/ntp.h.html">"ntp.h"</a></u></td></tr>
+<tr><th id="13">13</th><td><u>#include <a href="../include/ntpd.h.html">"ntpd.h"</a></u></td></tr>
+<tr><th id="14">14</th><td><u>#include <a href="../include/ntp_syslog.h.html">"ntp_syslog.h"</a></u></td></tr>
+<tr><th id="15">15</th><td><u>#include <a href="../include/ntp_stdlib.h.html">"ntp_stdlib.h"</a></u></td></tr>
+<tr><th id="16">16</th><td><u>#include <a href="../include/ntp_random.h.html">"ntp_random.h"</a></u></td></tr>
+<tr><th id="17">17</th><td><u>#include <a href="../include/iosignal.h.html">"iosignal.h"</a></u></td></tr>
+<tr><th id="18">18</th><td><u>#include <a href="../include/timevalops.h.html">"timevalops.h"</a></u></td></tr>
+<tr><th id="19">19</th><td><u>#include <a href="../include/timespecops.h.html">"timespecops.h"</a></u></td></tr>
+<tr><th id="20">20</th><td><u>#include <a href="../include/ntp_calendar.h.html">"ntp_calendar.h"</a></u></td></tr>
+<tr><th id="21">21</th><td><u>#include <a href="../include/lib_strbuf.h.html">"lib_strbuf.h"</a></u></td></tr>
+<tr><th id="22">22</th><td></td></tr>
+<tr><th id="23">23</th><td><u>#<span data-ppcond="23">ifdef</span> <a class="macro" href="../../include/config.h.html#1002" data-ref="_M/HAVE_SYS_PARAM_H">HAVE_SYS_PARAM_H</a></u></td></tr>
+<tr><th id="24">24</th><td><u># include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="25">25</th><td><u>#<span data-ppcond="23">endif</span></u></td></tr>
+<tr><th id="26">26</th><td><u>#<span data-ppcond="26">ifdef</span> <a class="macro" href="../../include/config.h.html#1200" data-ref="_M/HAVE_UTMP_H">HAVE_UTMP_H</a></u></td></tr>
+<tr><th id="27">27</th><td><u># include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/utmp.h.html">&lt;utmp.h&gt;</a></u></td></tr>
+<tr><th id="28">28</th><td><u>#<span data-ppcond="26">endif</span> /* HAVE_UTMP_H */</u></td></tr>
+<tr><th id="29">29</th><td><u>#<span data-ppcond="29">ifdef</span> <a class="macro" href="../../include/config.h.html#1197" data-ref="_M/HAVE_UTMPX_H">HAVE_UTMPX_H</a></u></td></tr>
+<tr><th id="30">30</th><td><u># include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/utmpx.h.html">&lt;utmpx.h&gt;</a></u></td></tr>
+<tr><th id="31">31</th><td><u>#<span data-ppcond="29">endif</span> /* HAVE_UTMPX_H */</u></td></tr>
+<tr><th id="32">32</th><td></td></tr>
+<tr><th id="33">33</th><td><em>int</em>	<dfn class="decl def" id="allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</dfn> = <a class="macro" href="../include/ntp_types.h.html#37" title="0" data-ref="_M/FALSE">FALSE</a>;		<i>/* allow panic correction (-g) */</i></td></tr>
+<tr><th id="34">34</th><td><em>int</em>	<dfn class="decl def" id="enable_panic_check" title='enable_panic_check' data-ref="enable_panic_check" data-ref-filename="enable_panic_check">enable_panic_check</dfn> = <a class="macro" href="../include/ntp_types.h.html#34" title="1" data-ref="_M/TRUE">TRUE</a>;	<i>/* Can we check allow_panic's state? */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a>	<dfn class="decl def" id="sys_lamport" title='sys_lamport' data-ref="sys_lamport" data-ref-filename="sys_lamport">sys_lamport</dfn>;			<i>/* Lamport violation */</i></td></tr>
+<tr><th id="37">37</th><td><a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a>	<dfn class="decl def" id="sys_tsrounding" title='sys_tsrounding' data-ref="sys_tsrounding" data-ref-filename="sys_tsrounding">sys_tsrounding</dfn>;			<i>/* timestamp rounding errors */</i></td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><u>#<span data-ppcond="39">ifndef</span> <span class="macro" data-ref="_M/USE_COMPILETIME_PIVOT">USE_COMPILETIME_PIVOT</span></u></td></tr>
+<tr><th id="40">40</th><td><u># define <dfn class="macro" id="_M/USE_COMPILETIME_PIVOT" data-ref="_M/USE_COMPILETIME_PIVOT">USE_COMPILETIME_PIVOT</dfn> 1</u></td></tr>
+<tr><th id="41">41</th><td><u>#<span data-ppcond="39">endif</span></u></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><i>/*</i></td></tr>
+<tr><th id="44">44</th><td><i> * These routines (get_systime, step_systime, adj_systime) implement an</i></td></tr>
+<tr><th id="45">45</th><td><i> * interface between the system independent NTP clock and the Unix</i></td></tr>
+<tr><th id="46">46</th><td><i> * system clock in various architectures and operating systems. Time is</i></td></tr>
+<tr><th id="47">47</th><td><i> * a precious quantity in these routines and every effort is made to</i></td></tr>
+<tr><th id="48">48</th><td><i> * minimize errors by unbiased rounding and amortizing adjustment</i></td></tr>
+<tr><th id="49">49</th><td><i> * residues.</i></td></tr>
+<tr><th id="50">50</th><td><i> *</i></td></tr>
+<tr><th id="51">51</th><td><i> * In order to improve the apparent resolution, provide unbiased</i></td></tr>
+<tr><th id="52">52</th><td><i> * rounding and most importantly ensure that the readings cannot be</i></td></tr>
+<tr><th id="53">53</th><td><i> * predicted, the low-order unused portion of the time below the minimum</i></td></tr>
+<tr><th id="54">54</th><td><i> * time to read the clock is filled with an unbiased random fuzz.</i></td></tr>
+<tr><th id="55">55</th><td><i> *</i></td></tr>
+<tr><th id="56">56</th><td><i> * The sys_tick variable specifies the system clock tick interval in</i></td></tr>
+<tr><th id="57">57</th><td><i> * seconds, for stepping clocks, defined as those which return times</i></td></tr>
+<tr><th id="58">58</th><td><i> * less than MINSTEP greater than the previous reading. For systems that</i></td></tr>
+<tr><th id="59">59</th><td><i> * use a high-resolution counter such that each clock reading is always</i></td></tr>
+<tr><th id="60">60</th><td><i> * at least MINSTEP greater than the prior, sys_tick is the time to read</i></td></tr>
+<tr><th id="61">61</th><td><i> * the system clock.</i></td></tr>
+<tr><th id="62">62</th><td><i> *</i></td></tr>
+<tr><th id="63">63</th><td><i> * The sys_fuzz variable measures the minimum time to read the system</i></td></tr>
+<tr><th id="64">64</th><td><i> * clock, regardless of its precision.  When reading the system clock</i></td></tr>
+<tr><th id="65">65</th><td><i> * using get_systime() after sys_tick and sys_fuzz have been determined,</i></td></tr>
+<tr><th id="66">66</th><td><i> * ntpd ensures each unprocessed clock reading is no less than sys_fuzz</i></td></tr>
+<tr><th id="67">67</th><td><i> * later than the prior unprocessed reading, and then fuzzes the bits</i></td></tr>
+<tr><th id="68">68</th><td><i> * below sys_fuzz in the timestamp returned, ensuring each of its</i></td></tr>
+<tr><th id="69">69</th><td><i> * resulting readings is strictly later than the previous.</i></td></tr>
+<tr><th id="70">70</th><td><i> *</i></td></tr>
+<tr><th id="71">71</th><td><i> * When slewing the system clock using adj_systime() (with the kernel</i></td></tr>
+<tr><th id="72">72</th><td><i> * loop discipline unavailable or disabled), adjtime() offsets are</i></td></tr>
+<tr><th id="73">73</th><td><i> * quantized to sys_tick, if sys_tick is greater than sys_fuzz, which</i></td></tr>
+<tr><th id="74">74</th><td><i> * is to say if the OS presents a stepping clock.  Otherwise, offsets</i></td></tr>
+<tr><th id="75">75</th><td><i> * are quantized to the microsecond resolution of adjtime()'s timeval</i></td></tr>
+<tr><th id="76">76</th><td><i> * input.  The remaining correction sys_residual is carried into the</i></td></tr>
+<tr><th id="77">77</th><td><i> * next adjtime() and meanwhile is also factored into get_systime()</i></td></tr>
+<tr><th id="78">78</th><td><i> * readings.</i></td></tr>
+<tr><th id="79">79</th><td><i> */</i></td></tr>
+<tr><th id="80">80</th><td><em>double</em>	<dfn class="decl def" id="sys_tick" title='sys_tick' data-ref="sys_tick" data-ref-filename="sys_tick">sys_tick</dfn> = <var>0</var>;		<i>/* tick size or time to read (s) */</i></td></tr>
+<tr><th id="81">81</th><td><em>double</em>	<dfn class="decl def" id="sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</dfn> = <var>0</var>;		<i>/* min. time to read the clock (s) */</i></td></tr>
+<tr><th id="82">82</th><td><em>long</em>	<dfn class="decl def" id="sys_fuzz_nsec" title='sys_fuzz_nsec' data-ref="sys_fuzz_nsec" data-ref-filename="sys_fuzz_nsec">sys_fuzz_nsec</dfn> = <var>0</var>;	<i>/* min. time to read the clock (ns) */</i></td></tr>
+<tr><th id="83">83</th><td><em>double</em>	<dfn class="decl def" id="measured_tick" title='measured_tick' data-ref="measured_tick" data-ref-filename="measured_tick">measured_tick</dfn>;		<i>/* non-overridable sys_tick (s) */</i></td></tr>
+<tr><th id="84">84</th><td><em>double</em>	<dfn class="decl def" id="sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</dfn> = <var>0</var>;	<i>/* adjustment residue (s) */</i></td></tr>
+<tr><th id="85">85</th><td><em>int</em>	<dfn class="decl def" id="trunc_os_clock" title='trunc_os_clock' data-ref="trunc_os_clock" data-ref-filename="trunc_os_clock">trunc_os_clock</dfn>;		<i>/* sys_tick &gt; measured_tick */</i></td></tr>
+<tr><th id="86">86</th><td><a class="typedef" href="../include/ntp_fp.h.html#time_stepped_callback" title='time_stepped_callback' data-type='void (*)(void)' data-ref="time_stepped_callback" data-ref-filename="time_stepped_callback">time_stepped_callback</a>	<dfn class="decl def" id="step_callback" title='step_callback' data-ref="step_callback" data-ref-filename="step_callback">step_callback</dfn>;</td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><u>#<span data-ppcond="88">ifndef</span> <span class="macro" data-ref="_M/SIM">SIM</span></u></td></tr>
+<tr><th id="89">89</th><td><i  data-doc="lamport_violated">/* perlinger@ntp.org: As 'get_sysime()' does it's own check for clock</i></td></tr>
+<tr><th id="90">90</th><td><i  data-doc="lamport_violated"> * backstepping, this could probably become a local variable in</i></td></tr>
+<tr><th id="91">91</th><td><i  data-doc="lamport_violated"> * 'get_systime()' and the cruft associated with communicating via a</i></td></tr>
+<tr><th id="92">92</th><td><i  data-doc="lamport_violated"> * static value could be removed after the v4.2.8 release.</i></td></tr>
+<tr><th id="93">93</th><td><i  data-doc="lamport_violated"> */</i></td></tr>
+<tr><th id="94">94</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="lamport_violated" title='lamport_violated' data-type='int' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</dfn>;	<i  data-doc="lamport_violated">/* clock was stepped back */</i></td></tr>
+<tr><th id="95">95</th><td><u>#<span data-ppcond="88">endif</span>	/* !SIM */</u></td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><u>#<span data-ppcond="97">ifdef</span> <a class="macro" href="../../include/config.h.html#184" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="98">98</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="systime_init_done" title='systime_init_done' data-type='int' data-ref="systime_init_done" data-ref-filename="systime_init_done">systime_init_done</dfn>;</td></tr>
+<tr><th id="99">99</th><td><u># define <dfn class="macro" id="_M/DONE_SYSTIME_INIT" data-ref="_M/DONE_SYSTIME_INIT">DONE_SYSTIME_INIT</dfn>()	<a class="tu ref" href="#systime_init_done" title='systime_init_done' data-use='w' data-ref="systime_init_done" data-ref-filename="systime_init_done">systime_init_done</a> = TRUE</u></td></tr>
+<tr><th id="100">100</th><td><u>#<span data-ppcond="97">else</span></u></td></tr>
+<tr><th id="101">101</th><td><u># define DONE_SYSTIME_INIT()	do {} while (FALSE)</u></td></tr>
+<tr><th id="102">102</th><td><u>#<span data-ppcond="97">endif</span></u></td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td><u>#<span data-ppcond="104">ifdef</span> <a class="macro" href="../../include/config.h.html#835" data-ref="_M/HAVE_SIGNALED_IO">HAVE_SIGNALED_IO</a></u></td></tr>
+<tr><th id="105">105</th><td><em>int</em> <dfn class="decl def" id="using_sigio" title='using_sigio' data-ref="using_sigio" data-ref-filename="using_sigio">using_sigio</dfn>;</td></tr>
+<tr><th id="106">106</th><td><u>#<span data-ppcond="104">endif</span></u></td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td><u>#<span data-ppcond="108">ifdef</span> <span class="macro" data-ref="_M/SYS_WINNT">SYS_WINNT</span></u></td></tr>
+<tr><th id="109">109</th><td>CRITICAL_SECTION get_systime_cs;</td></tr>
+<tr><th id="110">110</th><td><u>#<span data-ppcond="108">endif</span></u></td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td><em>void</em></td></tr>
+<tr><th id="114">114</th><td><dfn class="decl def fn" id="set_sys_fuzz" title='set_sys_fuzz' data-ref="set_sys_fuzz" data-ref-filename="set_sys_fuzz">set_sys_fuzz</dfn>(</td></tr>
+<tr><th id="115">115</th><td>	<em>double</em>	<dfn class="local col1 decl" id="1fuzz_val" title='fuzz_val' data-type='double' data-ref="1fuzz_val" data-ref-filename="1fuzz_val">fuzz_val</dfn></td></tr>
+<tr><th id="116">116</th><td>	)</td></tr>
+<tr><th id="117">117</th><td>{</td></tr>
+<tr><th id="118">118</th><td>	<a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a> = <a class="local col1 ref" href="#1fuzz_val" title='fuzz_val' data-ref="1fuzz_val" data-ref-filename="1fuzz_val">fuzz_val</a>;</td></tr>
+<tr><th id="119">119</th><td>	<a class="macro" href="../include/ntp_assert.h.html#85" title="((void) ((sys_fuzz &gt;= 0) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/external/bsd/ntp/lib/libntp/../../../../../../external/bsd/ntp/dist/libntp/systime.c&quot;, 119, isc_assertiontype_insist, &quot;sys_fuzz &gt;= 0&quot;), 0)))" data-ref="_M/INSIST">INSIST</a>(<a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a> &gt;= <var>0</var>);</td></tr>
+<tr><th id="120">120</th><td>	<a class="macro" href="../include/ntp_assert.h.html#85" title="((void) ((sys_fuzz &lt;= 1.0) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/external/bsd/ntp/lib/libntp/../../../../../../external/bsd/ntp/dist/libntp/systime.c&quot;, 120, isc_assertiontype_insist, &quot;sys_fuzz &lt;= 1.0&quot;), 0)))" data-ref="_M/INSIST">INSIST</a>(<a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a> &lt;= <var>1.0</var>);</td></tr>
+<tr><th id="121">121</th><td>	<i>/* [Bug 3450] ensure nsec fuzz &gt;= sys_fuzz to reduce chance of</i></td></tr>
+<tr><th id="122">122</th><td><i>	 * short-falling fuzz advance</i></td></tr>
+<tr><th id="123">123</th><td><i>	 */</i></td></tr>
+<tr><th id="124">124</th><td>	<a class="ref" href="#sys_fuzz_nsec" title='sys_fuzz_nsec' data-ref="sys_fuzz_nsec" data-ref-filename="sys_fuzz_nsec">sys_fuzz_nsec</a> = (<em>long</em>)<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/math.h.html#ceil" title='ceil' data-ref="ceil" data-ref-filename="ceil">ceil</a>(<a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a> * <var>1e9</var>);</td></tr>
+<tr><th id="125">125</th><td>}</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td><em>void</em></td></tr>
+<tr><th id="129">129</th><td><dfn class="decl def fn" id="init_systime" title='init_systime' data-ref="init_systime" data-ref-filename="init_systime">init_systime</dfn>(<em>void</em>)</td></tr>
+<tr><th id="130">130</th><td>{</td></tr>
+<tr><th id="131">131</th><td>	<a class="macro" href="../include/ntp_fp.h.html#416" title="do {} while (0)" data-ref="_M/INIT_GET_SYSTIME_CRITSEC">INIT_GET_SYSTIME_CRITSEC</a>();</td></tr>
+<tr><th id="132">132</th><td>	<a class="macro" href="../include/ntp_fp.h.html#422" title="do {} while (0)" data-ref="_M/INIT_WIN_PRECISE_TIME">INIT_WIN_PRECISE_TIME</a>();</td></tr>
+<tr><th id="133">133</th><td>	<a class="macro" href="#99" title="systime_init_done = 1" data-ref="_M/DONE_SYSTIME_INIT">DONE_SYSTIME_INIT</a>();</td></tr>
+<tr><th id="134">134</th><td>}</td></tr>
+<tr><th id="135">135</th><td></td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td><u>#<span data-ppcond="137">ifndef</span> <span class="macro" data-ref="_M/SIM">SIM</span>	/* ntpsim.c has get_systime() and friends for sim */</u></td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="140">140</th><td><dfn class="tu decl def fn" id="get_ostime" title='get_ostime' data-type='void get_ostime(struct timespec * tsp)' data-ref="get_ostime" data-ref-filename="get_ostime">get_ostime</dfn>(</td></tr>
+<tr><th id="141">141</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> *	<dfn class="local col2 decl" id="2tsp" title='tsp' data-type='struct timespec *' data-ref="2tsp" data-ref-filename="2tsp">tsp</dfn></td></tr>
+<tr><th id="142">142</th><td>	)</td></tr>
+<tr><th id="143">143</th><td>{</td></tr>
+<tr><th id="144">144</th><td>	<em>int</em>	<dfn class="local col3 decl" id="3rc" title='rc' data-type='int' data-ref="3rc" data-ref-filename="3rc">rc</dfn>;</td></tr>
+<tr><th id="145">145</th><td>	<em>long</em>	<dfn class="local col4 decl" id="4ticks" title='ticks' data-type='long' data-ref="4ticks" data-ref-filename="4ticks">ticks</dfn>;</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><u>#<span data-ppcond="147">if</span> defined(<a class="macro" href="../../include/config.h.html#370" data-ref="_M/HAVE_CLOCK_GETTIME">HAVE_CLOCK_GETTIME</a>)</u></td></tr>
+<tr><th id="148">148</th><td>	<a class="local col3 ref" href="#3rc" title='rc' data-ref="3rc" data-ref-filename="3rc">rc</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/time.h.html#__clock_gettime50" title='clock_gettime' data-ref="__clock_gettime50" data-ref-filename="__clock_gettime50">clock_gettime</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#294" title="0" data-ref="_M/CLOCK_REALTIME">CLOCK_REALTIME</a>, <a class="local col2 ref" href="#2tsp" title='tsp' data-ref="2tsp" data-ref-filename="2tsp">tsp</a>);</td></tr>
+<tr><th id="149">149</th><td><u>#<span data-ppcond="147">elif</span> defined(HAVE_GETCLOCK)</u></td></tr>
+<tr><th id="150">150</th><td>	rc = getclock(TIMEOFDAY, tsp);</td></tr>
+<tr><th id="151">151</th><td><u>#else</u></td></tr>
+<tr><th id="152">152</th><td>	<b>struct</b> timeval		tv;</td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td>	rc = GETTIMEOFDAY(&amp;tv, NULL);</td></tr>
+<tr><th id="155">155</th><td>	tsp-&gt;tv_sec = tv.tv_sec;</td></tr>
+<tr><th id="156">156</th><td>	tsp-&gt;tv_nsec = tv.tv_usec * <var>1000</var>;</td></tr>
+<tr><th id="157">157</th><td><u>#<span data-ppcond="147">endif</span></u></td></tr>
+<tr><th id="158">158</th><td>	<b>if</b> (<a class="local col3 ref" href="#3rc" title='rc' data-ref="3rc" data-ref-filename="3rc">rc</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="159">159</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"read system clock failed: %m (%d)"</q>,</td></tr>
+<tr><th id="160">160</th><td>			<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a>);</td></tr>
+<tr><th id="161">161</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#exit" title='exit' data-ref="exit" data-ref-filename="exit">exit</a>(<var>1</var>);</td></tr>
+<tr><th id="162">162</th><td>	}</td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td>	<b>if</b> (<a class="ref" href="../include/ntp_stdlib.h.html#trunc_os_clock" title='trunc_os_clock' data-ref="trunc_os_clock" data-ref-filename="trunc_os_clock">trunc_os_clock</a>) {</td></tr>
+<tr><th id="165">165</th><td>		<a class="local col4 ref" href="#4ticks" title='ticks' data-ref="4ticks" data-ref-filename="4ticks">ticks</a> = (<em>long</em>)((<a class="local col2 ref" href="#2tsp" title='tsp' data-ref="2tsp" data-ref-filename="2tsp">tsp</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> * <var>1e-9</var>) / <a class="ref" href="../include/ntp_stdlib.h.html#sys_tick" title='sys_tick' data-ref="sys_tick" data-ref-filename="sys_tick">sys_tick</a>);</td></tr>
+<tr><th id="166">166</th><td>		<a class="local col2 ref" href="#2tsp" title='tsp' data-ref="2tsp" data-ref-filename="2tsp">tsp</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> = (<em>long</em>)(<a class="local col4 ref" href="#4ticks" title='ticks' data-ref="4ticks" data-ref-filename="4ticks">ticks</a> * <var>1e9</var> * <a class="ref" href="../include/ntp_stdlib.h.html#sys_tick" title='sys_tick' data-ref="sys_tick" data-ref-filename="sys_tick">sys_tick</a>);</td></tr>
+<tr><th id="167">167</th><td>	}</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td></td></tr>
+<tr><th id="171">171</th><td><i>/*</i></td></tr>
+<tr><th id="172">172</th><td><i> * get_systime - return system time in NTP timestamp format.</i></td></tr>
+<tr><th id="173">173</th><td><i> */</i></td></tr>
+<tr><th id="174">174</th><td><em>void</em></td></tr>
+<tr><th id="175">175</th><td><dfn class="decl def fn" id="get_systime" title='get_systime' data-ref="get_systime" data-ref-filename="get_systime">get_systime</dfn>(</td></tr>
+<tr><th id="176">176</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a> *<dfn class="local col5 decl" id="5now" title='now' data-type='l_fp *' data-ref="5now" data-ref-filename="5now">now</dfn>		<i>/* system time */</i></td></tr>
+<tr><th id="177">177</th><td>	)</td></tr>
+<tr><th id="178">178</th><td>{</td></tr>
+<tr><th id="179">179</th><td>        <em>static</em> <b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a>  <dfn class="local col6 decl" id="6ts_last" title='ts_last' data-type='struct timespec' data-ref="6ts_last" data-ref-filename="6ts_last">ts_last</dfn>;        <i>/* last sampled os time */</i></td></tr>
+<tr><th id="180">180</th><td>	<em>static</em> <b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a>	<dfn class="local col7 decl" id="7ts_prev" title='ts_prev' data-type='struct timespec' data-ref="7ts_prev" data-ref-filename="7ts_prev">ts_prev</dfn>;	<i>/* prior os time */</i></td></tr>
+<tr><th id="181">181</th><td>	<em>static</em> <a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>		<dfn class="local col8 decl" id="8lfp_prev" title='lfp_prev' data-type='l_fp' data-ref="8lfp_prev" data-ref-filename="8lfp_prev">lfp_prev</dfn>;	<i>/* prior result */</i></td></tr>
+<tr><th id="182">182</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col9 decl" id="9ts" title='ts' data-type='struct timespec' data-ref="9ts" data-ref-filename="9ts">ts</dfn>;	<i>/* seconds and nanoseconds */</i></td></tr>
+<tr><th id="183">183</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col0 decl" id="10ts_min" title='ts_min' data-type='struct timespec' data-ref="10ts_min" data-ref-filename="10ts_min">ts_min</dfn>;	<i>/* earliest permissible */</i></td></tr>
+<tr><th id="184">184</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col1 decl" id="11ts_lam" title='ts_lam' data-type='struct timespec' data-ref="11ts_lam" data-ref-filename="11ts_lam">ts_lam</dfn>;	<i>/* lamport fictional increment */</i></td></tr>
+<tr><th id="185">185</th><td>	<em>double</em>	<dfn class="local col2 decl" id="12dfuzz" title='dfuzz' data-type='double' data-ref="12dfuzz" data-ref-filename="12dfuzz">dfuzz</dfn>;</td></tr>
+<tr><th id="186">186</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>	<dfn class="local col3 decl" id="13result" title='result' data-type='l_fp' data-ref="13result" data-ref-filename="13result">result</dfn>;</td></tr>
+<tr><th id="187">187</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>	<dfn class="local col4 decl" id="14lfpfuzz" title='lfpfuzz' data-type='l_fp' data-ref="14lfpfuzz" data-ref-filename="14lfpfuzz">lfpfuzz</dfn>;</td></tr>
+<tr><th id="188">188</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>	<dfn class="local col5 decl" id="15lfpdelta" title='lfpdelta' data-type='l_fp' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</dfn>;</td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>	<a class="tu ref fn" href="#get_ostime" title='get_ostime' data-use='c' data-ref="get_ostime" data-ref-filename="get_ostime">get_ostime</a>(&amp;<a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>);</td></tr>
+<tr><th id="191">191</th><td>	<a class="macro" href="../include/ntp_assert.h.html#95" title="((void) ((systime_init_done) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/external/bsd/ntp/lib/libntp/../../../../../../external/bsd/ntp/dist/libntp/systime.c&quot;, 191, isc_assertiontype_require, &quot;systime_init_done&quot;), 0)))" data-ref="_M/DEBUG_REQUIRE">DEBUG_REQUIRE</a>(<a class="tu ref" href="#systime_init_done" title='systime_init_done' data-use='r' data-ref="systime_init_done" data-ref-filename="systime_init_done">systime_init_done</a>);</td></tr>
+<tr><th id="192">192</th><td>	<a class="macro" href="../include/ntp_fp.h.html#418" title="do {} while (0)" data-ref="_M/ENTER_GET_SYSTIME_CRITSEC">ENTER_GET_SYSTIME_CRITSEC</a>();</td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>        <i>/* First check if here was a Lamport violation, that is, two</i></td></tr>
+<tr><th id="195">195</th><td><i>         * successive calls to 'get_ostime()' resulted in negative</i></td></tr>
+<tr><th id="196">196</th><td><i>         * time difference. Use a few milliseconds of permissible</i></td></tr>
+<tr><th id="197">197</th><td><i>         * tolerance -- being too sharp can hurt here. (This is intented</i></td></tr>
+<tr><th id="198">198</th><td><i>         * for the Win32 target, where the HPC interpolation might</i></td></tr>
+<tr><th id="199">199</th><td><i>         * introduce small steps backward. It should not be an issue on</i></td></tr>
+<tr><th id="200">200</th><td><i>         * systems where get_ostime() results in a true syscall.)</i></td></tr>
+<tr><th id="201">201</th><td><i>         */</i></td></tr>
+<tr><th id="202">202</th><td>        <b>if</b> (<a class="ref fn" href="../include/timespecops.h.html#cmp_tspec" title='cmp_tspec' data-ref="cmp_tspec" data-ref-filename="cmp_tspec">cmp_tspec</a>(<a class="ref fn" href="../include/timespecops.h.html#add_tspec_ns" title='add_tspec_ns' data-ref="add_tspec_ns" data-ref-filename="add_tspec_ns">add_tspec_ns</a>(<a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>, <var>50000000</var>), <a class="local col6 ref" href="#6ts_last" title='ts_last' data-ref="6ts_last" data-ref-filename="6ts_last">ts_last</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="203">203</th><td>                <a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='w' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a> = <var>1</var>;</td></tr>
+<tr><th id="204">204</th><td>                <a class="ref" href="../include/ntpd.h.html#sys_lamport" title='sys_lamport' data-ref="sys_lamport" data-ref-filename="sys_lamport">sys_lamport</a>++;</td></tr>
+<tr><th id="205">205</th><td>	}</td></tr>
+<tr><th id="206">206</th><td>        <a class="local col6 ref" href="#6ts_last" title='ts_last' data-ref="6ts_last" data-ref-filename="6ts_last">ts_last</a> = <a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>;</td></tr>
+<tr><th id="207">207</th><td></td></tr>
+<tr><th id="208">208</th><td>	<i>/*</i></td></tr>
+<tr><th id="209">209</th><td><i>	 * After default_get_precision() has set a nonzero sys_fuzz,</i></td></tr>
+<tr><th id="210">210</th><td><i>	 * ensure every reading of the OS clock advances by at least</i></td></tr>
+<tr><th id="211">211</th><td><i>	 * sys_fuzz over the prior reading, thereby assuring each</i></td></tr>
+<tr><th id="212">212</th><td><i>	 * fuzzed result is strictly later than the prior.  Limit the</i></td></tr>
+<tr><th id="213">213</th><td><i>	 * necessary fiction to 1 second.</i></td></tr>
+<tr><th id="214">214</th><td><i>	 */</i></td></tr>
+<tr><th id="215">215</th><td>	<b>if</b> (!<a class="macro" href="../include/iosignal.h.html#41" title="using_sigio" data-ref="_M/USING_SIGIO">USING_SIGIO</a>()) {</td></tr>
+<tr><th id="216">216</th><td>		<a class="local col0 ref" href="#10ts_min" title='ts_min' data-ref="10ts_min" data-ref-filename="10ts_min">ts_min</a> = <a class="ref fn" href="../include/timespecops.h.html#add_tspec_ns" title='add_tspec_ns' data-ref="add_tspec_ns" data-ref-filename="add_tspec_ns">add_tspec_ns</a>(<a class="local col7 ref" href="#7ts_prev" title='ts_prev' data-ref="7ts_prev" data-ref-filename="7ts_prev">ts_prev</a>, <a class="ref" href="#sys_fuzz_nsec" title='sys_fuzz_nsec' data-ref="sys_fuzz_nsec" data-ref-filename="sys_fuzz_nsec">sys_fuzz_nsec</a>);</td></tr>
+<tr><th id="217">217</th><td>		<b>if</b> (<a class="ref fn" href="../include/timespecops.h.html#cmp_tspec" title='cmp_tspec' data-ref="cmp_tspec" data-ref-filename="cmp_tspec">cmp_tspec</a>(<a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>, <a class="local col0 ref" href="#10ts_min" title='ts_min' data-ref="10ts_min" data-ref-filename="10ts_min">ts_min</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="218">218</th><td>			<a class="local col1 ref" href="#11ts_lam" title='ts_lam' data-ref="11ts_lam" data-ref-filename="11ts_lam">ts_lam</a> = <a class="ref fn" href="../include/timespecops.h.html#sub_tspec" title='sub_tspec' data-ref="sub_tspec" data-ref-filename="sub_tspec">sub_tspec</a>(<a class="local col0 ref" href="#10ts_min" title='ts_min' data-ref="10ts_min" data-ref-filename="10ts_min">ts_min</a>, <a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>);</td></tr>
+<tr><th id="219">219</th><td>			<b>if</b> (<a class="local col1 ref" href="#11ts_lam" title='ts_lam' data-ref="11ts_lam" data-ref-filename="11ts_lam">ts_lam</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a> &gt; <var>0</var> &amp;&amp; !<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='r' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a>) {</td></tr>
+<tr><th id="220">220</th><td>				<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>,</td></tr>
+<tr><th id="221">221</th><td>					<q>"get_systime Lamport advance exceeds one second (%.9f)"</q>,</td></tr>
+<tr><th id="222">222</th><td>					<a class="local col1 ref" href="#11ts_lam" title='ts_lam' data-ref="11ts_lam" data-ref-filename="11ts_lam">ts_lam</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a> +</td></tr>
+<tr><th id="223">223</th><td>					    <var>1e-9</var> * <a class="local col1 ref" href="#11ts_lam" title='ts_lam' data-ref="11ts_lam" data-ref-filename="11ts_lam">ts_lam</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a>);</td></tr>
+<tr><th id="224">224</th><td>				<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#exit" title='exit' data-ref="exit" data-ref-filename="exit">exit</a>(<var>1</var>);</td></tr>
+<tr><th id="225">225</th><td>			}</td></tr>
+<tr><th id="226">226</th><td>			<b>if</b> (!<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='r' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a>)</td></tr>
+<tr><th id="227">227</th><td>				<a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a> = <a class="local col0 ref" href="#10ts_min" title='ts_min' data-ref="10ts_min" data-ref-filename="10ts_min">ts_min</a>;</td></tr>
+<tr><th id="228">228</th><td>		}</td></tr>
+<tr><th id="229">229</th><td>		<a class="local col7 ref" href="#7ts_prev" title='ts_prev' data-ref="7ts_prev" data-ref-filename="7ts_prev">ts_prev</a> = <a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>;</td></tr>
+<tr><th id="230">230</th><td>	}</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td>	<i>/* convert from timespec to l_fp fixed-point */</i></td></tr>
+<tr><th id="233">233</th><td>	<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> = <a class="ref fn" href="../include/timespecops.h.html#tspec_stamp_to_lfp" title='tspec_stamp_to_lfp' data-ref="tspec_stamp_to_lfp" data-ref-filename="tspec_stamp_to_lfp">tspec_stamp_to_lfp</a>(<a class="local col9 ref" href="#9ts" title='ts' data-ref="9ts" data-ref-filename="9ts">ts</a>);</td></tr>
+<tr><th id="234">234</th><td></td></tr>
+<tr><th id="235">235</th><td>	<i>/*</i></td></tr>
+<tr><th id="236">236</th><td><i>	 * Add in the fuzz. 'ntp_random()' returns [0..2**31-1] so we</i></td></tr>
+<tr><th id="237">237</th><td><i>	 * must scale up the result by 2.0 to cover the full fractional</i></td></tr>
+<tr><th id="238">238</th><td><i>	 * range.</i></td></tr>
+<tr><th id="239">239</th><td><i>	 */</i></td></tr>
+<tr><th id="240">240</th><td>	<a class="local col2 ref" href="#12dfuzz" title='dfuzz' data-ref="12dfuzz" data-ref-filename="12dfuzz">dfuzz</a> = <a class="ref fn" href="../include/ntp_random.h.html#ntp_random" title='ntp_random' data-ref="ntp_random" data-ref-filename="ntp_random">ntp_random</a>() * <var>2.</var> / <a class="macro" href="../include/ntp_fp.h.html#260" title="4294967296.0" data-ref="_M/FRAC">FRAC</a> * <a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a>;</td></tr>
+<tr><th id="241">241</th><td>	<a class="macro" href="../include/ntp_fp.h.html#343" title="do { double d_tmp; u_int64 q_tmp; int M_isneg; d_tmp = ((dfuzz)); M_isneg = (d_tmp &lt; 0.); if (M_isneg) { d_tmp = -d_tmp; } q_tmp = (u_int64)ldexp(d_tmp, 32); if (M_isneg) { q_tmp = ~q_tmp + 1; } ((&amp;lfpfuzz)-&gt;l_uf) = (u_int32)q_tmp; ((&amp;lfpfuzz)-&gt;Ul_i.Xl_ui) = (u_int32)(q_tmp &gt;&gt; 32); } while (0)" data-ref="_M/DTOLFP">DTOLFP</a>(<a class="local col2 ref" href="#12dfuzz" title='dfuzz' data-ref="12dfuzz" data-ref-filename="12dfuzz">dfuzz</a>, &amp;<a class="local col4 ref" href="#14lfpfuzz" title='lfpfuzz' data-ref="14lfpfuzz" data-ref-filename="14lfpfuzz">lfpfuzz</a>);</td></tr>
+<tr><th id="242">242</th><td>	<a class="macro" href="../include/ntp_fp.h.html#230" title="do { u_int32 add_t = ((&amp;result)-&gt;l_uf); ((&amp;result)-&gt;l_uf) += ((&amp;lfpfuzz)-&gt;l_uf); ((&amp;result)-&gt;Ul_i.Xl_ui) += ((&amp;lfpfuzz)-&gt;Ul_i.Xl_ui) + ((u_int32)((&amp;result)-&gt;l_uf) &lt; add_t); } while (0)" data-ref="_M/L_ADD">L_ADD</a>(&amp;<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>, &amp;<a class="local col4 ref" href="#14lfpfuzz" title='lfpfuzz' data-ref="14lfpfuzz" data-ref-filename="14lfpfuzz">lfpfuzz</a>);</td></tr>
+<tr><th id="243">243</th><td></td></tr>
+<tr><th id="244">244</th><td>	<i>/*</i></td></tr>
+<tr><th id="245">245</th><td><i>	 * Ensure result is strictly greater than prior result (ignoring</i></td></tr>
+<tr><th id="246">246</th><td><i>	 * sys_residual's effect for now) once sys_fuzz has been</i></td></tr>
+<tr><th id="247">247</th><td><i>	 * determined.</i></td></tr>
+<tr><th id="248">248</th><td><i>	 *</i></td></tr>
+<tr><th id="249">249</th><td><i>	 * [Bug 3450] Rounding errors and time slew can lead to a</i></td></tr>
+<tr><th id="250">250</th><td><i>	 * violation of the expected postcondition. This is bound to</i></td></tr>
+<tr><th id="251">251</th><td><i>	 * happen from time to time (depending on state of the random</i></td></tr>
+<tr><th id="252">252</th><td><i>	 * generator, the current slew and the closeness of system time</i></td></tr>
+<tr><th id="253">253</th><td><i>	 * stamps drawn) and does not warrant a syslog entry. Instead it</i></td></tr>
+<tr><th id="254">254</th><td><i>	 * makes much more sense to ensure the postcondition and hop</i></td></tr>
+<tr><th id="255">255</th><td><i>	 * along silently.</i></td></tr>
+<tr><th id="256">256</th><td><i>	 */</i></td></tr>
+<tr><th id="257">257</th><td>	<b>if</b> (!<a class="macro" href="../include/iosignal.h.html#41" title="using_sigio" data-ref="_M/USING_SIGIO">USING_SIGIO</a>()) {</td></tr>
+<tr><th id="258">258</th><td>		<b>if</b> (   !<a class="macro" href="../include/ntp_fp.h.html#242" title="(((&amp;lfp_prev)-&gt;Ul_i.Xl_ui | (&amp;lfp_prev)-&gt;l_uf) == 0)" data-ref="_M/L_ISZERO">L_ISZERO</a>(&amp;<a class="local col8 ref" href="#8lfp_prev" title='lfp_prev' data-ref="8lfp_prev" data-ref-filename="8lfp_prev">lfp_prev</a>)</td></tr>
+<tr><th id="259">259</th><td>		    &amp;&amp; !<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='r' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a></td></tr>
+<tr><th id="260">260</th><td>		    &amp;&amp; (<a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a> &gt; <var>0.0</var>)</td></tr>
+<tr><th id="261">261</th><td>		   ) {</td></tr>
+<tr><th id="262">262</th><td>			<a class="local col5 ref" href="#15lfpdelta" title='lfpdelta' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</a> = <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>;</td></tr>
+<tr><th id="263">263</th><td>			<a class="macro" href="../include/ntp_fp.h.html#231" title="do { u_int32 sub_t = ((&amp;lfpdelta)-&gt;l_uf); ((&amp;lfpdelta)-&gt;l_uf) -= ((&amp;lfp_prev)-&gt;l_uf); ((&amp;lfpdelta)-&gt;Ul_i.Xl_ui) -= ((&amp;lfp_prev)-&gt;Ul_i.Xl_ui) + ((u_int32)((&amp;lfpdelta)-&gt;l_uf) &gt; sub_t); } while (0)" data-ref="_M/L_SUB">L_SUB</a>(&amp;<a class="local col5 ref" href="#15lfpdelta" title='lfpdelta' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</a>, &amp;<a class="local col8 ref" href="#8lfp_prev" title='lfp_prev' data-ref="8lfp_prev" data-ref-filename="8lfp_prev">lfp_prev</a>);</td></tr>
+<tr><th id="264">264</th><td>			<a class="macro" href="../include/ntp_fp.h.html#234" title="do { u_int32 sub_t = (((&amp;lfpdelta)-&gt;l_uf)); (((&amp;lfpdelta)-&gt;l_uf)) -= (((1))); (((&amp;lfpdelta)-&gt;Ul_i.Xl_ui)) -= (0) + ((u_int32)(((&amp;lfpdelta)-&gt;l_uf)) &gt; sub_t); } while (0)" data-ref="_M/L_SUBUF">L_SUBUF</a>(&amp;<a class="local col5 ref" href="#15lfpdelta" title='lfpdelta' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</a>, <var>1</var>);</td></tr>
+<tr><th id="265">265</th><td>			<b>if</b> (<a class="local col5 ref" href="#15lfpdelta" title='lfpdelta' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</a>.<a class="macro" href="../include/ntp_fp.h.html#41" title="Ul_i.Xl_i" data-ref="_M/l_i">l_i</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="266">266</th><td>			{</td></tr>
+<tr><th id="267">267</th><td>				<a class="macro" href="../include/ntp_fp.h.html#232" title="do { ((&amp;lfpdelta)-&gt;l_uf) = ~((&amp;lfpdelta)-&gt;l_uf) + 1u; ((&amp;lfpdelta)-&gt;Ul_i.Xl_ui) = ~((&amp;lfpdelta)-&gt;Ul_i.Xl_ui) + (((&amp;lfpdelta)-&gt;l_uf) == 0); } while (0)" data-ref="_M/L_NEG">L_NEG</a>(&amp;<a class="local col5 ref" href="#15lfpdelta" title='lfpdelta' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</a>);</td></tr>
+<tr><th id="268">268</th><td>				<a class="macro" href="../include/ntpd.h.html#43" title="do { if (debug &gt;= (1)) mprintf (&quot;get_systime: postcond failed by %s secs, fixed\n&quot;, mfptoa((&amp;lfpdelta)-&gt;Ul_i.Xl_ui, (&amp;lfpdelta)-&gt;l_uf, (9))); } while (0)" data-ref="_M/DPRINTF">DPRINTF</a>(<var>1</var>, (<q>"get_systime: postcond failed by %s secs, fixed\n"</q>,</td></tr>
+<tr><th id="269">269</th><td>					    <a class="macro" href="../include/ntp_fp.h.html#373" title="mfptoa((&amp;lfpdelta)-&gt;Ul_i.Xl_ui, (&amp;lfpdelta)-&gt;l_uf, (9))" data-ref="_M/lfptoa">lfptoa</a>(&amp;<a class="local col5 ref" href="#15lfpdelta" title='lfpdelta' data-ref="15lfpdelta" data-ref-filename="15lfpdelta">lfpdelta</a>, <var>9</var>)));</td></tr>
+<tr><th id="270">270</th><td>				<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> = <a class="local col8 ref" href="#8lfp_prev" title='lfp_prev' data-ref="8lfp_prev" data-ref-filename="8lfp_prev">lfp_prev</a>;</td></tr>
+<tr><th id="271">271</th><td>				<a class="macro" href="../include/ntp_fp.h.html#233" title="do { u_int32 add_t = (((&amp;result)-&gt;l_uf)); (((&amp;result)-&gt;l_uf)) += (((1))); (((&amp;result)-&gt;Ul_i.Xl_ui)) += (0) + ((u_int32)(((&amp;result)-&gt;l_uf)) &lt; add_t); } while (0)" data-ref="_M/L_ADDUF">L_ADDUF</a>(&amp;<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>, <var>1</var>);</td></tr>
+<tr><th id="272">272</th><td>				<a class="ref" href="../include/ntpd.h.html#sys_tsrounding" title='sys_tsrounding' data-ref="sys_tsrounding" data-ref-filename="sys_tsrounding">sys_tsrounding</a>++;</td></tr>
+<tr><th id="273">273</th><td>			}</td></tr>
+<tr><th id="274">274</th><td>		}</td></tr>
+<tr><th id="275">275</th><td>		<a class="local col8 ref" href="#8lfp_prev" title='lfp_prev' data-ref="8lfp_prev" data-ref-filename="8lfp_prev">lfp_prev</a> = <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>;</td></tr>
+<tr><th id="276">276</th><td>		<b>if</b> (<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='r' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a>) </td></tr>
+<tr><th id="277">277</th><td>			<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='w' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a> = <a class="macro" href="../include/ntp_types.h.html#37" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="278">278</th><td>	}</td></tr>
+<tr><th id="279">279</th><td>	<a class="macro" href="../include/ntp_fp.h.html#420" title="do {} while (0)" data-ref="_M/LEAVE_GET_SYSTIME_CRITSEC">LEAVE_GET_SYSTIME_CRITSEC</a>();</td></tr>
+<tr><th id="280">280</th><td>	*<a class="local col5 ref" href="#5now" title='now' data-ref="5now" data-ref-filename="5now">now</a> = <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>;</td></tr>
+<tr><th id="281">281</th><td>}</td></tr>
+<tr><th id="282">282</th><td></td></tr>
+<tr><th id="283">283</th><td></td></tr>
+<tr><th id="284">284</th><td><i>/*</i></td></tr>
+<tr><th id="285">285</th><td><i> * adj_systime - adjust system time by the argument.</i></td></tr>
+<tr><th id="286">286</th><td><i> */</i></td></tr>
+<tr><th id="287">287</th><td><u>#<span data-ppcond="287">if</span> !defined <span class="macro" data-ref="_M/SYS_WINNT">SYS_WINNT</span></u></td></tr>
+<tr><th id="288">288</th><td><em>int</em>				<i>/* 0 okay, 1 error */</i></td></tr>
+<tr><th id="289">289</th><td><dfn class="decl def fn" id="adj_systime" title='adj_systime' data-ref="adj_systime" data-ref-filename="adj_systime">adj_systime</dfn>(</td></tr>
+<tr><th id="290">290</th><td>	<em>double</em> <dfn class="local col6 decl" id="16now" title='now' data-type='double' data-ref="16now" data-ref-filename="16now">now</dfn>		<i>/* adjustment (s) */</i></td></tr>
+<tr><th id="291">291</th><td>	)</td></tr>
+<tr><th id="292">292</th><td>{</td></tr>
+<tr><th id="293">293</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col7 decl" id="17adjtv" title='adjtv' data-type='struct timeval' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</dfn>;	<i>/* new adjustment */</i></td></tr>
+<tr><th id="294">294</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col8 decl" id="18oadjtv" title='oadjtv' data-type='struct timeval' data-ref="18oadjtv" data-ref-filename="18oadjtv">oadjtv</dfn>;	<i>/* residual adjustment */</i></td></tr>
+<tr><th id="295">295</th><td>	<em>double</em>	<dfn class="local col9 decl" id="19quant" title='quant' data-type='double' data-ref="19quant" data-ref-filename="19quant">quant</dfn>;		<i>/* quantize to multiples of */</i></td></tr>
+<tr><th id="296">296</th><td>	<em>double</em>	<dfn class="local col0 decl" id="20dtemp" title='dtemp' data-type='double' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</dfn>;</td></tr>
+<tr><th id="297">297</th><td>	<em>long</em>	<dfn class="local col1 decl" id="21ticks" title='ticks' data-type='long' data-ref="21ticks" data-ref-filename="21ticks">ticks</dfn>;</td></tr>
+<tr><th id="298">298</th><td>	<em>int</em>	<dfn class="local col2 decl" id="22isneg" title='isneg' data-type='int' data-ref="22isneg" data-ref-filename="22isneg">isneg</dfn> = <var>0</var>;</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td>	<i>/*</i></td></tr>
+<tr><th id="301">301</th><td><i>	 * The Windows port adj_systime() depends on being called each</i></td></tr>
+<tr><th id="302">302</th><td><i>	 * second even when there's no additional correction, to allow</i></td></tr>
+<tr><th id="303">303</th><td><i>	 * emulation of adjtime() behavior on top of an API that simply</i></td></tr>
+<tr><th id="304">304</th><td><i>	 * sets the current rate.  This POSIX implementation needs to</i></td></tr>
+<tr><th id="305">305</th><td><i>	 * ignore invocations with zero correction, otherwise ongoing</i></td></tr>
+<tr><th id="306">306</th><td><i>	 * EVNT_NSET adjtime() can be aborted by a tiny adjtime()</i></td></tr>
+<tr><th id="307">307</th><td><i>	 * triggered by sys_residual.</i></td></tr>
+<tr><th id="308">308</th><td><i>	 */</i></td></tr>
+<tr><th id="309">309</th><td>	<b>if</b> (<var>0.</var> == <a class="local col6 ref" href="#16now" title='now' data-ref="16now" data-ref-filename="16now">now</a>) {</td></tr>
+<tr><th id="310">310</th><td>		<b>if</b> (<a class="ref" href="../include/ntpd.h.html#enable_panic_check" title='enable_panic_check' data-ref="enable_panic_check" data-ref-filename="enable_panic_check">enable_panic_check</a> &amp;&amp; <a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>) {</td></tr>
+<tr><th id="311">311</th><td>			<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"adj_systime: allow_panic is TRUE!"</q>);</td></tr>
+<tr><th id="312">312</th><td>			<a class="macro" href="../include/ntp_assert.h.html#85" title="((void) ((!allow_panic) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/external/bsd/ntp/lib/libntp/../../../../../../external/bsd/ntp/dist/libntp/systime.c&quot;, 312, isc_assertiontype_insist, &quot;!allow_panic&quot;), 0)))" data-ref="_M/INSIST">INSIST</a>(!<a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>);</td></tr>
+<tr><th id="313">313</th><td>		}</td></tr>
+<tr><th id="314">314</th><td>		<b>return</b> <a class="macro" href="../include/ntp_types.h.html#34" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="315">315</th><td>	}</td></tr>
+<tr><th id="316">316</th><td></td></tr>
+<tr><th id="317">317</th><td>	<i>/*</i></td></tr>
+<tr><th id="318">318</th><td><i>	 * Most Unix adjtime() implementations adjust the system clock</i></td></tr>
+<tr><th id="319">319</th><td><i>	 * in microsecond quanta, but some adjust in 10-ms quanta. We</i></td></tr>
+<tr><th id="320">320</th><td><i>	 * carefully round the adjustment to the nearest quantum, then</i></td></tr>
+<tr><th id="321">321</th><td><i>	 * adjust in quanta and keep the residue for later.</i></td></tr>
+<tr><th id="322">322</th><td><i>	 */</i></td></tr>
+<tr><th id="323">323</th><td>	<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a> = <a class="local col6 ref" href="#16now" title='now' data-ref="16now" data-ref-filename="16now">now</a> + <a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a>;</td></tr>
+<tr><th id="324">324</th><td>	<b>if</b> (<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="325">325</th><td>		<a class="local col2 ref" href="#22isneg" title='isneg' data-ref="22isneg" data-ref-filename="22isneg">isneg</a> = <var>1</var>;</td></tr>
+<tr><th id="326">326</th><td>		<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a> = -<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a>;</td></tr>
+<tr><th id="327">327</th><td>	}</td></tr>
+<tr><th id="328">328</th><td>	<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> = (<em>long</em>)<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a>;</td></tr>
+<tr><th id="329">329</th><td>	<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a> -= <a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>;</td></tr>
+<tr><th id="330">330</th><td>	<b>if</b> (<a class="ref" href="../include/ntp_stdlib.h.html#sys_tick" title='sys_tick' data-ref="sys_tick" data-ref-filename="sys_tick">sys_tick</a> &gt; <a class="ref" href="../include/ntp_stdlib.h.html#sys_fuzz" title='sys_fuzz' data-ref="sys_fuzz" data-ref-filename="sys_fuzz">sys_fuzz</a>)</td></tr>
+<tr><th id="331">331</th><td>		<a class="local col9 ref" href="#19quant" title='quant' data-ref="19quant" data-ref-filename="19quant">quant</a> = <a class="ref" href="../include/ntp_stdlib.h.html#sys_tick" title='sys_tick' data-ref="sys_tick" data-ref-filename="sys_tick">sys_tick</a>;</td></tr>
+<tr><th id="332">332</th><td>	<b>else</b></td></tr>
+<tr><th id="333">333</th><td>		<a class="local col9 ref" href="#19quant" title='quant' data-ref="19quant" data-ref-filename="19quant">quant</a> = <var>1e-6</var>;</td></tr>
+<tr><th id="334">334</th><td>	<a class="local col1 ref" href="#21ticks" title='ticks' data-ref="21ticks" data-ref-filename="21ticks">ticks</a> = (<em>long</em>)(<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a> / <a class="local col9 ref" href="#19quant" title='quant' data-ref="19quant" data-ref-filename="19quant">quant</a> + <var>.5</var>);</td></tr>
+<tr><th id="335">335</th><td>	<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> = (<em>long</em>)(<a class="local col1 ref" href="#21ticks" title='ticks' data-ref="21ticks" data-ref-filename="21ticks">ticks</a> * <a class="local col9 ref" href="#19quant" title='quant' data-ref="19quant" data-ref-filename="19quant">quant</a> * <var>1.e6</var> + <var>.5</var>);</td></tr>
+<tr><th id="336">336</th><td>	<i>/* The rounding in the conversions could us push over the</i></td></tr>
+<tr><th id="337">337</th><td><i>	 * limits: make sure the result is properly normalised!</i></td></tr>
+<tr><th id="338">338</th><td><i>	 * note: sign comes later, all numbers non-negative here.</i></td></tr>
+<tr><th id="339">339</th><td><i>	 */</i></td></tr>
+<tr><th id="340">340</th><td>	<b>if</b> (<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> &gt;= <var>1000000</var>) {</td></tr>
+<tr><th id="341">341</th><td>		<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>  += <var>1</var>;</td></tr>
+<tr><th id="342">342</th><td>		<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> -= <var>1000000</var>;</td></tr>
+<tr><th id="343">343</th><td>		<a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a>         -= <var>1.</var>;</td></tr>
+<tr><th id="344">344</th><td>	}</td></tr>
+<tr><th id="345">345</th><td>	<i>/* set the new residual with leftover from correction */</i></td></tr>
+<tr><th id="346">346</th><td>	<a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a> = <a class="local col0 ref" href="#20dtemp" title='dtemp' data-ref="20dtemp" data-ref-filename="20dtemp">dtemp</a> - <a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> * <var>1.e-6</var>;</td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td>	<i>/*</i></td></tr>
+<tr><th id="349">349</th><td><i>	 * Convert to signed seconds and microseconds for the Unix</i></td></tr>
+<tr><th id="350">350</th><td><i>	 * adjtime() system call. Note we purposely lose the adjtime()</i></td></tr>
+<tr><th id="351">351</th><td><i>	 * leftover.</i></td></tr>
+<tr><th id="352">352</th><td><i>	 */</i></td></tr>
+<tr><th id="353">353</th><td>	<b>if</b> (<a class="local col2 ref" href="#22isneg" title='isneg' data-ref="22isneg" data-ref-filename="22isneg">isneg</a>) {</td></tr>
+<tr><th id="354">354</th><td>		<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> = -<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>;</td></tr>
+<tr><th id="355">355</th><td>		<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> = -<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a>;</td></tr>
+<tr><th id="356">356</th><td>		<a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a> = -<a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a>;</td></tr>
+<tr><th id="357">357</th><td>	}</td></tr>
+<tr><th id="358">358</th><td>	<b>if</b> (<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> != <var>0</var> || <a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> != <var>0</var>) {</td></tr>
+<tr><th id="359">359</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#__adjtime50" title='adjtime' data-ref="__adjtime50" data-ref-filename="__adjtime50">adjtime</a>(&amp;<a class="local col7 ref" href="#17adjtv" title='adjtv' data-ref="17adjtv" data-ref-filename="17adjtv">adjtv</a>, &amp;<a class="local col8 ref" href="#18oadjtv" title='oadjtv' data-ref="18oadjtv" data-ref-filename="18oadjtv">oadjtv</a>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="360">360</th><td>			<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"adj_systime: %m"</q>);</td></tr>
+<tr><th id="361">361</th><td>			<b>if</b> (<a class="ref" href="../include/ntpd.h.html#enable_panic_check" title='enable_panic_check' data-ref="enable_panic_check" data-ref-filename="enable_panic_check">enable_panic_check</a> &amp;&amp; <a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>) {</td></tr>
+<tr><th id="362">362</th><td>				<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"adj_systime: allow_panic is TRUE!"</q>);</td></tr>
+<tr><th id="363">363</th><td>			}</td></tr>
+<tr><th id="364">364</th><td>			<b>return</b> <a class="macro" href="../include/ntp_types.h.html#37" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="365">365</th><td>		}</td></tr>
+<tr><th id="366">366</th><td>	}</td></tr>
+<tr><th id="367">367</th><td>	<b>if</b> (<a class="ref" href="../include/ntpd.h.html#enable_panic_check" title='enable_panic_check' data-ref="enable_panic_check" data-ref-filename="enable_panic_check">enable_panic_check</a> &amp;&amp; <a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>) {</td></tr>
+<tr><th id="368">368</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"adj_systime: allow_panic is TRUE!"</q>);</td></tr>
+<tr><th id="369">369</th><td>	}</td></tr>
+<tr><th id="370">370</th><td>	<b>return</b> <a class="macro" href="../include/ntp_types.h.html#34" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="371">371</th><td>}</td></tr>
+<tr><th id="372">372</th><td><u>#<span data-ppcond="287">endif</span></u></td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td><i  data-doc="update_uwtmp">/*</i></td></tr>
+<tr><th id="375">375</th><td><i  data-doc="update_uwtmp"> * helper to keep utmp/wtmp up to date</i></td></tr>
+<tr><th id="376">376</th><td><i  data-doc="update_uwtmp"> */</i></td></tr>
+<tr><th id="377">377</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="378">378</th><td><dfn class="tu decl def fn" id="update_uwtmp" title='update_uwtmp' data-type='void update_uwtmp(struct timeval timetv, struct timeval tvlast)' data-ref="update_uwtmp" data-ref-filename="update_uwtmp">update_uwtmp</dfn>(</td></tr>
+<tr><th id="379">379</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col3 decl" id="23timetv" title='timetv' data-type='struct timeval' data-ref="23timetv" data-ref-filename="23timetv">timetv</dfn>,</td></tr>
+<tr><th id="380">380</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col4 decl" id="24tvlast" title='tvlast' data-type='struct timeval' data-ref="24tvlast" data-ref-filename="24tvlast">tvlast</dfn></td></tr>
+<tr><th id="381">381</th><td>	)</td></tr>
+<tr><th id="382">382</th><td>{</td></tr>
+<tr><th id="383">383</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col5 decl" id="25tvdiff" title='tvdiff' data-type='struct timeval' data-ref="25tvdiff" data-ref-filename="25tvdiff">tvdiff</dfn>;</td></tr>
+<tr><th id="384">384</th><td>	<i>/*</i></td></tr>
+<tr><th id="385">385</th><td><i>	 * FreeBSD, for example, has:</i></td></tr>
+<tr><th id="386">386</th><td><i>	 * struct utmp {</i></td></tr>
+<tr><th id="387">387</th><td><i>	 *	   char    ut_line[UT_LINESIZE];</i></td></tr>
+<tr><th id="388">388</th><td><i>	 *	   char    ut_name[UT_NAMESIZE];</i></td></tr>
+<tr><th id="389">389</th><td><i>	 *	   char    ut_host[UT_HOSTSIZE];</i></td></tr>
+<tr><th id="390">390</th><td><i>	 *	   long    ut_time;</i></td></tr>
+<tr><th id="391">391</th><td><i>	 * };</i></td></tr>
+<tr><th id="392">392</th><td><i>	 * and appends line="|", name="date", host="", time for the OLD</i></td></tr>
+<tr><th id="393">393</th><td><i>	 * and appends line="{", name="date", host="", time for the NEW // }</i></td></tr>
+<tr><th id="394">394</th><td><i>	 * to _PATH_WTMP .</i></td></tr>
+<tr><th id="395">395</th><td><i>	 *</i></td></tr>
+<tr><th id="396">396</th><td><i>	 * Some OSes have utmp, some have utmpx.</i></td></tr>
+<tr><th id="397">397</th><td><i>	 */</i></td></tr>
+<tr><th id="398">398</th><td></td></tr>
+<tr><th id="399">399</th><td>	<i>/*</i></td></tr>
+<tr><th id="400">400</th><td><i>	 * Write old and new time entries in utmp and wtmp if step</i></td></tr>
+<tr><th id="401">401</th><td><i>	 * adjustment is greater than one second.</i></td></tr>
+<tr><th id="402">402</th><td><i>	 *</i></td></tr>
+<tr><th id="403">403</th><td><i>	 * This might become even Uglier...</i></td></tr>
+<tr><th id="404">404</th><td><i>	 */</i></td></tr>
+<tr><th id="405">405</th><td>	<a class="local col5 ref" href="#25tvdiff" title='tvdiff' data-ref="25tvdiff" data-ref-filename="25tvdiff">tvdiff</a> = <a class="ref fn" href="../include/timevalops.h.html#abs_tval" title='abs_tval' data-ref="abs_tval" data-ref-filename="abs_tval">abs_tval</a>(<a class="ref fn" href="../include/timevalops.h.html#sub_tval" title='sub_tval' data-ref="sub_tval" data-ref-filename="sub_tval">sub_tval</a>(<a class="local col3 ref" href="#23timetv" title='timetv' data-ref="23timetv" data-ref-filename="23timetv">timetv</a>, <a class="local col4 ref" href="#24tvlast" title='tvlast' data-ref="24tvlast" data-ref-filename="24tvlast">tvlast</a>));</td></tr>
+<tr><th id="406">406</th><td>	<b>if</b> (<a class="local col5 ref" href="#25tvdiff" title='tvdiff' data-ref="25tvdiff" data-ref-filename="25tvdiff">tvdiff</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="407">407</th><td><u>#<span data-ppcond="407">ifdef</span> <a class="macro" href="../../include/config.h.html#1200" data-ref="_M/HAVE_UTMP_H">HAVE_UTMP_H</a></u></td></tr>
+<tr><th id="408">408</th><td>		<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/utmp.h.html#utmp" title='utmp' data-ref="utmp" data-ref-filename="utmp">utmp</a> <dfn class="local col6 decl" id="26ut" title='ut' data-type='struct utmp' data-ref="26ut" data-ref-filename="26ut">ut</dfn>;</td></tr>
+<tr><th id="409">409</th><td><u>#<span data-ppcond="407">endif</span></u></td></tr>
+<tr><th id="410">410</th><td><u>#<span data-ppcond="410">ifdef</span> <a class="macro" href="../../include/config.h.html#1197" data-ref="_M/HAVE_UTMPX_H">HAVE_UTMPX_H</a></u></td></tr>
+<tr><th id="411">411</th><td>		<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/utmpx.h.html#utmpx" title='utmpx' data-ref="utmpx" data-ref-filename="utmpx">utmpx</a> <dfn class="local col7 decl" id="27utx" title='utx' data-type='struct utmpx' data-ref="27utx" data-ref-filename="27utx">utx</dfn>;</td></tr>
+<tr><th id="412">412</th><td><u>#<span data-ppcond="410">endif</span></u></td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td><u>#<span data-ppcond="414">ifdef</span> <a class="macro" href="../../include/config.h.html#1200" data-ref="_M/HAVE_UTMP_H">HAVE_UTMP_H</a></u></td></tr>
+<tr><th id="415">415</th><td>		<a class="macro" href="../include/ntp_malloc.h.html#61" title="bzero(&amp;(ut), sizeof(ut))" data-ref="_M/ZERO">ZERO</a>(<a class="local col6 ref" href="#26ut" title='ut' data-ref="26ut" data-ref-filename="26ut">ut</a>);</td></tr>
+<tr><th id="416">416</th><td><u>#<span data-ppcond="414">endif</span></u></td></tr>
+<tr><th id="417">417</th><td><u>#<span data-ppcond="417">ifdef</span> <a class="macro" href="../../include/config.h.html#1197" data-ref="_M/HAVE_UTMPX_H">HAVE_UTMPX_H</a></u></td></tr>
+<tr><th id="418">418</th><td>		<a class="macro" href="../include/ntp_malloc.h.html#61" title="bzero(&amp;(utx), sizeof(utx))" data-ref="_M/ZERO">ZERO</a>(<a class="local col7 ref" href="#27utx" title='utx' data-ref="27utx" data-ref-filename="27utx">utx</a>);</td></tr>
+<tr><th id="419">419</th><td><u>#<span data-ppcond="417">endif</span></u></td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td>		<i>/* UTMP */</i></td></tr>
+<tr><th id="422">422</th><td></td></tr>
+<tr><th id="423">423</th><td><u>#<span data-ppcond="423">ifdef</span> <span class="macro" data-ref="_M/UPDATE_UTMP">UPDATE_UTMP</span></u></td></tr>
+<tr><th id="424">424</th><td><u># ifdef HAVE_PUTUTLINE</u></td></tr>
+<tr><th id="425">425</th><td><u>#  ifndef _PATH_UTMP</u></td></tr>
+<tr><th id="426">426</th><td><u>#   define _PATH_UTMP UTMP_FILE</u></td></tr>
+<tr><th id="427">427</th><td><u>#  endif</u></td></tr>
+<tr><th id="428">428</th><td>		utmpname(_PATH_UTMP);</td></tr>
+<tr><th id="429">429</th><td>		ut.ut_type = OLD_TIME;</td></tr>
+<tr><th id="430">430</th><td>		strlcpy(ut.ut_line, OTIME_MSG, <b>sizeof</b>(ut.ut_line));</td></tr>
+<tr><th id="431">431</th><td>		ut.ut_time = tvlast.tv_sec;</td></tr>
+<tr><th id="432">432</th><td>		setutent();</td></tr>
+<tr><th id="433">433</th><td>		pututline(&amp;ut);</td></tr>
+<tr><th id="434">434</th><td>		ut.ut_type = NEW_TIME;</td></tr>
+<tr><th id="435">435</th><td>		strlcpy(ut.ut_line, NTIME_MSG, <b>sizeof</b>(ut.ut_line));</td></tr>
+<tr><th id="436">436</th><td>		ut.ut_time = timetv.tv_sec;</td></tr>
+<tr><th id="437">437</th><td>		setutent();</td></tr>
+<tr><th id="438">438</th><td>		pututline(&amp;ut);</td></tr>
+<tr><th id="439">439</th><td>		endutent();</td></tr>
+<tr><th id="440">440</th><td><u># else /* not HAVE_PUTUTLINE */</u></td></tr>
+<tr><th id="441">441</th><td><u># endif /* not HAVE_PUTUTLINE */</u></td></tr>
+<tr><th id="442">442</th><td><u>#<span data-ppcond="423">endif</span> /* UPDATE_UTMP */</u></td></tr>
+<tr><th id="443">443</th><td></td></tr>
+<tr><th id="444">444</th><td>		<i>/* UTMPX */</i></td></tr>
+<tr><th id="445">445</th><td></td></tr>
+<tr><th id="446">446</th><td><u>#<span data-ppcond="446">ifdef</span> <span class="macro" data-ref="_M/UPDATE_UTMPX">UPDATE_UTMPX</span></u></td></tr>
+<tr><th id="447">447</th><td><u># ifdef HAVE_PUTUTXLINE</u></td></tr>
+<tr><th id="448">448</th><td>		utx.ut_type = OLD_TIME;</td></tr>
+<tr><th id="449">449</th><td>		strlcpy(utx.ut_line, OTIME_MSG, <b>sizeof</b>(utx.ut_line));</td></tr>
+<tr><th id="450">450</th><td>		utx.ut_tv = tvlast;</td></tr>
+<tr><th id="451">451</th><td>		setutxent();</td></tr>
+<tr><th id="452">452</th><td>		pututxline(&amp;utx);</td></tr>
+<tr><th id="453">453</th><td>		utx.ut_type = NEW_TIME;</td></tr>
+<tr><th id="454">454</th><td>		strlcpy(utx.ut_line, NTIME_MSG, <b>sizeof</b>(utx.ut_line));</td></tr>
+<tr><th id="455">455</th><td>		utx.ut_tv = timetv;</td></tr>
+<tr><th id="456">456</th><td>		setutxent();</td></tr>
+<tr><th id="457">457</th><td>		pututxline(&amp;utx);</td></tr>
+<tr><th id="458">458</th><td>		endutxent();</td></tr>
+<tr><th id="459">459</th><td><u># else /* not HAVE_PUTUTXLINE */</u></td></tr>
+<tr><th id="460">460</th><td><u># endif /* not HAVE_PUTUTXLINE */</u></td></tr>
+<tr><th id="461">461</th><td><u>#<span data-ppcond="446">endif</span> /* UPDATE_UTMPX */</u></td></tr>
+<tr><th id="462">462</th><td></td></tr>
+<tr><th id="463">463</th><td>		<i>/* WTMP */</i></td></tr>
+<tr><th id="464">464</th><td></td></tr>
+<tr><th id="465">465</th><td><u>#<span data-ppcond="465">ifdef</span> <span class="macro" data-ref="_M/UPDATE_WTMP">UPDATE_WTMP</span></u></td></tr>
+<tr><th id="466">466</th><td><u># ifdef HAVE_PUTUTLINE</u></td></tr>
+<tr><th id="467">467</th><td><u>#  ifndef _PATH_WTMP</u></td></tr>
+<tr><th id="468">468</th><td><u>#   define _PATH_WTMP WTMP_FILE</u></td></tr>
+<tr><th id="469">469</th><td><u>#  endif</u></td></tr>
+<tr><th id="470">470</th><td>		utmpname(_PATH_WTMP);</td></tr>
+<tr><th id="471">471</th><td>		ut.ut_type = OLD_TIME;</td></tr>
+<tr><th id="472">472</th><td>		strlcpy(ut.ut_line, OTIME_MSG, <b>sizeof</b>(ut.ut_line));</td></tr>
+<tr><th id="473">473</th><td>		ut.ut_time = tvlast.tv_sec;</td></tr>
+<tr><th id="474">474</th><td>		setutent();</td></tr>
+<tr><th id="475">475</th><td>		pututline(&amp;ut);</td></tr>
+<tr><th id="476">476</th><td>		ut.ut_type = NEW_TIME;</td></tr>
+<tr><th id="477">477</th><td>		strlcpy(ut.ut_line, NTIME_MSG, <b>sizeof</b>(ut.ut_line));</td></tr>
+<tr><th id="478">478</th><td>		ut.ut_time = timetv.tv_sec;</td></tr>
+<tr><th id="479">479</th><td>		setutent();</td></tr>
+<tr><th id="480">480</th><td>		pututline(&amp;ut);</td></tr>
+<tr><th id="481">481</th><td>		endutent();</td></tr>
+<tr><th id="482">482</th><td><u># else /* not HAVE_PUTUTLINE */</u></td></tr>
+<tr><th id="483">483</th><td><u># endif /* not HAVE_PUTUTLINE */</u></td></tr>
+<tr><th id="484">484</th><td><u>#<span data-ppcond="465">endif</span> /* UPDATE_WTMP */</u></td></tr>
+<tr><th id="485">485</th><td></td></tr>
+<tr><th id="486">486</th><td>		<i>/* WTMPX */</i></td></tr>
+<tr><th id="487">487</th><td></td></tr>
+<tr><th id="488">488</th><td><u>#<span data-ppcond="488">ifdef</span> <span class="macro" data-ref="_M/UPDATE_WTMPX">UPDATE_WTMPX</span></u></td></tr>
+<tr><th id="489">489</th><td><u># ifdef HAVE_PUTUTXLINE</u></td></tr>
+<tr><th id="490">490</th><td>		utx.ut_type = OLD_TIME;</td></tr>
+<tr><th id="491">491</th><td>		utx.ut_tv = tvlast;</td></tr>
+<tr><th id="492">492</th><td>		strlcpy(utx.ut_line, OTIME_MSG, <b>sizeof</b>(utx.ut_line));</td></tr>
+<tr><th id="493">493</th><td><u>#  ifdef HAVE_UPDWTMPX</u></td></tr>
+<tr><th id="494">494</th><td>		updwtmpx(WTMPX_FILE, &amp;utx);</td></tr>
+<tr><th id="495">495</th><td><u>#  else /* not HAVE_UPDWTMPX */</u></td></tr>
+<tr><th id="496">496</th><td><u>#  endif /* not HAVE_UPDWTMPX */</u></td></tr>
+<tr><th id="497">497</th><td><u># else /* not HAVE_PUTUTXLINE */</u></td></tr>
+<tr><th id="498">498</th><td><u># endif /* not HAVE_PUTUTXLINE */</u></td></tr>
+<tr><th id="499">499</th><td><u># ifdef HAVE_PUTUTXLINE</u></td></tr>
+<tr><th id="500">500</th><td>		utx.ut_type = NEW_TIME;</td></tr>
+<tr><th id="501">501</th><td>		utx.ut_tv = timetv;</td></tr>
+<tr><th id="502">502</th><td>		strlcpy(utx.ut_line, NTIME_MSG, <b>sizeof</b>(utx.ut_line));</td></tr>
+<tr><th id="503">503</th><td><u>#  ifdef HAVE_UPDWTMPX</u></td></tr>
+<tr><th id="504">504</th><td>		updwtmpx(WTMPX_FILE, &amp;utx);</td></tr>
+<tr><th id="505">505</th><td><u>#  else /* not HAVE_UPDWTMPX */</u></td></tr>
+<tr><th id="506">506</th><td><u>#  endif /* not HAVE_UPDWTMPX */</u></td></tr>
+<tr><th id="507">507</th><td><u># else /* not HAVE_PUTUTXLINE */</u></td></tr>
+<tr><th id="508">508</th><td><u># endif /* not HAVE_PUTUTXLINE */</u></td></tr>
+<tr><th id="509">509</th><td><u>#<span data-ppcond="488">endif</span> /* UPDATE_WTMPX */</u></td></tr>
+<tr><th id="510">510</th><td></td></tr>
+<tr><th id="511">511</th><td>	}</td></tr>
+<tr><th id="512">512</th><td>}</td></tr>
+<tr><th id="513">513</th><td></td></tr>
+<tr><th id="514">514</th><td><i>/*</i></td></tr>
+<tr><th id="515">515</th><td><i> * step_systime - step the system clock.</i></td></tr>
+<tr><th id="516">516</th><td><i> */</i></td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td><em>int</em></td></tr>
+<tr><th id="519">519</th><td><dfn class="decl def fn" id="step_systime" title='step_systime' data-ref="step_systime" data-ref-filename="step_systime">step_systime</dfn>(</td></tr>
+<tr><th id="520">520</th><td>	<em>double</em> <dfn class="local col8 decl" id="28step" title='step' data-type='double' data-ref="28step" data-ref-filename="28step">step</dfn></td></tr>
+<tr><th id="521">521</th><td>	)</td></tr>
+<tr><th id="522">522</th><td>{</td></tr>
+<tr><th id="523">523</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#time_t" title='time_t' data-type='__int64_t' data-ref="time_t" data-ref-filename="time_t">time_t</a> <dfn class="local col9 decl" id="29pivot" title='pivot' data-type='time_t' data-ref="29pivot" data-ref-filename="29pivot">pivot</dfn>; <i>/* for ntp era unfolding */</i></td></tr>
+<tr><th id="524">524</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col0 decl" id="30timetv" title='timetv' data-type='struct timeval' data-ref="30timetv" data-ref-filename="30timetv">timetv</dfn>, <dfn class="local col1 decl" id="31tvlast" title='tvlast' data-type='struct timeval' data-ref="31tvlast" data-ref-filename="31tvlast">tvlast</dfn>;</td></tr>
+<tr><th id="525">525</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col2 decl" id="32timets" title='timets' data-type='struct timespec' data-ref="32timets" data-ref-filename="32timets">timets</dfn>;</td></tr>
+<tr><th id="526">526</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a> <dfn class="local col3 decl" id="33fp_ofs" title='fp_ofs' data-type='l_fp' data-ref="33fp_ofs" data-ref-filename="33fp_ofs">fp_ofs</dfn>, <dfn class="local col4 decl" id="34fp_sys" title='fp_sys' data-type='l_fp' data-ref="34fp_sys" data-ref-filename="34fp_sys">fp_sys</dfn>; <i>/* offset and target system time in FP */</i></td></tr>
+<tr><th id="527">527</th><td></td></tr>
+<tr><th id="528">528</th><td>	<i>/*</i></td></tr>
+<tr><th id="529">529</th><td><i>	 * Get pivot time for NTP era unfolding. Since we don't step</i></td></tr>
+<tr><th id="530">530</th><td><i>	 * very often, we can afford to do the whole calculation from</i></td></tr>
+<tr><th id="531">531</th><td><i>	 * scratch. And we're not in the time-critical path yet.</i></td></tr>
+<tr><th id="532">532</th><td><i>	 */</i></td></tr>
+<tr><th id="533">533</th><td><u>#<span data-ppcond="533">if</span> <a class="macro" href="../../include/config.h.html#1570" title="8" data-ref="_M/SIZEOF_TIME_T">SIZEOF_TIME_T</a> &gt; 4</u></td></tr>
+<tr><th id="534">534</th><td>	<a class="local col9 ref" href="#29pivot" title='pivot' data-ref="29pivot" data-ref-filename="29pivot">pivot</a> = <a class="ref fn" href="../include/ntp_calendar.h.html#basedate_get_eracenter" title='basedate_get_eracenter' data-ref="basedate_get_eracenter" data-ref-filename="basedate_get_eracenter">basedate_get_eracenter</a>();</td></tr>
+<tr><th id="535">535</th><td><u>#<span data-ppcond="533">else</span></u></td></tr>
+<tr><th id="536">536</th><td>	<i>/* This makes sure the resulting time stamp is on or after</i></td></tr>
+<tr><th id="537">537</th><td><i>	 * 1969-12-31/23:59:59 UTC and gives us additional two years,</i></td></tr>
+<tr><th id="538">538</th><td><i>	 * from the change of NTP era in 2036 to the UNIX rollover in</i></td></tr>
+<tr><th id="539">539</th><td><i>	 * 2038. (Minus one second, but that won't hurt.) We *really*</i></td></tr>
+<tr><th id="540">540</th><td><i>	 * need a longer 'time_t' after that!  Or a different baseline,</i></td></tr>
+<tr><th id="541">541</th><td><i>	 * but that would cause other serious trouble, too.</i></td></tr>
+<tr><th id="542">542</th><td><i>	 */</i></td></tr>
+<tr><th id="543">543</th><td>	pivot = <var>0x7FFFFFFF</var>;</td></tr>
+<tr><th id="544">544</th><td><u>#<span data-ppcond="533">endif</span></u></td></tr>
+<tr><th id="545">545</th><td></td></tr>
+<tr><th id="546">546</th><td>	<i>/* get the complete jump distance as l_fp */</i></td></tr>
+<tr><th id="547">547</th><td>	<a class="macro" href="../include/ntp_fp.h.html#343" title="do { double d_tmp; u_int64 q_tmp; int M_isneg; d_tmp = ((sys_residual)); M_isneg = (d_tmp &lt; 0.); if (M_isneg) { d_tmp = -d_tmp; } q_tmp = (u_int64)ldexp(d_tmp, 32); if (M_isneg) { q_tmp = ~q_tmp + 1; } ((&amp;fp_sys)-&gt;l_uf) = (u_int32)q_tmp; ((&amp;fp_sys)-&gt;Ul_i.Xl_ui) = (u_int32)(q_tmp &gt;&gt; 32); } while (0)" data-ref="_M/DTOLFP">DTOLFP</a>(<a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a>, &amp;<a class="local col4 ref" href="#34fp_sys" title='fp_sys' data-ref="34fp_sys" data-ref-filename="34fp_sys">fp_sys</a>);</td></tr>
+<tr><th id="548">548</th><td>	<a class="macro" href="../include/ntp_fp.h.html#343" title="do { double d_tmp; u_int64 q_tmp; int M_isneg; d_tmp = ((step)); M_isneg = (d_tmp &lt; 0.); if (M_isneg) { d_tmp = -d_tmp; } q_tmp = (u_int64)ldexp(d_tmp, 32); if (M_isneg) { q_tmp = ~q_tmp + 1; } ((&amp;fp_ofs)-&gt;l_uf) = (u_int32)q_tmp; ((&amp;fp_ofs)-&gt;Ul_i.Xl_ui) = (u_int32)(q_tmp &gt;&gt; 32); } while (0)" data-ref="_M/DTOLFP">DTOLFP</a>(<a class="local col8 ref" href="#28step" title='step' data-ref="28step" data-ref-filename="28step">step</a>,         &amp;<a class="local col3 ref" href="#33fp_ofs" title='fp_ofs' data-ref="33fp_ofs" data-ref-filename="33fp_ofs">fp_ofs</a>);</td></tr>
+<tr><th id="549">549</th><td>	<a class="macro" href="../include/ntp_fp.h.html#230" title="do { u_int32 add_t = ((&amp;fp_ofs)-&gt;l_uf); ((&amp;fp_ofs)-&gt;l_uf) += ((&amp;fp_sys)-&gt;l_uf); ((&amp;fp_ofs)-&gt;Ul_i.Xl_ui) += ((&amp;fp_sys)-&gt;Ul_i.Xl_ui) + ((u_int32)((&amp;fp_ofs)-&gt;l_uf) &lt; add_t); } while (0)" data-ref="_M/L_ADD">L_ADD</a>(&amp;<a class="local col3 ref" href="#33fp_ofs" title='fp_ofs' data-ref="33fp_ofs" data-ref-filename="33fp_ofs">fp_ofs</a>, &amp;<a class="local col4 ref" href="#34fp_sys" title='fp_sys' data-ref="34fp_sys" data-ref-filename="34fp_sys">fp_sys</a>);</td></tr>
+<tr><th id="550">550</th><td></td></tr>
+<tr><th id="551">551</th><td>	<i>/* ---&gt; time-critical path starts ---&gt; */</i></td></tr>
+<tr><th id="552">552</th><td></td></tr>
+<tr><th id="553">553</th><td>	<i>/* get the current time as l_fp (without fuzz) and as struct timeval */</i></td></tr>
+<tr><th id="554">554</th><td>	<a class="tu ref fn" href="#get_ostime" title='get_ostime' data-use='c' data-ref="get_ostime" data-ref-filename="get_ostime">get_ostime</a>(&amp;<a class="local col2 ref" href="#32timets" title='timets' data-ref="32timets" data-ref-filename="32timets">timets</a>);</td></tr>
+<tr><th id="555">555</th><td>	<a class="local col4 ref" href="#34fp_sys" title='fp_sys' data-ref="34fp_sys" data-ref-filename="34fp_sys">fp_sys</a> = <a class="ref fn" href="../include/timespecops.h.html#tspec_stamp_to_lfp" title='tspec_stamp_to_lfp' data-ref="tspec_stamp_to_lfp" data-ref-filename="tspec_stamp_to_lfp">tspec_stamp_to_lfp</a>(<a class="local col2 ref" href="#32timets" title='timets' data-ref="32timets" data-ref-filename="32timets">timets</a>);</td></tr>
+<tr><th id="556">556</th><td>	<a class="local col1 ref" href="#31tvlast" title='tvlast' data-ref="31tvlast" data-ref-filename="31tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> = <a class="local col2 ref" href="#32timets" title='timets' data-ref="32timets" data-ref-filename="32timets">timets</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a>;</td></tr>
+<tr><th id="557">557</th><td>	<a class="local col1 ref" href="#31tvlast" title='tvlast' data-ref="31tvlast" data-ref-filename="31tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> = (<a class="local col2 ref" href="#32timets" title='timets' data-ref="32timets" data-ref-filename="32timets">timets</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> + <var>500</var>) / <var>1000</var>;</td></tr>
+<tr><th id="558">558</th><td></td></tr>
+<tr><th id="559">559</th><td>	<i>/* get the target time as l_fp */</i></td></tr>
+<tr><th id="560">560</th><td>	<a class="macro" href="../include/ntp_fp.h.html#230" title="do { u_int32 add_t = ((&amp;fp_sys)-&gt;l_uf); ((&amp;fp_sys)-&gt;l_uf) += ((&amp;fp_ofs)-&gt;l_uf); ((&amp;fp_sys)-&gt;Ul_i.Xl_ui) += ((&amp;fp_ofs)-&gt;Ul_i.Xl_ui) + ((u_int32)((&amp;fp_sys)-&gt;l_uf) &lt; add_t); } while (0)" data-ref="_M/L_ADD">L_ADD</a>(&amp;<a class="local col4 ref" href="#34fp_sys" title='fp_sys' data-ref="34fp_sys" data-ref-filename="34fp_sys">fp_sys</a>, &amp;<a class="local col3 ref" href="#33fp_ofs" title='fp_ofs' data-ref="33fp_ofs" data-ref-filename="33fp_ofs">fp_ofs</a>);</td></tr>
+<tr><th id="561">561</th><td></td></tr>
+<tr><th id="562">562</th><td>	<i>/* unfold the new system time */</i></td></tr>
+<tr><th id="563">563</th><td>	<a class="local col0 ref" href="#30timetv" title='timetv' data-ref="30timetv" data-ref-filename="30timetv">timetv</a> = <a class="ref fn" href="../include/timevalops.h.html#lfp_stamp_to_tval" title='lfp_stamp_to_tval' data-ref="lfp_stamp_to_tval" data-ref-filename="lfp_stamp_to_tval">lfp_stamp_to_tval</a>(<a class="local col4 ref" href="#34fp_sys" title='fp_sys' data-ref="34fp_sys" data-ref-filename="34fp_sys">fp_sys</a>, &amp;<a class="local col9 ref" href="#29pivot" title='pivot' data-ref="29pivot" data-ref-filename="29pivot">pivot</a>);</td></tr>
+<tr><th id="564">564</th><td></td></tr>
+<tr><th id="565">565</th><td>	<i>/* now set new system time */</i></td></tr>
+<tr><th id="566">566</th><td>	<b>if</b> (<a class="ref fn" href="../include/ntp_machine.h.html#ntp_set_tod" title='ntp_set_tod' data-ref="ntp_set_tod" data-ref-filename="ntp_set_tod">ntp_set_tod</a>(&amp;<a class="local col0 ref" href="#30timetv" title='timetv' data-ref="30timetv" data-ref-filename="30timetv">timetv</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>) != <var>0</var>) {</td></tr>
+<tr><th id="567">567</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"step-systime: %m"</q>);</td></tr>
+<tr><th id="568">568</th><td>		<b>if</b> (<a class="ref" href="../include/ntpd.h.html#enable_panic_check" title='enable_panic_check' data-ref="enable_panic_check" data-ref-filename="enable_panic_check">enable_panic_check</a> &amp;&amp; <a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>) {</td></tr>
+<tr><th id="569">569</th><td>			<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"step_systime: allow_panic is TRUE!"</q>);</td></tr>
+<tr><th id="570">570</th><td>		}</td></tr>
+<tr><th id="571">571</th><td>		<b>return</b> <a class="macro" href="../include/ntp_types.h.html#37" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="572">572</th><td>	}</td></tr>
+<tr><th id="573">573</th><td></td></tr>
+<tr><th id="574">574</th><td>	<i>/* &lt;--- time-critical path ended with 'ntp_set_tod()' &lt;--- */</i></td></tr>
+<tr><th id="575">575</th><td></td></tr>
+<tr><th id="576">576</th><td>	<a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a> = <var>0</var>;</td></tr>
+<tr><th id="577">577</th><td>	<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='w' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a> = (<a class="local col8 ref" href="#28step" title='step' data-ref="28step" data-ref-filename="28step">step</a> &lt; <var>0</var>);</td></tr>
+<tr><th id="578">578</th><td>	<b>if</b> (<a class="ref" href="../include/ntp_fp.h.html#step_callback" title='step_callback' data-ref="step_callback" data-ref-filename="step_callback">step_callback</a>)</td></tr>
+<tr><th id="579">579</th><td>		(*<a class="ref" href="../include/ntp_fp.h.html#step_callback" title='step_callback' data-ref="step_callback" data-ref-filename="step_callback">step_callback</a>)();</td></tr>
+<tr><th id="580">580</th><td></td></tr>
+<tr><th id="581">581</th><td><u>#<span data-ppcond="581">ifdef</span> <span class="macro" data-ref="_M/NEED_HPUX_ADJTIME">NEED_HPUX_ADJTIME</span></u></td></tr>
+<tr><th id="582">582</th><td>	<i>/*</i></td></tr>
+<tr><th id="583">583</th><td><i>	 * CHECKME: is this correct when called by ntpdate?????</i></td></tr>
+<tr><th id="584">584</th><td><i>	 */</i></td></tr>
+<tr><th id="585">585</th><td>	_clear_adjtime();</td></tr>
+<tr><th id="586">586</th><td><u>#<span data-ppcond="581">endif</span></u></td></tr>
+<tr><th id="587">587</th><td></td></tr>
+<tr><th id="588">588</th><td>	<a class="tu ref fn" href="#update_uwtmp" title='update_uwtmp' data-use='c' data-ref="update_uwtmp" data-ref-filename="update_uwtmp">update_uwtmp</a>(<a class="local col0 ref" href="#30timetv" title='timetv' data-ref="30timetv" data-ref-filename="30timetv">timetv</a>, <a class="local col1 ref" href="#31tvlast" title='tvlast' data-ref="31tvlast" data-ref-filename="31tvlast">tvlast</a>);</td></tr>
+<tr><th id="589">589</th><td>	<b>if</b> (<a class="ref" href="../include/ntpd.h.html#enable_panic_check" title='enable_panic_check' data-ref="enable_panic_check" data-ref-filename="enable_panic_check">enable_panic_check</a> &amp;&amp; <a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>) {</td></tr>
+<tr><th id="590">590</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"step_systime: allow_panic is TRUE!"</q>);</td></tr>
+<tr><th id="591">591</th><td>		<a class="macro" href="../include/ntp_assert.h.html#85" title="((void) ((!allow_panic) || ((isc_assertion_failed)(&quot;/___NETBSD_SRC___/objdir.amd64/external/bsd/ntp/lib/libntp/../../../../../../external/bsd/ntp/dist/libntp/systime.c&quot;, 591, isc_assertiontype_insist, &quot;!allow_panic&quot;), 0)))" data-ref="_M/INSIST">INSIST</a>(!<a class="ref" href="../include/ntpd.h.html#allow_panic" title='allow_panic' data-ref="allow_panic" data-ref-filename="allow_panic">allow_panic</a>);</td></tr>
+<tr><th id="592">592</th><td>	}</td></tr>
+<tr><th id="593">593</th><td>	<b>return</b> <a class="macro" href="../include/ntp_types.h.html#34" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="594">594</th><td>}</td></tr>
+<tr><th id="595">595</th><td></td></tr>
+<tr><th id="596">596</th><td><em>static</em> <em>const</em> <em>char</em> *</td></tr>
+<tr><th id="597">597</th><td><dfn class="tu decl def fn" id="tv_fmt_libbuf" title='tv_fmt_libbuf' data-type='const char * tv_fmt_libbuf(const struct timeval * ptv)' data-ref="tv_fmt_libbuf" data-ref-filename="tv_fmt_libbuf">tv_fmt_libbuf</dfn>(</td></tr>
+<tr><th id="598">598</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> * <dfn class="local col5 decl" id="35ptv" title='ptv' data-type='const struct timeval *' data-ref="35ptv" data-ref-filename="35ptv">ptv</dfn></td></tr>
+<tr><th id="599">599</th><td>	)</td></tr>
+<tr><th id="600">600</th><td>{</td></tr>
+<tr><th id="601">601</th><td>	<em>char</em> *		<dfn class="local col6 decl" id="36retv" title='retv' data-type='char *' data-ref="36retv" data-ref-filename="36retv">retv</dfn>;</td></tr>
+<tr><th id="602">602</th><td>	<a class="typedef" href="../include/ntp_types.h.html#vint64" title='vint64' data-type='union vint64' data-ref="vint64" data-ref-filename="vint64">vint64</a>		<dfn class="local col7 decl" id="37secs" title='secs' data-type='vint64' data-ref="37secs" data-ref-filename="37secs">secs</dfn>;</td></tr>
+<tr><th id="603">603</th><td>	<a class="typedef" href="../include/ntp_calendar.h.html#ntpcal_split" title='ntpcal_split' data-type='struct ntpcal_split' data-ref="ntpcal_split" data-ref-filename="ntpcal_split">ntpcal_split</a>	<dfn class="local col8 decl" id="38dds" title='dds' data-type='ntpcal_split' data-ref="38dds" data-ref-filename="38dds">dds</dfn>;</td></tr>
+<tr><th id="604">604</th><td>	<b>struct</b> <a class="type" href="../include/ntp_calendar.h.html#calendar" title='calendar' data-ref="calendar" data-ref-filename="calendar">calendar</a>	<dfn class="local col9 decl" id="39jd" title='jd' data-type='struct calendar' data-ref="39jd" data-ref-filename="39jd">jd</dfn>;</td></tr>
+<tr><th id="605">605</th><td></td></tr>
+<tr><th id="606">606</th><td>	<a class="local col7 ref" href="#37secs" title='secs' data-ref="37secs" data-ref-filename="37secs">secs</a> = <a class="ref fn" href="../include/ntp_calendar.h.html#time_to_vint64" title='time_to_vint64' data-ref="time_to_vint64" data-ref-filename="time_to_vint64">time_to_vint64</a>(&amp;<a class="local col5 ref" href="#35ptv" title='ptv' data-ref="35ptv" data-ref-filename="35ptv">ptv</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>);</td></tr>
+<tr><th id="607">607</th><td>	<a class="local col8 ref" href="#38dds" title='dds' data-ref="38dds" data-ref-filename="38dds">dds</a>  = <a class="ref fn" href="../include/ntp_calendar.h.html#ntpcal_daysplit" title='ntpcal_daysplit' data-ref="ntpcal_daysplit" data-ref-filename="ntpcal_daysplit">ntpcal_daysplit</a>(&amp;<a class="local col7 ref" href="#37secs" title='secs' data-ref="37secs" data-ref-filename="37secs">secs</a>);</td></tr>
+<tr><th id="608">608</th><td>	<a class="ref fn" href="../include/ntp_calendar.h.html#ntpcal_daysplit_to_date" title='ntpcal_daysplit_to_date' data-ref="ntpcal_daysplit_to_date" data-ref-filename="ntpcal_daysplit_to_date">ntpcal_daysplit_to_date</a>(&amp;<a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>, &amp;<a class="local col8 ref" href="#38dds" title='dds' data-ref="38dds" data-ref-filename="38dds">dds</a>, <a class="macro" href="../include/ntp_calendar.h.html#423" title="719163" data-ref="_M/DAY_UNIX_STARTS">DAY_UNIX_STARTS</a>);</td></tr>
+<tr><th id="609">609</th><td>	<a class="macro" href="../include/lib_strbuf.h.html#27" title="do { bzero(&amp;(lib_stringbuf[lib_nextbuf]), sizeof(lib_stringbuf[lib_nextbuf])); (retv) = &amp;lib_stringbuf[lib_nextbuf++][0]; lib_nextbuf %= (sizeof(lib_stringbuf) / sizeof((lib_stringbuf)[0])); } while (0)" data-ref="_M/LIB_GETBUF">LIB_GETBUF</a>(<a class="local col6 ref" href="#36retv" title='retv' data-ref="36retv" data-ref-filename="36retv">retv</a>);</td></tr>
+<tr><th id="610">610</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a>(<a class="local col6 ref" href="#36retv" title='retv' data-ref="36retv" data-ref-filename="36retv">retv</a>, <a class="macro" href="../include/lib_strbuf.h.html#16" title="128" data-ref="_M/LIB_BUFLENGTH">LIB_BUFLENGTH</a>,</td></tr>
+<tr><th id="611">611</th><td>		 <q>"%04hu-%02hu-%02hu/%02hu:%02hu:%02hu.%06u"</q>,</td></tr>
+<tr><th id="612">612</th><td>		 <a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>.<a class="ref field" href="../include/ntp_calendar.h.html#calendar::year" title='calendar::year' data-ref="calendar::year" data-ref-filename="calendar..year">year</a>, (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>)<a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>.<a class="ref field" href="../include/ntp_calendar.h.html#calendar::month" title='calendar::month' data-ref="calendar::month" data-ref-filename="calendar..month">month</a>, (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>)<a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>.<a class="ref field" href="../include/ntp_calendar.h.html#calendar::monthday" title='calendar::monthday' data-ref="calendar::monthday" data-ref-filename="calendar..monthday">monthday</a>,</td></tr>
+<tr><th id="613">613</th><td>		 (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>)<a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>.<a class="ref field" href="../include/ntp_calendar.h.html#calendar::hour" title='calendar::hour' data-ref="calendar::hour" data-ref-filename="calendar..hour">hour</a>, (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>)<a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>.<a class="ref field" href="../include/ntp_calendar.h.html#calendar::minute" title='calendar::minute' data-ref="calendar::minute" data-ref-filename="calendar..minute">minute</a>, (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>)<a class="local col9 ref" href="#39jd" title='jd' data-ref="39jd" data-ref-filename="39jd">jd</a>.<a class="ref field" href="../include/ntp_calendar.h.html#calendar::second" title='calendar::second' data-ref="calendar::second" data-ref-filename="calendar..second">second</a>,</td></tr>
+<tr><th id="614">614</th><td>		 (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>)<a class="local col5 ref" href="#35ptv" title='ptv' data-ref="35ptv" data-ref-filename="35ptv">ptv</a>-&gt;<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a>);</td></tr>
+<tr><th id="615">615</th><td>	<b>return</b> <a class="local col6 ref" href="#36retv" title='retv' data-ref="36retv" data-ref-filename="36retv">retv</a>;</td></tr>
+<tr><th id="616">616</th><td>}</td></tr>
+<tr><th id="617">617</th><td></td></tr>
+<tr><th id="618">618</th><td></td></tr>
+<tr><th id="619">619</th><td><em>int</em> <i>/*BOOL*/</i></td></tr>
+<tr><th id="620">620</th><td><dfn class="decl def fn" id="clamp_systime" title='clamp_systime' data-ref="clamp_systime" data-ref-filename="clamp_systime">clamp_systime</dfn>(<em>void</em>)</td></tr>
+<tr><th id="621">621</th><td>{</td></tr>
+<tr><th id="622">622</th><td><u>#<span data-ppcond="622">if</span> <a class="macro" href="../../include/config.h.html#1570" title="8" data-ref="_M/SIZEOF_TIME_T">SIZEOF_TIME_T</a> &gt; 4</u></td></tr>
+<tr><th id="623">623</th><td></td></tr>
+<tr><th id="624">624</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col0 decl" id="40timetv" title='timetv' data-type='struct timeval' data-ref="40timetv" data-ref-filename="40timetv">timetv</dfn>, <dfn class="local col1 decl" id="41tvlast" title='tvlast' data-type='struct timeval' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</dfn>;</td></tr>
+<tr><th id="625">625</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> <dfn class="local col2 decl" id="42timets" title='timets' data-type='struct timespec' data-ref="42timets" data-ref-filename="42timets">timets</dfn>;</td></tr>
+<tr><th id="626">626</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="local col3 decl" id="43tdiff" title='tdiff' data-type='uint32_t' data-ref="43tdiff" data-ref-filename="43tdiff">tdiff</dfn>;</td></tr>
+<tr><th id="627">627</th><td></td></tr>
+<tr><th id="628">628</th><td>	</td></tr>
+<tr><th id="629">629</th><td>	<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> = <a class="ref fn" href="../include/ntp_calendar.h.html#basedate_get_erabase" title='basedate_get_erabase' data-ref="basedate_get_erabase" data-ref-filename="basedate_get_erabase">basedate_get_erabase</a>();</td></tr>
+<tr><th id="630">630</th><td>	</td></tr>
+<tr><th id="631">631</th><td>	<i>/* ---&gt; time-critical path starts ---&gt; */</i></td></tr>
+<tr><th id="632">632</th><td></td></tr>
+<tr><th id="633">633</th><td>	<i>/* get the current time as l_fp (without fuzz) and as struct timeval */</i></td></tr>
+<tr><th id="634">634</th><td>	<a class="tu ref fn" href="#get_ostime" title='get_ostime' data-use='c' data-ref="get_ostime" data-ref-filename="get_ostime">get_ostime</a>(&amp;<a class="local col2 ref" href="#42timets" title='timets' data-ref="42timets" data-ref-filename="42timets">timets</a>);</td></tr>
+<tr><th id="635">635</th><td>	<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> = <a class="local col2 ref" href="#42timets" title='timets' data-ref="42timets" data-ref-filename="42timets">timets</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a>;</td></tr>
+<tr><th id="636">636</th><td>	<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> = (<a class="local col2 ref" href="#42timets" title='timets' data-ref="42timets" data-ref-filename="42timets">timets</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a> + <var>500</var>) / <var>1000</var>;</td></tr>
+<tr><th id="637">637</th><td>	<b>if</b> (<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> &gt;= <var>1000000</var>) {</td></tr>
+<tr><th id="638">638</th><td>		<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> -= <var>1000000</var>;</td></tr>
+<tr><th id="639">639</th><td>		<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>  += <var>1</var>;</td></tr>
+<tr><th id="640">640</th><td>	}</td></tr>
+<tr><th id="641">641</th><td>	<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> = <a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a>;</td></tr>
+<tr><th id="642">642</th><td></td></tr>
+<tr><th id="643">643</th><td>	<a class="local col3 ref" href="#43tdiff" title='tdiff' data-ref="43tdiff" data-ref-filename="43tdiff">tdiff</a> = (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)(<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> &amp; <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/common_int_limits.h.html#60" title="4294967295U" data-ref="_M/UINT32_MAX">UINT32_MAX</a>) -</td></tr>
+<tr><th id="644">644</th><td>	        (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)(<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> &amp; <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/common_int_limits.h.html#60" title="4294967295U" data-ref="_M/UINT32_MAX">UINT32_MAX</a>);</td></tr>
+<tr><th id="645">645</th><td>	<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> += <a class="local col3 ref" href="#43tdiff" title='tdiff' data-ref="43tdiff" data-ref-filename="43tdiff">tdiff</a>;</td></tr>
+<tr><th id="646">646</th><td>	<b>if</b> (<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> != <a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>) {</td></tr>
+<tr><th id="647">647</th><td>		<i>/* now set new system time */</i></td></tr>
+<tr><th id="648">648</th><td>		<b>if</b> (<a class="ref fn" href="../include/ntp_machine.h.html#ntp_set_tod" title='ntp_set_tod' data-ref="ntp_set_tod" data-ref-filename="ntp_set_tod">ntp_set_tod</a>(&amp;<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>) != <var>0</var>) {</td></tr>
+<tr><th id="649">649</th><td>			<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"clamp-systime: %m"</q>);</td></tr>
+<tr><th id="650">650</th><td>			<b>return</b> <a class="macro" href="../include/ntp_types.h.html#37" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="651">651</th><td>		}</td></tr>
+<tr><th id="652">652</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="653">653</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#58" title="6" data-ref="_M/LOG_INFO">LOG_INFO</a>,</td></tr>
+<tr><th id="654">654</th><td>			<q>"clamp-systime: clock (%s) in allowed range"</q>,</td></tr>
+<tr><th id="655">655</th><td>			<a class="tu ref fn" href="#tv_fmt_libbuf" title='tv_fmt_libbuf' data-use='c' data-ref="tv_fmt_libbuf" data-ref-filename="tv_fmt_libbuf">tv_fmt_libbuf</a>(&amp;<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>));</td></tr>
+<tr><th id="656">656</th><td>		<b>return</b> <a class="macro" href="../include/ntp_types.h.html#37" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="657">657</th><td>	}</td></tr>
+<tr><th id="658">658</th><td></td></tr>
+<tr><th id="659">659</th><td>	<i>/* &lt;--- time-critical path ended with 'ntp_set_tod()' &lt;--- */</i></td></tr>
+<tr><th id="660">660</th><td></td></tr>
+<tr><th id="661">661</th><td>	<a class="ref" href="#sys_residual" title='sys_residual' data-ref="sys_residual" data-ref-filename="sys_residual">sys_residual</a> = <var>0</var>;</td></tr>
+<tr><th id="662">662</th><td>	<a class="tu ref" href="#lamport_violated" title='lamport_violated' data-use='w' data-ref="lamport_violated" data-ref-filename="lamport_violated">lamport_violated</a> = (<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> &lt; <a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>);</td></tr>
+<tr><th id="663">663</th><td>	<b>if</b> (<a class="ref" href="../include/ntp_fp.h.html#step_callback" title='step_callback' data-ref="step_callback" data-ref-filename="step_callback">step_callback</a>)</td></tr>
+<tr><th id="664">664</th><td>		(*<a class="ref" href="../include/ntp_fp.h.html#step_callback" title='step_callback' data-ref="step_callback" data-ref-filename="step_callback">step_callback</a>)();</td></tr>
+<tr><th id="665">665</th><td></td></tr>
+<tr><th id="666">666</th><td><u>#   <span data-ppcond="666">ifdef</span> <span class="macro" data-ref="_M/NEED_HPUX_ADJTIME">NEED_HPUX_ADJTIME</span></u></td></tr>
+<tr><th id="667">667</th><td>	<i>/*</i></td></tr>
+<tr><th id="668">668</th><td><i>	 * CHECKME: is this correct when called by ntpdate?????</i></td></tr>
+<tr><th id="669">669</th><td><i>	 */</i></td></tr>
+<tr><th id="670">670</th><td>	_clear_adjtime();</td></tr>
+<tr><th id="671">671</th><td><u>#   <span data-ppcond="666">endif</span></u></td></tr>
+<tr><th id="672">672</th><td></td></tr>
+<tr><th id="673">673</th><td>	<a class="tu ref fn" href="#update_uwtmp" title='update_uwtmp' data-use='c' data-ref="update_uwtmp" data-ref-filename="update_uwtmp">update_uwtmp</a>(<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>, <a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>);</td></tr>
+<tr><th id="674">674</th><td>	<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#56" title="4" data-ref="_M/LOG_WARNING">LOG_WARNING</a>,</td></tr>
+<tr><th id="675">675</th><td>		<q>"clamp-systime: clock stepped from %s to %s!"</q>,</td></tr>
+<tr><th id="676">676</th><td>		<a class="tu ref fn" href="#tv_fmt_libbuf" title='tv_fmt_libbuf' data-use='c' data-ref="tv_fmt_libbuf" data-ref-filename="tv_fmt_libbuf">tv_fmt_libbuf</a>(&amp;<a class="local col1 ref" href="#41tvlast" title='tvlast' data-ref="41tvlast" data-ref-filename="41tvlast">tvlast</a>), <a class="tu ref fn" href="#tv_fmt_libbuf" title='tv_fmt_libbuf' data-use='c' data-ref="tv_fmt_libbuf" data-ref-filename="tv_fmt_libbuf">tv_fmt_libbuf</a>(&amp;<a class="local col0 ref" href="#40timetv" title='timetv' data-ref="40timetv" data-ref-filename="40timetv">timetv</a>));</td></tr>
+<tr><th id="677">677</th><td>	<b>return</b> <a class="macro" href="../include/ntp_types.h.html#34" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="678">678</th><td>		</td></tr>
+<tr><th id="679">679</th><td><u>#<span data-ppcond="622">else</span></u></td></tr>
+<tr><th id="680">680</th><td></td></tr>
+<tr><th id="681">681</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="682">682</th><td><u>#<span data-ppcond="622">endif</span></u></td></tr>
+<tr><th id="683">683</th><td>}</td></tr>
+<tr><th id="684">684</th><td></td></tr>
+<tr><th id="685">685</th><td><u>#<span data-ppcond="137">endif</span>	/* !SIM */</u></td></tr>
+<tr><th id="686">686</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

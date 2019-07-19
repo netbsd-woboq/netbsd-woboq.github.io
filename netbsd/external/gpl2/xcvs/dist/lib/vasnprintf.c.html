@@ -1,0 +1,885 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>vasnprintf.c source code [netbsd/external/gpl2/xcvs/dist/lib/vasnprintf.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl2/xcvs/dist/lib/vasnprintf.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl2</a>/<a href='../..'>xcvs</a>/<a href='..'>dist</a>/<a href='./'>lib</a>/<a href='vasnprintf.c.html'>vasnprintf.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* vsprintf with automatic memory allocation.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 1999, 2002-2005 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i></i></td></tr>
+<tr><th id="4">4</th><td><i>   This program is free software; you can redistribute it and/or modify</i></td></tr>
+<tr><th id="5">5</th><td><i>   it under the terms of the GNU General Public License as published by</i></td></tr>
+<tr><th id="6">6</th><td><i>   the Free Software Foundation; either version 2, or (at your option)</i></td></tr>
+<tr><th id="7">7</th><td><i>   any later version.</i></td></tr>
+<tr><th id="8">8</th><td><i></i></td></tr>
+<tr><th id="9">9</th><td><i>   This program is distributed in the hope that it will be useful,</i></td></tr>
+<tr><th id="10">10</th><td><i>   but WITHOUT ANY WARRANTY; without even the implied warranty of</i></td></tr>
+<tr><th id="11">11</th><td><i>   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</i></td></tr>
+<tr><th id="12">12</th><td><i>   GNU General Public License for more details.</i></td></tr>
+<tr><th id="13">13</th><td><i></i></td></tr>
+<tr><th id="14">14</th><td><i>   You should have received a copy of the GNU General Public License along</i></td></tr>
+<tr><th id="15">15</th><td><i>   with this program; if not, write to the Free Software Foundation,</i></td></tr>
+<tr><th id="16">16</th><td><i>   Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */</i></td></tr>
+<tr><th id="17">17</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="18">18</th><td><a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: vasnprintf.c,v 1.4 2016/05/17 14:00:09 christos Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: vasnprintf.c,v 1.4 2016/05/17 14:00:09 christos Exp $"</q>);</td></tr>
+<tr><th id="19">19</th><td></td></tr>
+<tr><th id="20">20</th><td></td></tr>
+<tr><th id="21">21</th><td><i>/* Tell glibc's &lt;stdio.h&gt; to provide a prototype for snprintf().</i></td></tr>
+<tr><th id="22">22</th><td><i>   This must come before &lt;config.h&gt; because &lt;config.h&gt; may include</i></td></tr>
+<tr><th id="23">23</th><td><i>   &lt;features.h&gt;, and once &lt;features.h&gt; has been included, it's too late.  */</i></td></tr>
+<tr><th id="24">24</th><td><u>#<span data-ppcond="24">ifndef</span> <span class="macro" data-ref="_M/_GNU_SOURCE">_GNU_SOURCE</span></u></td></tr>
+<tr><th id="25">25</th><td><u># define <dfn class="macro" id="_M/_GNU_SOURCE" data-ref="_M/_GNU_SOURCE">_GNU_SOURCE</dfn>    1</u></td></tr>
+<tr><th id="26">26</th><td><u>#<span data-ppcond="24">endif</span></u></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><u>#<span data-ppcond="28">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="29">29</th><td><u># include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="30">30</th><td><u>#<span data-ppcond="28">endif</span></u></td></tr>
+<tr><th id="31">31</th><td><u>#<span data-ppcond="31">ifdef</span> <span class="macro" data-ref="_M/__SSP__">__SSP__</span></u></td></tr>
+<tr><th id="32">32</th><td><u>#undef HAVE_ALLOCA</u></td></tr>
+<tr><th id="33">33</th><td><u>#<span data-ppcond="31">endif</span></u></td></tr>
+<tr><th id="34">34</th><td><u>#<span data-ppcond="34">ifndef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="35">35</th><td><u>#<span data-ppcond="35">ifndef</span> <span class="macro" data-ref="_M/IN_LIBINTL">IN_LIBINTL</span></u></td></tr>
+<tr><th id="36">36</th><td><u># include <span class='error' title="&apos;alloca.h&apos; file not found">&lt;</span>alloca.h&gt;</u></td></tr>
+<tr><th id="37">37</th><td><u>#<span data-ppcond="35">endif</span></u></td></tr>
+<tr><th id="38">38</th><td><u>#<span data-ppcond="34">endif</span></u></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><i>/* Specification.  */</i></td></tr>
+<tr><th id="41">41</th><td><u>#<span data-ppcond="41">if</span> WIDE_CHAR_VERSION</u></td></tr>
+<tr><th id="42">42</th><td><u># include "vasnwprintf.h"</u></td></tr>
+<tr><th id="43">43</th><td><u>#<span data-ppcond="41">else</span></u></td></tr>
+<tr><th id="44">44</th><td><u># include <a href="vasnprintf.h.html">"vasnprintf.h"</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#<span data-ppcond="41">endif</span></u></td></tr>
+<tr><th id="46">46</th><td></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a>	/* snprintf(), sprintf() */</u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a>	/* abort(), malloc(), realloc(), free() */</u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html">&lt;string.h&gt;</a>	/* memcpy(), strlen() */</u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html">&lt;errno.h&gt;</a>	/* errno */</u></td></tr>
+<tr><th id="51">51</th><td><u>#include &lt;limits.h&gt;	/* CHAR_BIT, INT_MAX */</u></td></tr>
+<tr><th id="52">52</th><td><u>#include &lt;float.h&gt;	/* DBL_MAX_EXP, LDBL_MAX_EXP */</u></td></tr>
+<tr><th id="53">53</th><td><u>#<span data-ppcond="53">if</span> WIDE_CHAR_VERSION</u></td></tr>
+<tr><th id="54">54</th><td><u># include "wprintf-parse.h"</u></td></tr>
+<tr><th id="55">55</th><td><u>#<span data-ppcond="53">else</span></u></td></tr>
+<tr><th id="56">56</th><td><u># include <a href="printf-parse.h.html">"printf-parse.h"</a></u></td></tr>
+<tr><th id="57">57</th><td><u>#<span data-ppcond="53">endif</span></u></td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><i>/* Checked size_t computations.  */</i></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="xsize.h.html">"xsize.h"</a></u></td></tr>
+<tr><th id="61">61</th><td></td></tr>
+<tr><th id="62">62</th><td><i>/* Some systems, like OSF/1 4.0 and Woe32, don't have EOVERFLOW.  */</i></td></tr>
+<tr><th id="63">63</th><td><u>#<span data-ppcond="63">ifndef</span> <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#146" data-ref="_M/EOVERFLOW">EOVERFLOW</a></u></td></tr>
+<tr><th id="64">64</th><td><u># define EOVERFLOW E2BIG</u></td></tr>
+<tr><th id="65">65</th><td><u>#<span data-ppcond="63">endif</span></u></td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td><u>#<span data-ppcond="67">ifdef</span> <a class="macro" href="../../include/config.h.html#785" data-ref="_M/HAVE_WCHAR_T">HAVE_WCHAR_T</a></u></td></tr>
+<tr><th id="68">68</th><td><u># <span data-ppcond="68">ifdef</span> <a class="macro" href="../../include/config.h.html#794" data-ref="_M/HAVE_WCSLEN">HAVE_WCSLEN</a></u></td></tr>
+<tr><th id="69">69</th><td><u>#  define <dfn class="macro" id="_M/local_wcslen" data-ref="_M/local_wcslen">local_wcslen</dfn> wcslen</u></td></tr>
+<tr><th id="70">70</th><td><u># <span data-ppcond="68">else</span></u></td></tr>
+<tr><th id="71">71</th><td>   <i>/* Solaris 2.5.1 has wcslen() in a separate library libw.so. To avoid</i></td></tr>
+<tr><th id="72">72</th><td><i>      a dependency towards this library, here is a local substitute.</i></td></tr>
+<tr><th id="73">73</th><td><i>      Define this substitute only once, even if this file is included</i></td></tr>
+<tr><th id="74">74</th><td><i>      twice in the same compilation unit.  */</i></td></tr>
+<tr><th id="75">75</th><td><u>#  ifndef local_wcslen_defined</u></td></tr>
+<tr><th id="76">76</th><td><u>#   define local_wcslen_defined 1</u></td></tr>
+<tr><th id="77">77</th><td><em>static</em> size_t</td></tr>
+<tr><th id="78">78</th><td>local_wcslen (<em>const</em> wchar_t *s)</td></tr>
+<tr><th id="79">79</th><td>{</td></tr>
+<tr><th id="80">80</th><td>  <em>const</em> wchar_t *ptr;</td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td>  <b>for</b> (ptr = s; *ptr != (wchar_t) <var>0</var>; ptr++)</td></tr>
+<tr><th id="83">83</th><td>    ;</td></tr>
+<tr><th id="84">84</th><td>  <b>return</b> ptr - s;</td></tr>
+<tr><th id="85">85</th><td>}</td></tr>
+<tr><th id="86">86</th><td><u>#  endif</u></td></tr>
+<tr><th id="87">87</th><td><u># <span data-ppcond="68">endif</span></u></td></tr>
+<tr><th id="88">88</th><td><u>#<span data-ppcond="67">endif</span></u></td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td><u>#<span data-ppcond="90">if</span> WIDE_CHAR_VERSION</u></td></tr>
+<tr><th id="91">91</th><td><u># define VASNPRINTF vasnwprintf</u></td></tr>
+<tr><th id="92">92</th><td><u># define CHAR_T wchar_t</u></td></tr>
+<tr><th id="93">93</th><td><u># define DIRECTIVE wchar_t_directive</u></td></tr>
+<tr><th id="94">94</th><td><u># define DIRECTIVES wchar_t_directives</u></td></tr>
+<tr><th id="95">95</th><td><u># define PRINTF_PARSE wprintf_parse</u></td></tr>
+<tr><th id="96">96</th><td><u># define USE_SNPRINTF 1</u></td></tr>
+<tr><th id="97">97</th><td><u># if HAVE_DECL__SNWPRINTF</u></td></tr>
+<tr><th id="98">98</th><td>   <i>/* On Windows, the function swprintf() has a different signature than</i></td></tr>
+<tr><th id="99">99</th><td><i>      on Unix; we use the _snwprintf() function instead.  */</i></td></tr>
+<tr><th id="100">100</th><td><u>#  define SNPRINTF _snwprintf</u></td></tr>
+<tr><th id="101">101</th><td><u># else</u></td></tr>
+<tr><th id="102">102</th><td>   <i>/* Unix.  */</i></td></tr>
+<tr><th id="103">103</th><td><u>#  define SNPRINTF swprintf</u></td></tr>
+<tr><th id="104">104</th><td><u># endif</u></td></tr>
+<tr><th id="105">105</th><td><u>#<span data-ppcond="90">else</span></u></td></tr>
+<tr><th id="106">106</th><td><u># define <dfn class="macro" id="_M/VASNPRINTF" data-ref="_M/VASNPRINTF">VASNPRINTF</dfn> <dfn class="decl def fn" id="vasnprintf" title='vasnprintf' data-ref="vasnprintf" data-ref-filename="vasnprintf">vasnprintf</dfn></u></td></tr>
+<tr><th id="107">107</th><td><u># define <dfn class="macro" id="_M/CHAR_T" data-ref="_M/CHAR_T">CHAR_T</dfn> char</u></td></tr>
+<tr><th id="108">108</th><td><u># define <dfn class="macro" id="_M/DIRECTIVE" data-ref="_M/DIRECTIVE">DIRECTIVE</dfn> <a class="typedef" href="printf-parse.h.html#char_directive" title='char_directive' data-type='struct char_directive' data-ref="char_directive" data-ref-filename="char_directive">char_directive</a></u></td></tr>
+<tr><th id="109">109</th><td><u># define <dfn class="macro" id="_M/DIRECTIVES" data-ref="_M/DIRECTIVES">DIRECTIVES</dfn> <a class="typedef" href="printf-parse.h.html#char_directives" title='char_directives' data-type='struct char_directives' data-ref="char_directives" data-ref-filename="char_directives">char_directives</a></u></td></tr>
+<tr><th id="110">110</th><td><u># define <dfn class="macro" id="_M/PRINTF_PARSE" data-ref="_M/PRINTF_PARSE">PRINTF_PARSE</dfn> <a class="ref fn" href="printf-parse.h.html#printf_parse" title='printf_parse' data-ref="printf_parse" data-ref-filename="printf_parse">printf_parse</a></u></td></tr>
+<tr><th id="111">111</th><td><u># define <dfn class="macro" id="_M/USE_SNPRINTF" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</dfn> (HAVE_DECL__SNPRINTF || HAVE_SNPRINTF)</u></td></tr>
+<tr><th id="112">112</th><td><u># <span data-ppcond="112">if</span> HAVE_DECL__SNPRINTF</u></td></tr>
+<tr><th id="113">113</th><td>   <i>/* Windows.  */</i></td></tr>
+<tr><th id="114">114</th><td><u>#  define SNPRINTF _snprintf</u></td></tr>
+<tr><th id="115">115</th><td><u># <span data-ppcond="112">else</span></u></td></tr>
+<tr><th id="116">116</th><td>   <i>/* Unix.  */</i></td></tr>
+<tr><th id="117">117</th><td><u>#  define <dfn class="macro" id="_M/SNPRINTF" data-ref="_M/SNPRINTF">SNPRINTF</dfn> <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a></u></td></tr>
+<tr><th id="118">118</th><td><u># <span data-ppcond="112">endif</span></u></td></tr>
+<tr><th id="119">119</th><td><u>#<span data-ppcond="90">endif</span></u></td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *</td></tr>
+<tr><th id="122">122</th><td><a class="macro" href="#106" title="vasnprintf" data-ref="_M/VASNPRINTF">VASNPRINTF</a> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col1 decl" id="1resultbuf" title='resultbuf' data-type='char *' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</dfn>, <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> *<dfn class="local col2 decl" id="2lengthp" title='lengthp' data-type='size_t *' data-ref="2lengthp" data-ref-filename="2lengthp">lengthp</dfn>, <em>const</em> <a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col3 decl" id="3format" title='format' data-type='const char *' data-ref="3format" data-ref-filename="3format">format</dfn>, <span class='typedef' title='va_list' data-type='__builtin_va_list' data-ref="va_list" data-ref-filename="va_list">va_list</span> <dfn class="local col4 decl" id="4args" title='args' data-type='struct __va_list_tag *' data-ref="4args" data-ref-filename="4args">args</dfn>)</td></tr>
+<tr><th id="123">123</th><td>{</td></tr>
+<tr><th id="124">124</th><td>  <a class="macro" href="#109" title="char_directives" data-ref="_M/DIRECTIVES">DIRECTIVES</a> <dfn class="local col5 decl" id="5d" title='d' data-type='char_directives' data-ref="5d" data-ref-filename="5d">d</dfn>;</td></tr>
+<tr><th id="125">125</th><td>  <a class="typedef" href="printf-args.h.html#arguments" title='arguments' data-type='struct arguments' data-ref="arguments" data-ref-filename="arguments">arguments</a> <dfn class="local col6 decl" id="6a" title='a' data-type='arguments' data-ref="6a" data-ref-filename="6a">a</dfn>;</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td>  <b>if</b> (<a class="macro" href="#110" title="printf_parse" data-ref="_M/PRINTF_PARSE">PRINTF_PARSE</a> (<a class="local col3 ref" href="#3format" title='format' data-ref="3format" data-ref-filename="3format">format</a>, &amp;<a class="local col5 ref" href="#5d" title='d' data-ref="5d" data-ref-filename="5d">d</a>, &amp;<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="128">128</th><td>    {</td></tr>
+<tr><th id="129">129</th><td>      <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="130">130</th><td>      <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="131">131</th><td>    }</td></tr>
+<tr><th id="132">132</th><td></td></tr>
+<tr><th id="133">133</th><td><u>#define <dfn class="macro" id="_M/CLEANUP" data-ref="_M/CLEANUP">CLEANUP</dfn>() \</u></td></tr>
+<tr><th id="134">134</th><td><u>  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col5 ref" href="#5d" title='d' data-ref="5d" data-ref-filename="5d">d</a>.<a class="ref field" href="printf-parse.h.html#(anonymous)::dir" title='(anonymous struct)::dir' data-ref="(anonymous)::dir" data-ref-filename="(anonymous)..dir">dir</a>);								\</u></td></tr>
+<tr><th id="135">135</th><td><u>  if (<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>)								\</u></td></tr>
+<tr><th id="136">136</th><td><u>    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>);</u></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td>  <b>if</b> (<a class="ref fn" href="printf-args.h.html#printf_fetchargs" title='printf_fetchargs' data-ref="printf_fetchargs" data-ref-filename="printf_fetchargs">printf_fetchargs</a> (<a class="local col4 ref" href="#4args" title='args' data-ref="4args" data-ref-filename="4args">args</a>, &amp;<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>) &lt; <var>0</var>)</td></tr>
+<tr><th id="139">139</th><td>    {</td></tr>
+<tr><th id="140">140</th><td>      <a class="macro" href="#133" title="free (d.dir); if (a.arg) free (a.arg);" data-ref="_M/CLEANUP">CLEANUP</a> ();</td></tr>
+<tr><th id="141">141</th><td>      <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="142">142</th><td>      <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="143">143</th><td>    }</td></tr>
+<tr><th id="144">144</th><td></td></tr>
+<tr><th id="145">145</th><td>  {</td></tr>
+<tr><th id="146">146</th><td>    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col7 decl" id="7buf_neededlength" title='buf_neededlength' data-type='size_t' data-ref="7buf_neededlength" data-ref-filename="7buf_neededlength">buf_neededlength</dfn>;</td></tr>
+<tr><th id="147">147</th><td>    <a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col8 decl" id="8buf" title='buf' data-type='char *' data-ref="8buf" data-ref-filename="8buf">buf</dfn>;</td></tr>
+<tr><th id="148">148</th><td>    <a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col9 decl" id="9buf_malloced" title='buf_malloced' data-type='char *' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</dfn>;</td></tr>
+<tr><th id="149">149</th><td>    <em>const</em> <a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col0 decl" id="10cp" title='cp' data-type='const char *' data-ref="10cp" data-ref-filename="10cp">cp</dfn>;</td></tr>
+<tr><th id="150">150</th><td>    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="11i" title='i' data-type='size_t' data-ref="11i" data-ref-filename="11i">i</dfn>;</td></tr>
+<tr><th id="151">151</th><td>    <a class="macro" href="#108" title="char_directive" data-ref="_M/DIRECTIVE">DIRECTIVE</a> *<dfn class="local col2 decl" id="12dp" title='dp' data-type='char_directive *' data-ref="12dp" data-ref-filename="12dp">dp</dfn>;</td></tr>
+<tr><th id="152">152</th><td>    <i>/* Output string accumulator.  */</i></td></tr>
+<tr><th id="153">153</th><td>    <a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col3 decl" id="13result" title='result' data-type='char *' data-ref="13result" data-ref-filename="13result">result</dfn>;</td></tr>
+<tr><th id="154">154</th><td>    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="14allocated" title='allocated' data-type='size_t' data-ref="14allocated" data-ref-filename="14allocated">allocated</dfn>;</td></tr>
+<tr><th id="155">155</th><td>    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="15length" title='length' data-type='size_t' data-ref="15length" data-ref-filename="15length">length</dfn>;</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>    <i>/* Allocate a small buffer that will hold a directive passed to</i></td></tr>
+<tr><th id="158">158</th><td><i>       sprintf or snprintf.  */</i></td></tr>
+<tr><th id="159">159</th><td>    <a class="local col7 ref" href="#7buf_neededlength" title='buf_neededlength' data-ref="7buf_neededlength" data-ref-filename="7buf_neededlength">buf_neededlength</a> =</td></tr>
+<tr><th id="160">160</th><td>      <a class="ref fn" href="xsize.h.html#xsum4" title='xsum4' data-ref="xsum4" data-ref-filename="xsum4">xsum4</a> (<var>7</var>, <a class="local col5 ref" href="#5d" title='d' data-ref="5d" data-ref-filename="5d">d</a>.<a class="ref field" href="printf-parse.h.html#(anonymous)::max_width_length" title='(anonymous struct)::max_width_length' data-ref="(anonymous)::max_width_length" data-ref-filename="(anonymous)..max_width_length">max_width_length</a>, <a class="local col5 ref" href="#5d" title='d' data-ref="5d" data-ref-filename="5d">d</a>.<a class="ref field" href="printf-parse.h.html#(anonymous)::max_precision_length" title='(anonymous struct)::max_precision_length' data-ref="(anonymous)::max_precision_length" data-ref-filename="(anonymous)..max_precision_length">max_precision_length</a>, <var>6</var>);</td></tr>
+<tr><th id="161">161</th><td><u>#<span data-ppcond="161">if</span> <a class="macro" href="../../include/config.h.html#112" title="1" data-ref="_M/HAVE_ALLOCA">HAVE_ALLOCA</a></u></td></tr>
+<tr><th id="162">162</th><td>    <b>if</b> (<a class="local col7 ref" href="#7buf_neededlength" title='buf_neededlength' data-ref="7buf_neededlength" data-ref-filename="7buf_neededlength">buf_neededlength</a> &lt; <var>4000</var> / <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>))</td></tr>
+<tr><th id="163">163</th><td>      {</td></tr>
+<tr><th id="164">164</th><td>	<a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a> = (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *) <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#alloca" title='alloca' data-ref="alloca" data-ref-filename="alloca">alloca</a> (<a class="local col7 ref" href="#7buf_neededlength" title='buf_neededlength' data-ref="7buf_neededlength" data-ref-filename="7buf_neededlength">buf_neededlength</a> * <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>));</td></tr>
+<tr><th id="165">165</th><td>	<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="166">166</th><td>      }</td></tr>
+<tr><th id="167">167</th><td>    <b>else</b></td></tr>
+<tr><th id="168">168</th><td><u>#<span data-ppcond="161">endif</span></u></td></tr>
+<tr><th id="169">169</th><td>      {</td></tr>
+<tr><th id="170">170</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="16buf_memsize" title='buf_memsize' data-type='size_t' data-ref="16buf_memsize" data-ref-filename="16buf_memsize">buf_memsize</dfn> = <a class="macro" href="xsize.h.html#98" title="((buf_neededlength) &lt;= 18446744073709551615UL / (sizeof (char)) ? (size_t) (buf_neededlength) * (sizeof (char)) : 18446744073709551615UL)" data-ref="_M/xtimes">xtimes</a> (<a class="local col7 ref" href="#7buf_neededlength" title='buf_neededlength' data-ref="7buf_neededlength" data-ref-filename="7buf_neededlength">buf_neededlength</a>, <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>));</td></tr>
+<tr><th id="171">171</th><td>	<b>if</b> (<a class="macro" href="xsize.h.html#102" title="((buf_memsize) == 18446744073709551615UL)" data-ref="_M/size_overflow_p">size_overflow_p</a> (<a class="local col6 ref" href="#16buf_memsize" title='buf_memsize' data-ref="16buf_memsize" data-ref-filename="16buf_memsize">buf_memsize</a>))</td></tr>
+<tr><th id="172">172</th><td>	  <b>goto</b> <a class="lbl" href="#17out_of_memory_1" data-ref="17out_of_memory_1" data-ref-filename="17out_of_memory_1">out_of_memory_1</a>;</td></tr>
+<tr><th id="173">173</th><td>	<a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a> = (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *) <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#malloc" title='malloc' data-ref="malloc" data-ref-filename="malloc">malloc</a> (<a class="local col6 ref" href="#16buf_memsize" title='buf_memsize' data-ref="16buf_memsize" data-ref-filename="16buf_memsize">buf_memsize</a>);</td></tr>
+<tr><th id="174">174</th><td>	<b>if</b> (<a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="175">175</th><td>	  <b>goto</b> <a class="lbl" href="#17out_of_memory_1" data-ref="17out_of_memory_1" data-ref-filename="17out_of_memory_1">out_of_memory_1</a>;</td></tr>
+<tr><th id="176">176</th><td>	<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a> = <a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a>;</td></tr>
+<tr><th id="177">177</th><td>      }</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td>    <b>if</b> (<a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="180">180</th><td>      {</td></tr>
+<tr><th id="181">181</th><td>	<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> = <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a>;</td></tr>
+<tr><th id="182">182</th><td>	<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a> = *<a class="local col2 ref" href="#2lengthp" title='lengthp' data-ref="2lengthp" data-ref-filename="2lengthp">lengthp</a>;</td></tr>
+<tr><th id="183">183</th><td>      }</td></tr>
+<tr><th id="184">184</th><td>    <b>else</b></td></tr>
+<tr><th id="185">185</th><td>      {</td></tr>
+<tr><th id="186">186</th><td>	<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="187">187</th><td>	<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a> = <var>0</var>;</td></tr>
+<tr><th id="188">188</th><td>      }</td></tr>
+<tr><th id="189">189</th><td>    <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> = <var>0</var>;</td></tr>
+<tr><th id="190">190</th><td>    <i>/* Invariants:</i></td></tr>
+<tr><th id="191">191</th><td><i>       result is either == resultbuf or == NULL or malloc-allocated.</i></td></tr>
+<tr><th id="192">192</th><td><i>       If length &gt; 0, then result != NULL.  */</i></td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>    <i>/* Ensures that allocated &gt;= needed.  Aborts through a jump to</i></td></tr>
+<tr><th id="195">195</th><td><i>       out_of_memory if needed is SIZE_MAX or otherwise too big.  */</i></td></tr>
+<tr><th id="196">196</th><td><u>#define <dfn class="macro" id="_M/ENSURE_ALLOCATION" data-ref="_M/ENSURE_ALLOCATION">ENSURE_ALLOCATION</dfn>(needed) \</u></td></tr>
+<tr><th id="197">197</th><td><u>    if ((needed) &gt; <a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a>)						     \</u></td></tr>
+<tr><th id="198">198</th><td><u>      {									     \</u></td></tr>
+<tr><th id="199">199</th><td><u>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="20memory_size" title='memory_size' data-type='size_t' data-ref="20memory_size" data-ref-filename="20memory_size"><dfn class="local col4 decl" id="24memory_size" title='memory_size' data-type='size_t' data-ref="24memory_size" data-ref-filename="24memory_size"><dfn class="local col2 decl" id="32memory_size" title='memory_size' data-type='size_t' data-ref="32memory_size" data-ref-filename="32memory_size"><dfn class="local col4 decl" id="54memory_size" title='memory_size' data-type='size_t' data-ref="54memory_size" data-ref-filename="54memory_size"><dfn class="local col6 decl" id="56memory_size" title='memory_size' data-type='size_t' data-ref="56memory_size" data-ref-filename="56memory_size">memory_size</dfn></dfn></dfn></dfn></dfn>;						     \</u></td></tr>
+<tr><th id="200">200</th><td><u>	CHAR_T *<dfn class="local col1 decl" id="21memory" title='memory' data-type='char *' data-ref="21memory" data-ref-filename="21memory"><dfn class="local col5 decl" id="25memory" title='memory' data-type='char *' data-ref="25memory" data-ref-filename="25memory"><dfn class="local col3 decl" id="33memory" title='memory' data-type='char *' data-ref="33memory" data-ref-filename="33memory"><dfn class="local col5 decl" id="55memory" title='memory' data-type='char *' data-ref="55memory" data-ref-filename="55memory"><dfn class="local col7 decl" id="57memory" title='memory' data-type='char *' data-ref="57memory" data-ref-filename="57memory">memory</dfn></dfn></dfn></dfn></dfn>;							     \</u></td></tr>
+<tr><th id="201">201</th><td><u>									     \</u></td></tr>
+<tr><th id="202">202</th><td><u>	<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a> = (<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a> &gt; 0 ? xtimes (<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a>, 2) : 12);	     \</u></td></tr>
+<tr><th id="203">203</th><td><u>	if ((needed) &gt; <a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a>)					     \</u></td></tr>
+<tr><th id="204">204</th><td><u>	  <a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a> = (needed);						     \</u></td></tr>
+<tr><th id="205">205</th><td><u>	<a class="local col0 ref" href="#226" title='memory_size' data-ref="20memory_size" data-ref-filename="20memory_size"><a class="local col4 ref" href="#241" title='memory_size' data-ref="24memory_size" data-ref-filename="24memory_size"><a class="local col2 ref" href="#588" title='memory_size' data-ref="32memory_size" data-ref-filename="32memory_size"><a class="local col4 ref" href="#796" title='memory_size' data-ref="54memory_size" data-ref-filename="54memory_size"><a class="local col6 ref" href="#819" title='memory_size' data-ref="56memory_size" data-ref-filename="56memory_size">memory_size</a></a></a></a></a> = xtimes (<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a>, sizeof (CHAR_T));		     \</u></td></tr>
+<tr><th id="206">206</th><td><u>	if (size_overflow_p (<a class="local col0 ref" href="#226" title='memory_size' data-ref="20memory_size" data-ref-filename="20memory_size"><a class="local col4 ref" href="#241" title='memory_size' data-ref="24memory_size" data-ref-filename="24memory_size"><a class="local col2 ref" href="#588" title='memory_size' data-ref="32memory_size" data-ref-filename="32memory_size"><a class="local col4 ref" href="#796" title='memory_size' data-ref="54memory_size" data-ref-filename="54memory_size"><a class="local col6 ref" href="#819" title='memory_size' data-ref="56memory_size" data-ref-filename="56memory_size">memory_size</a></a></a></a></a>))				     \</u></td></tr>
+<tr><th id="207">207</th><td><u>	  goto <a class="lbl" href="#22out_of_memory" data-ref="22out_of_memory" data-ref-filename="22out_of_memory">out_of_memory</a>;						     \</u></td></tr>
+<tr><th id="208">208</th><td><u>	if (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a> || <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == NULL)			     \</u></td></tr>
+<tr><th id="209">209</th><td><u>	  <a class="local col1 ref" href="#226" title='memory' data-ref="21memory" data-ref-filename="21memory"><a class="local col5 ref" href="#241" title='memory' data-ref="25memory" data-ref-filename="25memory"><a class="local col3 ref" href="#588" title='memory' data-ref="33memory" data-ref-filename="33memory"><a class="local col5 ref" href="#796" title='memory' data-ref="55memory" data-ref-filename="55memory"><a class="local col7 ref" href="#819" title='memory' data-ref="57memory" data-ref-filename="57memory">memory</a></a></a></a></a> = (CHAR_T *) <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#malloc" title='malloc' data-ref="malloc" data-ref-filename="malloc">malloc</a> (<a class="local col0 ref" href="#226" title='memory_size' data-ref="20memory_size" data-ref-filename="20memory_size"><a class="local col4 ref" href="#241" title='memory_size' data-ref="24memory_size" data-ref-filename="24memory_size"><a class="local col2 ref" href="#588" title='memory_size' data-ref="32memory_size" data-ref-filename="32memory_size"><a class="local col4 ref" href="#796" title='memory_size' data-ref="54memory_size" data-ref-filename="54memory_size"><a class="local col6 ref" href="#819" title='memory_size' data-ref="56memory_size" data-ref-filename="56memory_size">memory_size</a></a></a></a></a>);			     \</u></td></tr>
+<tr><th id="210">210</th><td><u>	else								     \</u></td></tr>
+<tr><th id="211">211</th><td><u>	  <a class="local col1 ref" href="#226" title='memory' data-ref="21memory" data-ref-filename="21memory"><a class="local col5 ref" href="#241" title='memory' data-ref="25memory" data-ref-filename="25memory"><a class="local col3 ref" href="#588" title='memory' data-ref="33memory" data-ref-filename="33memory"><a class="local col5 ref" href="#796" title='memory' data-ref="55memory" data-ref-filename="55memory"><a class="local col7 ref" href="#819" title='memory' data-ref="57memory" data-ref-filename="57memory">memory</a></a></a></a></a> = (CHAR_T *) <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#realloc" title='realloc' data-ref="realloc" data-ref-filename="realloc">realloc</a> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>, <a class="local col0 ref" href="#226" title='memory_size' data-ref="20memory_size" data-ref-filename="20memory_size"><a class="local col4 ref" href="#241" title='memory_size' data-ref="24memory_size" data-ref-filename="24memory_size"><a class="local col2 ref" href="#588" title='memory_size' data-ref="32memory_size" data-ref-filename="32memory_size"><a class="local col4 ref" href="#796" title='memory_size' data-ref="54memory_size" data-ref-filename="54memory_size"><a class="local col6 ref" href="#819" title='memory_size' data-ref="56memory_size" data-ref-filename="56memory_size">memory_size</a></a></a></a></a>);		     \</u></td></tr>
+<tr><th id="212">212</th><td><u>	if (<a class="local col1 ref" href="#226" title='memory' data-ref="21memory" data-ref-filename="21memory"><a class="local col5 ref" href="#241" title='memory' data-ref="25memory" data-ref-filename="25memory"><a class="local col3 ref" href="#588" title='memory' data-ref="33memory" data-ref-filename="33memory"><a class="local col5 ref" href="#796" title='memory' data-ref="55memory" data-ref-filename="55memory"><a class="local col7 ref" href="#819" title='memory' data-ref="57memory" data-ref-filename="57memory">memory</a></a></a></a></a> == NULL)						     \</u></td></tr>
+<tr><th id="213">213</th><td><u>	  goto <a class="lbl" href="#22out_of_memory" data-ref="22out_of_memory" data-ref-filename="22out_of_memory">out_of_memory</a>;						     \</u></td></tr>
+<tr><th id="214">214</th><td><u>	if (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a> &amp;&amp; <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> &gt; 0)				     \</u></td></tr>
+<tr><th id="215">215</th><td><u>	  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a> (<a class="local col1 ref" href="#226" title='memory' data-ref="21memory" data-ref-filename="21memory"><a class="local col5 ref" href="#241" title='memory' data-ref="25memory" data-ref-filename="25memory"><a class="local col3 ref" href="#588" title='memory' data-ref="33memory" data-ref-filename="33memory"><a class="local col5 ref" href="#796" title='memory' data-ref="55memory" data-ref-filename="55memory"><a class="local col7 ref" href="#819" title='memory' data-ref="57memory" data-ref-filename="57memory">memory</a></a></a></a></a>, <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>, <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> * sizeof (CHAR_T));		     \</u></td></tr>
+<tr><th id="216">216</th><td><u>	<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> = <a class="local col1 ref" href="#226" title='memory' data-ref="21memory" data-ref-filename="21memory"><a class="local col5 ref" href="#241" title='memory' data-ref="25memory" data-ref-filename="25memory"><a class="local col3 ref" href="#588" title='memory' data-ref="33memory" data-ref-filename="33memory"><a class="local col5 ref" href="#796" title='memory' data-ref="55memory" data-ref-filename="55memory"><a class="local col7 ref" href="#819" title='memory' data-ref="57memory" data-ref-filename="57memory">memory</a></a></a></a></a>;						     \</u></td></tr>
+<tr><th id="217">217</th><td><u>      }</u></td></tr>
+<tr><th id="218">218</th><td></td></tr>
+<tr><th id="219">219</th><td>    <b>for</b> (<a class="local col0 ref" href="#10cp" title='cp' data-ref="10cp" data-ref-filename="10cp">cp</a> = <a class="local col3 ref" href="#3format" title='format' data-ref="3format" data-ref-filename="3format">format</a>, <a class="local col1 ref" href="#11i" title='i' data-ref="11i" data-ref-filename="11i">i</a> = <var>0</var>, <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a> = &amp;<a class="local col5 ref" href="#5d" title='d' data-ref="5d" data-ref-filename="5d">d</a>.<a class="ref field" href="printf-parse.h.html#(anonymous)::dir" title='(anonymous struct)::dir' data-ref="(anonymous)::dir" data-ref-filename="(anonymous)..dir">dir</a>[<var>0</var>]; ; <a class="local col0 ref" href="#10cp" title='cp' data-ref="10cp" data-ref-filename="10cp">cp</a> = <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::dir_end" title='(anonymous struct)::dir_end' data-ref="(anonymous)::dir_end" data-ref-filename="(anonymous)..dir_end">dir_end</a>, <a class="local col1 ref" href="#11i" title='i' data-ref="11i" data-ref-filename="11i">i</a>++, <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>++)</td></tr>
+<tr><th id="220">220</th><td>      {</td></tr>
+<tr><th id="221">221</th><td>	<b>if</b> (<a class="local col0 ref" href="#10cp" title='cp' data-ref="10cp" data-ref-filename="10cp">cp</a> != <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::dir_start" title='(anonymous struct)::dir_start' data-ref="(anonymous)::dir_start" data-ref-filename="(anonymous)..dir_start">dir_start</a>)</td></tr>
+<tr><th id="222">222</th><td>	  {</td></tr>
+<tr><th id="223">223</th><td>	    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="18n" title='n' data-type='size_t' data-ref="18n" data-ref-filename="18n">n</dfn> = <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::dir_start" title='(anonymous struct)::dir_start' data-ref="(anonymous)::dir_start" data-ref-filename="(anonymous)..dir_start">dir_start</a> - <a class="local col0 ref" href="#10cp" title='cp' data-ref="10cp" data-ref-filename="10cp">cp</a>;</td></tr>
+<tr><th id="224">224</th><td>	    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col9 decl" id="19augmented_length" title='augmented_length' data-type='size_t' data-ref="19augmented_length" data-ref-filename="19augmented_length">augmented_length</dfn> = <a class="ref fn" href="xsize.h.html#xsum" title='xsum' data-ref="xsum" data-ref-filename="xsum">xsum</a> (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <a class="local col8 ref" href="#18n" title='n' data-ref="18n" data-ref-filename="18n">n</a>);</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td>	    <a class="macro" href="#196" title="if ((augmented_length) &gt; allocated) { size_t memory_size; char *memory; allocated = (allocated &gt; 0 ? ((allocated) &lt;= 18446744073709551615UL / (2) ? (size_t) (allocated) * (2) : 18446744073709551615UL) : 12); if ((augmented_length) &gt; allocated) allocated = (augmented_length); memory_size = ((allocated) &lt;= 18446744073709551615UL / (sizeof (char)) ? (size_t) (allocated) * (sizeof (char)) : 18446744073709551615UL); if (((memory_size) == 18446744073709551615UL)) goto out_of_memory; if (result == resultbuf || result == ((void*)0)) memory = (char *) malloc (memory_size); else memory = (char *) realloc (result, memory_size); if (memory == ((void*)0)) goto out_of_memory; if (result == resultbuf &amp;&amp; length &gt; 0) memcpy (memory, result, length * sizeof (char)); result = memory; }" data-ref="_M/ENSURE_ALLOCATION">ENSURE_ALLOCATION</a> (<a class="local col9 ref" href="#19augmented_length" title='augmented_length' data-ref="19augmented_length" data-ref-filename="19augmented_length">augmented_length</a>);</td></tr>
+<tr><th id="227">227</th><td>	    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> + <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <a class="local col0 ref" href="#10cp" title='cp' data-ref="10cp" data-ref-filename="10cp">cp</a>, <a class="local col8 ref" href="#18n" title='n' data-ref="18n" data-ref-filename="18n">n</a> * <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>));</td></tr>
+<tr><th id="228">228</th><td>	    <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> = <a class="local col9 ref" href="#19augmented_length" title='augmented_length' data-ref="19augmented_length" data-ref-filename="19augmented_length">augmented_length</a>;</td></tr>
+<tr><th id="229">229</th><td>	  }</td></tr>
+<tr><th id="230">230</th><td>	<b>if</b> (<a class="local col1 ref" href="#11i" title='i' data-ref="11i" data-ref-filename="11i">i</a> == <a class="local col5 ref" href="#5d" title='d' data-ref="5d" data-ref-filename="5d">d</a>.<a class="ref field" href="printf-parse.h.html#(anonymous)::count" title='(anonymous struct)::count' data-ref="(anonymous)::count" data-ref-filename="(anonymous)..count">count</a>)</td></tr>
+<tr><th id="231">231</th><td>	  <b>break</b>;</td></tr>
+<tr><th id="232">232</th><td></td></tr>
+<tr><th id="233">233</th><td>	<i>/* Execute a single directive.  */</i></td></tr>
+<tr><th id="234">234</th><td>	<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::conversion" title='(anonymous struct)::conversion' data-ref="(anonymous)::conversion" data-ref-filename="(anonymous)..conversion">conversion</a> == <kbd>'%'</kbd>)</td></tr>
+<tr><th id="235">235</th><td>	  {</td></tr>
+<tr><th id="236">236</th><td>	    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="23augmented_length" title='augmented_length' data-type='size_t' data-ref="23augmented_length" data-ref-filename="23augmented_length">augmented_length</dfn>;</td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td>	    <b>if</b> (!(<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a> == <a class="macro" href="printf-parse.h.html#33" title="(~(size_t)0)" data-ref="_M/ARG_NONE">ARG_NONE</a>))</td></tr>
+<tr><th id="239">239</th><td>	      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="240">240</th><td>	    <a class="local col3 ref" href="#23augmented_length" title='augmented_length' data-ref="23augmented_length" data-ref-filename="23augmented_length">augmented_length</a> = <a class="ref fn" href="xsize.h.html#xsum" title='xsum' data-ref="xsum" data-ref-filename="xsum">xsum</a> (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <var>1</var>);</td></tr>
+<tr><th id="241">241</th><td>	    <a class="macro" href="#196" title="if ((augmented_length) &gt; allocated) { size_t memory_size; char *memory; allocated = (allocated &gt; 0 ? ((allocated) &lt;= 18446744073709551615UL / (2) ? (size_t) (allocated) * (2) : 18446744073709551615UL) : 12); if ((augmented_length) &gt; allocated) allocated = (augmented_length); memory_size = ((allocated) &lt;= 18446744073709551615UL / (sizeof (char)) ? (size_t) (allocated) * (sizeof (char)) : 18446744073709551615UL); if (((memory_size) == 18446744073709551615UL)) goto out_of_memory; if (result == resultbuf || result == ((void*)0)) memory = (char *) malloc (memory_size); else memory = (char *) realloc (result, memory_size); if (memory == ((void*)0)) goto out_of_memory; if (result == resultbuf &amp;&amp; length &gt; 0) memcpy (memory, result, length * sizeof (char)); result = memory; }" data-ref="_M/ENSURE_ALLOCATION">ENSURE_ALLOCATION</a> (<a class="local col3 ref" href="#23augmented_length" title='augmented_length' data-ref="23augmented_length" data-ref-filename="23augmented_length">augmented_length</a>);</td></tr>
+<tr><th id="242">242</th><td>	    <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>[<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>] = <kbd>'%'</kbd>;</td></tr>
+<tr><th id="243">243</th><td>	    <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> = <a class="local col3 ref" href="#23augmented_length" title='augmented_length' data-ref="23augmented_length" data-ref-filename="23augmented_length">augmented_length</a>;</td></tr>
+<tr><th id="244">244</th><td>	  }</td></tr>
+<tr><th id="245">245</th><td>	<b>else</b></td></tr>
+<tr><th id="246">246</th><td>	  {</td></tr>
+<tr><th id="247">247</th><td>	    <b>if</b> (!(<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a> != <a class="macro" href="printf-parse.h.html#33" title="(~(size_t)0)" data-ref="_M/ARG_NONE">ARG_NONE</a>))</td></tr>
+<tr><th id="248">248</th><td>	      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="249">249</th><td></td></tr>
+<tr><th id="250">250</th><td>	    <b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::conversion" title='(anonymous struct)::conversion' data-ref="(anonymous)::conversion" data-ref-filename="(anonymous)..conversion">conversion</a> == <kbd>'n'</kbd>)</td></tr>
+<tr><th id="251">251</th><td>	      {</td></tr>
+<tr><th id="252">252</th><td>		<b>switch</b> (<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::type" title='(anonymous struct)::type' data-ref="(anonymous)::type" data-ref-filename="(anonymous)..type">type</a>)</td></tr>
+<tr><th id="253">253</th><td>		  {</td></tr>
+<tr><th id="254">254</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_COUNT_SCHAR_POINTER" title='TYPE_COUNT_SCHAR_POINTER' data-ref="TYPE_COUNT_SCHAR_POINTER" data-ref-filename="TYPE_COUNT_SCHAR_POINTER">TYPE_COUNT_SCHAR_POINTER</a>:</td></tr>
+<tr><th id="255">255</th><td>		    *<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_count_schar_pointer" title='(anonymous struct)::(anonymous union)::a_count_schar_pointer' data-ref="(anonymousstruct)::(anonymous)::a_count_schar_pointer" data-ref-filename="(anonymousstruct)..(anonymous)..a_count_schar_pointer">a_count_schar_pointer</a> = <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="256">256</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="257">257</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_COUNT_SHORT_POINTER" title='TYPE_COUNT_SHORT_POINTER' data-ref="TYPE_COUNT_SHORT_POINTER" data-ref-filename="TYPE_COUNT_SHORT_POINTER">TYPE_COUNT_SHORT_POINTER</a>:</td></tr>
+<tr><th id="258">258</th><td>		    *<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_count_short_pointer" title='(anonymous struct)::(anonymous union)::a_count_short_pointer' data-ref="(anonymousstruct)::(anonymous)::a_count_short_pointer" data-ref-filename="(anonymousstruct)..(anonymous)..a_count_short_pointer">a_count_short_pointer</a> = <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="259">259</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="260">260</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_COUNT_INT_POINTER" title='TYPE_COUNT_INT_POINTER' data-ref="TYPE_COUNT_INT_POINTER" data-ref-filename="TYPE_COUNT_INT_POINTER">TYPE_COUNT_INT_POINTER</a>:</td></tr>
+<tr><th id="261">261</th><td>		    *<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_count_int_pointer" title='(anonymous struct)::(anonymous union)::a_count_int_pointer' data-ref="(anonymousstruct)::(anonymous)::a_count_int_pointer" data-ref-filename="(anonymousstruct)..(anonymous)..a_count_int_pointer">a_count_int_pointer</a> = <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="262">262</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="263">263</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_COUNT_LONGINT_POINTER" title='TYPE_COUNT_LONGINT_POINTER' data-ref="TYPE_COUNT_LONGINT_POINTER" data-ref-filename="TYPE_COUNT_LONGINT_POINTER">TYPE_COUNT_LONGINT_POINTER</a>:</td></tr>
+<tr><th id="264">264</th><td>		    *<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_count_longint_pointer" title='(anonymous struct)::(anonymous union)::a_count_longint_pointer' data-ref="(anonymousstruct)::(anonymous)::a_count_longint_pointer" data-ref-filename="(anonymousstruct)..(anonymous)..a_count_longint_pointer">a_count_longint_pointer</a> = <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="265">265</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="266">266</th><td><u>#<span data-ppcond="266">ifdef</span> <a class="macro" href="../../include/config.h.html#442" data-ref="_M/HAVE_LONG_LONG">HAVE_LONG_LONG</a></u></td></tr>
+<tr><th id="267">267</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_COUNT_LONGLONGINT_POINTER" title='TYPE_COUNT_LONGLONGINT_POINTER' data-ref="TYPE_COUNT_LONGLONGINT_POINTER" data-ref-filename="TYPE_COUNT_LONGLONGINT_POINTER">TYPE_COUNT_LONGLONGINT_POINTER</a>:</td></tr>
+<tr><th id="268">268</th><td>		    *<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_count_longlongint_pointer" title='(anonymous struct)::(anonymous union)::a_count_longlongint_pointer' data-ref="(anonymousstruct)::(anonymous)::a_count_longlongint_pointer" data-ref-filename="(anonymousstruct)..(anonymous)..a_count_longlongint_pointer">a_count_longlongint_pointer</a> = <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="269">269</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="270">270</th><td><u>#<span data-ppcond="266">endif</span></u></td></tr>
+<tr><th id="271">271</th><td>		  <b>default</b>:</td></tr>
+<tr><th id="272">272</th><td>		    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="273">273</th><td>		  }</td></tr>
+<tr><th id="274">274</th><td>	      }</td></tr>
+<tr><th id="275">275</th><td>	    <b>else</b></td></tr>
+<tr><th id="276">276</th><td>	      {</td></tr>
+<tr><th id="277">277</th><td>		<a class="typedef" href="printf-args.h.html#arg_type" title='arg_type' data-type='enum arg_type' data-ref="arg_type" data-ref-filename="arg_type">arg_type</a> <dfn class="local col6 decl" id="26type" title='type' data-type='arg_type' data-ref="26type" data-ref-filename="26type">type</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::type" title='(anonymous struct)::type' data-ref="(anonymous)::type" data-ref-filename="(anonymous)..type">type</a>;</td></tr>
+<tr><th id="278">278</th><td>		<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col7 decl" id="27p" title='p' data-type='char *' data-ref="27p" data-ref-filename="27p">p</dfn>;</td></tr>
+<tr><th id="279">279</th><td>		<em>unsigned</em> <em>int</em> <dfn class="local col8 decl" id="28prefix_count" title='prefix_count' data-type='unsigned int' data-ref="28prefix_count" data-ref-filename="28prefix_count">prefix_count</dfn>;</td></tr>
+<tr><th id="280">280</th><td>		<em>int</em> <dfn class="local col9 decl" id="29prefixes" title='prefixes' data-type='int [2]' data-ref="29prefixes" data-ref-filename="29prefixes">prefixes</dfn>[<var>2</var>];</td></tr>
+<tr><th id="281">281</th><td><u>#<span data-ppcond="281">if</span> !<a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="282">282</th><td>		size_t tmp_length;</td></tr>
+<tr><th id="283">283</th><td>		CHAR_T tmpbuf[<var>700</var>];</td></tr>
+<tr><th id="284">284</th><td>		CHAR_T *tmp;</td></tr>
+<tr><th id="285">285</th><td></td></tr>
+<tr><th id="286">286</th><td>		<i>/* Allocate a temporary buffer of sufficient size for calling</i></td></tr>
+<tr><th id="287">287</th><td><i>		   sprintf.  */</i></td></tr>
+<tr><th id="288">288</th><td>		{</td></tr>
+<tr><th id="289">289</th><td>		  size_t width;</td></tr>
+<tr><th id="290">290</th><td>		  size_t precision;</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td>		  width = <var>0</var>;</td></tr>
+<tr><th id="293">293</th><td>		  <b>if</b> (dp-&gt;width_start != dp-&gt;width_end)</td></tr>
+<tr><th id="294">294</th><td>		    {</td></tr>
+<tr><th id="295">295</th><td>		      <b>if</b> (dp-&gt;width_arg_index != ARG_NONE)</td></tr>
+<tr><th id="296">296</th><td>			{</td></tr>
+<tr><th id="297">297</th><td>			  <em>int</em> arg;</td></tr>
+<tr><th id="298">298</th><td></td></tr>
+<tr><th id="299">299</th><td>			  <b>if</b> (!(a.arg[dp-&gt;width_arg_index].type == TYPE_INT))</td></tr>
+<tr><th id="300">300</th><td>			    abort ();</td></tr>
+<tr><th id="301">301</th><td>			  arg = a.arg[dp-&gt;width_arg_index].a.a_int;</td></tr>
+<tr><th id="302">302</th><td>			  width = (arg &lt; <var>0</var> ? (<em>unsigned</em> <em>int</em>) (-arg) : arg);</td></tr>
+<tr><th id="303">303</th><td>			}</td></tr>
+<tr><th id="304">304</th><td>		      <b>else</b></td></tr>
+<tr><th id="305">305</th><td>			{</td></tr>
+<tr><th id="306">306</th><td>			  <em>const</em> CHAR_T *digitp = dp-&gt;width_start;</td></tr>
+<tr><th id="307">307</th><td></td></tr>
+<tr><th id="308">308</th><td>			  <b>do</b></td></tr>
+<tr><th id="309">309</th><td>			    width = xsum (xtimes (width, <var>10</var>), *digitp++ - <kbd>'0'</kbd>);</td></tr>
+<tr><th id="310">310</th><td>			  <b>while</b> (digitp != dp-&gt;width_end);</td></tr>
+<tr><th id="311">311</th><td>			}</td></tr>
+<tr><th id="312">312</th><td>		    }</td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td>		  precision = <var>6</var>;</td></tr>
+<tr><th id="315">315</th><td>		  <b>if</b> (dp-&gt;precision_start != dp-&gt;precision_end)</td></tr>
+<tr><th id="316">316</th><td>		    {</td></tr>
+<tr><th id="317">317</th><td>		      <b>if</b> (dp-&gt;precision_arg_index != ARG_NONE)</td></tr>
+<tr><th id="318">318</th><td>			{</td></tr>
+<tr><th id="319">319</th><td>			  <em>int</em> arg;</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td>			  <b>if</b> (!(a.arg[dp-&gt;precision_arg_index].type == TYPE_INT))</td></tr>
+<tr><th id="322">322</th><td>			    abort ();</td></tr>
+<tr><th id="323">323</th><td>			  arg = a.arg[dp-&gt;precision_arg_index].a.a_int;</td></tr>
+<tr><th id="324">324</th><td>			  precision = (arg &lt; <var>0</var> ? <var>0</var> : arg);</td></tr>
+<tr><th id="325">325</th><td>			}</td></tr>
+<tr><th id="326">326</th><td>		      <b>else</b></td></tr>
+<tr><th id="327">327</th><td>			{</td></tr>
+<tr><th id="328">328</th><td>			  <em>const</em> CHAR_T *digitp = dp-&gt;precision_start + <var>1</var>;</td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td>			  precision = <var>0</var>;</td></tr>
+<tr><th id="331">331</th><td>			  <b>while</b> (digitp != dp-&gt;precision_end)</td></tr>
+<tr><th id="332">332</th><td>			    precision = xsum (xtimes (precision, <var>10</var>), *digitp++ - <kbd>'0'</kbd>);</td></tr>
+<tr><th id="333">333</th><td>			}</td></tr>
+<tr><th id="334">334</th><td>		    }</td></tr>
+<tr><th id="335">335</th><td></td></tr>
+<tr><th id="336">336</th><td>		  <b>switch</b> (dp-&gt;conversion)</td></tr>
+<tr><th id="337">337</th><td>		    {</td></tr>
+<tr><th id="338">338</th><td></td></tr>
+<tr><th id="339">339</th><td>		    <b>case</b> <kbd>'d'</kbd>: <b>case</b> <kbd>'i'</kbd>: <b>case</b> <kbd>'u'</kbd>:</td></tr>
+<tr><th id="340">340</th><td><u># ifdef HAVE_LONG_LONG</u></td></tr>
+<tr><th id="341">341</th><td>		      <b>if</b> (type == TYPE_LONGLONGINT || type == TYPE_ULONGLONGINT)</td></tr>
+<tr><th id="342">342</th><td>			tmp_length =</td></tr>
+<tr><th id="343">343</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>long</em> <em>long</em>) * CHAR_BIT</td></tr>
+<tr><th id="344">344</th><td>					  * <var>0.30103</var> <i>/* binary -&gt; decimal */</i></td></tr>
+<tr><th id="345">345</th><td>					  * <var>2</var> <i>/* estimate for FLAG_GROUP */</i></td></tr>
+<tr><th id="346">346</th><td>					 )</td></tr>
+<tr><th id="347">347</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="348">348</th><td>			  + <var>1</var>; <i>/* account for leading sign */</i></td></tr>
+<tr><th id="349">349</th><td>		      <b>else</b></td></tr>
+<tr><th id="350">350</th><td><u># endif</u></td></tr>
+<tr><th id="351">351</th><td>		      <b>if</b> (type == TYPE_LONGINT || type == TYPE_ULONGINT)</td></tr>
+<tr><th id="352">352</th><td>			tmp_length =</td></tr>
+<tr><th id="353">353</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>long</em>) * CHAR_BIT</td></tr>
+<tr><th id="354">354</th><td>					  * <var>0.30103</var> <i>/* binary -&gt; decimal */</i></td></tr>
+<tr><th id="355">355</th><td>					  * <var>2</var> <i>/* estimate for FLAG_GROUP */</i></td></tr>
+<tr><th id="356">356</th><td>					 )</td></tr>
+<tr><th id="357">357</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="358">358</th><td>			  + <var>1</var>; <i>/* account for leading sign */</i></td></tr>
+<tr><th id="359">359</th><td>		      <b>else</b></td></tr>
+<tr><th id="360">360</th><td>			tmp_length =</td></tr>
+<tr><th id="361">361</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>int</em>) * CHAR_BIT</td></tr>
+<tr><th id="362">362</th><td>					  * <var>0.30103</var> <i>/* binary -&gt; decimal */</i></td></tr>
+<tr><th id="363">363</th><td>					  * <var>2</var> <i>/* estimate for FLAG_GROUP */</i></td></tr>
+<tr><th id="364">364</th><td>					 )</td></tr>
+<tr><th id="365">365</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="366">366</th><td>			  + <var>1</var>; <i>/* account for leading sign */</i></td></tr>
+<tr><th id="367">367</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td>		    <b>case</b> <kbd>'o'</kbd>:</td></tr>
+<tr><th id="370">370</th><td><u># ifdef HAVE_LONG_LONG</u></td></tr>
+<tr><th id="371">371</th><td>		      <b>if</b> (type == TYPE_LONGLONGINT || type == TYPE_ULONGLONGINT)</td></tr>
+<tr><th id="372">372</th><td>			tmp_length =</td></tr>
+<tr><th id="373">373</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>long</em> <em>long</em>) * CHAR_BIT</td></tr>
+<tr><th id="374">374</th><td>					  * <var>0.333334</var> <i>/* binary -&gt; octal */</i></td></tr>
+<tr><th id="375">375</th><td>					 )</td></tr>
+<tr><th id="376">376</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="377">377</th><td>			  + <var>1</var>; <i>/* account for leading sign */</i></td></tr>
+<tr><th id="378">378</th><td>		      <b>else</b></td></tr>
+<tr><th id="379">379</th><td><u># endif</u></td></tr>
+<tr><th id="380">380</th><td>		      <b>if</b> (type == TYPE_LONGINT || type == TYPE_ULONGINT)</td></tr>
+<tr><th id="381">381</th><td>			tmp_length =</td></tr>
+<tr><th id="382">382</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>long</em>) * CHAR_BIT</td></tr>
+<tr><th id="383">383</th><td>					  * <var>0.333334</var> <i>/* binary -&gt; octal */</i></td></tr>
+<tr><th id="384">384</th><td>					 )</td></tr>
+<tr><th id="385">385</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="386">386</th><td>			  + <var>1</var>; <i>/* account for leading sign */</i></td></tr>
+<tr><th id="387">387</th><td>		      <b>else</b></td></tr>
+<tr><th id="388">388</th><td>			tmp_length =</td></tr>
+<tr><th id="389">389</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>int</em>) * CHAR_BIT</td></tr>
+<tr><th id="390">390</th><td>					  * <var>0.333334</var> <i>/* binary -&gt; octal */</i></td></tr>
+<tr><th id="391">391</th><td>					 )</td></tr>
+<tr><th id="392">392</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="393">393</th><td>			  + <var>1</var>; <i>/* account for leading sign */</i></td></tr>
+<tr><th id="394">394</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="395">395</th><td></td></tr>
+<tr><th id="396">396</th><td>		    <b>case</b> <kbd>'x'</kbd>: <b>case</b> <kbd>'X'</kbd>:</td></tr>
+<tr><th id="397">397</th><td><u># ifdef HAVE_LONG_LONG</u></td></tr>
+<tr><th id="398">398</th><td>		      <b>if</b> (type == TYPE_LONGLONGINT || type == TYPE_ULONGLONGINT)</td></tr>
+<tr><th id="399">399</th><td>			tmp_length =</td></tr>
+<tr><th id="400">400</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>long</em> <em>long</em>) * CHAR_BIT</td></tr>
+<tr><th id="401">401</th><td>					  * <var>0.25</var> <i>/* binary -&gt; hexadecimal */</i></td></tr>
+<tr><th id="402">402</th><td>					 )</td></tr>
+<tr><th id="403">403</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="404">404</th><td>			  + <var>2</var>; <i>/* account for leading sign or alternate form */</i></td></tr>
+<tr><th id="405">405</th><td>		      <b>else</b></td></tr>
+<tr><th id="406">406</th><td><u># endif</u></td></tr>
+<tr><th id="407">407</th><td>		      <b>if</b> (type == TYPE_LONGINT || type == TYPE_ULONGINT)</td></tr>
+<tr><th id="408">408</th><td>			tmp_length =</td></tr>
+<tr><th id="409">409</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>long</em>) * CHAR_BIT</td></tr>
+<tr><th id="410">410</th><td>					  * <var>0.25</var> <i>/* binary -&gt; hexadecimal */</i></td></tr>
+<tr><th id="411">411</th><td>					 )</td></tr>
+<tr><th id="412">412</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="413">413</th><td>			  + <var>2</var>; <i>/* account for leading sign or alternate form */</i></td></tr>
+<tr><th id="414">414</th><td>		      <b>else</b></td></tr>
+<tr><th id="415">415</th><td>			tmp_length =</td></tr>
+<tr><th id="416">416</th><td>			  (<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>unsigned</em> <em>int</em>) * CHAR_BIT</td></tr>
+<tr><th id="417">417</th><td>					  * <var>0.25</var> <i>/* binary -&gt; hexadecimal */</i></td></tr>
+<tr><th id="418">418</th><td>					 )</td></tr>
+<tr><th id="419">419</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="420">420</th><td>			  + <var>2</var>; <i>/* account for leading sign or alternate form */</i></td></tr>
+<tr><th id="421">421</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="422">422</th><td></td></tr>
+<tr><th id="423">423</th><td>		    <b>case</b> <kbd>'f'</kbd>: <b>case</b> <kbd>'F'</kbd>:</td></tr>
+<tr><th id="424">424</th><td><u># ifdef HAVE_LONG_DOUBLE</u></td></tr>
+<tr><th id="425">425</th><td>		      <b>if</b> (type == TYPE_LONGDOUBLE)</td></tr>
+<tr><th id="426">426</th><td>			tmp_length =</td></tr>
+<tr><th id="427">427</th><td>			  (<em>unsigned</em> <em>int</em>) (LDBL_MAX_EXP</td></tr>
+<tr><th id="428">428</th><td>					  * <var>0.30103</var> <i>/* binary -&gt; decimal */</i></td></tr>
+<tr><th id="429">429</th><td>					  * <var>2</var> <i>/* estimate for FLAG_GROUP */</i></td></tr>
+<tr><th id="430">430</th><td>					 )</td></tr>
+<tr><th id="431">431</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="432">432</th><td>			  + <var>10</var>; <i>/* sign, decimal point etc. */</i></td></tr>
+<tr><th id="433">433</th><td>		      <b>else</b></td></tr>
+<tr><th id="434">434</th><td><u># endif</u></td></tr>
+<tr><th id="435">435</th><td>			tmp_length =</td></tr>
+<tr><th id="436">436</th><td>			  (<em>unsigned</em> <em>int</em>) (DBL_MAX_EXP</td></tr>
+<tr><th id="437">437</th><td>					  * <var>0.30103</var> <i>/* binary -&gt; decimal */</i></td></tr>
+<tr><th id="438">438</th><td>					  * <var>2</var> <i>/* estimate for FLAG_GROUP */</i></td></tr>
+<tr><th id="439">439</th><td>					 )</td></tr>
+<tr><th id="440">440</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="441">441</th><td>			  + <var>10</var>; <i>/* sign, decimal point etc. */</i></td></tr>
+<tr><th id="442">442</th><td>		      tmp_length = xsum (tmp_length, precision);</td></tr>
+<tr><th id="443">443</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="444">444</th><td></td></tr>
+<tr><th id="445">445</th><td>		    <b>case</b> <kbd>'e'</kbd>: <b>case</b> <kbd>'E'</kbd>: <b>case</b> <kbd>'g'</kbd>: <b>case</b> <kbd>'G'</kbd>:</td></tr>
+<tr><th id="446">446</th><td>		    <b>case</b> <kbd>'a'</kbd>: <b>case</b> <kbd>'A'</kbd>:</td></tr>
+<tr><th id="447">447</th><td>		      tmp_length =</td></tr>
+<tr><th id="448">448</th><td>			<var>12</var>; <i>/* sign, decimal point, exponent etc. */</i></td></tr>
+<tr><th id="449">449</th><td>		      tmp_length = xsum (tmp_length, precision);</td></tr>
+<tr><th id="450">450</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="451">451</th><td></td></tr>
+<tr><th id="452">452</th><td>		    <b>case</b> <kbd>'c'</kbd>:</td></tr>
+<tr><th id="453">453</th><td><u># if defined HAVE_WINT_T &amp;&amp; !WIDE_CHAR_VERSION</u></td></tr>
+<tr><th id="454">454</th><td>		      <b>if</b> (type == TYPE_WIDE_CHAR)</td></tr>
+<tr><th id="455">455</th><td>			tmp_length = MB_CUR_MAX;</td></tr>
+<tr><th id="456">456</th><td>		      <b>else</b></td></tr>
+<tr><th id="457">457</th><td><u># endif</u></td></tr>
+<tr><th id="458">458</th><td>			tmp_length = <var>1</var>;</td></tr>
+<tr><th id="459">459</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="460">460</th><td></td></tr>
+<tr><th id="461">461</th><td>		    <b>case</b> <kbd>'s'</kbd>:</td></tr>
+<tr><th id="462">462</th><td><u># ifdef HAVE_WCHAR_T</u></td></tr>
+<tr><th id="463">463</th><td>		      <b>if</b> (type == TYPE_WIDE_STRING)</td></tr>
+<tr><th id="464">464</th><td>			{</td></tr>
+<tr><th id="465">465</th><td>			  tmp_length =</td></tr>
+<tr><th id="466">466</th><td>			    local_wcslen (a.arg[dp-&gt;arg_index].a.a_wide_string);</td></tr>
+<tr><th id="467">467</th><td></td></tr>
+<tr><th id="468">468</th><td><u>#  if !WIDE_CHAR_VERSION</u></td></tr>
+<tr><th id="469">469</th><td>			  tmp_length = xtimes (tmp_length, MB_CUR_MAX);</td></tr>
+<tr><th id="470">470</th><td><u>#  endif</u></td></tr>
+<tr><th id="471">471</th><td>			}</td></tr>
+<tr><th id="472">472</th><td>		      <b>else</b></td></tr>
+<tr><th id="473">473</th><td><u># endif</u></td></tr>
+<tr><th id="474">474</th><td>			tmp_length = strlen (a.arg[dp-&gt;arg_index].a.a_string);</td></tr>
+<tr><th id="475">475</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="476">476</th><td></td></tr>
+<tr><th id="477">477</th><td>		    <b>case</b> <kbd>'p'</kbd>:</td></tr>
+<tr><th id="478">478</th><td>		      tmp_length =</td></tr>
+<tr><th id="479">479</th><td>			(<em>unsigned</em> <em>int</em>) (<b>sizeof</b> (<em>void</em> *) * CHAR_BIT</td></tr>
+<tr><th id="480">480</th><td>					* <var>0.25</var> <i>/* binary -&gt; hexadecimal */</i></td></tr>
+<tr><th id="481">481</th><td>				       )</td></tr>
+<tr><th id="482">482</th><td>			  + <var>1</var> <i>/* turn floor into ceil */</i></td></tr>
+<tr><th id="483">483</th><td>			  + <var>2</var>; <i>/* account for leading 0x */</i></td></tr>
+<tr><th id="484">484</th><td>		      <b>break</b>;</td></tr>
+<tr><th id="485">485</th><td></td></tr>
+<tr><th id="486">486</th><td>		    <b>default</b>:</td></tr>
+<tr><th id="487">487</th><td>		      abort ();</td></tr>
+<tr><th id="488">488</th><td>		    }</td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td>		  <b>if</b> (tmp_length &lt; width)</td></tr>
+<tr><th id="491">491</th><td>		    tmp_length = width;</td></tr>
+<tr><th id="492">492</th><td></td></tr>
+<tr><th id="493">493</th><td>		  tmp_length = xsum (tmp_length, <var>1</var>); <i>/* account for trailing NUL */</i></td></tr>
+<tr><th id="494">494</th><td>		}</td></tr>
+<tr><th id="495">495</th><td></td></tr>
+<tr><th id="496">496</th><td>		<b>if</b> (tmp_length &lt;= <b>sizeof</b> (tmpbuf) / <b>sizeof</b> (CHAR_T))</td></tr>
+<tr><th id="497">497</th><td>		  tmp = tmpbuf;</td></tr>
+<tr><th id="498">498</th><td>		<b>else</b></td></tr>
+<tr><th id="499">499</th><td>		  {</td></tr>
+<tr><th id="500">500</th><td>		    size_t tmp_memsize = xtimes (tmp_length, <b>sizeof</b> (CHAR_T));</td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td>		    <b>if</b> (size_overflow_p (tmp_memsize))</td></tr>
+<tr><th id="503">503</th><td>		      <i>/* Overflow, would lead to out of memory.  */</i></td></tr>
+<tr><th id="504">504</th><td>		      <b>goto</b> out_of_memory;</td></tr>
+<tr><th id="505">505</th><td>		    tmp = (CHAR_T *) malloc (tmp_memsize);</td></tr>
+<tr><th id="506">506</th><td>		    <b>if</b> (tmp == NULL)</td></tr>
+<tr><th id="507">507</th><td>		      <i>/* Out of memory.  */</i></td></tr>
+<tr><th id="508">508</th><td>		      <b>goto</b> out_of_memory;</td></tr>
+<tr><th id="509">509</th><td>		  }</td></tr>
+<tr><th id="510">510</th><td><u>#<span data-ppcond="281">endif</span></u></td></tr>
+<tr><th id="511">511</th><td></td></tr>
+<tr><th id="512">512</th><td>		<i>/* Construct the format string for calling snprintf or</i></td></tr>
+<tr><th id="513">513</th><td><i>		   sprintf.  */</i></td></tr>
+<tr><th id="514">514</th><td>		<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a> = <a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a>;</td></tr>
+<tr><th id="515">515</th><td>		*<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'%'</kbd>;</td></tr>
+<tr><th id="516">516</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::flags" title='(anonymous struct)::flags' data-ref="(anonymous)::flags" data-ref-filename="(anonymous)..flags">flags</a> &amp; <a class="macro" href="printf-parse.h.html#25" title="1" data-ref="_M/FLAG_GROUP">FLAG_GROUP</a>)</td></tr>
+<tr><th id="517">517</th><td>		  *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'\''</kbd>;</td></tr>
+<tr><th id="518">518</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::flags" title='(anonymous struct)::flags' data-ref="(anonymous)::flags" data-ref-filename="(anonymous)..flags">flags</a> &amp; <a class="macro" href="printf-parse.h.html#26" title="2" data-ref="_M/FLAG_LEFT">FLAG_LEFT</a>)</td></tr>
+<tr><th id="519">519</th><td>		  *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'-'</kbd>;</td></tr>
+<tr><th id="520">520</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::flags" title='(anonymous struct)::flags' data-ref="(anonymous)::flags" data-ref-filename="(anonymous)..flags">flags</a> &amp; <a class="macro" href="printf-parse.h.html#27" title="4" data-ref="_M/FLAG_SHOWSIGN">FLAG_SHOWSIGN</a>)</td></tr>
+<tr><th id="521">521</th><td>		  *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'+'</kbd>;</td></tr>
+<tr><th id="522">522</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::flags" title='(anonymous struct)::flags' data-ref="(anonymous)::flags" data-ref-filename="(anonymous)..flags">flags</a> &amp; <a class="macro" href="printf-parse.h.html#28" title="8" data-ref="_M/FLAG_SPACE">FLAG_SPACE</a>)</td></tr>
+<tr><th id="523">523</th><td>		  *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>' '</kbd>;</td></tr>
+<tr><th id="524">524</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::flags" title='(anonymous struct)::flags' data-ref="(anonymous)::flags" data-ref-filename="(anonymous)..flags">flags</a> &amp; <a class="macro" href="printf-parse.h.html#29" title="16" data-ref="_M/FLAG_ALT">FLAG_ALT</a>)</td></tr>
+<tr><th id="525">525</th><td>		  *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'#'</kbd>;</td></tr>
+<tr><th id="526">526</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::flags" title='(anonymous struct)::flags' data-ref="(anonymous)::flags" data-ref-filename="(anonymous)..flags">flags</a> &amp; <a class="macro" href="printf-parse.h.html#30" title="32" data-ref="_M/FLAG_ZERO">FLAG_ZERO</a>)</td></tr>
+<tr><th id="527">527</th><td>		  *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'0'</kbd>;</td></tr>
+<tr><th id="528">528</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_start" title='(anonymous struct)::width_start' data-ref="(anonymous)::width_start" data-ref-filename="(anonymous)..width_start">width_start</a> != <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_end" title='(anonymous struct)::width_end' data-ref="(anonymous)::width_end" data-ref-filename="(anonymous)..width_end">width_end</a>)</td></tr>
+<tr><th id="529">529</th><td>		  {</td></tr>
+<tr><th id="530">530</th><td>		    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="30n" title='n' data-type='size_t' data-ref="30n" data-ref-filename="30n">n</dfn> = <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_end" title='(anonymous struct)::width_end' data-ref="(anonymous)::width_end" data-ref-filename="(anonymous)..width_end">width_end</a> - <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_start" title='(anonymous struct)::width_start' data-ref="(anonymous)::width_start" data-ref-filename="(anonymous)..width_start">width_start</a>;</td></tr>
+<tr><th id="531">531</th><td>		    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a> (<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>, <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_start" title='(anonymous struct)::width_start' data-ref="(anonymous)::width_start" data-ref-filename="(anonymous)..width_start">width_start</a>, <a class="local col0 ref" href="#30n" title='n' data-ref="30n" data-ref-filename="30n">n</a> * <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>));</td></tr>
+<tr><th id="532">532</th><td>		    <a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a> += <a class="local col0 ref" href="#30n" title='n' data-ref="30n" data-ref-filename="30n">n</a>;</td></tr>
+<tr><th id="533">533</th><td>		  }</td></tr>
+<tr><th id="534">534</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_start" title='(anonymous struct)::precision_start' data-ref="(anonymous)::precision_start" data-ref-filename="(anonymous)..precision_start">precision_start</a> != <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_end" title='(anonymous struct)::precision_end' data-ref="(anonymous)::precision_end" data-ref-filename="(anonymous)..precision_end">precision_end</a>)</td></tr>
+<tr><th id="535">535</th><td>		  {</td></tr>
+<tr><th id="536">536</th><td>		    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="31n" title='n' data-type='size_t' data-ref="31n" data-ref-filename="31n">n</dfn> = <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_end" title='(anonymous struct)::precision_end' data-ref="(anonymous)::precision_end" data-ref-filename="(anonymous)..precision_end">precision_end</a> - <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_start" title='(anonymous struct)::precision_start' data-ref="(anonymous)::precision_start" data-ref-filename="(anonymous)..precision_start">precision_start</a>;</td></tr>
+<tr><th id="537">537</th><td>		    <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a> (<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>, <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_start" title='(anonymous struct)::precision_start' data-ref="(anonymous)::precision_start" data-ref-filename="(anonymous)..precision_start">precision_start</a>, <a class="local col1 ref" href="#31n" title='n' data-ref="31n" data-ref-filename="31n">n</a> * <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>));</td></tr>
+<tr><th id="538">538</th><td>		    <a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a> += <a class="local col1 ref" href="#31n" title='n' data-ref="31n" data-ref-filename="31n">n</a>;</td></tr>
+<tr><th id="539">539</th><td>		  }</td></tr>
+<tr><th id="540">540</th><td></td></tr>
+<tr><th id="541">541</th><td>		<b>switch</b> (<a class="local col6 ref" href="#26type" title='type' data-ref="26type" data-ref-filename="26type">type</a>)</td></tr>
+<tr><th id="542">542</th><td>		  {</td></tr>
+<tr><th id="543">543</th><td><u>#<span data-ppcond="543">ifdef</span> <a class="macro" href="../../include/config.h.html#442" data-ref="_M/HAVE_LONG_LONG">HAVE_LONG_LONG</a></u></td></tr>
+<tr><th id="544">544</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_LONGLONGINT" title='TYPE_LONGLONGINT' data-ref="TYPE_LONGLONGINT" data-ref-filename="TYPE_LONGLONGINT">TYPE_LONGLONGINT</a>:</td></tr>
+<tr><th id="545">545</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_ULONGLONGINT" title='TYPE_ULONGLONGINT' data-ref="TYPE_ULONGLONGINT" data-ref-filename="TYPE_ULONGLONGINT">TYPE_ULONGLONGINT</a>:</td></tr>
+<tr><th id="546">546</th><td>		    *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'l'</kbd>;</td></tr>
+<tr><th id="547">547</th><td>		    <i>/*FALLTHROUGH*/</i></td></tr>
+<tr><th id="548">548</th><td><u>#<span data-ppcond="543">endif</span></u></td></tr>
+<tr><th id="549">549</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_LONGINT" title='TYPE_LONGINT' data-ref="TYPE_LONGINT" data-ref-filename="TYPE_LONGINT">TYPE_LONGINT</a>:</td></tr>
+<tr><th id="550">550</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_ULONGINT" title='TYPE_ULONGINT' data-ref="TYPE_ULONGINT" data-ref-filename="TYPE_ULONGINT">TYPE_ULONGINT</a>:</td></tr>
+<tr><th id="551">551</th><td><u>#<span data-ppcond="551">ifdef</span> <a class="macro" href="../../include/config.h.html#800" data-ref="_M/HAVE_WINT_T">HAVE_WINT_T</a></u></td></tr>
+<tr><th id="552">552</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_WIDE_CHAR" title='TYPE_WIDE_CHAR' data-ref="TYPE_WIDE_CHAR" data-ref-filename="TYPE_WIDE_CHAR">TYPE_WIDE_CHAR</a>:</td></tr>
+<tr><th id="553">553</th><td><u>#<span data-ppcond="551">endif</span></u></td></tr>
+<tr><th id="554">554</th><td><u>#<span data-ppcond="554">ifdef</span> <a class="macro" href="../../include/config.h.html#785" data-ref="_M/HAVE_WCHAR_T">HAVE_WCHAR_T</a></u></td></tr>
+<tr><th id="555">555</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_WIDE_STRING" title='TYPE_WIDE_STRING' data-ref="TYPE_WIDE_STRING" data-ref-filename="TYPE_WIDE_STRING">TYPE_WIDE_STRING</a>:</td></tr>
+<tr><th id="556">556</th><td><u>#<span data-ppcond="554">endif</span></u></td></tr>
+<tr><th id="557">557</th><td>		    *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'l'</kbd>;</td></tr>
+<tr><th id="558">558</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="559">559</th><td><u>#<span data-ppcond="559">ifdef</span> <a class="macro" href="../../include/config.h.html#436" data-ref="_M/HAVE_LONG_DOUBLE">HAVE_LONG_DOUBLE</a></u></td></tr>
+<tr><th id="560">560</th><td>		  <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_LONGDOUBLE" title='TYPE_LONGDOUBLE' data-ref="TYPE_LONGDOUBLE" data-ref-filename="TYPE_LONGDOUBLE">TYPE_LONGDOUBLE</a>:</td></tr>
+<tr><th id="561">561</th><td>		    *<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>++ = <kbd>'L'</kbd>;</td></tr>
+<tr><th id="562">562</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="563">563</th><td><u>#<span data-ppcond="559">endif</span></u></td></tr>
+<tr><th id="564">564</th><td>		  <b>default</b>:</td></tr>
+<tr><th id="565">565</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="566">566</th><td>		  }</td></tr>
+<tr><th id="567">567</th><td>		*<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a> = <a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::conversion" title='(anonymous struct)::conversion' data-ref="(anonymous)::conversion" data-ref-filename="(anonymous)..conversion">conversion</a>;</td></tr>
+<tr><th id="568">568</th><td>		<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>[<var>1</var>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="569">569</th><td></td></tr>
+<tr><th id="570">570</th><td>		<i>/* Construct the arguments for calling snprintf or sprintf.  */</i></td></tr>
+<tr><th id="571">571</th><td>		<a class="local col8 ref" href="#28prefix_count" title='prefix_count' data-ref="28prefix_count" data-ref-filename="28prefix_count">prefix_count</a> = <var>0</var>;</td></tr>
+<tr><th id="572">572</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_arg_index" title='(anonymous struct)::width_arg_index' data-ref="(anonymous)::width_arg_index" data-ref-filename="(anonymous)..width_arg_index">width_arg_index</a> != <a class="macro" href="printf-parse.h.html#33" title="(~(size_t)0)" data-ref="_M/ARG_NONE">ARG_NONE</a>)</td></tr>
+<tr><th id="573">573</th><td>		  {</td></tr>
+<tr><th id="574">574</th><td>		    <b>if</b> (!(<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_arg_index" title='(anonymous struct)::width_arg_index' data-ref="(anonymous)::width_arg_index" data-ref-filename="(anonymous)..width_arg_index">width_arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::type" title='(anonymous struct)::type' data-ref="(anonymous)::type" data-ref-filename="(anonymous)..type">type</a> == <a class="enum" href="printf-args.h.html#TYPE_INT" title='TYPE_INT' data-ref="TYPE_INT" data-ref-filename="TYPE_INT">TYPE_INT</a>))</td></tr>
+<tr><th id="575">575</th><td>		      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="576">576</th><td>		    <a class="local col9 ref" href="#29prefixes" title='prefixes' data-ref="29prefixes" data-ref-filename="29prefixes">prefixes</a>[<a class="local col8 ref" href="#28prefix_count" title='prefix_count' data-ref="28prefix_count" data-ref-filename="28prefix_count">prefix_count</a>++] = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::width_arg_index" title='(anonymous struct)::width_arg_index' data-ref="(anonymous)::width_arg_index" data-ref-filename="(anonymous)..width_arg_index">width_arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_int" title='(anonymous struct)::(anonymous union)::a_int' data-ref="(anonymousstruct)::(anonymous)::a_int" data-ref-filename="(anonymousstruct)..(anonymous)..a_int">a_int</a>;</td></tr>
+<tr><th id="577">577</th><td>		  }</td></tr>
+<tr><th id="578">578</th><td>		<b>if</b> (<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_arg_index" title='(anonymous struct)::precision_arg_index' data-ref="(anonymous)::precision_arg_index" data-ref-filename="(anonymous)..precision_arg_index">precision_arg_index</a> != <a class="macro" href="printf-parse.h.html#33" title="(~(size_t)0)" data-ref="_M/ARG_NONE">ARG_NONE</a>)</td></tr>
+<tr><th id="579">579</th><td>		  {</td></tr>
+<tr><th id="580">580</th><td>		    <b>if</b> (!(<a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_arg_index" title='(anonymous struct)::precision_arg_index' data-ref="(anonymous)::precision_arg_index" data-ref-filename="(anonymous)..precision_arg_index">precision_arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::type" title='(anonymous struct)::type' data-ref="(anonymous)::type" data-ref-filename="(anonymous)..type">type</a> == <a class="enum" href="printf-args.h.html#TYPE_INT" title='TYPE_INT' data-ref="TYPE_INT" data-ref-filename="TYPE_INT">TYPE_INT</a>))</td></tr>
+<tr><th id="581">581</th><td>		      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="582">582</th><td>		    <a class="local col9 ref" href="#29prefixes" title='prefixes' data-ref="29prefixes" data-ref-filename="29prefixes">prefixes</a>[<a class="local col8 ref" href="#28prefix_count" title='prefix_count' data-ref="28prefix_count" data-ref-filename="28prefix_count">prefix_count</a>++] = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::precision_arg_index" title='(anonymous struct)::precision_arg_index' data-ref="(anonymous)::precision_arg_index" data-ref-filename="(anonymous)..precision_arg_index">precision_arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_int" title='(anonymous struct)::(anonymous union)::a_int' data-ref="(anonymousstruct)::(anonymous)::a_int" data-ref-filename="(anonymousstruct)..(anonymous)..a_int">a_int</a>;</td></tr>
+<tr><th id="583">583</th><td>		  }</td></tr>
+<tr><th id="584">584</th><td></td></tr>
+<tr><th id="585">585</th><td><u>#<span data-ppcond="585">if</span> <a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="586">586</th><td>		<i>/* Prepare checking whether snprintf returns the count</i></td></tr>
+<tr><th id="587">587</th><td><i>		   via %n.  */</i></td></tr>
+<tr><th id="588">588</th><td>		<a class="macro" href="#196" title="if ((xsum (length, 1)) &gt; allocated) { size_t memory_size; char *memory; allocated = (allocated &gt; 0 ? ((allocated) &lt;= 18446744073709551615UL / (2) ? (size_t) (allocated) * (2) : 18446744073709551615UL) : 12); if ((xsum (length, 1)) &gt; allocated) allocated = (xsum (length, 1)); memory_size = ((allocated) &lt;= 18446744073709551615UL / (sizeof (char)) ? (size_t) (allocated) * (sizeof (char)) : 18446744073709551615UL); if (((memory_size) == 18446744073709551615UL)) goto out_of_memory; if (result == resultbuf || result == ((void*)0)) memory = (char *) malloc (memory_size); else memory = (char *) realloc (result, memory_size); if (memory == ((void*)0)) goto out_of_memory; if (result == resultbuf &amp;&amp; length &gt; 0) memcpy (memory, result, length * sizeof (char)); result = memory; }" data-ref="_M/ENSURE_ALLOCATION">ENSURE_ALLOCATION</a> (<a class="ref fn" href="xsize.h.html#xsum" title='xsum' data-ref="xsum" data-ref-filename="xsum">xsum</a> (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <var>1</var>));</td></tr>
+<tr><th id="589">589</th><td>		<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>[<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="590">590</th><td><u>#<span data-ppcond="585">endif</span></u></td></tr>
+<tr><th id="591">591</th><td></td></tr>
+<tr><th id="592">592</th><td>		<b>for</b> (;;)</td></tr>
+<tr><th id="593">593</th><td>		  {</td></tr>
+<tr><th id="594">594</th><td>		    <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col4 decl" id="34maxlen" title='maxlen' data-type='size_t' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</dfn>;</td></tr>
+<tr><th id="595">595</th><td>		    <em>int</em> <dfn class="local col5 decl" id="35count" title='count' data-type='int' data-ref="35count" data-ref-filename="35count">count</dfn>;</td></tr>
+<tr><th id="596">596</th><td></td></tr>
+<tr><th id="597">597</th><td>		    <a class="local col4 ref" href="#34maxlen" title='maxlen' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</a> = <a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a> - <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="598">598</th><td>		    <a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> = -<var>1</var>;</td></tr>
+<tr><th id="599">599</th><td></td></tr>
+<tr><th id="600">600</th><td><u>#<span data-ppcond="600">if</span> <a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="601">601</th><td><u># define <dfn class="macro" id="_M/SNPRINTF_BUF" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</dfn>(arg) \</u></td></tr>
+<tr><th id="602">602</th><td><u>		    switch (<a class="local col8 ref" href="#28prefix_count" title='prefix_count' data-ref="28prefix_count" data-ref-filename="28prefix_count">prefix_count</a>)				    \</u></td></tr>
+<tr><th id="603">603</th><td><u>		      {							    \</u></td></tr>
+<tr><th id="604">604</th><td><u>		      case 0:						    \</u></td></tr>
+<tr><th id="605">605</th><td><u>			<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> = SNPRINTF (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> + <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <a class="local col4 ref" href="#34maxlen" title='maxlen' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</a>, <a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a>,     \</u></td></tr>
+<tr><th id="606">606</th><td><u>					     arg);            		    \</u></td></tr>
+<tr><th id="607">607</th><td><u>			break;						    \</u></td></tr>
+<tr><th id="608">608</th><td><u>		      case 1:						    \</u></td></tr>
+<tr><th id="609">609</th><td><u>			<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> = SNPRINTF (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> + <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <a class="local col4 ref" href="#34maxlen" title='maxlen' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</a>, <a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a>,     \</u></td></tr>
+<tr><th id="610">610</th><td><u>					     <a class="local col9 ref" href="#29prefixes" title='prefixes' data-ref="29prefixes" data-ref-filename="29prefixes">prefixes</a>[0], arg);	            \</u></td></tr>
+<tr><th id="611">611</th><td><u>			break;						    \</u></td></tr>
+<tr><th id="612">612</th><td><u>		      case 2:						    \</u></td></tr>
+<tr><th id="613">613</th><td><u>			<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> = SNPRINTF (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> + <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <a class="local col4 ref" href="#34maxlen" title='maxlen' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</a>, <a class="local col8 ref" href="#8buf" title='buf' data-ref="8buf" data-ref-filename="8buf">buf</a>,     \</u></td></tr>
+<tr><th id="614">614</th><td><u>					  <a class="local col9 ref" href="#29prefixes" title='prefixes' data-ref="29prefixes" data-ref-filename="29prefixes">prefixes</a>[0], <a class="local col9 ref" href="#29prefixes" title='prefixes' data-ref="29prefixes" data-ref-filename="29prefixes">prefixes</a>[1], arg);   \</u></td></tr>
+<tr><th id="615">615</th><td><u>			break;						    \</u></td></tr>
+<tr><th id="616">616</th><td><u>		      default:						    \</u></td></tr>
+<tr><th id="617">617</th><td><u>			<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();					    \</u></td></tr>
+<tr><th id="618">618</th><td><u>		      }</u></td></tr>
+<tr><th id="619">619</th><td><u>#<span data-ppcond="600">else</span></u></td></tr>
+<tr><th id="620">620</th><td><u># define SNPRINTF_BUF(arg) \</u></td></tr>
+<tr><th id="621">621</th><td><u>		    switch (prefix_count)				    \</u></td></tr>
+<tr><th id="622">622</th><td><u>		      {							    \</u></td></tr>
+<tr><th id="623">623</th><td><u>		      case 0:						    \</u></td></tr>
+<tr><th id="624">624</th><td><u>			count = sprintf (tmp, buf, arg);		    \</u></td></tr>
+<tr><th id="625">625</th><td><u>			break;						    \</u></td></tr>
+<tr><th id="626">626</th><td><u>		      case 1:						    \</u></td></tr>
+<tr><th id="627">627</th><td><u>			count = sprintf (tmp, buf, prefixes[0], arg);	    \</u></td></tr>
+<tr><th id="628">628</th><td><u>			break;						    \</u></td></tr>
+<tr><th id="629">629</th><td><u>		      case 2:						    \</u></td></tr>
+<tr><th id="630">630</th><td><u>			count = sprintf (tmp, buf, prefixes[0], prefixes[1],\</u></td></tr>
+<tr><th id="631">631</th><td><u>					 arg);				    \</u></td></tr>
+<tr><th id="632">632</th><td><u>			break;						    \</u></td></tr>
+<tr><th id="633">633</th><td><u>		      default:						    \</u></td></tr>
+<tr><th id="634">634</th><td><u>			abort ();					    \</u></td></tr>
+<tr><th id="635">635</th><td><u>		      }</u></td></tr>
+<tr><th id="636">636</th><td><u>#<span data-ppcond="600">endif</span></u></td></tr>
+<tr><th id="637">637</th><td></td></tr>
+<tr><th id="638">638</th><td>		    <b>switch</b> (<a class="local col6 ref" href="#26type" title='type' data-ref="26type" data-ref-filename="26type">type</a>)</td></tr>
+<tr><th id="639">639</th><td>		      {</td></tr>
+<tr><th id="640">640</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_SCHAR" title='TYPE_SCHAR' data-ref="TYPE_SCHAR" data-ref-filename="TYPE_SCHAR">TYPE_SCHAR</a>:</td></tr>
+<tr><th id="641">641</th><td>			{</td></tr>
+<tr><th id="642">642</th><td>			  <em>int</em> <dfn class="local col6 decl" id="36arg" title='arg' data-type='int' data-ref="36arg" data-ref-filename="36arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_schar" title='(anonymous struct)::(anonymous union)::a_schar' data-ref="(anonymousstruct)::(anonymous)::a_schar" data-ref-filename="(anonymousstruct)..(anonymous)..a_schar">a_schar</a>;</td></tr>
+<tr><th id="643">643</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col6 ref" href="#36arg" title='arg' data-ref="36arg" data-ref-filename="36arg">arg</a>);</td></tr>
+<tr><th id="644">644</th><td>			}</td></tr>
+<tr><th id="645">645</th><td>			<b>break</b>;</td></tr>
+<tr><th id="646">646</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_UCHAR" title='TYPE_UCHAR' data-ref="TYPE_UCHAR" data-ref-filename="TYPE_UCHAR">TYPE_UCHAR</a>:</td></tr>
+<tr><th id="647">647</th><td>			{</td></tr>
+<tr><th id="648">648</th><td>			  <em>unsigned</em> <em>int</em> <dfn class="local col7 decl" id="37arg" title='arg' data-type='unsigned int' data-ref="37arg" data-ref-filename="37arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_uchar" title='(anonymous struct)::(anonymous union)::a_uchar' data-ref="(anonymousstruct)::(anonymous)::a_uchar" data-ref-filename="(anonymousstruct)..(anonymous)..a_uchar">a_uchar</a>;</td></tr>
+<tr><th id="649">649</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col7 ref" href="#37arg" title='arg' data-ref="37arg" data-ref-filename="37arg">arg</a>);</td></tr>
+<tr><th id="650">650</th><td>			}</td></tr>
+<tr><th id="651">651</th><td>			<b>break</b>;</td></tr>
+<tr><th id="652">652</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_SHORT" title='TYPE_SHORT' data-ref="TYPE_SHORT" data-ref-filename="TYPE_SHORT">TYPE_SHORT</a>:</td></tr>
+<tr><th id="653">653</th><td>			{</td></tr>
+<tr><th id="654">654</th><td>			  <em>int</em> <dfn class="local col8 decl" id="38arg" title='arg' data-type='int' data-ref="38arg" data-ref-filename="38arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_short" title='(anonymous struct)::(anonymous union)::a_short' data-ref="(anonymousstruct)::(anonymous)::a_short" data-ref-filename="(anonymousstruct)..(anonymous)..a_short">a_short</a>;</td></tr>
+<tr><th id="655">655</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col8 ref" href="#38arg" title='arg' data-ref="38arg" data-ref-filename="38arg">arg</a>);</td></tr>
+<tr><th id="656">656</th><td>			}</td></tr>
+<tr><th id="657">657</th><td>			<b>break</b>;</td></tr>
+<tr><th id="658">658</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_USHORT" title='TYPE_USHORT' data-ref="TYPE_USHORT" data-ref-filename="TYPE_USHORT">TYPE_USHORT</a>:</td></tr>
+<tr><th id="659">659</th><td>			{</td></tr>
+<tr><th id="660">660</th><td>			  <em>unsigned</em> <em>int</em> <dfn class="local col9 decl" id="39arg" title='arg' data-type='unsigned int' data-ref="39arg" data-ref-filename="39arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_ushort" title='(anonymous struct)::(anonymous union)::a_ushort' data-ref="(anonymousstruct)::(anonymous)::a_ushort" data-ref-filename="(anonymousstruct)..(anonymous)..a_ushort">a_ushort</a>;</td></tr>
+<tr><th id="661">661</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col9 ref" href="#39arg" title='arg' data-ref="39arg" data-ref-filename="39arg">arg</a>);</td></tr>
+<tr><th id="662">662</th><td>			}</td></tr>
+<tr><th id="663">663</th><td>			<b>break</b>;</td></tr>
+<tr><th id="664">664</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_INT" title='TYPE_INT' data-ref="TYPE_INT" data-ref-filename="TYPE_INT">TYPE_INT</a>:</td></tr>
+<tr><th id="665">665</th><td>			{</td></tr>
+<tr><th id="666">666</th><td>			  <em>int</em> <dfn class="local col0 decl" id="40arg" title='arg' data-type='int' data-ref="40arg" data-ref-filename="40arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_int" title='(anonymous struct)::(anonymous union)::a_int' data-ref="(anonymousstruct)::(anonymous)::a_int" data-ref-filename="(anonymousstruct)..(anonymous)..a_int">a_int</a>;</td></tr>
+<tr><th id="667">667</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col0 ref" href="#40arg" title='arg' data-ref="40arg" data-ref-filename="40arg">arg</a>);</td></tr>
+<tr><th id="668">668</th><td>			}</td></tr>
+<tr><th id="669">669</th><td>			<b>break</b>;</td></tr>
+<tr><th id="670">670</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_UINT" title='TYPE_UINT' data-ref="TYPE_UINT" data-ref-filename="TYPE_UINT">TYPE_UINT</a>:</td></tr>
+<tr><th id="671">671</th><td>			{</td></tr>
+<tr><th id="672">672</th><td>			  <em>unsigned</em> <em>int</em> <dfn class="local col1 decl" id="41arg" title='arg' data-type='unsigned int' data-ref="41arg" data-ref-filename="41arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_uint" title='(anonymous struct)::(anonymous union)::a_uint' data-ref="(anonymousstruct)::(anonymous)::a_uint" data-ref-filename="(anonymousstruct)..(anonymous)..a_uint">a_uint</a>;</td></tr>
+<tr><th id="673">673</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col1 ref" href="#41arg" title='arg' data-ref="41arg" data-ref-filename="41arg">arg</a>);</td></tr>
+<tr><th id="674">674</th><td>			}</td></tr>
+<tr><th id="675">675</th><td>			<b>break</b>;</td></tr>
+<tr><th id="676">676</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_LONGINT" title='TYPE_LONGINT' data-ref="TYPE_LONGINT" data-ref-filename="TYPE_LONGINT">TYPE_LONGINT</a>:</td></tr>
+<tr><th id="677">677</th><td>			{</td></tr>
+<tr><th id="678">678</th><td>			  <em>long</em> <em>int</em> <dfn class="local col2 decl" id="42arg" title='arg' data-type='long' data-ref="42arg" data-ref-filename="42arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_longint" title='(anonymous struct)::(anonymous union)::a_longint' data-ref="(anonymousstruct)::(anonymous)::a_longint" data-ref-filename="(anonymousstruct)..(anonymous)..a_longint">a_longint</a>;</td></tr>
+<tr><th id="679">679</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col2 ref" href="#42arg" title='arg' data-ref="42arg" data-ref-filename="42arg">arg</a>);</td></tr>
+<tr><th id="680">680</th><td>			}</td></tr>
+<tr><th id="681">681</th><td>			<b>break</b>;</td></tr>
+<tr><th id="682">682</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_ULONGINT" title='TYPE_ULONGINT' data-ref="TYPE_ULONGINT" data-ref-filename="TYPE_ULONGINT">TYPE_ULONGINT</a>:</td></tr>
+<tr><th id="683">683</th><td>			{</td></tr>
+<tr><th id="684">684</th><td>			  <em>unsigned</em> <em>long</em> <em>int</em> <dfn class="local col3 decl" id="43arg" title='arg' data-type='unsigned long' data-ref="43arg" data-ref-filename="43arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_ulongint" title='(anonymous struct)::(anonymous union)::a_ulongint' data-ref="(anonymousstruct)::(anonymous)::a_ulongint" data-ref-filename="(anonymousstruct)..(anonymous)..a_ulongint">a_ulongint</a>;</td></tr>
+<tr><th id="685">685</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col3 ref" href="#43arg" title='arg' data-ref="43arg" data-ref-filename="43arg">arg</a>);</td></tr>
+<tr><th id="686">686</th><td>			}</td></tr>
+<tr><th id="687">687</th><td>			<b>break</b>;</td></tr>
+<tr><th id="688">688</th><td><u>#<span data-ppcond="688">ifdef</span> <a class="macro" href="../../include/config.h.html#442" data-ref="_M/HAVE_LONG_LONG">HAVE_LONG_LONG</a></u></td></tr>
+<tr><th id="689">689</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_LONGLONGINT" title='TYPE_LONGLONGINT' data-ref="TYPE_LONGLONGINT" data-ref-filename="TYPE_LONGLONGINT">TYPE_LONGLONGINT</a>:</td></tr>
+<tr><th id="690">690</th><td>			{</td></tr>
+<tr><th id="691">691</th><td>			  <em>long</em> <em>long</em> <em>int</em> <dfn class="local col4 decl" id="44arg" title='arg' data-type='long long' data-ref="44arg" data-ref-filename="44arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_longlongint" title='(anonymous struct)::(anonymous union)::a_longlongint' data-ref="(anonymousstruct)::(anonymous)::a_longlongint" data-ref-filename="(anonymousstruct)..(anonymous)..a_longlongint">a_longlongint</a>;</td></tr>
+<tr><th id="692">692</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col4 ref" href="#44arg" title='arg' data-ref="44arg" data-ref-filename="44arg">arg</a>);</td></tr>
+<tr><th id="693">693</th><td>			}</td></tr>
+<tr><th id="694">694</th><td>			<b>break</b>;</td></tr>
+<tr><th id="695">695</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_ULONGLONGINT" title='TYPE_ULONGLONGINT' data-ref="TYPE_ULONGLONGINT" data-ref-filename="TYPE_ULONGLONGINT">TYPE_ULONGLONGINT</a>:</td></tr>
+<tr><th id="696">696</th><td>			{</td></tr>
+<tr><th id="697">697</th><td>			  <em>unsigned</em> <em>long</em> <em>long</em> <em>int</em> <dfn class="local col5 decl" id="45arg" title='arg' data-type='unsigned long long' data-ref="45arg" data-ref-filename="45arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_ulonglongint" title='(anonymous struct)::(anonymous union)::a_ulonglongint' data-ref="(anonymousstruct)::(anonymous)::a_ulonglongint" data-ref-filename="(anonymousstruct)..(anonymous)..a_ulonglongint">a_ulonglongint</a>;</td></tr>
+<tr><th id="698">698</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col5 ref" href="#45arg" title='arg' data-ref="45arg" data-ref-filename="45arg">arg</a>);</td></tr>
+<tr><th id="699">699</th><td>			}</td></tr>
+<tr><th id="700">700</th><td>			<b>break</b>;</td></tr>
+<tr><th id="701">701</th><td><u>#<span data-ppcond="688">endif</span></u></td></tr>
+<tr><th id="702">702</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_DOUBLE" title='TYPE_DOUBLE' data-ref="TYPE_DOUBLE" data-ref-filename="TYPE_DOUBLE">TYPE_DOUBLE</a>:</td></tr>
+<tr><th id="703">703</th><td>			{</td></tr>
+<tr><th id="704">704</th><td>			  <em>double</em> <dfn class="local col6 decl" id="46arg" title='arg' data-type='double' data-ref="46arg" data-ref-filename="46arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_double" title='(anonymous struct)::(anonymous union)::a_double' data-ref="(anonymousstruct)::(anonymous)::a_double" data-ref-filename="(anonymousstruct)..(anonymous)..a_double">a_double</a>;</td></tr>
+<tr><th id="705">705</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col6 ref" href="#46arg" title='arg' data-ref="46arg" data-ref-filename="46arg">arg</a>);</td></tr>
+<tr><th id="706">706</th><td>			}</td></tr>
+<tr><th id="707">707</th><td>			<b>break</b>;</td></tr>
+<tr><th id="708">708</th><td><u>#<span data-ppcond="708">ifdef</span> <a class="macro" href="../../include/config.h.html#436" data-ref="_M/HAVE_LONG_DOUBLE">HAVE_LONG_DOUBLE</a></u></td></tr>
+<tr><th id="709">709</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_LONGDOUBLE" title='TYPE_LONGDOUBLE' data-ref="TYPE_LONGDOUBLE" data-ref-filename="TYPE_LONGDOUBLE">TYPE_LONGDOUBLE</a>:</td></tr>
+<tr><th id="710">710</th><td>			{</td></tr>
+<tr><th id="711">711</th><td>			  <em>long</em> <em>double</em> <dfn class="local col7 decl" id="47arg" title='arg' data-type='long double' data-ref="47arg" data-ref-filename="47arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_longdouble" title='(anonymous struct)::(anonymous union)::a_longdouble' data-ref="(anonymousstruct)::(anonymous)::a_longdouble" data-ref-filename="(anonymousstruct)..(anonymous)..a_longdouble">a_longdouble</a>;</td></tr>
+<tr><th id="712">712</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col7 ref" href="#47arg" title='arg' data-ref="47arg" data-ref-filename="47arg">arg</a>);</td></tr>
+<tr><th id="713">713</th><td>			}</td></tr>
+<tr><th id="714">714</th><td>			<b>break</b>;</td></tr>
+<tr><th id="715">715</th><td><u>#<span data-ppcond="708">endif</span></u></td></tr>
+<tr><th id="716">716</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_CHAR" title='TYPE_CHAR' data-ref="TYPE_CHAR" data-ref-filename="TYPE_CHAR">TYPE_CHAR</a>:</td></tr>
+<tr><th id="717">717</th><td>			{</td></tr>
+<tr><th id="718">718</th><td>			  <em>int</em> <dfn class="local col8 decl" id="48arg" title='arg' data-type='int' data-ref="48arg" data-ref-filename="48arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_char" title='(anonymous struct)::(anonymous union)::a_char' data-ref="(anonymousstruct)::(anonymous)::a_char" data-ref-filename="(anonymousstruct)..(anonymous)..a_char">a_char</a>;</td></tr>
+<tr><th id="719">719</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col8 ref" href="#48arg" title='arg' data-ref="48arg" data-ref-filename="48arg">arg</a>);</td></tr>
+<tr><th id="720">720</th><td>			}</td></tr>
+<tr><th id="721">721</th><td>			<b>break</b>;</td></tr>
+<tr><th id="722">722</th><td><u>#<span data-ppcond="722">ifdef</span> <a class="macro" href="../../include/config.h.html#800" data-ref="_M/HAVE_WINT_T">HAVE_WINT_T</a></u></td></tr>
+<tr><th id="723">723</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_WIDE_CHAR" title='TYPE_WIDE_CHAR' data-ref="TYPE_WIDE_CHAR" data-ref-filename="TYPE_WIDE_CHAR">TYPE_WIDE_CHAR</a>:</td></tr>
+<tr><th id="724">724</th><td>			{</td></tr>
+<tr><th id="725">725</th><td>			  <a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/wchar.h.html#wint_t" title='wint_t' data-type='unsigned int' data-ref="wint_t" data-ref-filename="wint_t">wint_t</a> <dfn class="local col9 decl" id="49arg" title='arg' data-type='wint_t' data-ref="49arg" data-ref-filename="49arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_wide_char" title='(anonymous struct)::(anonymous union)::a_wide_char' data-ref="(anonymousstruct)::(anonymous)::a_wide_char" data-ref-filename="(anonymousstruct)..(anonymous)..a_wide_char">a_wide_char</a>;</td></tr>
+<tr><th id="726">726</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col9 ref" href="#49arg" title='arg' data-ref="49arg" data-ref-filename="49arg">arg</a>);</td></tr>
+<tr><th id="727">727</th><td>			}</td></tr>
+<tr><th id="728">728</th><td>			<b>break</b>;</td></tr>
+<tr><th id="729">729</th><td><u>#<span data-ppcond="722">endif</span></u></td></tr>
+<tr><th id="730">730</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_STRING" title='TYPE_STRING' data-ref="TYPE_STRING" data-ref-filename="TYPE_STRING">TYPE_STRING</a>:</td></tr>
+<tr><th id="731">731</th><td>			{</td></tr>
+<tr><th id="732">732</th><td>			  <em>const</em> <em>char</em> *<dfn class="local col0 decl" id="50arg" title='arg' data-type='const char *' data-ref="50arg" data-ref-filename="50arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_string" title='(anonymous struct)::(anonymous union)::a_string' data-ref="(anonymousstruct)::(anonymous)::a_string" data-ref-filename="(anonymousstruct)..(anonymous)..a_string">a_string</a>;</td></tr>
+<tr><th id="733">733</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col0 ref" href="#50arg" title='arg' data-ref="50arg" data-ref-filename="50arg">arg</a>);</td></tr>
+<tr><th id="734">734</th><td>			}</td></tr>
+<tr><th id="735">735</th><td>			<b>break</b>;</td></tr>
+<tr><th id="736">736</th><td><u>#<span data-ppcond="736">ifdef</span> <a class="macro" href="../../include/config.h.html#785" data-ref="_M/HAVE_WCHAR_T">HAVE_WCHAR_T</a></u></td></tr>
+<tr><th id="737">737</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_WIDE_STRING" title='TYPE_WIDE_STRING' data-ref="TYPE_WIDE_STRING" data-ref-filename="TYPE_WIDE_STRING">TYPE_WIDE_STRING</a>:</td></tr>
+<tr><th id="738">738</th><td>			{</td></tr>
+<tr><th id="739">739</th><td>			  <em>const</em> <span class='typedef' title='wchar_t' data-type='int' data-ref="wchar_t" data-ref-filename="wchar_t">wchar_t</span> *<dfn class="local col1 decl" id="51arg" title='arg' data-type='const wchar_t *' data-ref="51arg" data-ref-filename="51arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_wide_string" title='(anonymous struct)::(anonymous union)::a_wide_string' data-ref="(anonymousstruct)::(anonymous)::a_wide_string" data-ref-filename="(anonymousstruct)..(anonymous)..a_wide_string">a_wide_string</a>;</td></tr>
+<tr><th id="740">740</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col1 ref" href="#51arg" title='arg' data-ref="51arg" data-ref-filename="51arg">arg</a>);</td></tr>
+<tr><th id="741">741</th><td>			}</td></tr>
+<tr><th id="742">742</th><td>			<b>break</b>;</td></tr>
+<tr><th id="743">743</th><td><u>#<span data-ppcond="736">endif</span></u></td></tr>
+<tr><th id="744">744</th><td>		      <b>case</b> <a class="enum" href="printf-args.h.html#TYPE_POINTER" title='TYPE_POINTER' data-ref="TYPE_POINTER" data-ref-filename="TYPE_POINTER">TYPE_POINTER</a>:</td></tr>
+<tr><th id="745">745</th><td>			{</td></tr>
+<tr><th id="746">746</th><td>			  <em>void</em> *<dfn class="local col2 decl" id="52arg" title='arg' data-type='void *' data-ref="52arg" data-ref-filename="52arg">arg</dfn> = <a class="local col6 ref" href="#6a" title='a' data-ref="6a" data-ref-filename="6a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymous)::arg" title='(anonymous struct)::arg' data-ref="(anonymous)::arg" data-ref-filename="(anonymous)..arg">arg</a>[<a class="local col2 ref" href="#12dp" title='dp' data-ref="12dp" data-ref-filename="12dp">dp</a>-&gt;<a class="ref field" href="printf-parse.h.html#(anonymous)::arg_index" title='(anonymous struct)::arg_index' data-ref="(anonymous)::arg_index" data-ref-filename="(anonymous)..arg_index">arg_index</a>].<a class="ref field" href="printf-args.h.html#(anonymous)::a" title='(anonymous struct)::a' data-ref="(anonymous)::a" data-ref-filename="(anonymous)..a">a</a>.<a class="ref field" href="printf-args.h.html#(anonymousstruct)::(anonymous)::a_pointer" title='(anonymous struct)::(anonymous union)::a_pointer' data-ref="(anonymousstruct)::(anonymous)::a_pointer" data-ref-filename="(anonymousstruct)..(anonymous)..a_pointer">a_pointer</a>;</td></tr>
+<tr><th id="747">747</th><td>			  <a class="macro" href="#601" title="switch (prefix_count) { case 0: count = snprintf (result + length, maxlen, buf, arg); break; case 1: count = snprintf (result + length, maxlen, buf, prefixes[0], arg); break; case 2: count = snprintf (result + length, maxlen, buf, prefixes[0], prefixes[1], arg); break; default: abort (); }" data-ref="_M/SNPRINTF_BUF">SNPRINTF_BUF</a> (<a class="local col2 ref" href="#52arg" title='arg' data-ref="52arg" data-ref-filename="52arg">arg</a>);</td></tr>
+<tr><th id="748">748</th><td>			}</td></tr>
+<tr><th id="749">749</th><td>			<b>break</b>;</td></tr>
+<tr><th id="750">750</th><td>		      <b>default</b>:</td></tr>
+<tr><th id="751">751</th><td>			<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="752">752</th><td>		      }</td></tr>
+<tr><th id="753">753</th><td></td></tr>
+<tr><th id="754">754</th><td><u>#<span data-ppcond="754">if</span> <a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="755">755</th><td>		    <i>/* Portability: Not all implementations of snprintf()</i></td></tr>
+<tr><th id="756">756</th><td><i>		       are ISO C 99 compliant.  Determine the number of</i></td></tr>
+<tr><th id="757">757</th><td><i>		       bytes that snprintf() has produced or would have</i></td></tr>
+<tr><th id="758">758</th><td><i>		       produced.  */</i></td></tr>
+<tr><th id="759">759</th><td>		    <b>if</b> (<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> &gt;= <var>0</var>)</td></tr>
+<tr><th id="760">760</th><td>		      {</td></tr>
+<tr><th id="761">761</th><td>			<i>/* Verify that snprintf() has NUL-terminated its</i></td></tr>
+<tr><th id="762">762</th><td><i>			   result.  */</i></td></tr>
+<tr><th id="763">763</th><td>			<b>if</b> (<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> &lt; <a class="local col4 ref" href="#34maxlen" title='maxlen' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</a> &amp;&amp; <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>[<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> + <a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a>] != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="764">764</th><td>			  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#abort" title='abort' data-ref="abort" data-ref-filename="abort">abort</a> ();</td></tr>
+<tr><th id="765">765</th><td>		      }</td></tr>
+<tr><th id="766">766</th><td><u>#<span data-ppcond="754">endif</span></u></td></tr>
+<tr><th id="767">767</th><td></td></tr>
+<tr><th id="768">768</th><td>		    <i>/* Attempt to handle failure.  */</i></td></tr>
+<tr><th id="769">769</th><td>		    <b>if</b> (<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> &lt; <var>0</var>)</td></tr>
+<tr><th id="770">770</th><td>		      {</td></tr>
+<tr><th id="771">771</th><td>			<b>if</b> (!(<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a> || <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>))</td></tr>
+<tr><th id="772">772</th><td>			  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>);</td></tr>
+<tr><th id="773">773</th><td>			<b>if</b> (<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="774">774</th><td>			  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a>);</td></tr>
+<tr><th id="775">775</th><td>			<a class="macro" href="#133" title="free (d.dir); if (a.arg) free (a.arg);" data-ref="_M/CLEANUP">CLEANUP</a> ();</td></tr>
+<tr><th id="776">776</th><td>			<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#64" title="22" data-ref="_M/EINVAL">EINVAL</a>;</td></tr>
+<tr><th id="777">777</th><td>			<b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="778">778</th><td>		      }</td></tr>
+<tr><th id="779">779</th><td></td></tr>
+<tr><th id="780">780</th><td><u>#<span data-ppcond="780">if</span> !<a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="781">781</th><td>		    <b>if</b> (count &gt;= tmp_length)</td></tr>
+<tr><th id="782">782</th><td>		      <i>/* tmp_length was incorrectly calculated - fix the</i></td></tr>
+<tr><th id="783">783</th><td><i>			 code above!  */</i></td></tr>
+<tr><th id="784">784</th><td>		      abort ();</td></tr>
+<tr><th id="785">785</th><td><u>#<span data-ppcond="780">endif</span></u></td></tr>
+<tr><th id="786">786</th><td></td></tr>
+<tr><th id="787">787</th><td>		    <i>/* Make room for the result.  */</i></td></tr>
+<tr><th id="788">788</th><td>		    <b>if</b> (<a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a> &gt;= <a class="local col4 ref" href="#34maxlen" title='maxlen' data-ref="34maxlen" data-ref-filename="34maxlen">maxlen</a>)</td></tr>
+<tr><th id="789">789</th><td>		      {</td></tr>
+<tr><th id="790">790</th><td>			<i>/* Need at least count bytes.  But allocate</i></td></tr>
+<tr><th id="791">791</th><td><i>			   proportionally, to avoid looping eternally if</i></td></tr>
+<tr><th id="792">792</th><td><i>			   snprintf() reports a too small count.  */</i></td></tr>
+<tr><th id="793">793</th><td>			<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="53n" title='n' data-type='size_t' data-ref="53n" data-ref-filename="53n">n</dfn> =</td></tr>
+<tr><th id="794">794</th><td>			  <a class="ref fn" href="xsize.h.html#xmax" title='xmax' data-ref="xmax" data-ref-filename="xmax">xmax</a> (<a class="ref fn" href="xsize.h.html#xsum" title='xsum' data-ref="xsum" data-ref-filename="xsum">xsum</a> (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a>), <a class="macro" href="xsize.h.html#98" title="((allocated) &lt;= 18446744073709551615UL / (2) ? (size_t) (allocated) * (2) : 18446744073709551615UL)" data-ref="_M/xtimes">xtimes</a> (<a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a>, <var>2</var>));</td></tr>
+<tr><th id="795">795</th><td></td></tr>
+<tr><th id="796">796</th><td>			<a class="macro" href="#196" title="if ((n) &gt; allocated) { size_t memory_size; char *memory; allocated = (allocated &gt; 0 ? ((allocated) &lt;= 18446744073709551615UL / (2) ? (size_t) (allocated) * (2) : 18446744073709551615UL) : 12); if ((n) &gt; allocated) allocated = (n); memory_size = ((allocated) &lt;= 18446744073709551615UL / (sizeof (char)) ? (size_t) (allocated) * (sizeof (char)) : 18446744073709551615UL); if (((memory_size) == 18446744073709551615UL)) goto out_of_memory; if (result == resultbuf || result == ((void*)0)) memory = (char *) malloc (memory_size); else memory = (char *) realloc (result, memory_size); if (memory == ((void*)0)) goto out_of_memory; if (result == resultbuf &amp;&amp; length &gt; 0) memcpy (memory, result, length * sizeof (char)); result = memory; }" data-ref="_M/ENSURE_ALLOCATION">ENSURE_ALLOCATION</a> (<a class="local col3 ref" href="#53n" title='n' data-ref="53n" data-ref-filename="53n">n</a>);</td></tr>
+<tr><th id="797">797</th><td><u>#<span data-ppcond="797">if</span> <a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="798">798</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="799">799</th><td><u>#<span data-ppcond="797">endif</span></u></td></tr>
+<tr><th id="800">800</th><td>		      }</td></tr>
+<tr><th id="801">801</th><td></td></tr>
+<tr><th id="802">802</th><td><u>#<span data-ppcond="802">if</span> <a class="macro" href="#111" title="(HAVE_DECL__SNPRINTF || 1)" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="803">803</th><td>		    <i>/* The snprintf() result did fit.  */</i></td></tr>
+<tr><th id="804">804</th><td><u>#<span data-ppcond="802">else</span></u></td></tr>
+<tr><th id="805">805</th><td>		    <i>/* Append the sprintf() result.  */</i></td></tr>
+<tr><th id="806">806</th><td>		    memcpy (result + length, tmp, count * <b>sizeof</b> (CHAR_T));</td></tr>
+<tr><th id="807">807</th><td>		    <b>if</b> (tmp != tmpbuf)</td></tr>
+<tr><th id="808">808</th><td>		      free (tmp);</td></tr>
+<tr><th id="809">809</th><td><u>#<span data-ppcond="802">endif</span></u></td></tr>
+<tr><th id="810">810</th><td></td></tr>
+<tr><th id="811">811</th><td>		    <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> += <a class="local col5 ref" href="#35count" title='count' data-ref="35count" data-ref-filename="35count">count</a>;</td></tr>
+<tr><th id="812">812</th><td>		    <b>break</b>;</td></tr>
+<tr><th id="813">813</th><td>		  }</td></tr>
+<tr><th id="814">814</th><td>	      }</td></tr>
+<tr><th id="815">815</th><td>	  }</td></tr>
+<tr><th id="816">816</th><td>      }</td></tr>
+<tr><th id="817">817</th><td></td></tr>
+<tr><th id="818">818</th><td>    <i>/* Add the final NUL.  */</i></td></tr>
+<tr><th id="819">819</th><td>    <a class="macro" href="#196" title="if ((xsum (length, 1)) &gt; allocated) { size_t memory_size; char *memory; allocated = (allocated &gt; 0 ? ((allocated) &lt;= 18446744073709551615UL / (2) ? (size_t) (allocated) * (2) : 18446744073709551615UL) : 12); if ((xsum (length, 1)) &gt; allocated) allocated = (xsum (length, 1)); memory_size = ((allocated) &lt;= 18446744073709551615UL / (sizeof (char)) ? (size_t) (allocated) * (sizeof (char)) : 18446744073709551615UL); if (((memory_size) == 18446744073709551615UL)) goto out_of_memory; if (result == resultbuf || result == ((void*)0)) memory = (char *) malloc (memory_size); else memory = (char *) realloc (result, memory_size); if (memory == ((void*)0)) goto out_of_memory; if (result == resultbuf &amp;&amp; length &gt; 0) memcpy (memory, result, length * sizeof (char)); result = memory; }" data-ref="_M/ENSURE_ALLOCATION">ENSURE_ALLOCATION</a> (<a class="ref fn" href="xsize.h.html#xsum" title='xsum' data-ref="xsum" data-ref-filename="xsum">xsum</a> (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>, <var>1</var>));</td></tr>
+<tr><th id="820">820</th><td>    <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>[<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="821">821</th><td></td></tr>
+<tr><th id="822">822</th><td>    <b>if</b> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> != <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a> &amp;&amp; <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> + <var>1</var> &lt; <a class="local col4 ref" href="#14allocated" title='allocated' data-ref="14allocated" data-ref-filename="14allocated">allocated</a>)</td></tr>
+<tr><th id="823">823</th><td>      {</td></tr>
+<tr><th id="824">824</th><td>	<i>/* Shrink the allocated memory if possible.  */</i></td></tr>
+<tr><th id="825">825</th><td>	<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *<dfn class="local col8 decl" id="58memory" title='memory' data-type='char *' data-ref="58memory" data-ref-filename="58memory">memory</dfn>;</td></tr>
+<tr><th id="826">826</th><td></td></tr>
+<tr><th id="827">827</th><td>	<a class="local col8 ref" href="#58memory" title='memory' data-ref="58memory" data-ref-filename="58memory">memory</a> = (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a> *) <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#realloc" title='realloc' data-ref="realloc" data-ref-filename="realloc">realloc</a> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>, (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> + <var>1</var>) * <b>sizeof</b> (<a class="macro" href="#107" title="char" data-ref="_M/CHAR_T">CHAR_T</a>));</td></tr>
+<tr><th id="828">828</th><td>	<b>if</b> (<a class="local col8 ref" href="#58memory" title='memory' data-ref="58memory" data-ref-filename="58memory">memory</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="829">829</th><td>	  <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> = <a class="local col8 ref" href="#58memory" title='memory' data-ref="58memory" data-ref-filename="58memory">memory</a>;</td></tr>
+<tr><th id="830">830</th><td>      }</td></tr>
+<tr><th id="831">831</th><td></td></tr>
+<tr><th id="832">832</th><td>    <b>if</b> (<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="833">833</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a>);</td></tr>
+<tr><th id="834">834</th><td>    <a class="macro" href="#133" title="free (d.dir); if (a.arg) free (a.arg);" data-ref="_M/CLEANUP">CLEANUP</a> ();</td></tr>
+<tr><th id="835">835</th><td>    *<a class="local col2 ref" href="#2lengthp" title='lengthp' data-ref="2lengthp" data-ref-filename="2lengthp">lengthp</a> = <a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a>;</td></tr>
+<tr><th id="836">836</th><td>    <b>if</b> (<a class="local col5 ref" href="#15length" title='length' data-ref="15length" data-ref-filename="15length">length</a> &gt; <span class="macro" title="2147483647" data-ref="_M/INT_MAX">INT_MAX</span>)</td></tr>
+<tr><th id="837">837</th><td>      <b>goto</b> <a class="lbl" href="#59length_overflow" data-ref="59length_overflow" data-ref-filename="59length_overflow">length_overflow</a>;</td></tr>
+<tr><th id="838">838</th><td>    <b>return</b> <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>;</td></tr>
+<tr><th id="839">839</th><td></td></tr>
+<tr><th id="840">840</th><td>  <dfn class="lbl" id="59length_overflow" data-ref="59length_overflow" data-ref-filename="59length_overflow">length_overflow</dfn>:</td></tr>
+<tr><th id="841">841</th><td>    <i>/* We could produce such a big string, but its length doesn't fit into</i></td></tr>
+<tr><th id="842">842</th><td><i>       an 'int'.  POSIX says that snprintf() fails with errno = EOVERFLOW in</i></td></tr>
+<tr><th id="843">843</th><td><i>       this case.  */</i></td></tr>
+<tr><th id="844">844</th><td>    <b>if</b> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> != <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a>)</td></tr>
+<tr><th id="845">845</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>);</td></tr>
+<tr><th id="846">846</th><td>    <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#146" title="84" data-ref="_M/EOVERFLOW">EOVERFLOW</a>;</td></tr>
+<tr><th id="847">847</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="848">848</th><td></td></tr>
+<tr><th id="849">849</th><td>  <dfn class="lbl" id="22out_of_memory" data-ref="22out_of_memory" data-ref-filename="22out_of_memory">out_of_memory</dfn>:</td></tr>
+<tr><th id="850">850</th><td>    <b>if</b> (!(<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == <a class="local col1 ref" href="#1resultbuf" title='resultbuf' data-ref="1resultbuf" data-ref-filename="1resultbuf">resultbuf</a> || <a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>))</td></tr>
+<tr><th id="851">851</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col3 ref" href="#13result" title='result' data-ref="13result" data-ref-filename="13result">result</a>);</td></tr>
+<tr><th id="852">852</th><td>    <b>if</b> (<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="853">853</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col9 ref" href="#9buf_malloced" title='buf_malloced' data-ref="9buf_malloced" data-ref-filename="9buf_malloced">buf_malloced</a>);</td></tr>
+<tr><th id="854">854</th><td>  <dfn class="lbl" id="17out_of_memory_1" data-ref="17out_of_memory_1" data-ref-filename="17out_of_memory_1">out_of_memory_1</dfn>:</td></tr>
+<tr><th id="855">855</th><td>    <a class="macro" href="#133" title="free (d.dir); if (a.arg) free (a.arg);" data-ref="_M/CLEANUP">CLEANUP</a> ();</td></tr>
+<tr><th id="856">856</th><td>    <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/errno.h.html#55" title="(*__errno())" data-ref="_M/errno">errno</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/errno.h.html#54" title="12" data-ref="_M/ENOMEM">ENOMEM</a>;</td></tr>
+<tr><th id="857">857</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="858">858</th><td>  }</td></tr>
+<tr><th id="859">859</th><td>}</td></tr>
+<tr><th id="860">860</th><td></td></tr>
+<tr><th id="861">861</th><td><u>#undef <a class="macro" href="#117" data-ref="_M/SNPRINTF">SNPRINTF</a></u></td></tr>
+<tr><th id="862">862</th><td><u>#undef <a class="macro" href="#111" data-ref="_M/USE_SNPRINTF">USE_SNPRINTF</a></u></td></tr>
+<tr><th id="863">863</th><td><u>#undef <a class="macro" href="#110" data-ref="_M/PRINTF_PARSE">PRINTF_PARSE</a></u></td></tr>
+<tr><th id="864">864</th><td><u>#undef <a class="macro" href="#109" data-ref="_M/DIRECTIVES">DIRECTIVES</a></u></td></tr>
+<tr><th id="865">865</th><td><u>#undef <a class="macro" href="#108" data-ref="_M/DIRECTIVE">DIRECTIVE</a></u></td></tr>
+<tr><th id="866">866</th><td><u>#undef <a class="macro" href="#107" data-ref="_M/CHAR_T">CHAR_T</a></u></td></tr>
+<tr><th id="867">867</th><td><u>#undef <a class="macro" href="#106" data-ref="_M/VASNPRINTF">VASNPRINTF</a></u></td></tr>
+<tr><th id="868">868</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

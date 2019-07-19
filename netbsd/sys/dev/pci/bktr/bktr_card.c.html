@@ -1,0 +1,1328 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>bktr_card.c source code [netbsd/sys/dev/pci/bktr/bktr_card.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/dev/pci/bktr/bktr_card.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>dev</a>/<a href='..'>pci</a>/<a href='./'>bktr</a>/<a href='bktr_card.c.html'>bktr_card.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* $SourceForge: bktr_card.c,v 1.3 2003/03/11 23:11:21 thomasklausner Exp $ */</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*	$NetBSD: bktr_card.c,v 1.25 2013/10/16 18:20:16 christos Exp $	*/</i></td></tr>
+<tr><th id="4">4</th><td><i>/* $FreeBSD: src/sys/dev/bktr/bktr_card.c,v 1.16 2000/10/31 13:09:56 roger Exp$ */</i></td></tr>
+<tr><th id="5">5</th><td></td></tr>
+<tr><th id="6">6</th><td><i>/*</i></td></tr>
+<tr><th id="7">7</th><td><i> * This is part of the Driver for Video Capture Cards (Frame grabbers)</i></td></tr>
+<tr><th id="8">8</th><td><i> * and TV Tuner cards using the Brooktree Bt848, Bt848A, Bt849A, Bt878, Bt879</i></td></tr>
+<tr><th id="9">9</th><td><i> * chipset.</i></td></tr>
+<tr><th id="10">10</th><td><i> * Copyright Roger Hardiman and Amancio Hasty.</i></td></tr>
+<tr><th id="11">11</th><td><i> *</i></td></tr>
+<tr><th id="12">12</th><td><i> * bktr_card : This deals with identifying TV cards.</i></td></tr>
+<tr><th id="13">13</th><td><i> *               trying to find the card make and model of card.</i></td></tr>
+<tr><th id="14">14</th><td><i> *               trying to find the type of tuner fitted.</i></td></tr>
+<tr><th id="15">15</th><td><i> *               reading the configuration EEPROM.</i></td></tr>
+<tr><th id="16">16</th><td><i> *               locating i2c devices.</i></td></tr>
+<tr><th id="17">17</th><td><i> *</i></td></tr>
+<tr><th id="18">18</th><td><i> */</i></td></tr>
+<tr><th id="19">19</th><td></td></tr>
+<tr><th id="20">20</th><td><i>/*</i></td></tr>
+<tr><th id="21">21</th><td><i> * 1. Redistributions of source code must retain the</i></td></tr>
+<tr><th id="22">22</th><td><i> * Copyright (c) 1997 Amancio Hasty, 1999 Roger Hardiman</i></td></tr>
+<tr><th id="23">23</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="24">24</th><td><i> *</i></td></tr>
+<tr><th id="25">25</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="26">26</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="27">27</th><td><i> * are met:</i></td></tr>
+<tr><th id="28">28</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="29">29</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="30">30</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="31">31</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="32">32</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="33">33</th><td><i> * 3. All advertising materials mentioning features or use of this software</i></td></tr>
+<tr><th id="34">34</th><td><i> *    must display the following acknowledgement:</i></td></tr>
+<tr><th id="35">35</th><td><i> *      This product includes software developed by Amancio Hasty and</i></td></tr>
+<tr><th id="36">36</th><td><i> *      Roger Hardiman</i></td></tr>
+<tr><th id="37">37</th><td><i> * 4. The name of the author may not be used to endorse or promote products</i></td></tr>
+<tr><th id="38">38</th><td><i> *    derived from this software without specific prior written permission.</i></td></tr>
+<tr><th id="39">39</th><td><i> *</i></td></tr>
+<tr><th id="40">40</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR</i></td></tr>
+<tr><th id="41">41</th><td><i> * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</i></td></tr>
+<tr><th id="42">42</th><td><i> * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE</i></td></tr>
+<tr><th id="43">43</th><td><i> * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,</i></td></tr>
+<tr><th id="44">44</th><td><i> * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES</i></td></tr>
+<tr><th id="45">45</th><td><i> * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR</i></td></tr>
+<tr><th id="46">46</th><td><i> * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="47">47</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,</i></td></tr>
+<tr><th id="48">48</th><td><i> * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN</i></td></tr>
+<tr><th id="49">49</th><td><i> * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="50">50</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="51">51</th><td><i> */</i></td></tr>
+<tr><th id="52">52</th><td></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: bktr_card.c,v 1.25 2013/10/16 18:20:16 christos Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: bktr_card.c,v 1.25 2013/10/16 18:20:16 christos Exp $"</q>);</td></tr>
+<tr><th id="55">55</th><td></td></tr>
+<tr><th id="56">56</th><td><u>#include <a href="../../../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_bktr.h.html">"opt_bktr.h"</a>		/* Include any kernel config options */</u></td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td><u>#include <a href="../../../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="59">59</th><td><u>#include <a href="../../../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../../../sys/vnode.h.html">&lt;sys/vnode.h&gt;</a></u></td></tr>
+<tr><th id="61">61</th><td></td></tr>
+<tr><th id="62">62</th><td><u>#<span data-ppcond="62">ifdef</span> <span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span></u></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><u>#if (__FreeBSD_version &lt; 500000)</u></td></tr>
+<tr><th id="65">65</th><td><u>#include &lt;machine/clock.h&gt;              /* for DELAY */</u></td></tr>
+<tr><th id="66">66</th><td><u>#endif</u></td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td><u>#include &lt;pci/pcivar.h&gt;</u></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><u>#if (__FreeBSD_version &gt;=300000)</u></td></tr>
+<tr><th id="71">71</th><td><u>#include &lt;machine/bus_memio.h&gt;	/* for bus space */</u></td></tr>
+<tr><th id="72">72</th><td><u>#include &lt;sys/bus.h&gt;</u></td></tr>
+<tr><th id="73">73</th><td><u>#include &lt;sys/bus.h&gt;</u></td></tr>
+<tr><th id="74">74</th><td><u>#endif</u></td></tr>
+<tr><th id="75">75</th><td><u>#<span data-ppcond="62">endif</span></u></td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td><u>#<span data-ppcond="77">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="78">78</th><td><u>#include &lt;dev/ic/bt8xx.h&gt;	/* NetBSD location for .h files */</u></td></tr>
+<tr><th id="79">79</th><td><u>#include &lt;dev/pci/bktr/bktr_reg.h&gt;</u></td></tr>
+<tr><th id="80">80</th><td><u>#include &lt;dev/pci/bktr/bktr_core.h&gt;</u></td></tr>
+<tr><th id="81">81</th><td><u>#include &lt;dev/pci/bktr/bktr_tuner.h&gt;</u></td></tr>
+<tr><th id="82">82</th><td><u>#include &lt;dev/pci/bktr/bktr_card.h&gt;</u></td></tr>
+<tr><th id="83">83</th><td><u>#include &lt;dev/pci/bktr/bktr_audio.h&gt;</u></td></tr>
+<tr><th id="84">84</th><td><u>#<span data-ppcond="77">else</span></u></td></tr>
+<tr><th id="85">85</th><td><u>#include <span class='error' title="&apos;machine/ioctl_meteor.h&apos; file not found">&lt;</span>machine/ioctl_meteor.h&gt;	/* Traditional location for .h files */</u></td></tr>
+<tr><th id="86">86</th><td><u>#include &lt;machine/ioctl_bt848.h&gt;        /* extensions to ioctl_meteor.h */</u></td></tr>
+<tr><th id="87">87</th><td><u>#include &lt;dev/bktr/bktr_reg.h&gt;</u></td></tr>
+<tr><th id="88">88</th><td><u>#include &lt;dev/bktr/bktr_core.h&gt;</u></td></tr>
+<tr><th id="89">89</th><td><u>#include &lt;dev/bktr/bktr_tuner.h&gt;</u></td></tr>
+<tr><th id="90">90</th><td><u>#include &lt;dev/bktr/bktr_card.h&gt;</u></td></tr>
+<tr><th id="91">91</th><td><u>#include &lt;dev/bktr/bktr_audio.h&gt;</u></td></tr>
+<tr><th id="92">92</th><td><u>#<span data-ppcond="77">endif</span></u></td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><i>/* Include the PCI Vendor definitions */</i></td></tr>
+<tr><th id="95">95</th><td><u>#<span data-ppcond="95">ifdef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="96">96</th><td><u>#include &lt;dev/pci/pcidevs.h&gt;</u></td></tr>
+<tr><th id="97">97</th><td><u>#include &lt;dev/pci/pcireg.h&gt;</u></td></tr>
+<tr><th id="98">98</th><td><u>#<span data-ppcond="95">endif</span></u></td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td><i>/* Various defines */</i></td></tr>
+<tr><th id="101">101</th><td><u>#define <dfn class="macro" id="_M/HAUP_REMOTE_INT_WADDR" data-ref="_M/HAUP_REMOTE_INT_WADDR">HAUP_REMOTE_INT_WADDR</dfn>   0x30</u></td></tr>
+<tr><th id="102">102</th><td><u>#define <dfn class="macro" id="_M/HAUP_REMOTE_INT_RADDR" data-ref="_M/HAUP_REMOTE_INT_RADDR">HAUP_REMOTE_INT_RADDR</dfn>   0x31</u></td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td><u>#define <dfn class="macro" id="_M/HAUP_REMOTE_EXT_WADDR" data-ref="_M/HAUP_REMOTE_EXT_WADDR">HAUP_REMOTE_EXT_WADDR</dfn>   0x34</u></td></tr>
+<tr><th id="105">105</th><td><u>#define <dfn class="macro" id="_M/HAUP_REMOTE_EXT_RADDR" data-ref="_M/HAUP_REMOTE_EXT_RADDR">HAUP_REMOTE_EXT_RADDR</dfn>   0x35</u></td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><i>/* address of BTSC/SAP decoder chip */</i></td></tr>
+<tr><th id="108">108</th><td><u>#define <dfn class="macro" id="_M/TDA9850_WADDR" data-ref="_M/TDA9850_WADDR">TDA9850_WADDR</dfn>           0xb6</u></td></tr>
+<tr><th id="109">109</th><td><u>#define <dfn class="macro" id="_M/TDA9850_RADDR" data-ref="_M/TDA9850_RADDR">TDA9850_RADDR</dfn>           0xb7</u></td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td><i>/* address of MSP3400C chip */</i></td></tr>
+<tr><th id="112">112</th><td><u>#define <dfn class="macro" id="_M/MSP3400C_WADDR" data-ref="_M/MSP3400C_WADDR">MSP3400C_WADDR</dfn>          0x80</u></td></tr>
+<tr><th id="113">113</th><td><u>#define <dfn class="macro" id="_M/MSP3400C_RADDR" data-ref="_M/MSP3400C_RADDR">MSP3400C_RADDR</dfn>          0x81</u></td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td><i>/* address of DPL3518A chip */</i></td></tr>
+<tr><th id="116">116</th><td><u>#define <dfn class="macro" id="_M/DPL3518A_WADDR" data-ref="_M/DPL3518A_WADDR">DPL3518A_WADDR</dfn>          0x84</u></td></tr>
+<tr><th id="117">117</th><td><u>#define <dfn class="macro" id="_M/DPL3518A_RADDR" data-ref="_M/DPL3518A_RADDR">DPL3518A_RADDR</dfn>          0x85</u></td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td><i>/* EEProm (128 * 8) on an STB card */</i></td></tr>
+<tr><th id="120">120</th><td><u>#define <dfn class="macro" id="_M/X24C01_WADDR" data-ref="_M/X24C01_WADDR">X24C01_WADDR</dfn>            0xae</u></td></tr>
+<tr><th id="121">121</th><td><u>#define <dfn class="macro" id="_M/X24C01_RADDR" data-ref="_M/X24C01_RADDR">X24C01_RADDR</dfn>            0xaf</u></td></tr>
+<tr><th id="122">122</th><td></td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td><i>/* EEProm (256 * 8) on a Hauppauge card */</i></td></tr>
+<tr><th id="125">125</th><td><i>/* and on most BT878s cards to store the sub-system vendor id */</i></td></tr>
+<tr><th id="126">126</th><td><u>#define <dfn class="macro" id="_M/PFC8582_WADDR" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</dfn>           0xa0</u></td></tr>
+<tr><th id="127">127</th><td><u>#define <dfn class="macro" id="_M/PFC8582_RADDR" data-ref="_M/PFC8582_RADDR">PFC8582_RADDR</dfn>		0xa1</u></td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><u>#<span data-ppcond="129">if</span> BKTR_SYSTEM_DEFAULT == BROOKTREE_PAL</u></td></tr>
+<tr><th id="130">130</th><td><u>#define <dfn class="macro" id="_M/DEFAULT_TUNER" data-ref="_M/DEFAULT_TUNER">DEFAULT_TUNER</dfn>   <span class='error' title="use of undeclared identifier &apos;PHILIPS_PALI&apos;">PHILIPS_PALI</span></u></td></tr>
+<tr><th id="131">131</th><td><u>#<span data-ppcond="129">else</span></u></td></tr>
+<tr><th id="132">132</th><td><u>#define DEFAULT_TUNER   PHILIPS_NTSC</u></td></tr>
+<tr><th id="133">133</th><td><u>#<span data-ppcond="129">endif</span></u></td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td></td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><i  data-doc="cards">/*</i></td></tr>
+<tr><th id="139">139</th><td><i  data-doc="cards"> * the data for each type of card</i></td></tr>
+<tr><th id="140">140</th><td><i  data-doc="cards"> *</i></td></tr>
+<tr><th id="141">141</th><td><i  data-doc="cards"> * Note:</i></td></tr>
+<tr><th id="142">142</th><td><i  data-doc="cards"> *   these entried MUST be kept in the order defined by the CARD_XXX defines!</i></td></tr>
+<tr><th id="143">143</th><td><i  data-doc="cards"> */</i></td></tr>
+<tr><th id="144">144</th><td><em>static</em> <em>const</em> <b>struct</b> <dfn class="type" id="CARDTYPE" title='CARDTYPE' data-ref="CARDTYPE" data-ref-filename="CARDTYPE">CARDTYPE</dfn> <dfn class="tu decl def" id="cards" title='cards' data-type='int' data-ref="cards" data-ref-filename="cards">cards</dfn><span class='error' title="array has incomplete element type &apos;const struct CARDTYPE&apos;">[</span>] = {</td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_UNKNOWN&apos;">CARD_UNKNOWN</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="147">147</th><td>	  <q>"Unknown"</q>,				<i>/* the 'name' */</i></td></tr>
+<tr><th id="148">148</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="149">149</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="150">150</th><td>	   <var>0</var>,					<i>/* dbx unknown */</i></td></tr>
+<tr><th id="151">151</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="152">152</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="153">153</th><td>	   <var>0</var>,					<i>/* EEProm unknown */</i></td></tr>
+<tr><th id="154">154</th><td>	   <var>0</var>,					<i>/* EEProm unknown */</i></td></tr>
+<tr><th id="155">155</th><td>	   { <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var> },</td></tr>
+<tr><th id="156">156</th><td>	   <var>0</var> },					<i>/* GPIO mask */</i></td></tr>
+<tr><th id="157">157</th><td></td></tr>
+<tr><th id="158">158</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_MIRO&apos;">CARD_MIRO</span>,				<i>/* the card id */</i></td></tr>
+<tr><th id="159">159</th><td>	  <q>"Pinnacle/Miro TV"</q>,			<i>/* the 'name' */</i></td></tr>
+<tr><th id="160">160</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="161">161</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="162">162</th><td>	   <var>0</var>,					<i>/* dbx unknown */</i></td></tr>
+<tr><th id="163">163</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="164">164</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="165">165</th><td>	   <var>0</var>,					<i>/* EEProm unknown */</i></td></tr>
+<tr><th id="166">166</th><td>	   <var>0</var>,					<i>/* size unknown */</i></td></tr>
+<tr><th id="167">167</th><td>	   { <var>0x02</var>, <var>0x01</var>, <var>0x00</var>, <var>0x0a</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="168">168</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_HAUPPAUGE&apos;">CARD_HAUPPAUGE</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="171">171</th><td>	  <q>"Hauppauge WinCast/TV"</q>,		<i>/* the 'name' */</i></td></tr>
+<tr><th id="172">172</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="173">173</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="174">174</th><td>	   <var>0</var>,					<i>/* dbx is optional */</i></td></tr>
+<tr><th id="175">175</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="176">176</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="177">177</th><td>	   <a class="macro" href="#126" title="0xa0" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</a>,			<i>/* EEProm type */</i></td></tr>
+<tr><th id="178">178</th><td>	   (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>),	<i>/* 256 bytes */</i></td></tr>
+<tr><th id="179">179</th><td>	   { <var>0x00</var>, <var>0x02</var>, <var>0x01</var>, <var>0x04</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="180">180</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="181">181</th><td></td></tr>
+<tr><th id="182">182</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_STB&apos;">CARD_STB</span>,				<i>/* the card id */</i></td></tr>
+<tr><th id="183">183</th><td>	  <q>"STB TV/PCI"</q>,				<i>/* the 'name' */</i></td></tr>
+<tr><th id="184">184</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="185">185</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="186">186</th><td>	   <var>0</var>,					<i>/* dbx is optional */</i></td></tr>
+<tr><th id="187">187</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="188">188</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="189">189</th><td>	   <a class="macro" href="#120" title="0xae" data-ref="_M/X24C01_WADDR">X24C01_WADDR</a>,			<i>/* EEProm type */</i></td></tr>
+<tr><th id="190">190</th><td>	   (u_char)(<var>128</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>),	<i>/* 128 bytes */</i></td></tr>
+<tr><th id="191">191</th><td>	   { <var>0x00</var>, <var>0x01</var>, <var>0x02</var>, <var>0x02</var>, <var>1</var> }, 	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="192">192</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_INTEL&apos;">CARD_INTEL</span>,				<i>/* the card id */</i></td></tr>
+<tr><th id="195">195</th><td>	  <q>"Intel Smart Video III/VideoLogic Captivator PCI"</q>, <i>/* the 'name' */</i></td></tr>
+<tr><th id="196">196</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="197">197</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="198">198</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="199">199</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="200">200</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="201">201</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="202">202</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="203">203</th><td>	   { <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var>, <var>0</var> }, 			<i>/* audio MUX values */</i></td></tr>
+<tr><th id="204">204</th><td>	   <var>0x00</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="205">205</th><td></td></tr>
+<tr><th id="206">206</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_IMS_TURBO&apos;">CARD_IMS_TURBO</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="207">207</th><td>	  <q>"IMS TV Turbo"</q>,			<i>/* the 'name' */</i></td></tr>
+<tr><th id="208">208</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="209">209</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="210">210</th><td>	   <var>0</var>,					<i>/* dbx is optional */</i></td></tr>
+<tr><th id="211">211</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="212">212</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="213">213</th><td>	   <a class="macro" href="#126" title="0xa0" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</a>,			<i>/* EEProm type */</i></td></tr>
+<tr><th id="214">214</th><td>	   (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>),	<i>/* 256 bytes */</i></td></tr>
+<tr><th id="215">215</th><td>	   { <var>0x01</var>, <var>0x02</var>, <var>0x01</var>, <var>0x00</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="216">216</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_AVER_MEDIA&apos;">CARD_AVER_MEDIA</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="219">219</th><td>          <q>"AVer Media TV/FM"</q>,                   <i>/* the 'name' */</i></td></tr>
+<tr><th id="220">220</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,                                <i>/* the tuner */</i></td></tr>
+<tr><th id="221">221</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="222">222</th><td>           <var>0</var>,                                   <i>/* dbx is optional */</i></td></tr>
+<tr><th id="223">223</th><td>           <var>0</var>,</td></tr>
+<tr><th id="224">224</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="225">225</th><td>           <var>0</var>,                                   <i>/* EEProm type */</i></td></tr>
+<tr><th id="226">226</th><td>           <var>0</var>,                                   <i>/* EEProm size */</i></td></tr>
+<tr><th id="227">227</th><td>           { <var>0x0c</var>, <var>0x08</var>, <var>0x04</var>, <var>0x00</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="228">228</th><td>	   <var>0x1f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="229">229</th><td></td></tr>
+<tr><th id="230">230</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_OSPREY&apos;">CARD_OSPREY</span>,				<i>/* the card id */</i></td></tr>
+<tr><th id="231">231</th><td>          <q>"MMAC Osprey"</q>,                   	<i>/* the 'name' */</i></td></tr>
+<tr><th id="232">232</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,                                <i>/* the tuner */</i></td></tr>
+<tr><th id="233">233</th><td>	   <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="234">234</th><td>           <var>0</var>,                                   <i>/* dbx is optional */</i></td></tr>
+<tr><th id="235">235</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="236">236</th><td>           <var>0</var>,</td></tr>
+<tr><th id="237">237</th><td>	   <a class="macro" href="#126" title="0xa0" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</a>,			<i>/* EEProm type */</i></td></tr>
+<tr><th id="238">238</th><td>	   (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>),	<i>/* 256 bytes */</i></td></tr>
+<tr><th id="239">239</th><td>           { <var>0x00</var>, <var>0x00</var>, <var>0x00</var>, <var>0x00</var>, <var>0</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="240">240</th><td>	   <var>0</var> },					<i>/* GPIO mask */</i></td></tr>
+<tr><th id="241">241</th><td></td></tr>
+<tr><th id="242">242</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_NEC_PK&apos;">CARD_NEC_PK</span>,                         <i>/* the card id */</i></td></tr>
+<tr><th id="243">243</th><td>          <q>"NEC PK-UG-X017"</q>,                     <i>/* the 'name' */</i></td></tr>
+<tr><th id="244">244</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,                                <i>/* the tuner */</i></td></tr>
+<tr><th id="245">245</th><td>           <var>0</var>,                                   <i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="246">246</th><td>           <var>0</var>,                                   <i>/* dbx is optional */</i></td></tr>
+<tr><th id="247">247</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="248">248</th><td>           <var>0</var>,</td></tr>
+<tr><th id="249">249</th><td>           <var>0</var>,                                   <i>/* EEProm type */</i></td></tr>
+<tr><th id="250">250</th><td>           <var>0</var>,                                   <i>/* EEProm size */</i></td></tr>
+<tr><th id="251">251</th><td>           { <var>0x01</var>, <var>0x02</var>, <var>0x01</var>, <var>0x00</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="252">252</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_IO_GV&apos;">CARD_IO_GV</span>,                          <i>/* the card id */</i></td></tr>
+<tr><th id="255">255</th><td>          <q>"I/O DATA GV-BCTV2/PCI"</q>,              <i>/* the 'name' */</i></td></tr>
+<tr><th id="256">256</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,                                <i>/* the tuner */</i></td></tr>
+<tr><th id="257">257</th><td>           <var>0</var>,                                   <i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="258">258</th><td>           <var>0</var>,                                   <i>/* dbx is optional */</i></td></tr>
+<tr><th id="259">259</th><td>           <var>0</var>,</td></tr>
+<tr><th id="260">260</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="261">261</th><td>           <var>0</var>,                                   <i>/* EEProm type */</i></td></tr>
+<tr><th id="262">262</th><td>           <var>0</var>,                                   <i>/* EEProm size */</i></td></tr>
+<tr><th id="263">263</th><td>           { <var>0x00</var>, <var>0x00</var>, <var>0x00</var>, <var>0x00</var>, <var>1</var> },	<i>/* Has special MUX handler */</i></td></tr>
+<tr><th id="264">264</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="265">265</th><td></td></tr>
+<tr><th id="266">266</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_FLYVIDEO&apos;">CARD_FLYVIDEO</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="267">267</th><td>          <q>"FlyVideo"</q>,				<i>/* the 'name' */</i></td></tr>
+<tr><th id="268">268</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="269">269</th><td>           <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="270">270</th><td>           <var>0</var>,					<i>/* dbx is optional */</i></td></tr>
+<tr><th id="271">271</th><td>           <var>0</var>,					<i>/* msp34xx is optional */</i></td></tr>
+<tr><th id="272">272</th><td>           <var>0</var>,					<i>/* dpl3518a is optional */</i></td></tr>
+<tr><th id="273">273</th><td>	   <var>0xac</var>,				<i>/* EEProm type */</i></td></tr>
+<tr><th id="274">274</th><td>	   (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>),	<i>/* 256 bytes */</i></td></tr>
+<tr><th id="275">275</th><td>           { <var>0x000</var>, <var>0x800</var>, <var>0x400</var>, <var>0x8dff00</var>, <var>1</var> },<i>/* audio MUX values */</i></td></tr>
+<tr><th id="276">276</th><td>	   <var>0x8dff00</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="277">277</th><td></td></tr>
+<tr><th id="278">278</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_ZOLTRIX&apos;">CARD_ZOLTRIX</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="279">279</th><td>	  <q>"Zoltrix"</q>,				<i>/* the 'name' */</i></td></tr>
+<tr><th id="280">280</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="281">281</th><td>           <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="282">282</th><td>           <var>0</var>,					<i>/* dbx is optional */</i></td></tr>
+<tr><th id="283">283</th><td>           <var>0</var>,					<i>/* msp34xx is optional */</i></td></tr>
+<tr><th id="284">284</th><td>           <var>0</var>,					<i>/* dpl3518a is optional */</i></td></tr>
+<tr><th id="285">285</th><td>	   <var>0</var>,					<i>/* EEProm type */</i></td></tr>
+<tr><th id="286">286</th><td>	   <var>0</var>,					<i>/* EEProm size */</i></td></tr>
+<tr><th id="287">287</th><td>	   { <var>0x04</var>, <var>0x01</var>, <var>0x00</var>, <var>0x0a</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="288">288</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_KISS&apos;">CARD_KISS</span>,				<i>/* the card id */</i></td></tr>
+<tr><th id="291">291</th><td>	  <q>"KISS TV/FM PCI"</q>,			<i>/* the 'name' */</i></td></tr>
+<tr><th id="292">292</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="293">293</th><td>           <var>0</var>,					<i>/* the tuner i2c address */</i></td></tr>
+<tr><th id="294">294</th><td>           <var>0</var>,					<i>/* dbx is optional */</i></td></tr>
+<tr><th id="295">295</th><td>           <var>0</var>,					<i>/* msp34xx is optional */</i></td></tr>
+<tr><th id="296">296</th><td>           <var>0</var>,					<i>/* dpl3518a is optional */</i></td></tr>
+<tr><th id="297">297</th><td>	   <var>0</var>,					<i>/* EEProm type */</i></td></tr>
+<tr><th id="298">298</th><td>	   <var>0</var>,					<i>/* EEProm size */</i></td></tr>
+<tr><th id="299">299</th><td>	   { <var>0x0c</var>, <var>0x00</var>, <var>0x0b</var>, <var>0x0b</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="300">300</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_VIDEO_HIGHWAY_XTREME&apos;">CARD_VIDEO_HIGHWAY_XTREME</span>,		<i>/* the card id */</i></td></tr>
+<tr><th id="303">303</th><td>	  <q>"Video Highway Xtreme"</q>,		<i>/* the 'name' */</i></td></tr>
+<tr><th id="304">304</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="305">305</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="306">306</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="307">307</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="308">308</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="309">309</th><td>	   <var>0</var>,					<i>/* EEProm type */</i></td></tr>
+<tr><th id="310">310</th><td>	   <var>0</var>,					<i>/* EEProm size */</i></td></tr>
+<tr><th id="311">311</th><td>	   { <var>0x00</var>, <var>0x02</var>, <var>0x01</var>, <var>0x04</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="312">312</th><td>	   <var>0x0f</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_ASKEY_DYNALINK_MAGIC_TVIEW&apos;">CARD_ASKEY_DYNALINK_MAGIC_TVIEW</span>,	<i>/* the card id */</i></td></tr>
+<tr><th id="315">315</th><td>	  <q>"Askey/Dynalink Magic TView"</q>,		<i>/* the 'name' */</i></td></tr>
+<tr><th id="316">316</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="317">317</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="318">318</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="319">319</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="320">320</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="321">321</th><td>	   <var>0</var>,					<i>/* EEProm type */</i></td></tr>
+<tr><th id="322">322</th><td>	   <var>0</var>,					<i>/* EEProm size */</i></td></tr>
+<tr><th id="323">323</th><td>	   { <var>0x400</var>, <var>0xE00</var>, <var>0x400</var>, <var>0xC00</var>, <var>1</var> },	<i>/* audio MUX values */</i></td></tr>
+<tr><th id="324">324</th><td>	   <var>0xE00</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td>	{  <span class='error' title="use of undeclared identifier &apos;CARD_LEADTEK&apos;">CARD_LEADTEK</span>,			<i>/* the card id */</i></td></tr>
+<tr><th id="327">327</th><td>	  <q>"Leadtek WinFast TV2000/VC100"</q>,	<i>/* the 'name' */</i></td></tr>
+<tr><th id="328">328</th><td>	   <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,				<i>/* the tuner */</i></td></tr>
+<tr><th id="329">329</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="330">330</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="331">331</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="332">332</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="333">333</th><td>	   <var>0</var>,					<i>/* EEProm type */</i></td></tr>
+<tr><th id="334">334</th><td>	   <var>0</var>,					<i>/* EEProm size */</i></td></tr>
+<tr><th id="335">335</th><td>	   <i>/* Tuner, Extern, Intern, Mute, Enabled */</i></td></tr>
+<tr><th id="336">336</th><td>	   { <var>0x621000</var>, <var>0x621000</var>, <var>0x621000</var>, <var>0xE21000</var>, <var>1</var> }, <i>/* audio MUX values */</i></td></tr>
+<tr><th id="337">337</th><td>	   <var>0xfff000</var> },				<i>/* GPIO mask */</i></td></tr>
+<tr><th id="338">338</th><td></td></tr>
+<tr><th id="339">339</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_TERRATVPLUS&apos;">CARD_TERRATVPLUS</span>,                    <i>/* the card id */</i></td></tr>
+<tr><th id="340">340</th><td>          <q>"TerraTVplus"</q>,                        <i>/* the 'name' */</i></td></tr>
+<tr><th id="341">341</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,                                <i>/* the tuner */</i></td></tr>
+<tr><th id="342">342</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="343">343</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="344">344</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="345">345</th><td>	   <var>0</var>,</td></tr>
+<tr><th id="346">346</th><td>	   <var>0</var>,					<i>/* EEProm type */</i></td></tr>
+<tr><th id="347">347</th><td>	   <var>0</var>,					<i>/* EEProm size */</i></td></tr>
+<tr><th id="348">348</th><td>           { <var>0x20000</var>, <var>0x00000</var>, <var>0x30000</var>, <var>0x40000</var>, <var>1</var> }, <i>/* audio MUX values*/</i></td></tr>
+<tr><th id="349">349</th><td>           <var>0x70000</var> },                           <i>/* GPIO mask */</i></td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td>        {  <span class='error' title="use of undeclared identifier &apos;CARD_TERRATVALUE&apos;">CARD_TERRATVALUE</span>,                    <i>/* the card id */</i></td></tr>
+<tr><th id="352">352</th><td>          <q>"Terratec TValue"</q>,                    <i>/* the 'name' */</i></td></tr>
+<tr><th id="353">353</th><td>           <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,                                <i>/* the tuner */</i></td></tr>
+<tr><th id="354">354</th><td>           <var>0</var>,</td></tr>
+<tr><th id="355">355</th><td>           <var>0</var>,</td></tr>
+<tr><th id="356">356</th><td>           <var>0</var>,</td></tr>
+<tr><th id="357">357</th><td>           <var>0</var>,</td></tr>
+<tr><th id="358">358</th><td>           <var>0</var>,                                   <i>/* EEProm type */</i></td></tr>
+<tr><th id="359">359</th><td>           <var>0</var>,                                   <i>/* EEProm size */</i></td></tr>
+<tr><th id="360">360</th><td>           { <var>0x500</var>, <var>0x900</var>, <var>0x300</var>, <var>0x900</var>, <var>1</var> },   <i>/* audio MUX values*/</i></td></tr>
+<tr><th id="361">361</th><td>           <var>0xffff00</var> },                          <i>/* GPIO mask */</i></td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td>};</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td><b>struct</b> <dfn class="type" id="bt848_card_sig" title='bt848_card_sig' data-ref="bt848_card_sig" data-ref-filename="bt848_card_sig">bt848_card_sig</dfn> <dfn class="tu decl def" id="bt848_card_signature" title='bt848_card_signature' data-type='int' data-ref="bt848_card_signature" data-ref-filename="bt848_card_signature">bt848_card_signature</dfn><span class='error' title="array has incomplete element type &apos;struct bt848_card_sig&apos;">[</span><var>1</var>]= {</td></tr>
+<tr><th id="366">366</th><td>  <i>/* IMS TURBO TV : card 5 */</i></td></tr>
+<tr><th id="367">367</th><td>    {  <var>5</var>,<var>9</var>, {<var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>00</var>, <var>02</var>, <var>00</var>, <var>00</var>, <var>00</var>}}</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td></td></tr>
+<tr><th id="370">370</th><td>};</td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td><i>/*</i></td></tr>
+<tr><th id="374">374</th><td><i> * Write to the configuration EEPROM on the card.</i></td></tr>
+<tr><th id="375">375</th><td><i> * This is dangerous and will mess up your card. Therefore it is not</i></td></tr>
+<tr><th id="376">376</th><td><i> * implemented.</i></td></tr>
+<tr><th id="377">377</th><td><i> */</i></td></tr>
+<tr><th id="378">378</th><td><em>int</em></td></tr>
+<tr><th id="379">379</th><td><dfn class="decl def fn" id="writeEEProm" title='writeEEProm' data-ref="writeEEProm" data-ref-filename="writeEEProm">writeEEProm</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col1 decl" id="1bktr" title='bktr' data-type='int' data-ref="1bktr" data-ref-filename="1bktr">bktr</dfn>, <em>int</em> <dfn class="local col2 decl" id="2offset" title='offset' data-type='int' data-ref="2offset" data-ref-filename="2offset">offset</dfn>, <em>int</em> <dfn class="local col3 decl" id="3count" title='count' data-type='int' data-ref="3count" data-ref-filename="3count">count</dfn>,</td></tr>
+<tr><th id="380">380</th><td>    <a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> *<dfn class="local col4 decl" id="4data" title='data' data-type='u_char *' data-ref="4data" data-ref-filename="4data">data</dfn>)</td></tr>
+<tr><th id="381">381</th><td>{</td></tr>
+<tr><th id="382">382</th><td>        <b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="383">383</th><td>}</td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td><i>/*</i></td></tr>
+<tr><th id="386">386</th><td><i> * Read the contents of the configuration EEPROM on the card.</i></td></tr>
+<tr><th id="387">387</th><td><i> * (This is not fitted to all makes of card. All Hauppauge cards have them</i></td></tr>
+<tr><th id="388">388</th><td><i> * and so do newer Bt878 based cards.</i></td></tr>
+<tr><th id="389">389</th><td><i> */</i></td></tr>
+<tr><th id="390">390</th><td><em>int</em></td></tr>
+<tr><th id="391">391</th><td><dfn class="decl def fn" id="readEEProm" title='readEEProm' data-ref="readEEProm" data-ref-filename="readEEProm">readEEProm</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col5 decl" id="5bktr" title='bktr' data-type='int' data-ref="5bktr" data-ref-filename="5bktr">bktr</dfn>, <em>int</em> <dfn class="local col6 decl" id="6offset" title='offset' data-type='int' data-ref="6offset" data-ref-filename="6offset">offset</dfn>, <em>int</em> <dfn class="local col7 decl" id="7count" title='count' data-type='int' data-ref="7count" data-ref-filename="7count">count</dfn>, <a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> *<dfn class="local col8 decl" id="8data" title='data' data-type='u_char *' data-ref="8data" data-ref-filename="8data">data</dfn>)</td></tr>
+<tr><th id="392">392</th><td>{</td></tr>
+<tr><th id="393">393</th><td>	<em>int</em>	<dfn class="local col9 decl" id="9x" title='x' data-type='int' data-ref="9x" data-ref-filename="9x">x</dfn>;</td></tr>
+<tr><th id="394">394</th><td>	<em>int</em>	<dfn class="local col0 decl" id="10addr" title='addr' data-type='int' data-ref="10addr" data-ref-filename="10addr">addr</dfn>;</td></tr>
+<tr><th id="395">395</th><td>	<em>int</em>	<dfn class="local col1 decl" id="11xmax" title='xmax' data-type='int' data-ref="11xmax" data-ref-filename="11xmax">xmax</dfn>;</td></tr>
+<tr><th id="396">396</th><td>	<em>int</em>	<dfn class="local col2 decl" id="12byte" title='byte' data-type='int' data-ref="12byte" data-ref-filename="12byte">byte</dfn>;</td></tr>
+<tr><th id="397">397</th><td></td></tr>
+<tr><th id="398">398</th><td>	<i>/* get the address of the EEProm */</i></td></tr>
+<tr><th id="399">399</th><td>	addr = (<em>int</em>)(bktr-&gt;card.eepromAddr &amp; <var>0xff</var>);</td></tr>
+<tr><th id="400">400</th><td>	<b>if</b> (<a class="local col0 ref" href="#10addr" title='addr' data-ref="10addr" data-ref-filename="10addr">addr</a> == <var>0</var>)</td></tr>
+<tr><th id="401">401</th><td>		<b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="402">402</th><td></td></tr>
+<tr><th id="403">403</th><td>	xmax = (<em>int</em>)(bktr-&gt;card.eepromSize * <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="404">404</th><td>	<b>if</b> ((<a class="local col6 ref" href="#6offset" title='offset' data-ref="6offset" data-ref-filename="6offset">offset</a> + <a class="local col7 ref" href="#7count" title='count' data-ref="7count" data-ref-filename="7count">count</a>) &gt; <a class="local col1 ref" href="#11xmax" title='xmax' data-ref="11xmax" data-ref-filename="11xmax">xmax</a>)</td></tr>
+<tr><th id="405">405</th><td>		<b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="406">406</th><td></td></tr>
+<tr><th id="407">407</th><td>	<i>/* set the start address */</i></td></tr>
+<tr><th id="408">408</th><td>	<b>if</b> (i2cWrite(bktr, addr, offset, -<var>1</var>) == -<var>1</var>)</td></tr>
+<tr><th id="409">409</th><td>		<b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="410">410</th><td></td></tr>
+<tr><th id="411">411</th><td>	<i>/* the read cycle */</i></td></tr>
+<tr><th id="412">412</th><td>	<b>for</b> (<a class="local col9 ref" href="#9x" title='x' data-ref="9x" data-ref-filename="9x">x</a> = <var>0</var>; <a class="local col9 ref" href="#9x" title='x' data-ref="9x" data-ref-filename="9x">x</a> &lt; <a class="local col7 ref" href="#7count" title='count' data-ref="7count" data-ref-filename="7count">count</a>; ++<a class="local col9 ref" href="#9x" title='x' data-ref="9x" data-ref-filename="9x">x</a>) {</td></tr>
+<tr><th id="413">413</th><td>		<b>if</b> ((byte = i2cRead(bktr, (addr | <var>1</var>))) == -<var>1</var>)</td></tr>
+<tr><th id="414">414</th><td>			<b>return</b>(-<var>1</var>);</td></tr>
+<tr><th id="415">415</th><td>		<a class="local col8 ref" href="#8data" title='data' data-ref="8data" data-ref-filename="8data">data</a>[<a class="local col9 ref" href="#9x" title='x' data-ref="9x" data-ref-filename="9x">x</a>] = <a class="local col2 ref" href="#12byte" title='byte' data-ref="12byte" data-ref-filename="12byte">byte</a>;</td></tr>
+<tr><th id="416">416</th><td>	}</td></tr>
+<tr><th id="417">417</th><td></td></tr>
+<tr><th id="418">418</th><td>	<b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="419">419</th><td>}</td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td></td></tr>
+<tr><th id="422">422</th><td><u>#define <dfn class="macro" id="_M/ABSENT" data-ref="_M/ABSENT">ABSENT</dfn>		(-1)</u></td></tr>
+<tr><th id="423">423</th><td></td></tr>
+<tr><th id="424">424</th><td><i>/*</i></td></tr>
+<tr><th id="425">425</th><td><i> * get a signature of the card</i></td></tr>
+<tr><th id="426">426</th><td><i> * read all 128 possible i2c read addresses from 0x01 thru 0xff</i></td></tr>
+<tr><th id="427">427</th><td><i> * build a bit array with a 1 bit for each i2c device that responds</i></td></tr>
+<tr><th id="428">428</th><td><i> *</i></td></tr>
+<tr><th id="429">429</th><td><i> * XXX FIXME: use offset &amp; count args</i></td></tr>
+<tr><th id="430">430</th><td><i> */</i></td></tr>
+<tr><th id="431">431</th><td><em>int</em></td></tr>
+<tr><th id="432">432</th><td><dfn class="decl def fn" id="signCard" title='signCard' data-ref="signCard" data-ref-filename="signCard">signCard</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col3 decl" id="13bktr" title='bktr' data-type='int' data-ref="13bktr" data-ref-filename="13bktr">bktr</dfn>, <em>int</em> <dfn class="local col4 decl" id="14offset" title='offset' data-type='int' data-ref="14offset" data-ref-filename="14offset">offset</dfn>, <em>int</em> <dfn class="local col5 decl" id="15count" title='count' data-type='int' data-ref="15count" data-ref-filename="15count">count</dfn>, <a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a>* <dfn class="local col6 decl" id="16sig" title='sig' data-type='u_char *' data-ref="16sig" data-ref-filename="16sig">sig</dfn>)</td></tr>
+<tr><th id="433">433</th><td>{</td></tr>
+<tr><th id="434">434</th><td>	<em>int</em>	<dfn class="local col7 decl" id="17x" title='x' data-type='int' data-ref="17x" data-ref-filename="17x">x</dfn>;</td></tr>
+<tr><th id="435">435</th><td></td></tr>
+<tr><th id="436">436</th><td>	<b>for</b> (<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a> = <var>0</var>; <a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a> &lt; <var>16</var>; ++<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a>)</td></tr>
+<tr><th id="437">437</th><td>		<a class="local col6 ref" href="#16sig" title='sig' data-ref="16sig" data-ref-filename="16sig">sig</a>[<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a>] = <var>0</var>;</td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td>	<b>for</b> (<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a> = <var>0</var>; <a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a> &lt; <a class="local col5 ref" href="#15count" title='count' data-ref="15count" data-ref-filename="15count">count</a>; ++<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a>) {</td></tr>
+<tr><th id="440">440</th><td>		<b>if</b> (i2cRead(bktr, (<var>2</var> * x) + <var>1</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="441">441</th><td>			<a class="local col6 ref" href="#16sig" title='sig' data-ref="16sig" data-ref-filename="16sig">sig</a>[<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a> / <var>8</var>] |= (<var>1</var> &lt;&lt; (<a class="local col7 ref" href="#17x" title='x' data-ref="17x" data-ref-filename="17x">x</a> % <var>8</var>));</td></tr>
+<tr><th id="442">442</th><td>		}</td></tr>
+<tr><th id="443">443</th><td>	}</td></tr>
+<tr><th id="444">444</th><td></td></tr>
+<tr><th id="445">445</th><td>	<b>return</b>(<var>0</var>);</td></tr>
+<tr><th id="446">446</th><td>}</td></tr>
+<tr><th id="447">447</th><td></td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td><i  data-doc="check_for_i2c_devices">/*</i></td></tr>
+<tr><th id="450">450</th><td><i  data-doc="check_for_i2c_devices"> * check_for_i2c_devices.</i></td></tr>
+<tr><th id="451">451</th><td><i  data-doc="check_for_i2c_devices"> * Some BT848 cards have no tuner and no additional i2c devices</i></td></tr>
+<tr><th id="452">452</th><td><i  data-doc="check_for_i2c_devices"> * eg stereo decoder. These are used for video conferencing or capture from</i></td></tr>
+<tr><th id="453">453</th><td><i  data-doc="check_for_i2c_devices"> * a video camera. (eg VideoLogic Captivator PCI, Intel SmartCapture card).</i></td></tr>
+<tr><th id="454">454</th><td><i  data-doc="check_for_i2c_devices"> *</i></td></tr>
+<tr><th id="455">455</th><td><i  data-doc="check_for_i2c_devices"> * Determine if there are any i2c devices present. There are none present if</i></td></tr>
+<tr><th id="456">456</th><td><i  data-doc="check_for_i2c_devices"> *  a) reading from all 128 devices returns ABSENT (-1) for each one</i></td></tr>
+<tr><th id="457">457</th><td><i  data-doc="check_for_i2c_devices"> *     (eg VideoLogic Captivator PCI with BT848)</i></td></tr>
+<tr><th id="458">458</th><td><i  data-doc="check_for_i2c_devices"> *  b) reading from all 128 devices returns 0 for each one</i></td></tr>
+<tr><th id="459">459</th><td><i  data-doc="check_for_i2c_devices"> *     (eg VideoLogic Captivator PCI rev. 2F with BT848A)</i></td></tr>
+<tr><th id="460">460</th><td><i  data-doc="check_for_i2c_devices"> */</i></td></tr>
+<tr><th id="461">461</th><td><em>static</em> <em>int</em> <dfn class="tu decl def fn" id="check_for_i2c_devices" title='check_for_i2c_devices' data-type='int check_for_i2c_devices(int bktr)' data-ref="check_for_i2c_devices" data-ref-filename="check_for_i2c_devices">check_for_i2c_devices</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col8 decl" id="18bktr" title='bktr' data-type='int' data-ref="18bktr" data-ref-filename="18bktr">bktr</dfn>) {</td></tr>
+<tr><th id="462">462</th><td>  <em>int</em> <dfn class="local col9 decl" id="19x" title='x' data-type='int' data-ref="19x" data-ref-filename="19x">x</dfn>, <dfn class="local col0 decl" id="20temp_read" title='temp_read' data-type='int' data-ref="20temp_read" data-ref-filename="20temp_read">temp_read</dfn>;</td></tr>
+<tr><th id="463">463</th><td>  <em>int</em> <dfn class="local col1 decl" id="21i2c_all_0" title='i2c_all_0' data-type='int' data-ref="21i2c_all_0" data-ref-filename="21i2c_all_0">i2c_all_0</dfn> = <var>1</var>;</td></tr>
+<tr><th id="464">464</th><td>  <em>int</em> <dfn class="local col2 decl" id="22i2c_all_absent" title='i2c_all_absent' data-type='int' data-ref="22i2c_all_absent" data-ref-filename="22i2c_all_absent">i2c_all_absent</dfn> = <var>1</var>;</td></tr>
+<tr><th id="465">465</th><td>  <b>for</b> (<a class="local col9 ref" href="#19x" title='x' data-ref="19x" data-ref-filename="19x">x</a> = <var>0</var>; <a class="local col9 ref" href="#19x" title='x' data-ref="19x" data-ref-filename="19x">x</a> &lt; <var>128</var>; ++<a class="local col9 ref" href="#19x" title='x' data-ref="19x" data-ref-filename="19x">x</a>) {</td></tr>
+<tr><th id="466">466</th><td>    temp_read = i2cRead(bktr, (<var>2</var> * x) + <var>1</var>);</td></tr>
+<tr><th id="467">467</th><td>    <b>if</b> (<a class="local col0 ref" href="#20temp_read" title='temp_read' data-ref="20temp_read" data-ref-filename="20temp_read">temp_read</a> != <var>0</var>)      <a class="local col1 ref" href="#21i2c_all_0" title='i2c_all_0' data-ref="21i2c_all_0" data-ref-filename="21i2c_all_0">i2c_all_0</a> = <var>0</var>;</td></tr>
+<tr><th id="468">468</th><td>    <b>if</b> (<a class="local col0 ref" href="#20temp_read" title='temp_read' data-ref="20temp_read" data-ref-filename="20temp_read">temp_read</a> != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <a class="local col2 ref" href="#22i2c_all_absent" title='i2c_all_absent' data-ref="22i2c_all_absent" data-ref-filename="22i2c_all_absent">i2c_all_absent</a> = <var>0</var>;</td></tr>
+<tr><th id="469">469</th><td>  }</td></tr>
+<tr><th id="470">470</th><td></td></tr>
+<tr><th id="471">471</th><td>  <b>if</b> ((<a class="local col1 ref" href="#21i2c_all_0" title='i2c_all_0' data-ref="21i2c_all_0" data-ref-filename="21i2c_all_0">i2c_all_0</a>) || (<a class="local col2 ref" href="#22i2c_all_absent" title='i2c_all_absent' data-ref="22i2c_all_absent" data-ref-filename="22i2c_all_absent">i2c_all_absent</a>)) <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="472">472</th><td>  <b>else</b> <b>return</b> <var>1</var>;</td></tr>
+<tr><th id="473">473</th><td>}</td></tr>
+<tr><th id="474">474</th><td></td></tr>
+<tr><th id="475">475</th><td></td></tr>
+<tr><th id="476">476</th><td><i  data-doc="locate_tuner_address">/*</i></td></tr>
+<tr><th id="477">477</th><td><i  data-doc="locate_tuner_address"> * Temic/Philips datasheets say tuners can be at i2c addresses 0xc0, 0xc2,</i></td></tr>
+<tr><th id="478">478</th><td><i  data-doc="locate_tuner_address"> * 0xc4 or 0xc6, settable by links on the tuner.</i></td></tr>
+<tr><th id="479">479</th><td><i  data-doc="locate_tuner_address"> * Determine the actual address used on the TV card by probing read addresses.</i></td></tr>
+<tr><th id="480">480</th><td><i  data-doc="locate_tuner_address"> */</i></td></tr>
+<tr><th id="481">481</th><td><em>static</em> <em>int</em> <dfn class="tu decl def fn" id="locate_tuner_address" title='locate_tuner_address' data-type='int locate_tuner_address(int bktr)' data-ref="locate_tuner_address" data-ref-filename="locate_tuner_address">locate_tuner_address</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col3 decl" id="23bktr" title='bktr' data-type='int' data-ref="23bktr" data-ref-filename="23bktr">bktr</dfn>) {</td></tr>
+<tr><th id="482">482</th><td>  <b>if</b> (i2cRead(bktr, <var>0xc1</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xc0</var>;</td></tr>
+<tr><th id="483">483</th><td>  <b>if</b> (i2cRead(bktr, <var>0xc3</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xc2</var>;</td></tr>
+<tr><th id="484">484</th><td>  <b>if</b> (i2cRead(bktr, <var>0xc5</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xc4</var>;</td></tr>
+<tr><th id="485">485</th><td>  <b>if</b> (i2cRead(bktr, <var>0xc7</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xc6</var>;</td></tr>
+<tr><th id="486">486</th><td>  <b>return</b> -<var>1</var>; <i>/* no tuner found */</i></td></tr>
+<tr><th id="487">487</th><td>}</td></tr>
+<tr><th id="488">488</th><td></td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td><i  data-doc="locate_eeprom_address">/*</i></td></tr>
+<tr><th id="491">491</th><td><i  data-doc="locate_eeprom_address"> * Search for a configuration EEPROM on the i2c bus by looking at i2c addresses</i></td></tr>
+<tr><th id="492">492</th><td><i  data-doc="locate_eeprom_address"> * where EEPROMs are usually found.</i></td></tr>
+<tr><th id="493">493</th><td><i  data-doc="locate_eeprom_address"> * On some cards, the EEPROM appears in several locations, but all in the</i></td></tr>
+<tr><th id="494">494</th><td><i  data-doc="locate_eeprom_address"> * range 0xa0 to 0xae.</i></td></tr>
+<tr><th id="495">495</th><td><i  data-doc="locate_eeprom_address"> */</i></td></tr>
+<tr><th id="496">496</th><td><em>static</em> <em>int</em> <dfn class="tu decl def fn" id="locate_eeprom_address" title='locate_eeprom_address' data-type='int locate_eeprom_address(int bktr)' data-ref="locate_eeprom_address" data-ref-filename="locate_eeprom_address">locate_eeprom_address</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col4 decl" id="24bktr" title='bktr' data-type='int' data-ref="24bktr" data-ref-filename="24bktr">bktr</dfn>) {</td></tr>
+<tr><th id="497">497</th><td>  <b>if</b> (i2cRead(bktr, <var>0xa0</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xa0</var>;</td></tr>
+<tr><th id="498">498</th><td>  <b>if</b> (i2cRead(bktr, <var>0xac</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xac</var>;</td></tr>
+<tr><th id="499">499</th><td>  <b>if</b> (i2cRead(bktr, <var>0xae</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) <b>return</b> <var>0xae</var>;</td></tr>
+<tr><th id="500">500</th><td>  <b>return</b> -<var>1</var>; <i>/* no eeprom found */</i></td></tr>
+<tr><th id="501">501</th><td>}</td></tr>
+<tr><th id="502">502</th><td></td></tr>
+<tr><th id="503">503</th><td></td></tr>
+<tr><th id="504">504</th><td><i>/*</i></td></tr>
+<tr><th id="505">505</th><td><i> * determine the card brand/model</i></td></tr>
+<tr><th id="506">506</th><td><i> * BKTR_OVERRIDE_CARD, BKTR_OVERRIDE_TUNER, BKTR_OVERRIDE_DBX and</i></td></tr>
+<tr><th id="507">507</th><td><i> * BKTR_OVERRIDE_MSP can be used to select a specific device,</i></td></tr>
+<tr><th id="508">508</th><td><i> * regardless of the autodetection and i2c device checks.</i></td></tr>
+<tr><th id="509">509</th><td><i> *</i></td></tr>
+<tr><th id="510">510</th><td><i> * The scheme used for probing cards faces these problems:</i></td></tr>
+<tr><th id="511">511</th><td><i> *  It is impossible to work out which type of tuner is actually fitted,</i></td></tr>
+<tr><th id="512">512</th><td><i> *  (the driver cannot tell if the Tuner is PAL or NTSC, Temic or Philips)</i></td></tr>
+<tr><th id="513">513</th><td><i> *  It is impossible to determine what audio-mux hardware is connected.</i></td></tr>
+<tr><th id="514">514</th><td><i> *  It is impossible to determine if there is extra hardware connected to the</i></td></tr>
+<tr><th id="515">515</th><td><i> *  GPIO pins  (eg radio chips or MSP34xx reset logic)</i></td></tr>
+<tr><th id="516">516</th><td><i> *</i></td></tr>
+<tr><th id="517">517</th><td><i> * However some makes of card (eg Hauppauge) come with a configuration eeprom</i></td></tr>
+<tr><th id="518">518</th><td><i> * which tells us the make of the card. Most eeproms also tell us the</i></td></tr>
+<tr><th id="519">519</th><td><i> * tuner type and other features of the cards.</i></td></tr>
+<tr><th id="520">520</th><td><i> *</i></td></tr>
+<tr><th id="521">521</th><td><i> * The current probe code works as follows</i></td></tr>
+<tr><th id="522">522</th><td><i> * A) If the card uses a Bt878/879:</i></td></tr>
+<tr><th id="523">523</th><td><i> *   1) Read the sub-system vendor id from the configuration EEPROM.</i></td></tr>
+<tr><th id="524">524</th><td><i> *      Select the required tuner, audio mux arrangement and any other</i></td></tr>
+<tr><th id="525">525</th><td><i> *      onboard features. If this fails, move to step B.</i></td></tr>
+<tr><th id="526">526</th><td><i> * B) If it card uses a Bt848, 848A, 849A or an unknown Bt878/879:</i></td></tr>
+<tr><th id="527">527</th><td><i> *   1) Look for I2C devices. If there are none fitted, it is an Intel or</i></td></tr>
+<tr><th id="528">528</th><td><i> *      VideoLogic cards.</i></td></tr>
+<tr><th id="529">529</th><td><i> *   2) Look for a configuration EEPROM.</i></td></tr>
+<tr><th id="530">530</th><td><i> *   2a) If there is one at I2C address 0xa0 it may be</i></td></tr>
+<tr><th id="531">531</th><td><i> *       a Hauppauge or an Osprey. Check the EEPROM contents to determine which</i></td></tr>
+<tr><th id="532">532</th><td><i> *       one it is. For Hauppauge, select the tuner type and audio hardware.</i></td></tr>
+<tr><th id="533">533</th><td><i> *   2b) If there is an EEPROM at I2C address 0xa8 it will be an STB card.</i></td></tr>
+<tr><th id="534">534</th><td><i> *       We still have to guess on the tuner type.</i></td></tr>
+<tr><th id="535">535</th><td><i> *</i></td></tr>
+<tr><th id="536">536</th><td><i> * C) If we do not know the card type from (A) or (B), guess at the tuner</i></td></tr>
+<tr><th id="537">537</th><td><i> *    type based on the I2C address of the tuner.</i></td></tr>
+<tr><th id="538">538</th><td><i> *</i></td></tr>
+<tr><th id="539">539</th><td><i> * D) After determining the Tuner Type, we probe the i2c bus for other</i></td></tr>
+<tr><th id="540">540</th><td><i> *    devices at known locations, eg IR-Remote Control, MSP34xx and TDA</i></td></tr>
+<tr><th id="541">541</th><td><i> *    stereo chips.</i></td></tr>
+<tr><th id="542">542</th><td><i> */</i></td></tr>
+<tr><th id="543">543</th><td></td></tr>
+<tr><th id="544">544</th><td></td></tr>
+<tr><th id="545">545</th><td><i>/*</i></td></tr>
+<tr><th id="546">546</th><td><i> * These are the sub-system vendor ID codes stored in the</i></td></tr>
+<tr><th id="547">547</th><td><i> * configuration EEPROM used on Bt878/879 cards. They should match the</i></td></tr>
+<tr><th id="548">548</th><td><i> * number assigned to the company by the PCI Special Interest Group</i></td></tr>
+<tr><th id="549">549</th><td><i> */</i></td></tr>
+<tr><th id="550">550</th><td><u>#<span data-ppcond="550">ifndef</span> <span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span></u></td></tr>
+<tr><th id="551">551</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_HAUPPAUGE" data-ref="_M/PCI_VENDOR_HAUPPAUGE">PCI_VENDOR_HAUPPAUGE</dfn>	0x0070</u></td></tr>
+<tr><th id="552">552</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_AVERMEDIA" data-ref="_M/PCI_VENDOR_AVERMEDIA">PCI_VENDOR_AVERMEDIA</dfn>	0x1461</u></td></tr>
+<tr><th id="553">553</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_STB" data-ref="_M/PCI_VENDOR_STB">PCI_VENDOR_STB</dfn>		0x10B4</u></td></tr>
+<tr><th id="554">554</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_ASKEY" data-ref="_M/PCI_VENDOR_ASKEY">PCI_VENDOR_ASKEY</dfn>	0x144F</u></td></tr>
+<tr><th id="555">555</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_TERRATEC" data-ref="_M/PCI_VENDOR_TERRATEC">PCI_VENDOR_TERRATEC</dfn>	0x153B</u></td></tr>
+<tr><th id="556">556</th><td><u>#<span data-ppcond="550">endif</span></u></td></tr>
+<tr><th id="557">557</th><td><i>/* Following not confirmed with <a href="http://www.pcidatabase.com/,">http://www.pcidatabase.com/,</a></i></td></tr>
+<tr><th id="558">558</th><td><i>   so not added to NetBSD's pcidevs */</i></td></tr>
+<tr><th id="559">559</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_LEADTEK_ALT" data-ref="_M/PCI_VENDOR_LEADTEK_ALT">PCI_VENDOR_LEADTEK_ALT</dfn>	0x6606</u></td></tr>
+<tr><th id="560">560</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_LEADTEK_ALT_2" data-ref="_M/PCI_VENDOR_LEADTEK_ALT_2">PCI_VENDOR_LEADTEK_ALT_2</dfn>	0x6607</u></td></tr>
+<tr><th id="561">561</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_LEADTEK_ALT_3" data-ref="_M/PCI_VENDOR_LEADTEK_ALT_3">PCI_VENDOR_LEADTEK_ALT_3</dfn>	0x107D</u></td></tr>
+<tr><th id="562">562</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_FLYVIDEO" data-ref="_M/PCI_VENDOR_FLYVIDEO">PCI_VENDOR_FLYVIDEO</dfn>	0x1851</u></td></tr>
+<tr><th id="563">563</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_FLYVIDEO_2" data-ref="_M/PCI_VENDOR_FLYVIDEO_2">PCI_VENDOR_FLYVIDEO_2</dfn>	0x1852</u></td></tr>
+<tr><th id="564">564</th><td><u>#define <dfn class="macro" id="_M/PCI_VENDOR_PINNACLE_ALT" data-ref="_M/PCI_VENDOR_PINNACLE_ALT">PCI_VENDOR_PINNACLE_ALT</dfn>	0xBD11</u></td></tr>
+<tr><th id="565">565</th><td></td></tr>
+<tr><th id="566">566</th><td><u>#define <dfn class="macro" id="_M/MODEL_TERRATVALUE_1118" data-ref="_M/MODEL_TERRATVALUE_1118">MODEL_TERRATVALUE_1118</dfn>	0x1118</u></td></tr>
+<tr><th id="567">567</th><td><u>#define <dfn class="macro" id="_M/MODEL_TERRATVALUE_1134" data-ref="_M/MODEL_TERRATVALUE_1134">MODEL_TERRATVALUE_1134</dfn>	0x1134</u></td></tr>
+<tr><th id="568">568</th><td></td></tr>
+<tr><th id="569">569</th><td><em>void</em></td></tr>
+<tr><th id="570">570</th><td><dfn class="decl def fn" id="probeCard" title='probeCard' data-ref="probeCard" data-ref-filename="probeCard">probeCard</dfn>(<span class='error' title="unknown type name &apos;bktr_ptr_t&apos;">bktr_ptr_t</span> <dfn class="local col5 decl" id="25bktr" title='bktr' data-type='int' data-ref="25bktr" data-ref-filename="25bktr">bktr</dfn>, <em>int</em> <dfn class="local col6 decl" id="26verbose" title='verbose' data-type='int' data-ref="26verbose" data-ref-filename="26verbose">verbose</dfn>, <em>int</em> <dfn class="local col7 decl" id="27unit" title='unit' data-type='int' data-ref="27unit" data-ref-filename="27unit">unit</dfn>)</td></tr>
+<tr><th id="571">571</th><td>{</td></tr>
+<tr><th id="572">572</th><td>	<em>int</em>		<dfn class="local col8 decl" id="28card" title='card' data-type='int' data-ref="28card" data-ref-filename="28card">card</dfn>, <dfn class="local col9 decl" id="29i" title='i' data-type='int' data-ref="29i" data-ref-filename="29i">i</dfn>,<dfn class="local col0 decl" id="30j" title='j' data-type='int' data-ref="30j" data-ref-filename="30j">j</dfn>, <dfn class="local col1 decl" id="31card_found" title='card_found' data-type='int' data-ref="31card_found" data-ref-filename="31card_found">card_found</dfn>;</td></tr>
+<tr><th id="573">573</th><td>	<em>int</em>		<dfn class="local col2 decl" id="32status" title='status' data-type='int' data-ref="32status" data-ref-filename="32status">status</dfn>;</td></tr>
+<tr><th id="574">574</th><td>	<a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> 		<dfn class="local col3 decl" id="33probe_signature" title='probe_signature' data-type='u_char [128]' data-ref="33probe_signature" data-ref-filename="33probe_signature">probe_signature</dfn>[<var>128</var>], *<dfn class="local col4 decl" id="34probe_temp" title='probe_temp' data-type='u_char *' data-ref="34probe_temp" data-ref-filename="34probe_temp">probe_temp</dfn>;</td></tr>
+<tr><th id="575">575</th><td>        <em>int</em>   		<dfn class="local col5 decl" id="35any_i2c_devices" title='any_i2c_devices' data-type='int' data-ref="35any_i2c_devices" data-ref-filename="35any_i2c_devices">any_i2c_devices</dfn>;</td></tr>
+<tr><th id="576">576</th><td>	<a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> 		<dfn class="local col6 decl" id="36eeprom" title='eeprom' data-type='u_char [256]' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</dfn>[<var>256</var>];</td></tr>
+<tr><th id="577">577</th><td>	<em>int</em> 		<dfn class="local col7 decl" id="37tuner_i2c_address" title='tuner_i2c_address' data-type='int' data-ref="37tuner_i2c_address" data-ref-filename="37tuner_i2c_address">tuner_i2c_address</dfn> = -<var>1</var>;</td></tr>
+<tr><th id="578">578</th><td>	<em>int</em> 		<dfn class="local col8 decl" id="38eeprom_i2c_address" title='eeprom_i2c_address' data-type='int' data-ref="38eeprom_i2c_address" data-ref-filename="38eeprom_i2c_address">eeprom_i2c_address</dfn> = -<var>1</var>;</td></tr>
+<tr><th id="579">579</th><td></td></tr>
+<tr><th id="580">580</th><td>	<i>/* Select all GPIO bits as inputs */</i></td></tr>
+<tr><th id="581">581</th><td>	OUTL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_OUT_EN&apos;">BKTR_GPIO_OUT_EN</span>, <var>0</var>);</td></tr>
+<tr><th id="582">582</th><td>	<b>if</b> (<a class="macro" href="../../../sys/systm.h.html#163" title="(boothowto &amp; AB_VERBOSE)" data-ref="_M/bootverbose">bootverbose</a>)</td></tr>
+<tr><th id="583">583</th><td>	    printf(<q>"%s: GPIO is 0x%08x\n"</q>, bktr_name(bktr),</td></tr>
+<tr><th id="584">584</th><td>		   INL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>));</td></tr>
+<tr><th id="585">585</th><td></td></tr>
+<tr><th id="586">586</th><td><u>#<span data-ppcond="586">ifdef</span> <span class="macro" data-ref="_M/HAUPPAUGE_MSP_RESET">HAUPPAUGE_MSP_RESET</span></u></td></tr>
+<tr><th id="587">587</th><td>	<i>/* Reset the MSP34xx audio chip. This resolves bootup card</i></td></tr>
+<tr><th id="588">588</th><td><i>	 * detection problems with old Bt848 based Hauppauge cards with</i></td></tr>
+<tr><th id="589">589</th><td><i>	 * MSP34xx stereo audio chips. This must be user enabled because</i></td></tr>
+<tr><th id="590">590</th><td><i>	 * at this point the probe function does not know the card type. */</i></td></tr>
+<tr><th id="591">591</th><td>        OUTL(bktr, BKTR_GPIO_OUT_EN, INL(bktr, BKTR_GPIO_OUT_EN) | (<var>1</var>&lt;&lt;<var>5</var>));</td></tr>
+<tr><th id="592">592</th><td>        OUTL(bktr, BKTR_GPIO_DATA, INL(bktr, BKTR_GPIO_DATA) | (<var>1</var>&lt;&lt;<var>5</var>));  <i>/* write '1' */</i></td></tr>
+<tr><th id="593">593</th><td>        DELAY(<var>2500</var>); <i>/* wait 2.5ms */</i></td></tr>
+<tr><th id="594">594</th><td>        OUTL(bktr, BKTR_GPIO_DATA, INL(bktr, BKTR_GPIO_DATA) &amp; ~(<var>1</var>&lt;&lt;<var>5</var>)); <i>/* write '0' */</i></td></tr>
+<tr><th id="595">595</th><td>        DELAY(<var>2500</var>); <i>/* wait 2.5ms */</i></td></tr>
+<tr><th id="596">596</th><td>        OUTL(bktr, BKTR_GPIO_DATA, INL(bktr, BKTR_GPIO_DATA) | (<var>1</var>&lt;&lt;<var>5</var>));  <i>/* write '1' */</i></td></tr>
+<tr><th id="597">597</th><td>        DELAY(<var>2500</var>); <i>/* wait 2.5ms */</i></td></tr>
+<tr><th id="598">598</th><td><u>#<span data-ppcond="586">endif</span></u></td></tr>
+<tr><th id="599">599</th><td></td></tr>
+<tr><th id="600">600</th><td>	<i>/* Check for the presence of i2c devices */</i></td></tr>
+<tr><th id="601">601</th><td>        any_i2c_devices = check_for_i2c_devices(bktr);</td></tr>
+<tr><th id="602">602</th><td></td></tr>
+<tr><th id="603">603</th><td></td></tr>
+<tr><th id="604">604</th><td>	<i>/* Check for a user specified override on the card selection */</i></td></tr>
+<tr><th id="605">605</th><td><u>#<span data-ppcond="605">if</span> defined(<span class="macro" data-ref="_M/BKTR_OVERRIDE_CARD">BKTR_OVERRIDE_CARD</span>)</u></td></tr>
+<tr><th id="606">606</th><td>	bktr-&gt;card = cards[(card = BKTR_OVERRIDE_CARD)];</td></tr>
+<tr><th id="607">607</th><td>	<b>goto</b> checkEEPROM;</td></tr>
+<tr><th id="608">608</th><td><u>#<span data-ppcond="605">endif</span></u></td></tr>
+<tr><th id="609">609</th><td>	<b>if</b> (bktr-&gt;bt848_card != -<var>1</var>) {</td></tr>
+<tr><th id="610">610</th><td>	  bktr-&gt;card = cards[(card = bktr-&gt;bt848_card)];</td></tr>
+<tr><th id="611">611</th><td>	  <b>goto</b> <a class="lbl" href="#39checkEEPROM" data-ref="39checkEEPROM" data-ref-filename="39checkEEPROM">checkEEPROM</a>;</td></tr>
+<tr><th id="612">612</th><td>	}</td></tr>
+<tr><th id="613">613</th><td></td></tr>
+<tr><th id="614">614</th><td></td></tr>
+<tr><th id="615">615</th><td>	<i>/* No override, so try and determine the make of the card */</i></td></tr>
+<tr><th id="616">616</th><td></td></tr>
+<tr><th id="617">617</th><td>        <i>/* On BT878/879 cards, read the sub-system vendor id */</i></td></tr>
+<tr><th id="618">618</th><td>	<i>/* This identifies the manufacturer of the card and the model */</i></td></tr>
+<tr><th id="619">619</th><td>	<i>/* In theory this can be read from PCI registers but this does not */</i></td></tr>
+<tr><th id="620">620</th><td>	<i>/* appear to work on the FlyVideo 98. Hauppauge also warned that */</i></td></tr>
+<tr><th id="621">621</th><td>	<i>/* the PCI registers are sometimes not loaded correctly. */</i></td></tr>
+<tr><th id="622">622</th><td>	<i>/* Therefore, I will read the sub-system vendor ID from the EEPROM */</i></td></tr>
+<tr><th id="623">623</th><td>	<i>/* (just like the Bt878 does during power up initialisation) */</i></td></tr>
+<tr><th id="624">624</th><td></td></tr>
+<tr><th id="625">625</th><td>        <b>if</b> ((bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_878&apos;">BROOKTREE_878</span>) || (bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_879&apos;">BROOKTREE_879</span>)) {</td></tr>
+<tr><th id="626">626</th><td>	    <i>/* Try and locate the EEPROM */</i></td></tr>
+<tr><th id="627">627</th><td>	    eeprom_i2c_address = locate_eeprom_address(bktr);</td></tr>
+<tr><th id="628">628</th><td>	    <b>if</b> (<a class="local col8 ref" href="#38eeprom_i2c_address" title='eeprom_i2c_address' data-ref="38eeprom_i2c_address" data-ref-filename="38eeprom_i2c_address">eeprom_i2c_address</a> != -<var>1</var>) {</td></tr>
+<tr><th id="629">629</th><td></td></tr>
+<tr><th id="630">630</th><td>                <em>unsigned</em> <em>int</em> <dfn class="local col0 decl" id="40subsystem_vendor_id" title='subsystem_vendor_id' data-type='unsigned int' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</dfn>; <i>/* vendors PCI-SIG ID */</i></td></tr>
+<tr><th id="631">631</th><td>                <em>unsigned</em> <em>int</em> <dfn class="local col1 decl" id="41subsystem_id" title='subsystem_id' data-type='unsigned int' data-ref="41subsystem_id" data-ref-filename="41subsystem_id">subsystem_id</dfn>;        <i>/* board model number */</i></td></tr>
+<tr><th id="632">632</th><td>		<em>unsigned</em> <em>int</em> <dfn class="local col2 decl" id="42byte_252" title='byte_252' data-type='unsigned int' data-ref="42byte_252" data-ref-filename="42byte_252">byte_252</dfn>, <dfn class="local col3 decl" id="43byte_253" title='byte_253' data-type='unsigned int' data-ref="43byte_253" data-ref-filename="43byte_253">byte_253</dfn>, <dfn class="local col4 decl" id="44byte_254" title='byte_254' data-type='unsigned int' data-ref="44byte_254" data-ref-filename="44byte_254">byte_254</dfn>, <dfn class="local col5 decl" id="45byte_255" title='byte_255' data-type='unsigned int' data-ref="45byte_255" data-ref-filename="45byte_255">byte_255</dfn>;</td></tr>
+<tr><th id="633">633</th><td></td></tr>
+<tr><th id="634">634</th><td>		bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_UNKNOWN&apos;">CARD_UNKNOWN</span>)];</td></tr>
+<tr><th id="635">635</th><td>		bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="636">636</th><td>		bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="637">637</th><td></td></tr>
+<tr><th id="638">638</th><td>	        <b>if</b>(readEEProm(bktr, <var>0</var>, <var>256</var>, (u_char *) &amp;eeprom))</td></tr>
+<tr><th id="639">639</th><td>		    printf(<q>"%s: error reading EEPROM\n"</q>, bktr_name(bktr));</td></tr>
+<tr><th id="640">640</th><td></td></tr>
+<tr><th id="641">641</th><td>                <a class="local col2 ref" href="#42byte_252" title='byte_252' data-ref="42byte_252" data-ref-filename="42byte_252">byte_252</a> = (<em>unsigned</em> <em>int</em>)<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>252</var>];</td></tr>
+<tr><th id="642">642</th><td>                <a class="local col3 ref" href="#43byte_253" title='byte_253' data-ref="43byte_253" data-ref-filename="43byte_253">byte_253</a> = (<em>unsigned</em> <em>int</em>)<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>253</var>];</td></tr>
+<tr><th id="643">643</th><td>                <a class="local col4 ref" href="#44byte_254" title='byte_254' data-ref="44byte_254" data-ref-filename="44byte_254">byte_254</a> = (<em>unsigned</em> <em>int</em>)<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>254</var>];</td></tr>
+<tr><th id="644">644</th><td>                <a class="local col5 ref" href="#45byte_255" title='byte_255' data-ref="45byte_255" data-ref-filename="45byte_255">byte_255</a> = (<em>unsigned</em> <em>int</em>)<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>255</var>];</td></tr>
+<tr><th id="645">645</th><td></td></tr>
+<tr><th id="646">646</th><td>                <a class="local col1 ref" href="#41subsystem_id" title='subsystem_id' data-ref="41subsystem_id" data-ref-filename="41subsystem_id">subsystem_id</a>        = (<a class="local col2 ref" href="#42byte_252" title='byte_252' data-ref="42byte_252" data-ref-filename="42byte_252">byte_252</a> &lt;&lt; <var>8</var>) | <a class="local col3 ref" href="#43byte_253" title='byte_253' data-ref="43byte_253" data-ref-filename="43byte_253">byte_253</a>;</td></tr>
+<tr><th id="647">647</th><td>                <a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> = (<a class="local col4 ref" href="#44byte_254" title='byte_254' data-ref="44byte_254" data-ref-filename="44byte_254">byte_254</a> &lt;&lt; <var>8</var>) | <a class="local col5 ref" href="#45byte_255" title='byte_255' data-ref="45byte_255" data-ref-filename="45byte_255">byte_255</a>;</td></tr>
+<tr><th id="648">648</th><td></td></tr>
+<tr><th id="649">649</th><td>	        <b>if</b> (<a class="macro" href="../../../sys/systm.h.html#163" title="(boothowto &amp; AB_VERBOSE)" data-ref="_M/bootverbose">bootverbose</a>)</td></tr>
+<tr><th id="650">650</th><td>	            printf(<q>"%s: subsystem 0x%04x 0x%04x\n"</q>, bktr_name(bktr),</td></tr>
+<tr><th id="651">651</th><td>			   subsystem_vendor_id, subsystem_id);</td></tr>
+<tr><th id="652">652</th><td></td></tr>
+<tr><th id="653">653</th><td>                <b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#552" title="0x1461" data-ref="_M/PCI_VENDOR_AVERMEDIA">PCI_VENDOR_AVERMEDIA</a>) {</td></tr>
+<tr><th id="654">654</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_AVER_MEDIA&apos;">CARD_AVER_MEDIA</span>)];</td></tr>
+<tr><th id="655">655</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="656">656</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="657">657</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="658">658</th><td>                }</td></tr>
+<tr><th id="659">659</th><td></td></tr>
+<tr><th id="660">660</th><td>                <b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#551" title="0x0070" data-ref="_M/PCI_VENDOR_HAUPPAUGE">PCI_VENDOR_HAUPPAUGE</a>) {</td></tr>
+<tr><th id="661">661</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_HAUPPAUGE&apos;">CARD_HAUPPAUGE</span>)];</td></tr>
+<tr><th id="662">662</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="663">663</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="664">664</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="665">665</th><td>                }</td></tr>
+<tr><th id="666">666</th><td></td></tr>
+<tr><th id="667">667</th><td>                <b>if</b> ((<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#562" title="0x1851" data-ref="_M/PCI_VENDOR_FLYVIDEO">PCI_VENDOR_FLYVIDEO</a>)</td></tr>
+<tr><th id="668">668</th><td>                 || (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#563" title="0x1852" data-ref="_M/PCI_VENDOR_FLYVIDEO_2">PCI_VENDOR_FLYVIDEO_2</a>)) {</td></tr>
+<tr><th id="669">669</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_FLYVIDEO&apos;">CARD_FLYVIDEO</span>)];</td></tr>
+<tr><th id="670">670</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="671">671</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="672">672</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="673">673</th><td>                }</td></tr>
+<tr><th id="674">674</th><td></td></tr>
+<tr><th id="675">675</th><td>                <b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#553" title="0x10B4" data-ref="_M/PCI_VENDOR_STB">PCI_VENDOR_STB</a>) {</td></tr>
+<tr><th id="676">676</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_STB&apos;">CARD_STB</span>)];</td></tr>
+<tr><th id="677">677</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="678">678</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="679">679</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="680">680</th><td>                }</td></tr>
+<tr><th id="681">681</th><td></td></tr>
+<tr><th id="682">682</th><td>                <b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#554" title="0x144F" data-ref="_M/PCI_VENDOR_ASKEY">PCI_VENDOR_ASKEY</a>) {</td></tr>
+<tr><th id="683">683</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_ASKEY_DYNALINK_MAGIC_TVIEW&apos;">CARD_ASKEY_DYNALINK_MAGIC_TVIEW</span>)];</td></tr>
+<tr><th id="684">684</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="685">685</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="686">686</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="687">687</th><td>                }</td></tr>
+<tr><th id="688">688</th><td></td></tr>
+<tr><th id="689">689</th><td>                <b>if</b> ((subsystem_vendor_id == <span class='error' title="use of undeclared identifier &apos;PCI_VENDOR_LEADTEK&apos;">PCI_VENDOR_LEADTEK</span>)</td></tr>
+<tr><th id="690">690</th><td>                 || (subsystem_vendor_id == <a class="macro" href="#559" title="0x6606" data-ref="_M/PCI_VENDOR_LEADTEK_ALT">PCI_VENDOR_LEADTEK_ALT</a>)</td></tr>
+<tr><th id="691">691</th><td>                 || (subsystem_vendor_id == <a class="macro" href="#560" title="0x6607" data-ref="_M/PCI_VENDOR_LEADTEK_ALT_2">PCI_VENDOR_LEADTEK_ALT_2</a>)</td></tr>
+<tr><th id="692">692</th><td>                 || (subsystem_vendor_id == <a class="macro" href="#561" title="0x107D" data-ref="_M/PCI_VENDOR_LEADTEK_ALT_3">PCI_VENDOR_LEADTEK_ALT_3</a>)) {</td></tr>
+<tr><th id="693">693</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_LEADTEK&apos;">CARD_LEADTEK</span>)];</td></tr>
+<tr><th id="694">694</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="695">695</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="696">696</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="697">697</th><td>                }</td></tr>
+<tr><th id="698">698</th><td></td></tr>
+<tr><th id="699">699</th><td>		<b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#564" title="0xBD11" data-ref="_M/PCI_VENDOR_PINNACLE_ALT">PCI_VENDOR_PINNACLE_ALT</a>) {</td></tr>
+<tr><th id="700">700</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_MIRO&apos;">CARD_MIRO</span>)];</td></tr>
+<tr><th id="701">701</th><td>		    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="702">702</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="703">703</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="704">704</th><td>                }</td></tr>
+<tr><th id="705">705</th><td></td></tr>
+<tr><th id="706">706</th><td>    	    	<b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#555" title="0x153B" data-ref="_M/PCI_VENDOR_TERRATEC">PCI_VENDOR_TERRATEC</a></td></tr>
+<tr><th id="707">707</th><td>		    &amp;&amp; (<a class="local col1 ref" href="#41subsystem_id" title='subsystem_id' data-ref="41subsystem_id" data-ref-filename="41subsystem_id">subsystem_id</a> == <a class="macro" href="#566" title="0x1118" data-ref="_M/MODEL_TERRATVALUE_1118">MODEL_TERRATVALUE_1118</a> </td></tr>
+<tr><th id="708">708</th><td>		        || <a class="local col1 ref" href="#41subsystem_id" title='subsystem_id' data-ref="41subsystem_id" data-ref-filename="41subsystem_id">subsystem_id</a> == <a class="macro" href="#567" title="0x1134" data-ref="_M/MODEL_TERRATVALUE_1134">MODEL_TERRATVALUE_1134</a>)) {</td></tr>
+<tr><th id="709">709</th><td>    	    	    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_TERRATVALUE&apos;">CARD_TERRATVALUE</span>)];</td></tr>
+<tr><th id="710">710</th><td>    	    	    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="711">711</th><td>    	    	    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="712">712</th><td>    	    	    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="713">713</th><td>    	    	}</td></tr>
+<tr><th id="714">714</th><td></td></tr>
+<tr><th id="715">715</th><td>    	    	<b>if</b> (<a class="local col0 ref" href="#40subsystem_vendor_id" title='subsystem_vendor_id' data-ref="40subsystem_vendor_id" data-ref-filename="40subsystem_vendor_id">subsystem_vendor_id</a> == <a class="macro" href="#555" title="0x153B" data-ref="_M/PCI_VENDOR_TERRATEC">PCI_VENDOR_TERRATEC</a>) {</td></tr>
+<tr><th id="716">716</th><td>    	    	    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_TERRATVPLUS&apos;">CARD_TERRATVPLUS</span>)];</td></tr>
+<tr><th id="717">717</th><td>    	    	    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="718">718</th><td>    	    	    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="719">719</th><td>    	    	    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="720">720</th><td>    	    	}</td></tr>
+<tr><th id="721">721</th><td></td></tr>
+<tr><th id="722">722</th><td>                <i>/* Vendor is unknown. We will use the standard probe code */</i></td></tr>
+<tr><th id="723">723</th><td>		<i>/* which may not give best results */</i></td></tr>
+<tr><th id="724">724</th><td>                printf(<q>"%s: Warning - card vendor 0x%04x (model 0x%04x) unknown.\n"</q>,</td></tr>
+<tr><th id="725">725</th><td>		       bktr_name(bktr), subsystem_vendor_id, subsystem_id);</td></tr>
+<tr><th id="726">726</th><td>            }</td></tr>
+<tr><th id="727">727</th><td>	    <b>else</b></td></tr>
+<tr><th id="728">728</th><td>	    {</td></tr>
+<tr><th id="729">729</th><td>                printf(<q>"%s: Card has no configuration EEPROM. Cannot determine card make.\n"</q>,</td></tr>
+<tr><th id="730">730</th><td>		       bktr_name(bktr));</td></tr>
+<tr><th id="731">731</th><td>	    }</td></tr>
+<tr><th id="732">732</th><td>	} <i>/* end of bt878/bt879 card detection code */</i></td></tr>
+<tr><th id="733">733</th><td></td></tr>
+<tr><th id="734">734</th><td>	<i>/* If we get to this point, we must have a Bt848/848A/849A card */</i></td></tr>
+<tr><th id="735">735</th><td>	<i>/* or a Bt878/879 with an unknown subsystem vendor id */</i></td></tr>
+<tr><th id="736">736</th><td>        <i>/* Try and determine the make of card by clever i2c probing */</i></td></tr>
+<tr><th id="737">737</th><td></td></tr>
+<tr><th id="738">738</th><td>   	<i>/* Check for i2c devices. If none, move on */</i></td></tr>
+<tr><th id="739">739</th><td>	<b>if</b> (!<a class="local col5 ref" href="#35any_i2c_devices" title='any_i2c_devices' data-ref="35any_i2c_devices" data-ref-filename="35any_i2c_devices">any_i2c_devices</a>) {</td></tr>
+<tr><th id="740">740</th><td>		bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_INTEL&apos;">CARD_INTEL</span>)];</td></tr>
+<tr><th id="741">741</th><td>		bktr-&gt;card.eepromAddr = <var>0</var>;</td></tr>
+<tr><th id="742">742</th><td>		bktr-&gt;card.eepromSize = <var>0</var>;</td></tr>
+<tr><th id="743">743</th><td>		<b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="744">744</th><td>	}</td></tr>
+<tr><th id="745">745</th><td></td></tr>
+<tr><th id="746">746</th><td>        <i>/* Look for Hauppauge, STB and Osprey cards by the presence */</i></td></tr>
+<tr><th id="747">747</th><td>	<i>/* of an EEPROM */</i></td></tr>
+<tr><th id="748">748</th><td>        <i>/* Note: Bt878 based cards also use EEPROMs so we can only do this */</i></td></tr>
+<tr><th id="749">749</th><td>        <i>/* test on BT848/848A and 849A based cards. */</i></td></tr>
+<tr><th id="750">750</th><td>	<b>if</b> ((bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_848&apos;">BROOKTREE_848</span>)  ||</td></tr>
+<tr><th id="751">751</th><td>	    (bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_848A&apos;">BROOKTREE_848A</span>) ||</td></tr>
+<tr><th id="752">752</th><td>	    (bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_849A&apos;">BROOKTREE_849A</span>)) {</td></tr>
+<tr><th id="753">753</th><td></td></tr>
+<tr><th id="754">754</th><td>            <i>/* At i2c address 0xa0, look for Hauppauge and Osprey cards */</i></td></tr>
+<tr><th id="755">755</th><td>            <b>if</b> ((status = i2cRead(bktr, <a class="macro" href="#127" title="0xa1" data-ref="_M/PFC8582_RADDR">PFC8582_RADDR</a>)) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="756">756</th><td></td></tr>
+<tr><th id="757">757</th><td>		    <i>/* Read the eeprom contents */</i></td></tr>
+<tr><th id="758">758</th><td>		    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_UNKNOWN&apos;">CARD_UNKNOWN</span>)];</td></tr>
+<tr><th id="759">759</th><td>		    bktr-&gt;card.eepromAddr = <a class="macro" href="#126" title="0xa0" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</a>;</td></tr>
+<tr><th id="760">760</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="761">761</th><td>	            readEEProm(bktr, <var>0</var>, <var>128</var>, (u_char *) &amp;eeprom);</td></tr>
+<tr><th id="762">762</th><td></td></tr>
+<tr><th id="763">763</th><td>		    <i>/* For Hauppauge, check the EEPROM begins with 0x84 */</i></td></tr>
+<tr><th id="764">764</th><td>		    <b>if</b> (<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>0</var>] == <var>0x84</var>) {</td></tr>
+<tr><th id="765">765</th><td>                            bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_HAUPPAUGE&apos;">CARD_HAUPPAUGE</span>)];</td></tr>
+<tr><th id="766">766</th><td>			    bktr-&gt;card.eepromAddr = <a class="macro" href="#126" title="0xa0" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</a>;</td></tr>
+<tr><th id="767">767</th><td>			    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="768">768</th><td>                            <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="769">769</th><td>		    }</td></tr>
+<tr><th id="770">770</th><td></td></tr>
+<tr><th id="771">771</th><td>		    <i>/* For Osprey, check the EEPROM begins with "MMAC" */</i></td></tr>
+<tr><th id="772">772</th><td>		    <b>if</b> ((<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>0</var>] == <kbd>'M'</kbd>) &amp;&amp;(<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>1</var>] == <kbd>'M'</kbd>)</td></tr>
+<tr><th id="773">773</th><td>			&amp;&amp;(<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>2</var>] == <kbd>'A'</kbd>) &amp;&amp;(<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>3</var>] == <kbd>'C'</kbd>)) {</td></tr>
+<tr><th id="774">774</th><td>                            bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_OSPREY&apos;">CARD_OSPREY</span>)];</td></tr>
+<tr><th id="775">775</th><td>			    bktr-&gt;card.eepromAddr = <a class="macro" href="#126" title="0xa0" data-ref="_M/PFC8582_WADDR">PFC8582_WADDR</a>;</td></tr>
+<tr><th id="776">776</th><td>			    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="777">777</th><td>                            <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="778">778</th><td>		    }</td></tr>
+<tr><th id="779">779</th><td>		    printf(<q>"%s: Warning: Unknown card type. EEPROM data not recognised\n"</q>,</td></tr>
+<tr><th id="780">780</th><td>			   bktr_name(bktr));</td></tr>
+<tr><th id="781">781</th><td>		    printf(<q>"%s: %x %x %x %x\n"</q>, bktr_name(bktr),</td></tr>
+<tr><th id="782">782</th><td>			   eeprom[<var>0</var>],eeprom[<var>1</var>],eeprom[<var>2</var>],eeprom[<var>3</var>]);</td></tr>
+<tr><th id="783">783</th><td>            }</td></tr>
+<tr><th id="784">784</th><td></td></tr>
+<tr><th id="785">785</th><td>            <i>/* look for an STB card */</i></td></tr>
+<tr><th id="786">786</th><td>            <b>if</b> ((status = i2cRead(bktr, <a class="macro" href="#121" title="0xaf" data-ref="_M/X24C01_RADDR">X24C01_RADDR</a>)) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="787">787</th><td>                    bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_STB&apos;">CARD_STB</span>)];</td></tr>
+<tr><th id="788">788</th><td>		    bktr-&gt;card.eepromAddr = <a class="macro" href="#120" title="0xae" data-ref="_M/X24C01_WADDR">X24C01_WADDR</a>;</td></tr>
+<tr><th id="789">789</th><td>		    bktr-&gt;card.eepromSize = (u_char)(<var>128</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="790">790</th><td>                    <b>goto</b> <a class="lbl" href="#46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</a>;</td></tr>
+<tr><th id="791">791</th><td>            }</td></tr>
+<tr><th id="792">792</th><td></td></tr>
+<tr><th id="793">793</th><td>	}</td></tr>
+<tr><th id="794">794</th><td></td></tr>
+<tr><th id="795">795</th><td>	signCard(bktr, <var>1</var>, <var>128</var>, (u_char *)  &amp;probe_signature);</td></tr>
+<tr><th id="796">796</th><td></td></tr>
+<tr><th id="797">797</th><td>	<b>if</b> (<a class="macro" href="../../../sys/systm.h.html#163" title="(boothowto &amp; AB_VERBOSE)" data-ref="_M/bootverbose">bootverbose</a>) {</td></tr>
+<tr><th id="798">798</th><td>	  printf(<q>"%s: card signature: "</q>, bktr_name(bktr));</td></tr>
+<tr><th id="799">799</th><td>	  <b>for</b> (j = <var>0</var>; j &lt; <span class='error' title="use of undeclared identifier &apos;Bt848_MAX_SIGN&apos;">Bt848_MAX_SIGN</span>; j++) {</td></tr>
+<tr><th id="800">800</th><td>	    printf(<q>" %02x "</q>, probe_signature[j]);</td></tr>
+<tr><th id="801">801</th><td>	  }</td></tr>
+<tr><th id="802">802</th><td>	  <a class="ref fn" href="../../../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"\n\n"</q>);</td></tr>
+<tr><th id="803">803</th><td>	}</td></tr>
+<tr><th id="804">804</th><td>	<b>for</b> (i = <var>0</var>;</td></tr>
+<tr><th id="805">805</th><td>	     i &lt; (<b>sizeof</b> bt848_card_signature)/ <span class='error' title="invalid application of &apos;sizeof&apos; to an incomplete type &apos;struct bt848_card_sig&apos;"><b>sizeof</b></span> (<b>struct</b> bt848_card_sig);</td></tr>
+<tr><th id="806">806</th><td>	     i++) {</td></tr>
+<tr><th id="807">807</th><td></td></tr>
+<tr><th id="808">808</th><td>	  card_found = <var>1</var>;</td></tr>
+<tr><th id="809">809</th><td>	  probe_temp = (u_char *) &amp;bt848_card_signature[i].signature;</td></tr>
+<tr><th id="810">810</th><td></td></tr>
+<tr><th id="811">811</th><td>	  <b>for</b> (j = <var>0</var>; j &lt; <span class='error' title="use of undeclared identifier &apos;Bt848_MAX_SIGN&apos;">Bt848_MAX_SIGN</span>; j++) {</td></tr>
+<tr><th id="812">812</th><td>	    <b>if</b> ((probe_temp[j] &amp; <var>0xf</var>) != (probe_signature[j] &amp; <var>0xf</var>)) {</td></tr>
+<tr><th id="813">813</th><td>	      card_found = <var>0</var>;</td></tr>
+<tr><th id="814">814</th><td>	      <b>break</b>;</td></tr>
+<tr><th id="815">815</th><td>	    }</td></tr>
+<tr><th id="816">816</th><td></td></tr>
+<tr><th id="817">817</th><td>	  }</td></tr>
+<tr><th id="818">818</th><td>	  <b>if</b> (card_found) {</td></tr>
+<tr><th id="819">819</th><td>	    bktr-&gt;card = cards[card = bt848_card_signature[i].card];</td></tr>
+<tr><th id="820">820</th><td>	    eeprom_i2c_address = locate_eeprom_address(bktr);</td></tr>
+<tr><th id="821">821</th><td>	    <b>if</b> (eeprom_i2c_address != -<var>1</var>) {</td></tr>
+<tr><th id="822">822</th><td>		bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="823">823</th><td>		bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="824">824</th><td>	    } <b>else</b> {</td></tr>
+<tr><th id="825">825</th><td>		bktr-&gt;card.eepromAddr = <var>0</var>;</td></tr>
+<tr><th id="826">826</th><td>		bktr-&gt;card.eepromSize = <var>0</var>;</td></tr>
+<tr><th id="827">827</th><td>	    }</td></tr>
+<tr><th id="828">828</th><td>	    tuner_i2c_address = locate_tuner_address(bktr);</td></tr>
+<tr><th id="829">829</th><td>	    select_tuner(bktr, bt848_card_signature[i].tuner);</td></tr>
+<tr><th id="830">830</th><td>	    <b>goto</b> checkDBX;</td></tr>
+<tr><th id="831">831</th><td>	  }</td></tr>
+<tr><th id="832">832</th><td>	}</td></tr>
+<tr><th id="833">833</th><td></td></tr>
+<tr><th id="834">834</th><td>	<i>/* We do not know the card type. Default to Miro */</i></td></tr>
+<tr><th id="835">835</th><td>	bktr-&gt;card = cards[(card = <span class='error' title="use of undeclared identifier &apos;CARD_MIRO&apos;">CARD_MIRO</span>)];</td></tr>
+<tr><th id="836">836</th><td></td></tr>
+<tr><th id="837">837</th><td></td></tr>
+<tr><th id="838">838</th><td><dfn class="lbl" id="39checkEEPROM" data-ref="39checkEEPROM" data-ref-filename="39checkEEPROM">checkEEPROM</dfn>:</td></tr>
+<tr><th id="839">839</th><td>	<i>/* look for a configuration eeprom */</i></td></tr>
+<tr><th id="840">840</th><td>	eeprom_i2c_address = locate_eeprom_address(bktr);</td></tr>
+<tr><th id="841">841</th><td>	<b>if</b> (<a class="local col8 ref" href="#38eeprom_i2c_address" title='eeprom_i2c_address' data-ref="38eeprom_i2c_address" data-ref-filename="38eeprom_i2c_address">eeprom_i2c_address</a> != -<var>1</var>) {</td></tr>
+<tr><th id="842">842</th><td>	    bktr-&gt;card.eepromAddr = eeprom_i2c_address;</td></tr>
+<tr><th id="843">843</th><td>	    bktr-&gt;card.eepromSize = (u_char)(<var>256</var> / <span class='error' title="use of undeclared identifier &apos;EEPROMBLOCKSIZE&apos;">EEPROMBLOCKSIZE</span>);</td></tr>
+<tr><th id="844">844</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="845">845</th><td>	    bktr-&gt;card.eepromAddr = <var>0</var>;</td></tr>
+<tr><th id="846">846</th><td>	    bktr-&gt;card.eepromSize = <var>0</var>;</td></tr>
+<tr><th id="847">847</th><td>	}</td></tr>
+<tr><th id="848">848</th><td></td></tr>
+<tr><th id="849">849</th><td></td></tr>
+<tr><th id="850">850</th><td><dfn class="lbl" id="46checkTuner" data-ref="46checkTuner" data-ref-filename="46checkTuner">checkTuner</dfn>:</td></tr>
+<tr><th id="851">851</th><td></td></tr>
+<tr><th id="852">852</th><td>	<i>/* look for a tuner */</i></td></tr>
+<tr><th id="853">853</th><td>	tuner_i2c_address = locate_tuner_address(bktr);</td></tr>
+<tr><th id="854">854</th><td>	<b>if</b> (<a class="local col7 ref" href="#37tuner_i2c_address" title='tuner_i2c_address' data-ref="37tuner_i2c_address" data-ref-filename="37tuner_i2c_address">tuner_i2c_address</a> == -<var>1</var>) {</td></tr>
+<tr><th id="855">855</th><td>		select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;NO_TUNER&apos;">NO_TUNER</span>);</td></tr>
+<tr><th id="856">856</th><td>		<b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="857">857</th><td>	}</td></tr>
+<tr><th id="858">858</th><td></td></tr>
+<tr><th id="859">859</th><td><u>#<span data-ppcond="859">if</span> defined(<span class="macro" data-ref="_M/BKTR_OVERRIDE_TUNER">BKTR_OVERRIDE_TUNER</span>)</u></td></tr>
+<tr><th id="860">860</th><td>	select_tuner(bktr, BKTR_OVERRIDE_TUNER);</td></tr>
+<tr><th id="861">861</th><td>	<b>goto</b> checkDBX;</td></tr>
+<tr><th id="862">862</th><td><u>#<span data-ppcond="859">endif</span></u></td></tr>
+<tr><th id="863">863</th><td>	<b>if</b> (bktr-&gt;bt848_tuner != -<var>1</var>) {</td></tr>
+<tr><th id="864">864</th><td>	  select_tuner(bktr, bktr-&gt;bt848_tuner &amp; <var>0xff</var>);</td></tr>
+<tr><th id="865">865</th><td>	  <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="866">866</th><td>	}</td></tr>
+<tr><th id="867">867</th><td></td></tr>
+<tr><th id="868">868</th><td>	<i>/* Check for i2c devices */</i></td></tr>
+<tr><th id="869">869</th><td>	<b>if</b> (!<a class="local col5 ref" href="#35any_i2c_devices" title='any_i2c_devices' data-ref="35any_i2c_devices" data-ref-filename="35any_i2c_devices">any_i2c_devices</a>) {</td></tr>
+<tr><th id="870">870</th><td>		select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;NO_TUNER&apos;">NO_TUNER</span>);</td></tr>
+<tr><th id="871">871</th><td>		<b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="872">872</th><td>	}</td></tr>
+<tr><th id="873">873</th><td></td></tr>
+<tr><th id="874">874</th><td>	<i>/* differentiate type of tuner */</i></td></tr>
+<tr><th id="875">875</th><td></td></tr>
+<tr><th id="876">876</th><td>	<b>switch</b> (<a class="local col8 ref" href="#28card" title='card' data-ref="28card" data-ref-filename="28card">card</a>) {</td></tr>
+<tr><th id="877">877</th><td>	<b>case</b> <span class='error' title="use of undeclared identifier &apos;CARD_MIRO&apos;">CARD_MIRO</span>:</td></tr>
+<tr><th id="878">878</th><td>	    <b>switch</b> (((INL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>) &gt;&gt; <var>10</var>)-<var>1</var>)&amp;<var>7</var>) {</td></tr>
+<tr><th id="879">879</th><td>	    <b>case</b> <var>0</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>); <b>break</b>;</td></tr>
+<tr><th id="880">880</th><td>	    <b>case</b> <var>1</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>); <b>break</b>;</td></tr>
+<tr><th id="881">881</th><td>	    <b>case</b> <var>2</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_NTSC&apos;">PHILIPS_NTSC</span>); <b>break</b>;</td></tr>
+<tr><th id="882">882</th><td>	    <b>case</b> <var>3</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_SECAM&apos;">PHILIPS_SECAM</span>); <b>break</b>;</td></tr>
+<tr><th id="883">883</th><td>	    <b>case</b> <var>4</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;NO_TUNER&apos;">NO_TUNER</span>); <b>break</b>;</td></tr>
+<tr><th id="884">884</th><td>	    <b>case</b> <var>5</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_PALI&apos;">PHILIPS_PALI</span>); <b>break</b>;</td></tr>
+<tr><th id="885">885</th><td>	    <b>case</b> <var>6</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_NTSC&apos;">TEMIC_NTSC</span>); <b>break</b>;</td></tr>
+<tr><th id="886">886</th><td>	    <b>case</b> <var>7</var>: select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_PALI&apos;">TEMIC_PALI</span>); <b>break</b>;</td></tr>
+<tr><th id="887">887</th><td>	    }</td></tr>
+<tr><th id="888">888</th><td>	    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="889">889</th><td>	    <b>break</b>;</td></tr>
+<tr><th id="890">890</th><td></td></tr>
+<tr><th id="891">891</th><td>	<b>case</b> <span class='error' title="use of undeclared identifier &apos;CARD_HAUPPAUGE&apos;">CARD_HAUPPAUGE</span>:</td></tr>
+<tr><th id="892">892</th><td>	    <i>/* Hauppauge kindly supplied the following Tuner Table */</i></td></tr>
+<tr><th id="893">893</th><td>	    <i>/* FIXME: I think the tuners the driver selects for types */</i></td></tr>
+<tr><th id="894">894</th><td>	    <i>/* 0x08 and 0x15 may be incorrect but no one has complained. */</i></td></tr>
+<tr><th id="895">895</th><td>	    <i>/* Old Temic tuners had their own API, but newer Temic tuners */</i></td></tr>
+<tr><th id="896">896</th><td>	    <i>/* have the same API as Philips tuners */</i></td></tr>
+<tr><th id="897">897</th><td>	    <i>/*</i></td></tr>
+<tr><th id="898">898</th><td><i>  ID  Tuner Model           Format			We select Format</i></td></tr>
+<tr><th id="899">899</th><td><i> 0x00 NONE</i></td></tr>
+<tr><th id="900">900</th><td><i> 0x01 EXTERNAL</i></td></tr>
+<tr><th id="901">901</th><td><i> 0x02 OTHER</i></td></tr>
+<tr><th id="902">902</th><td><i> 0x03 Philips FI1216        BG</i></td></tr>
+<tr><th id="903">903</th><td><i> 0x04 Philips FI1216MF      BGLL'			PHILIPS_SECAM</i></td></tr>
+<tr><th id="904">904</th><td><i> 0x05 Philips FI1236        MN 				PHILIPS_NTSC</i></td></tr>
+<tr><th id="905">905</th><td><i> 0x06 Philips FI1246        I 				PHILIPS_PALI</i></td></tr>
+<tr><th id="906">906</th><td><i> 0x07 Philips FI1256        DK</i></td></tr>
+<tr><th id="907">907</th><td><i> 0x08 Philips FI1216 MK2    BG 				PHILIPS_PALI</i></td></tr>
+<tr><th id="908">908</th><td><i> 0x09 Philips FI1216MF MK2  BGLL' 			PHILIPS_SECAM</i></td></tr>
+<tr><th id="909">909</th><td><i> 0x0a Philips FI1236 MK2    MN 				PHILIPS_NTSC</i></td></tr>
+<tr><th id="910">910</th><td><i> 0x0b Philips FI1246 MK2    I 				PHILIPS_PALI</i></td></tr>
+<tr><th id="911">911</th><td><i> 0x0c Philips FI1256 MK2    DK</i></td></tr>
+<tr><th id="912">912</th><td><i> 0x0d Temic 4032FY5         NTSC			TEMIC_NTSC</i></td></tr>
+<tr><th id="913">913</th><td><i> 0x0e Temic 4002FH5         BG				TEMIC_PAL</i></td></tr>
+<tr><th id="914">914</th><td><i> 0x0f Temic 4062FY5         I 				TEMIC_PALI</i></td></tr>
+<tr><th id="915">915</th><td><i> 0x10 Philips FR1216 MK2    BG</i></td></tr>
+<tr><th id="916">916</th><td><i> 0x11 Philips FR1216MF MK2  BGLL' 			PHILIPS_FR1236_SECAM</i></td></tr>
+<tr><th id="917">917</th><td><i> 0x12 Philips FR1236 MK2    MN 				PHILIPS_FR1236_NTSC</i></td></tr>
+<tr><th id="918">918</th><td><i> 0x13 Philips FR1246 MK2    I</i></td></tr>
+<tr><th id="919">919</th><td><i> 0x14 Philips FR1256 MK2    DK</i></td></tr>
+<tr><th id="920">920</th><td><i> 0x15 Philips FM1216        BG 				PHILIPS_FR1216_PAL</i></td></tr>
+<tr><th id="921">921</th><td><i> 0x16 Philips FM1216MF      BGLL' 			PHILIPS_FR1236_SECAM</i></td></tr>
+<tr><th id="922">922</th><td><i> 0x17 Philips FM1236        MN 				PHILIPS_FR1236_NTSC</i></td></tr>
+<tr><th id="923">923</th><td><i> 0x18 Philips FM1246        I</i></td></tr>
+<tr><th id="924">924</th><td><i> 0x19 Philips FM1256        DK</i></td></tr>
+<tr><th id="925">925</th><td><i> 0x1a Temic 4036FY5         MN (FI1236 MK2 clone)	PHILIPS_NTSC</i></td></tr>
+<tr><th id="926">926</th><td><i> 0x1b Samsung TCPN9082D     MN</i></td></tr>
+<tr><th id="927">927</th><td><i> 0x1c Samsung TCPM9092P     Pal BG/I/DK</i></td></tr>
+<tr><th id="928">928</th><td><i> 0x1d Temic 4006FH5         BG				PHILIPS_PALI</i></td></tr>
+<tr><th id="929">929</th><td><i> 0x1e Samsung TCPN9085D     MN/Radio</i></td></tr>
+<tr><th id="930">930</th><td><i> 0x1f Samsung TCPB9085P     Pal BG/I/DK / Radio</i></td></tr>
+<tr><th id="931">931</th><td><i> 0x20 Samsung TCPL9091P     Pal BG &amp; Secam L/L'</i></td></tr>
+<tr><th id="932">932</th><td><i> 0x21 Temic 4039FY5         NTSC Radio</i></td></tr>
+<tr><th id="933">933</th><td><i> 0x22 Philips FQ1216ME      Pal BGIDK &amp; Secam L/L'</i></td></tr>
+<tr><th id="934">934</th><td><i> 0x23 Temic 4066FY5         Pal I (FI1246 MK2 clone)	PHILIPS_PALI</i></td></tr>
+<tr><th id="935">935</th><td><i> 0x24 Philips TD1536        MN/ATSCDigital</i></td></tr>
+<tr><th id="936">936</th><td><i> 0x25 Philips TD1536D       MN/ATSCDigital DUAL INPUT</i></td></tr>
+<tr><th id="937">937</th><td><i> 0x26 Philips FMR1236       M/N FM(no demod)</i></td></tr>
+<tr><th id="938">938</th><td><i> 0x27 Philips FI1256MP      B/G, D/K</i></td></tr>
+<tr><th id="939">939</th><td><i> 0x28 Samsung TCPQ9091P     BG/I/DK, L/L'</i></td></tr>
+<tr><th id="940">940</th><td><i> 0x29 Temic 4006FN5         BG/I/DK</i></td></tr>
+<tr><th id="941">941</th><td><i> 0x2a Temic 4009FR5         BG FM			PHILIPS_FR1216_PAL</i></td></tr>
+<tr><th id="942">942</th><td><i> 0x2b Temic 4046FM5         B/G, I, D/K, L/L'</i></td></tr>
+<tr><th id="943">943</th><td><i> 0x2c Temic 4009FN5         B/G, I, D/K, FM (no demod)</i></td></tr>
+<tr><th id="944">944</th><td><i> 0x2d Philips TD1536D_FH_44 MN/ATSCDigital DUAL INPUT</i></td></tr>
+<tr><th id="945">945</th><td><i>	    */</i></td></tr>
+<tr><th id="946">946</th><td></td></tr>
+<tr><th id="947">947</th><td></td></tr>
+<tr><th id="948">948</th><td>	    <i>/* Determine the model number from the eeprom */</i></td></tr>
+<tr><th id="949">949</th><td>	    <b>if</b> (bktr-&gt;card.eepromAddr != <var>0</var>) {</td></tr>
+<tr><th id="950">950</th><td>	        <i>/* eeprom data block structure */</i></td></tr>
+<tr><th id="951">951</th><td>	        <em>unsigned</em> <em>char</em> *<dfn class="local col8 decl" id="48block_1" title='block_1' data-type='unsigned char *' data-ref="48block_1" data-ref-filename="48block_1">block_1</dfn>, *<dfn class="local col9 decl" id="49block_2" title='block_2' data-type='unsigned char *' data-ref="49block_2" data-ref-filename="49block_2">block_2</dfn>, *<dfn class="local col0 decl" id="50block_3" title='block_3' data-type='unsigned char *' data-ref="50block_3" data-ref-filename="50block_3">block_3</dfn>;</td></tr>
+<tr><th id="952">952</th><td>	        <em>int</em> <dfn class="local col1 decl" id="51block_1_data_size" title='block_1_data_size' data-type='int' data-ref="51block_1_data_size" data-ref-filename="51block_1_data_size">block_1_data_size</dfn>,  <dfn class="local col2 decl" id="52block_2_data_size" title='block_2_data_size' data-type='int' data-ref="52block_2_data_size" data-ref-filename="52block_2_data_size">block_2_data_size</dfn>;</td></tr>
+<tr><th id="953">953</th><td>	        <em>int</em> <dfn class="local col3 decl" id="53block_1_total_size" title='block_1_total_size' data-type='int' data-ref="53block_1_total_size" data-ref-filename="53block_1_total_size">block_1_total_size</dfn>, <dfn class="local col4 decl" id="54block_2_total_size" title='block_2_total_size' data-type='int' data-ref="54block_2_total_size" data-ref-filename="54block_2_total_size">block_2_total_size</dfn>;</td></tr>
+<tr><th id="954">954</th><td></td></tr>
+<tr><th id="955">955</th><td>		<em>unsigned</em> <em>int</em> <dfn class="local col5 decl" id="55model" title='model' data-type='unsigned int' data-ref="55model" data-ref-filename="55model">model</dfn>,<dfn class="local col6 decl" id="56revision" title='revision' data-type='unsigned int' data-ref="56revision" data-ref-filename="56revision">revision</dfn>;</td></tr>
+<tr><th id="956">956</th><td>		<em>unsigned</em> <em>char</em> <dfn class="local col7 decl" id="57tuner_code" title='tuner_code' data-type='unsigned char' data-ref="57tuner_code" data-ref-filename="57tuner_code">tuner_code</dfn>;</td></tr>
+<tr><th id="957">957</th><td>		<em>unsigned</em> <em>char</em> <dfn class="local col8 decl" id="58no_audio_mux" title='no_audio_mux' data-type='unsigned char' data-ref="58no_audio_mux" data-ref-filename="58no_audio_mux">no_audio_mux</dfn>;</td></tr>
+<tr><th id="958">958</th><td></td></tr>
+<tr><th id="959">959</th><td>		readEEProm(bktr, <var>0</var>, <var>128</var>, (u_char *) &amp;eeprom);</td></tr>
+<tr><th id="960">960</th><td></td></tr>
+<tr><th id="961">961</th><td>	        <i>/* LOCATE THE EEPROM DATA BLOCKS */</i></td></tr>
+<tr><th id="962">962</th><td>	        <a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a> = &amp;<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>0</var>];</td></tr>
+<tr><th id="963">963</th><td>	        <a class="local col1 ref" href="#51block_1_data_size" title='block_1_data_size' data-ref="51block_1_data_size" data-ref-filename="51block_1_data_size">block_1_data_size</a> = (<a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>2</var>] &lt;&lt; <var>8</var> | <a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>1</var>]);</td></tr>
+<tr><th id="964">964</th><td>	        <a class="local col3 ref" href="#53block_1_total_size" title='block_1_total_size' data-ref="53block_1_total_size" data-ref-filename="53block_1_total_size">block_1_total_size</a> = <a class="local col1 ref" href="#51block_1_data_size" title='block_1_data_size' data-ref="51block_1_data_size" data-ref-filename="51block_1_data_size">block_1_data_size</a> + <var>3</var>; <i>/* Header bytes */</i></td></tr>
+<tr><th id="965">965</th><td></td></tr>
+<tr><th id="966">966</th><td>	        <a class="local col9 ref" href="#49block_2" title='block_2' data-ref="49block_2" data-ref-filename="49block_2">block_2</a> = &amp;<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<a class="local col3 ref" href="#53block_1_total_size" title='block_1_total_size' data-ref="53block_1_total_size" data-ref-filename="53block_1_total_size">block_1_total_size</a>];</td></tr>
+<tr><th id="967">967</th><td>	        <a class="local col2 ref" href="#52block_2_data_size" title='block_2_data_size' data-ref="52block_2_data_size" data-ref-filename="52block_2_data_size">block_2_data_size</a> = (<a class="local col9 ref" href="#49block_2" title='block_2' data-ref="49block_2" data-ref-filename="49block_2">block_2</a>[<var>2</var>] &lt;&lt; <var>8</var> | <a class="local col9 ref" href="#49block_2" title='block_2' data-ref="49block_2" data-ref-filename="49block_2">block_2</a>[<var>1</var>]);</td></tr>
+<tr><th id="968">968</th><td>	        <a class="local col4 ref" href="#54block_2_total_size" title='block_2_total_size' data-ref="54block_2_total_size" data-ref-filename="54block_2_total_size">block_2_total_size</a> = <a class="local col2 ref" href="#52block_2_data_size" title='block_2_data_size' data-ref="52block_2_data_size" data-ref-filename="52block_2_data_size">block_2_data_size</a> + <var>3</var>; <i>/* Header bytes */</i></td></tr>
+<tr><th id="969">969</th><td></td></tr>
+<tr><th id="970">970</th><td>	        <a class="local col0 ref" href="#50block_3" title='block_3' data-ref="50block_3" data-ref-filename="50block_3">block_3</a> = &amp;<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<a class="local col3 ref" href="#53block_1_total_size" title='block_1_total_size' data-ref="53block_1_total_size" data-ref-filename="53block_1_total_size">block_1_total_size</a> + <a class="local col4 ref" href="#54block_2_total_size" title='block_2_total_size' data-ref="54block_2_total_size" data-ref-filename="54block_2_total_size">block_2_total_size</a>];</td></tr>
+<tr><th id="971">971</th><td></td></tr>
+<tr><th id="972">972</th><td>		<a class="local col5 ref" href="#55model" title='model' data-ref="55model" data-ref-filename="55model">model</a>    = (<a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>12</var>] &lt;&lt; <var>8</var>  | <a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>11</var>]);</td></tr>
+<tr><th id="973">973</th><td>		<a class="local col6 ref" href="#56revision" title='revision' data-ref="56revision" data-ref-filename="56revision">revision</a> = (<a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>15</var>] &lt;&lt; <var>16</var> | <a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>14</var>] &lt;&lt; <var>8</var> | <a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>13</var>]);</td></tr>
+<tr><th id="974">974</th><td></td></tr>
+<tr><th id="975">975</th><td>		<a class="local col7 ref" href="#57tuner_code" title='tuner_code' data-ref="57tuner_code" data-ref-filename="57tuner_code">tuner_code</a> = <a class="local col8 ref" href="#48block_1" title='block_1' data-ref="48block_1" data-ref-filename="48block_1">block_1</a>[<var>9</var>];</td></tr>
+<tr><th id="976">976</th><td></td></tr>
+<tr><th id="977">977</th><td>		<a class="local col8 ref" href="#58no_audio_mux" title='no_audio_mux' data-ref="58no_audio_mux" data-ref-filename="58no_audio_mux">no_audio_mux</a> = ((<a class="local col0 ref" href="#50block_3" title='block_3' data-ref="50block_3" data-ref-filename="50block_3">block_3</a>[<var>3</var>] &gt;&gt; <var>7</var>) &amp;<var>0x01</var>);</td></tr>
+<tr><th id="978">978</th><td></td></tr>
+<tr><th id="979">979</th><td>		<b>if</b> (no_audio_mux) bktr-&gt;audio_mux_present = <var>0</var>;</td></tr>
+<tr><th id="980">980</th><td></td></tr>
+<tr><th id="981">981</th><td>		<b>if</b> (verbose)</td></tr>
+<tr><th id="982">982</th><td>		    printf(<q>"%s: Hauppauge Model %d %c%c%c%c\n"</q>,</td></tr>
+<tr><th id="983">983</th><td>			   bktr_name(bktr),</td></tr>
+<tr><th id="984">984</th><td>			   model,</td></tr>
+<tr><th id="985">985</th><td>			   ((revision &gt;&gt; <var>18</var>) &amp; <var>0x3f</var>) + <var>32</var>,</td></tr>
+<tr><th id="986">986</th><td>			   ((revision &gt;&gt; <var>12</var>) &amp; <var>0x3f</var>) + <var>32</var>,</td></tr>
+<tr><th id="987">987</th><td>			   ((revision &gt;&gt;  <var>6</var>) &amp; <var>0x3f</var>) + <var>32</var>,</td></tr>
+<tr><th id="988">988</th><td>			   ((revision &gt;&gt;  <var>0</var>) &amp; <var>0x3f</var>) + <var>32</var>);</td></tr>
+<tr><th id="989">989</th><td></td></tr>
+<tr><th id="990">990</th><td>	        <i>/* Determine the tuner type from the eeprom */</i></td></tr>
+<tr><th id="991">991</th><td></td></tr>
+<tr><th id="992">992</th><td>		<b>switch</b> (<a class="local col7 ref" href="#57tuner_code" title='tuner_code' data-ref="57tuner_code" data-ref-filename="57tuner_code">tuner_code</a>) {</td></tr>
+<tr><th id="993">993</th><td></td></tr>
+<tr><th id="994">994</th><td>		  <b>case</b> <var>0x5</var>:</td></tr>
+<tr><th id="995">995</th><td>                  <b>case</b> <var>0x0a</var>:</td></tr>
+<tr><th id="996">996</th><td>                  <b>case</b> <var>0x1a</var>:</td></tr>
+<tr><th id="997">997</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_NTSC&apos;">PHILIPS_NTSC</span>);</td></tr>
+<tr><th id="998">998</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="999">999</th><td></td></tr>
+<tr><th id="1000">1000</th><td>		  <b>case</b> <var>0x4</var>:</td></tr>
+<tr><th id="1001">1001</th><td>                  <b>case</b> <var>0x9</var>:</td></tr>
+<tr><th id="1002">1002</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_SECAM&apos;">PHILIPS_SECAM</span>);</td></tr>
+<tr><th id="1003">1003</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1004">1004</th><td></td></tr>
+<tr><th id="1005">1005</th><td>                  <b>case</b> <var>0x11</var>:</td></tr>
+<tr><th id="1006">1006</th><td>	          <b>case</b> <var>0x16</var>:</td></tr>
+<tr><th id="1007">1007</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1236_SECAM&apos;">PHILIPS_FR1236_SECAM</span>);</td></tr>
+<tr><th id="1008">1008</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1009">1009</th><td></td></tr>
+<tr><th id="1010">1010</th><td>                  <b>case</b> <var>0x12</var>:</td></tr>
+<tr><th id="1011">1011</th><td>	          <b>case</b> <var>0x17</var>:</td></tr>
+<tr><th id="1012">1012</th><td>	          <b>case</b> <var>0x21</var>: <i>/* Hauppauge WinTV-GO-FM (model 00191) */</i></td></tr>
+<tr><th id="1013">1013</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1236_NTSC&apos;">PHILIPS_FR1236_NTSC</span>);</td></tr>
+<tr><th id="1014">1014</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1015">1015</th><td></td></tr>
+<tr><th id="1016">1016</th><td>		  <b>case</b> <var>0x6</var>:</td></tr>
+<tr><th id="1017">1017</th><td>	          <b>case</b> <var>0x8</var>:</td></tr>
+<tr><th id="1018">1018</th><td>	          <b>case</b> <var>0xb</var>:</td></tr>
+<tr><th id="1019">1019</th><td>	          <b>case</b> <var>0x1d</var>:</td></tr>
+<tr><th id="1020">1020</th><td>	          <b>case</b> <var>0x23</var>:</td></tr>
+<tr><th id="1021">1021</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_PALI&apos;">PHILIPS_PALI</span>);</td></tr>
+<tr><th id="1022">1022</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1023">1023</th><td></td></tr>
+<tr><th id="1024">1024</th><td>	          <b>case</b> <var>0xd</var>:</td></tr>
+<tr><th id="1025">1025</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_NTSC&apos;">TEMIC_NTSC</span>);</td></tr>
+<tr><th id="1026">1026</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1027">1027</th><td></td></tr>
+<tr><th id="1028">1028</th><td>                  <b>case</b> <var>0xe</var>:</td></tr>
+<tr><th id="1029">1029</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>);</td></tr>
+<tr><th id="1030">1030</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1031">1031</th><td></td></tr>
+<tr><th id="1032">1032</th><td>	          <b>case</b> <var>0xf</var>:</td></tr>
+<tr><th id="1033">1033</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_PALI&apos;">TEMIC_PALI</span>);</td></tr>
+<tr><th id="1034">1034</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1035">1035</th><td></td></tr>
+<tr><th id="1036">1036</th><td>                  <b>case</b> <var>0x15</var>:</td></tr>
+<tr><th id="1037">1037</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>);</td></tr>
+<tr><th id="1038">1038</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1039">1039</th><td></td></tr>
+<tr><th id="1040">1040</th><td>                  <b>case</b> <var>0x2a</var>:</td></tr>
+<tr><th id="1041">1041</th><td>		    bktr-&gt;msp_use_mono_source = <var>1</var>;</td></tr>
+<tr><th id="1042">1042</th><td>		    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>);</td></tr>
+<tr><th id="1043">1043</th><td>		    <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1044">1044</th><td></td></tr>
+<tr><th id="1045">1045</th><td>	          <b>default</b> :</td></tr>
+<tr><th id="1046">1046</th><td>		    printf(<q>"%s: Warning - Unknown Hauppauge Tuner 0x%x\n"</q>,</td></tr>
+<tr><th id="1047">1047</th><td>			   bktr_name(bktr), tuner_code);</td></tr>
+<tr><th id="1048">1048</th><td>		}</td></tr>
+<tr><th id="1049">1049</th><td>	    }</td></tr>
+<tr><th id="1050">1050</th><td>	    <b>break</b>;</td></tr>
+<tr><th id="1051">1051</th><td></td></tr>
+<tr><th id="1052">1052</th><td></td></tr>
+<tr><th id="1053">1053</th><td>	<b>case</b> <span class='error' title="use of undeclared identifier &apos;CARD_AVER_MEDIA&apos;">CARD_AVER_MEDIA</span>:</td></tr>
+<tr><th id="1054">1054</th><td>	    <i>/* AVerMedia kindly supplied some details of their EEPROM contents</i></td></tr>
+<tr><th id="1055">1055</th><td><i>	     * which allow us to auto select the Tuner Type.</i></td></tr>
+<tr><th id="1056">1056</th><td><i>	     * Only the newer AVerMedia cards actually have an EEPROM.</i></td></tr>
+<tr><th id="1057">1057</th><td><i>	     */</i></td></tr>
+<tr><th id="1058">1058</th><td>	    <b>if</b> (bktr-&gt;card.eepromAddr != <var>0</var>) {</td></tr>
+<tr><th id="1059">1059</th><td></td></tr>
+<tr><th id="1060">1060</th><td>		<a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> <dfn class="local col9 decl" id="59tuner_make" title='tuner_make' data-type='u_char' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</dfn>;   <i>/* Eg Philips, Temic */</i></td></tr>
+<tr><th id="1061">1061</th><td>		<a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> <dfn class="local col0 decl" id="60tuner_tv_fm" title='tuner_tv_fm' data-type='u_char' data-ref="60tuner_tv_fm" data-ref-filename="60tuner_tv_fm">tuner_tv_fm</dfn>;  <i>/* TV or TV with FM Radio */</i></td></tr>
+<tr><th id="1062">1062</th><td>		<a class="typedef" href="../../../sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> <dfn class="local col1 decl" id="61tuner_format" title='tuner_format' data-type='u_char' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</dfn>; <i>/* Eg NTSC, PAL, SECAM */</i></td></tr>
+<tr><th id="1063">1063</th><td>		<em>int</em>    <dfn class="local col2 decl" id="62tuner" title='tuner' data-type='int' data-ref="62tuner" data-ref-filename="62tuner">tuner</dfn>;</td></tr>
+<tr><th id="1064">1064</th><td></td></tr>
+<tr><th id="1065">1065</th><td>		<em>int</em> <dfn class="local col3 decl" id="63tuner_0_table" title='tuner_0_table' data-type='int []' data-ref="63tuner_0_table" data-ref-filename="63tuner_0_table">tuner_0_table</dfn>[] = {</td></tr>
+<tr><th id="1066">1066</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_NTSC&apos;">PHILIPS_NTSC</span>,  <span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>,</td></tr>
+<tr><th id="1067">1067</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>,</td></tr>
+<tr><th id="1068">1068</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>,</td></tr>
+<tr><th id="1069">1069</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_SECAM&apos;">PHILIPS_SECAM</span>, <span class='error' title="use of undeclared identifier &apos;PHILIPS_SECAM&apos;">PHILIPS_SECAM</span>,</td></tr>
+<tr><th id="1070">1070</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_SECAM&apos;">PHILIPS_SECAM</span>, <span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>};</td></tr>
+<tr><th id="1071">1071</th><td></td></tr>
+<tr><th id="1072">1072</th><td>		<em>int</em> <dfn class="local col4 decl" id="64tuner_0_fm_table" title='tuner_0_fm_table' data-type='int []' data-ref="64tuner_0_fm_table" data-ref-filename="64tuner_0_fm_table">tuner_0_fm_table</dfn>[] = {</td></tr>
+<tr><th id="1073">1073</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1236_NTSC&apos;">PHILIPS_FR1236_NTSC</span>,  <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>,</td></tr>
+<tr><th id="1074">1074</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>,</td></tr>
+<tr><th id="1075">1075</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>,</td></tr>
+<tr><th id="1076">1076</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1236_SECAM&apos;">PHILIPS_FR1236_SECAM</span>, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1236_SECAM&apos;">PHILIPS_FR1236_SECAM</span>,</td></tr>
+<tr><th id="1077">1077</th><td>			<span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1236_SECAM&apos;">PHILIPS_FR1236_SECAM</span>, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>};</td></tr>
+<tr><th id="1078">1078</th><td></td></tr>
+<tr><th id="1079">1079</th><td>		<em>int</em> <dfn class="local col5 decl" id="65tuner_1_table" title='tuner_1_table' data-type='int []' data-ref="65tuner_1_table" data-ref-filename="65tuner_1_table">tuner_1_table</dfn>[] = {</td></tr>
+<tr><th id="1080">1080</th><td>			<span class='error' title="use of undeclared identifier &apos;TEMIC_NTSC&apos;">TEMIC_NTSC</span>,  <span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>,</td></tr>
+<tr><th id="1081">1081</th><td>			<span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>,   <span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>,</td></tr>
+<tr><th id="1082">1082</th><td>			<span class='error' title="use of undeclared identifier &apos;TEMIC_SECAM&apos;">TEMIC_SECAM</span>, <span class='error' title="use of undeclared identifier &apos;TEMIC_SECAM&apos;">TEMIC_SECAM</span>, <span class='error' title="use of undeclared identifier &apos;TEMIC_SECAM&apos;">TEMIC_SECAM</span>,</td></tr>
+<tr><th id="1083">1083</th><td>			<span class='error' title="use of undeclared identifier &apos;TEMIC_PAL&apos;">TEMIC_PAL</span>};</td></tr>
+<tr><th id="1084">1084</th><td></td></tr>
+<tr><th id="1085">1085</th><td></td></tr>
+<tr><th id="1086">1086</th><td>		<i>/* Extract information from the EEPROM data */</i></td></tr>
+<tr><th id="1087">1087</th><td>	    	readEEProm(bktr, <var>0</var>, <var>128</var>, (u_char *) &amp;eeprom);</td></tr>
+<tr><th id="1088">1088</th><td></td></tr>
+<tr><th id="1089">1089</th><td>		<a class="local col9 ref" href="#59tuner_make" title='tuner_make' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</a>   = (<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>0x41</var>] &amp; <var>0x7</var>);</td></tr>
+<tr><th id="1090">1090</th><td>		<a class="local col0 ref" href="#60tuner_tv_fm" title='tuner_tv_fm' data-ref="60tuner_tv_fm" data-ref-filename="60tuner_tv_fm">tuner_tv_fm</a>  = (<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>0x41</var>] &amp; <var>0x18</var>) &gt;&gt; <var>3</var>;</td></tr>
+<tr><th id="1091">1091</th><td>		<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a> = (<a class="local col6 ref" href="#36eeprom" title='eeprom' data-ref="36eeprom" data-ref-filename="36eeprom">eeprom</a>[<var>0x42</var>] &amp; <var>0xf0</var>) &gt;&gt; <var>4</var>;</td></tr>
+<tr><th id="1092">1092</th><td></td></tr>
+<tr><th id="1093">1093</th><td>		<i>/* Treat tuner make 0 (Philips) and make 2 (LG) the same */</i></td></tr>
+<tr><th id="1094">1094</th><td>		<b>if</b> (((<a class="local col9 ref" href="#59tuner_make" title='tuner_make' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</a> == <var>0</var>) || (<a class="local col9 ref" href="#59tuner_make" title='tuner_make' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</a> == <var>2</var>))</td></tr>
+<tr><th id="1095">1095</th><td>		    &amp;&amp; (<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a> &lt;= <var>9</var>) &amp;&amp; (<a class="local col0 ref" href="#60tuner_tv_fm" title='tuner_tv_fm' data-ref="60tuner_tv_fm" data-ref-filename="60tuner_tv_fm">tuner_tv_fm</a> == <var>0</var>)) {</td></tr>
+<tr><th id="1096">1096</th><td>			<a class="local col2 ref" href="#62tuner" title='tuner' data-ref="62tuner" data-ref-filename="62tuner">tuner</a> = <a class="local col3 ref" href="#63tuner_0_table" title='tuner_0_table' data-ref="63tuner_0_table" data-ref-filename="63tuner_0_table">tuner_0_table</a>[<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a>];</td></tr>
+<tr><th id="1097">1097</th><td>			select_tuner(bktr, tuner);</td></tr>
+<tr><th id="1098">1098</th><td>			<b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1099">1099</th><td>		}</td></tr>
+<tr><th id="1100">1100</th><td></td></tr>
+<tr><th id="1101">1101</th><td>		<b>if</b> (((<a class="local col9 ref" href="#59tuner_make" title='tuner_make' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</a> == <var>0</var>) || (<a class="local col9 ref" href="#59tuner_make" title='tuner_make' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</a> == <var>2</var>))</td></tr>
+<tr><th id="1102">1102</th><td>		    &amp;&amp; (<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a> &lt;= <var>9</var>) &amp;&amp; (<a class="local col0 ref" href="#60tuner_tv_fm" title='tuner_tv_fm' data-ref="60tuner_tv_fm" data-ref-filename="60tuner_tv_fm">tuner_tv_fm</a> == <var>1</var>)) {</td></tr>
+<tr><th id="1103">1103</th><td>			<a class="local col2 ref" href="#62tuner" title='tuner' data-ref="62tuner" data-ref-filename="62tuner">tuner</a> = <a class="local col4 ref" href="#64tuner_0_fm_table" title='tuner_0_fm_table' data-ref="64tuner_0_fm_table" data-ref-filename="64tuner_0_fm_table">tuner_0_fm_table</a>[<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a>];</td></tr>
+<tr><th id="1104">1104</th><td>			select_tuner(bktr, tuner);</td></tr>
+<tr><th id="1105">1105</th><td>			<b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1106">1106</th><td>		}</td></tr>
+<tr><th id="1107">1107</th><td></td></tr>
+<tr><th id="1108">1108</th><td>		<b>if</b> ((<a class="local col9 ref" href="#59tuner_make" title='tuner_make' data-ref="59tuner_make" data-ref-filename="59tuner_make">tuner_make</a> == <var>1</var>) &amp;&amp; (<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a> &lt;= <var>9</var>)) {</td></tr>
+<tr><th id="1109">1109</th><td>			<a class="local col2 ref" href="#62tuner" title='tuner' data-ref="62tuner" data-ref-filename="62tuner">tuner</a> = <a class="local col5 ref" href="#65tuner_1_table" title='tuner_1_table' data-ref="65tuner_1_table" data-ref-filename="65tuner_1_table">tuner_1_table</a>[<a class="local col1 ref" href="#61tuner_format" title='tuner_format' data-ref="61tuner_format" data-ref-filename="61tuner_format">tuner_format</a>];</td></tr>
+<tr><th id="1110">1110</th><td>			select_tuner(bktr, tuner);</td></tr>
+<tr><th id="1111">1111</th><td>			<b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1112">1112</th><td>		}</td></tr>
+<tr><th id="1113">1113</th><td></td></tr>
+<tr><th id="1114">1114</th><td>	    	printf(<q>"%s: Warning - Unknown AVerMedia Tuner Make %d Format %d\n"</q>,</td></tr>
+<tr><th id="1115">1115</th><td>			bktr_name(bktr), tuner_make, tuner_format);</td></tr>
+<tr><th id="1116">1116</th><td>	    }</td></tr>
+<tr><th id="1117">1117</th><td>	    <b>break</b>;</td></tr>
+<tr><th id="1118">1118</th><td></td></tr>
+<tr><th id="1119">1119</th><td>	<b>case</b> <span class='error' title="use of undeclared identifier &apos;CARD_LEADTEK&apos;">CARD_LEADTEK</span>:</td></tr>
+<tr><th id="1120">1120</th><td><u>#<span data-ppcond="1120">if</span> BKTR_SYSTEM_DEFAULT == BROOKTREE_PAL</u></td></tr>
+<tr><th id="1121">1121</th><td>	    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_FR1216_PAL&apos;">PHILIPS_FR1216_PAL</span>);</td></tr>
+<tr><th id="1122">1122</th><td><u>#<span data-ppcond="1120">else</span></u></td></tr>
+<tr><th id="1123">1123</th><td>	    select_tuner(bktr, PHILIPS_FR1236_NTSC);</td></tr>
+<tr><th id="1124">1124</th><td><u>#<span data-ppcond="1120">endif</span></u></td></tr>
+<tr><th id="1125">1125</th><td>            <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1126">1126</th><td>	    <b>break</b>;</td></tr>
+<tr><th id="1127">1127</th><td></td></tr>
+<tr><th id="1128">1128</th><td>	<b>case</b> <span class='error' title="use of undeclared identifier &apos;CARD_TERRATVALUE&apos;">CARD_TERRATVALUE</span>:</td></tr>
+<tr><th id="1129">1129</th><td>            select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_PAL&apos;">PHILIPS_PAL</span>);</td></tr>
+<tr><th id="1130">1130</th><td>            <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1131">1131</th><td>            <b>break</b>;</td></tr>
+<tr><th id="1132">1132</th><td></td></tr>
+<tr><th id="1133">1133</th><td>	} <i>/* end switch(card) */</i></td></tr>
+<tr><th id="1134">1134</th><td></td></tr>
+<tr><th id="1135">1135</th><td></td></tr>
+<tr><th id="1136">1136</th><td>        <i>/* At this point, a goto checkDBX has not occurred */</i></td></tr>
+<tr><th id="1137">1137</th><td>        <i>/* We have not been able to select a Tuner */</i></td></tr>
+<tr><th id="1138">1138</th><td>        <i>/* Some cards make use of the tuner address to */</i></td></tr>
+<tr><th id="1139">1139</th><td>        <i>/* identify the make/model of tuner */</i></td></tr>
+<tr><th id="1140">1140</th><td></td></tr>
+<tr><th id="1141">1141</th><td>        <i>/* At address 0xc0/0xc1 we often find a TEMIC NTSC */</i></td></tr>
+<tr><th id="1142">1142</th><td>        <b>if</b> (i2cRead(bktr, <var>0xc1</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="1143">1143</th><td>	    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;TEMIC_NTSC&apos;">TEMIC_NTSC</span>);</td></tr>
+<tr><th id="1144">1144</th><td>            <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1145">1145</th><td>        }</td></tr>
+<tr><th id="1146">1146</th><td></td></tr>
+<tr><th id="1147">1147</th><td>        <i>/* At address 0xc6/0xc7 we often find a PHILIPS NTSC Tuner */</i></td></tr>
+<tr><th id="1148">1148</th><td>        <b>if</b> (i2cRead(bktr, <var>0xc7</var>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="1149">1149</th><td>	    select_tuner(bktr, <span class='error' title="use of undeclared identifier &apos;PHILIPS_NTSC&apos;">PHILIPS_NTSC</span>);</td></tr>
+<tr><th id="1150">1150</th><td>            <b>goto</b> <a class="lbl" href="#47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</a>;</td></tr>
+<tr><th id="1151">1151</th><td>        }</td></tr>
+<tr><th id="1152">1152</th><td></td></tr>
+<tr><th id="1153">1153</th><td>        <i>/* Address 0xc2/0xc3 is default (or common address) for several */</i></td></tr>
+<tr><th id="1154">1154</th><td>	<i>/* tuners and we cannot tell which is which. */</i></td></tr>
+<tr><th id="1155">1155</th><td>	<i>/* And for all other tuner i2c addresses, select the default */</i></td></tr>
+<tr><th id="1156">1156</th><td>	select_tuner(bktr, <a class="macro" href="#130" title="PHILIPS_PALI" data-ref="_M/DEFAULT_TUNER">DEFAULT_TUNER</a>);</td></tr>
+<tr><th id="1157">1157</th><td></td></tr>
+<tr><th id="1158">1158</th><td></td></tr>
+<tr><th id="1159">1159</th><td><dfn class="lbl" id="47checkDBX" data-ref="47checkDBX" data-ref-filename="47checkDBX">checkDBX</dfn>:</td></tr>
+<tr><th id="1160">1160</th><td><u>#<span data-ppcond="1160">if</span> defined(<span class="macro" data-ref="_M/BKTR_OVERRIDE_DBX">BKTR_OVERRIDE_DBX</span>)</u></td></tr>
+<tr><th id="1161">1161</th><td>	bktr-&gt;card.dbx = BKTR_OVERRIDE_DBX;</td></tr>
+<tr><th id="1162">1162</th><td>	<b>goto</b> checkMSP;</td></tr>
+<tr><th id="1163">1163</th><td><u>#<span data-ppcond="1160">endif</span></u></td></tr>
+<tr><th id="1164">1164</th><td>   <i>/* Check for i2c devices */</i></td></tr>
+<tr><th id="1165">1165</th><td>	<b>if</b> (!<a class="local col5 ref" href="#35any_i2c_devices" title='any_i2c_devices' data-ref="35any_i2c_devices" data-ref-filename="35any_i2c_devices">any_i2c_devices</a>) {</td></tr>
+<tr><th id="1166">1166</th><td>		<b>goto</b> <a class="lbl" href="#66checkMSP" data-ref="66checkMSP" data-ref-filename="66checkMSP">checkMSP</a>;</td></tr>
+<tr><th id="1167">1167</th><td>	}</td></tr>
+<tr><th id="1168">1168</th><td></td></tr>
+<tr><th id="1169">1169</th><td>	<i>/* probe for BTSC (dbx) chip */</i></td></tr>
+<tr><th id="1170">1170</th><td>	<b>if</b> (i2cRead(bktr, <a class="macro" href="#109" title="0xb7" data-ref="_M/TDA9850_RADDR">TDA9850_RADDR</a>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>)</td></tr>
+<tr><th id="1171">1171</th><td>		bktr-&gt;card.dbx = <var>1</var>;</td></tr>
+<tr><th id="1172">1172</th><td></td></tr>
+<tr><th id="1173">1173</th><td><dfn class="lbl" id="66checkMSP" data-ref="66checkMSP" data-ref-filename="66checkMSP">checkMSP</dfn>:</td></tr>
+<tr><th id="1174">1174</th><td>	<i>/* If this is a Hauppauge Bt878 card, we need to enable the</i></td></tr>
+<tr><th id="1175">1175</th><td><i>	 * MSP 34xx audio chip.</i></td></tr>
+<tr><th id="1176">1176</th><td><i>	 * If this is a Hauppauge Bt848 card, reset the MSP device.</i></td></tr>
+<tr><th id="1177">1177</th><td><i>	 * The MSP reset line is wired to GPIO pin 5. On Bt878 cards a pulldown</i></td></tr>
+<tr><th id="1178">1178</th><td><i>	 * resistor holds the device in reset until we set GPIO pin 5.</i></td></tr>
+<tr><th id="1179">1179</th><td><i>         */</i></td></tr>
+<tr><th id="1180">1180</th><td></td></tr>
+<tr><th id="1181">1181</th><td>	<i>/* Optionally skip the MSP reset. This is handy if you initialise the</i></td></tr>
+<tr><th id="1182">1182</th><td><i>	 * MSP audio in another operating system (eg Windows) first and then</i></td></tr>
+<tr><th id="1183">1183</th><td><i>	 * do a soft reboot.</i></td></tr>
+<tr><th id="1184">1184</th><td><i>	 */</i></td></tr>
+<tr><th id="1185">1185</th><td></td></tr>
+<tr><th id="1186">1186</th><td><u>#<span data-ppcond="1186">ifndef</span> <span class="macro" data-ref="_M/BKTR_NO_MSP_RESET">BKTR_NO_MSP_RESET</span></u></td></tr>
+<tr><th id="1187">1187</th><td>	<b>if</b> (card == <span class='error' title="use of undeclared identifier &apos;CARD_HAUPPAUGE&apos;">CARD_HAUPPAUGE</span>) {</td></tr>
+<tr><th id="1188">1188</th><td>            OUTL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_OUT_EN&apos;">BKTR_GPIO_OUT_EN</span>, INL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_OUT_EN&apos;">BKTR_GPIO_OUT_EN</span>) | (<var>1</var>&lt;&lt;<var>5</var>));</td></tr>
+<tr><th id="1189">1189</th><td>            OUTL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>, INL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>) | (<var>1</var>&lt;&lt;<var>5</var>));  <i>/* write '1' */</i></td></tr>
+<tr><th id="1190">1190</th><td>            <a class="macro" href="../../../arch/x86/include/cpu.h.html#428" title="(*delay_func)(2500)" data-ref="_M/DELAY">DELAY</a>(<var>2500</var>); <i>/* wait 2.5ms */</i></td></tr>
+<tr><th id="1191">1191</th><td>            OUTL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>, INL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>) &amp; ~(<var>1</var>&lt;&lt;<var>5</var>)); <i>/* write '0' */</i></td></tr>
+<tr><th id="1192">1192</th><td>            <a class="macro" href="../../../arch/x86/include/cpu.h.html#428" title="(*delay_func)(2500)" data-ref="_M/DELAY">DELAY</a>(<var>2500</var>); <i>/* wait 2.5ms */</i></td></tr>
+<tr><th id="1193">1193</th><td>            OUTL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>, INL(bktr, <span class='error' title="use of undeclared identifier &apos;BKTR_GPIO_DATA&apos;">BKTR_GPIO_DATA</span>) | (<var>1</var>&lt;&lt;<var>5</var>));  <i>/* write '1' */</i></td></tr>
+<tr><th id="1194">1194</th><td>            <a class="macro" href="../../../arch/x86/include/cpu.h.html#428" title="(*delay_func)(2500)" data-ref="_M/DELAY">DELAY</a>(<var>2500</var>); <i>/* wait 2.5ms */</i></td></tr>
+<tr><th id="1195">1195</th><td>        }</td></tr>
+<tr><th id="1196">1196</th><td><u>#<span data-ppcond="1186">endif</span></u></td></tr>
+<tr><th id="1197">1197</th><td></td></tr>
+<tr><th id="1198">1198</th><td><u>#<span data-ppcond="1198">if</span> defined(<span class="macro" data-ref="_M/BKTR_OVERRIDE_MSP">BKTR_OVERRIDE_MSP</span>)</u></td></tr>
+<tr><th id="1199">1199</th><td>	bktr-&gt;card.msp3400c = BKTR_OVERRIDE_MSP;</td></tr>
+<tr><th id="1200">1200</th><td>	<b>goto</b> checkMSPEnd;</td></tr>
+<tr><th id="1201">1201</th><td><u>#<span data-ppcond="1198">endif</span></u></td></tr>
+<tr><th id="1202">1202</th><td></td></tr>
+<tr><th id="1203">1203</th><td>	<i>/* Check for i2c devices */</i></td></tr>
+<tr><th id="1204">1204</th><td>	<b>if</b> (!<a class="local col5 ref" href="#35any_i2c_devices" title='any_i2c_devices' data-ref="35any_i2c_devices" data-ref-filename="35any_i2c_devices">any_i2c_devices</a>) {</td></tr>
+<tr><th id="1205">1205</th><td>		<b>goto</b> <a class="lbl" href="#67checkMSPEnd" data-ref="67checkMSPEnd" data-ref-filename="67checkMSPEnd">checkMSPEnd</a>;</td></tr>
+<tr><th id="1206">1206</th><td>	}</td></tr>
+<tr><th id="1207">1207</th><td></td></tr>
+<tr><th id="1208">1208</th><td>	<b>if</b> (i2cRead(bktr, <a class="macro" href="#113" title="0x81" data-ref="_M/MSP3400C_RADDR">MSP3400C_RADDR</a>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="1209">1209</th><td>		bktr-&gt;card.msp3400c = <var>1</var>;</td></tr>
+<tr><th id="1210">1210</th><td>	}</td></tr>
+<tr><th id="1211">1211</th><td></td></tr>
+<tr><th id="1212">1212</th><td><dfn class="lbl" id="67checkMSPEnd" data-ref="67checkMSPEnd" data-ref-filename="67checkMSPEnd">checkMSPEnd</dfn>:</td></tr>
+<tr><th id="1213">1213</th><td></td></tr>
+<tr><th id="1214">1214</th><td>	<b>if</b> (bktr-&gt;card.msp3400c) {</td></tr>
+<tr><th id="1215">1215</th><td>		bktr-&gt;msp_addr = <a class="macro" href="#112" title="0x80" data-ref="_M/MSP3400C_WADDR">MSP3400C_WADDR</a>;</td></tr>
+<tr><th id="1216">1216</th><td>		msp_read_id(bktr);</td></tr>
+<tr><th id="1217">1217</th><td>		printf(<q>"%s: Detected a MSP%s at 0x%x\n"</q>, bktr_name(bktr),</td></tr>
+<tr><th id="1218">1218</th><td>		       bktr-&gt;msp_version_string,</td></tr>
+<tr><th id="1219">1219</th><td>		       bktr-&gt;msp_addr);</td></tr>
+<tr><th id="1220">1220</th><td></td></tr>
+<tr><th id="1221">1221</th><td>	}</td></tr>
+<tr><th id="1222">1222</th><td></td></tr>
+<tr><th id="1223">1223</th><td><i>/* Check for Dolby Surround Sound DPL3518A sound chip */</i></td></tr>
+<tr><th id="1224">1224</th><td>	<b>if</b> (i2cRead(bktr, <a class="macro" href="#117" title="0x85" data-ref="_M/DPL3518A_RADDR">DPL3518A_RADDR</a>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>) {</td></tr>
+<tr><th id="1225">1225</th><td>		bktr-&gt;card.dpl3518a = <var>1</var>;</td></tr>
+<tr><th id="1226">1226</th><td>	}</td></tr>
+<tr><th id="1227">1227</th><td></td></tr>
+<tr><th id="1228">1228</th><td>	<b>if</b> (bktr-&gt;card.dpl3518a) {</td></tr>
+<tr><th id="1229">1229</th><td>		bktr-&gt;dpl_addr = <a class="macro" href="#116" title="0x84" data-ref="_M/DPL3518A_WADDR">DPL3518A_WADDR</a>;</td></tr>
+<tr><th id="1230">1230</th><td>		dpl_read_id(bktr);</td></tr>
+<tr><th id="1231">1231</th><td>		printf(<q>"%s: Detected a DPL%s at 0x%x\n"</q>, bktr_name(bktr),</td></tr>
+<tr><th id="1232">1232</th><td>		       bktr-&gt;dpl_version_string,</td></tr>
+<tr><th id="1233">1233</th><td>		       bktr-&gt;dpl_addr);</td></tr>
+<tr><th id="1234">1234</th><td>	}</td></tr>
+<tr><th id="1235">1235</th><td></td></tr>
+<tr><th id="1236">1236</th><td><i>/* Start of Check Remote */</i></td></tr>
+<tr><th id="1237">1237</th><td>        <i>/* Check for the Hauppauge IR Remote Control */</i></td></tr>
+<tr><th id="1238">1238</th><td>        <i>/* If there is an external unit, the internal will be ignored */</i></td></tr>
+<tr><th id="1239">1239</th><td></td></tr>
+<tr><th id="1240">1240</th><td>        bktr-&gt;remote_control = <var>0</var>; <i>/* initial value */</i></td></tr>
+<tr><th id="1241">1241</th><td></td></tr>
+<tr><th id="1242">1242</th><td>        <b>if</b> (<a class="local col5 ref" href="#35any_i2c_devices" title='any_i2c_devices' data-ref="35any_i2c_devices" data-ref-filename="35any_i2c_devices">any_i2c_devices</a>) {</td></tr>
+<tr><th id="1243">1243</th><td>            <b>if</b> (i2cRead(bktr, <a class="macro" href="#105" title="0x35" data-ref="_M/HAUP_REMOTE_EXT_RADDR">HAUP_REMOTE_EXT_RADDR</a>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>)</td></tr>
+<tr><th id="1244">1244</th><td>                {</td></tr>
+<tr><th id="1245">1245</th><td>                bktr-&gt;remote_control      = <var>1</var>;</td></tr>
+<tr><th id="1246">1246</th><td>                bktr-&gt;remote_control_addr = <a class="macro" href="#105" title="0x35" data-ref="_M/HAUP_REMOTE_EXT_RADDR">HAUP_REMOTE_EXT_RADDR</a>;</td></tr>
+<tr><th id="1247">1247</th><td>                }</td></tr>
+<tr><th id="1248">1248</th><td>            <b>else</b> <b>if</b> (i2cRead(bktr, <a class="macro" href="#102" title="0x31" data-ref="_M/HAUP_REMOTE_INT_RADDR">HAUP_REMOTE_INT_RADDR</a>) != <a class="macro" href="#422" title="(-1)" data-ref="_M/ABSENT">ABSENT</a>)</td></tr>
+<tr><th id="1249">1249</th><td>                {</td></tr>
+<tr><th id="1250">1250</th><td>                bktr-&gt;remote_control      = <var>1</var>;</td></tr>
+<tr><th id="1251">1251</th><td>                bktr-&gt;remote_control_addr = <a class="macro" href="#102" title="0x31" data-ref="_M/HAUP_REMOTE_INT_RADDR">HAUP_REMOTE_INT_RADDR</a>;</td></tr>
+<tr><th id="1252">1252</th><td>                }</td></tr>
+<tr><th id="1253">1253</th><td></td></tr>
+<tr><th id="1254">1254</th><td>        }</td></tr>
+<tr><th id="1255">1255</th><td>        <i>/* If a remote control is found, poll it 5 times to turn off the LED */</i></td></tr>
+<tr><th id="1256">1256</th><td>        <b>if</b> (bktr-&gt;remote_control) {</td></tr>
+<tr><th id="1257">1257</th><td>                <em>int</em> <dfn class="local col8 decl" id="68ii" title='ii' data-type='int' data-ref="68ii" data-ref-filename="68ii">ii</dfn>;</td></tr>
+<tr><th id="1258">1258</th><td>                <b>for</b> (ii=<var>0</var>; ii&lt;<var>5</var>; ii++)</td></tr>
+<tr><th id="1259">1259</th><td>                        i2cRead(bktr, bktr-&gt;remote_control_addr);</td></tr>
+<tr><th id="1260">1260</th><td>        }</td></tr>
+<tr><th id="1261">1261</th><td><i>/* End of Check Remote */</i></td></tr>
+<tr><th id="1262">1262</th><td></td></tr>
+<tr><th id="1263">1263</th><td><u>#<span data-ppcond="1263">if</span> defined(<span class="macro" data-ref="_M/BKTR_USE_PLL">BKTR_USE_PLL</span>)</u></td></tr>
+<tr><th id="1264">1264</th><td>	bktr-&gt;xtal_pll_mode = BT848_USE_PLL;</td></tr>
+<tr><th id="1265">1265</th><td>	<b>goto</b> checkPLLEnd;</td></tr>
+<tr><th id="1266">1266</th><td><u>#<span data-ppcond="1263">endif</span></u></td></tr>
+<tr><th id="1267">1267</th><td>	<i>/* Default is to use XTALS and not PLL mode */</i></td></tr>
+<tr><th id="1268">1268</th><td>	bktr-&gt;xtal_pll_mode = <span class='error' title="use of undeclared identifier &apos;BT848_USE_XTALS&apos;">BT848_USE_XTALS</span>;</td></tr>
+<tr><th id="1269">1269</th><td></td></tr>
+<tr><th id="1270">1270</th><td>	<i>/* Enable PLL mode for OSPREY users */</i></td></tr>
+<tr><th id="1271">1271</th><td>	<b>if</b> (card == <span class='error' title="use of undeclared identifier &apos;CARD_OSPREY&apos;">CARD_OSPREY</span>)</td></tr>
+<tr><th id="1272">1272</th><td>		bktr-&gt;xtal_pll_mode = <span class='error' title="use of undeclared identifier &apos;BT848_USE_PLL&apos;">BT848_USE_PLL</span>;</td></tr>
+<tr><th id="1273">1273</th><td></td></tr>
+<tr><th id="1274">1274</th><td>	<i>/* Enable PLL mode for Video Highway Xtreme users */</i></td></tr>
+<tr><th id="1275">1275</th><td>	<b>if</b> (card == <span class='error' title="use of undeclared identifier &apos;CARD_VIDEO_HIGHWAY_XTREME&apos;">CARD_VIDEO_HIGHWAY_XTREME</span>)</td></tr>
+<tr><th id="1276">1276</th><td>		bktr-&gt;xtal_pll_mode = <span class='error' title="use of undeclared identifier &apos;BT848_USE_PLL&apos;">BT848_USE_PLL</span>;</td></tr>
+<tr><th id="1277">1277</th><td></td></tr>
+<tr><th id="1278">1278</th><td></td></tr>
+<tr><th id="1279">1279</th><td>	<i>/* Most (perhaps all) Bt878 cards need to be switched to PLL mode */</i></td></tr>
+<tr><th id="1280">1280</th><td>	<i>/* as they only fit the NTSC crystal to their cards */</i></td></tr>
+<tr><th id="1281">1281</th><td>	<i>/* Default to enabling PLL mode for all Bt878/879 cards */</i></td></tr>
+<tr><th id="1282">1282</th><td></td></tr>
+<tr><th id="1283">1283</th><td>	<b>if</b> ((bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_878&apos;">BROOKTREE_878</span> || bktr-&gt;id==<span class='error' title="use of undeclared identifier &apos;BROOKTREE_879&apos;">BROOKTREE_879</span>))</td></tr>
+<tr><th id="1284">1284</th><td>		bktr-&gt;xtal_pll_mode = <span class='error' title="use of undeclared identifier &apos;BT848_USE_PLL&apos;">BT848_USE_PLL</span>;</td></tr>
+<tr><th id="1285">1285</th><td></td></tr>
+<tr><th id="1286">1286</th><td></td></tr>
+<tr><th id="1287">1287</th><td><u>#<span data-ppcond="1287">if</span> defined(<span class="macro" data-ref="_M/BKTR_USE_PLL">BKTR_USE_PLL</span>)</u></td></tr>
+<tr><th id="1288">1288</th><td>checkPLLEnd:</td></tr>
+<tr><th id="1289">1289</th><td><u>#<span data-ppcond="1287">endif</span></u></td></tr>
+<tr><th id="1290">1290</th><td></td></tr>
+<tr><th id="1291">1291</th><td></td></tr>
+<tr><th id="1292">1292</th><td>	bktr-&gt;card.tuner_pllAddr = tuner_i2c_address;</td></tr>
+<tr><th id="1293">1293</th><td></td></tr>
+<tr><th id="1294">1294</th><td>	<b>if</b> (<a class="local col6 ref" href="#26verbose" title='verbose' data-ref="26verbose" data-ref-filename="26verbose">verbose</a>) {</td></tr>
+<tr><th id="1295">1295</th><td>		printf(<q>"%s: %s"</q>, bktr_name(bktr), bktr-&gt;card.name);</td></tr>
+<tr><th id="1296">1296</th><td>		<b>if</b> (bktr-&gt;card.tuner)</td></tr>
+<tr><th id="1297">1297</th><td>			printf(<q>", %s tuner"</q>, bktr-&gt;card.tuner-&gt;name);</td></tr>
+<tr><th id="1298">1298</th><td>		<b>if</b> (bktr-&gt;card.dbx)</td></tr>
+<tr><th id="1299">1299</th><td>			<a class="ref fn" href="../../../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>", dbx stereo"</q>);</td></tr>
+<tr><th id="1300">1300</th><td>		<b>if</b> (bktr-&gt;card.msp3400c)</td></tr>
+<tr><th id="1301">1301</th><td>			<a class="ref fn" href="../../../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>", msp3400c stereo"</q>);</td></tr>
+<tr><th id="1302">1302</th><td>		<b>if</b> (bktr-&gt;card.dpl3518a)</td></tr>
+<tr><th id="1303">1303</th><td>			<a class="ref fn" href="../../../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>", dpl3518a dolby"</q>);</td></tr>
+<tr><th id="1304">1304</th><td>                <b>if</b> (bktr-&gt;remote_control)</td></tr>
+<tr><th id="1305">1305</th><td>                        <a class="ref fn" href="../../../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>", remote control"</q>);</td></tr>
+<tr><th id="1306">1306</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>".\n"</q>);</td></tr>
+<tr><th id="1307">1307</th><td>	}</td></tr>
+<tr><th id="1308">1308</th><td>}</td></tr>
+<tr><th id="1309">1309</th><td></td></tr>
+<tr><th id="1310">1310</th><td><u>#undef <a class="macro" href="#422" data-ref="_M/ABSENT">ABSENT</a></u></td></tr>
+<tr><th id="1311">1311</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

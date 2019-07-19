@@ -1,0 +1,607 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>scheduler.c source code [netbsd/sys/rump/librump/rumpkern/scheduler.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="rumpcpu "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/rump/librump/rumpkern/scheduler.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>rump</a>/<a href='..'>librump</a>/<a href='./'>rumpkern</a>/<a href='scheduler.c.html'>scheduler.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*      $NetBSD: scheduler.c,v 1.44 2016/02/19 18:38:37 pooka Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2010, 2011 Antti Kantee.  All Rights Reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="7">7</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="8">8</th><td><i> * are met:</i></td></tr>
+<tr><th id="9">9</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="10">10</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="11">11</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="12">12</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="13">13</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="14">14</th><td><i> *</i></td></tr>
+<tr><th id="15">15</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS</i></td></tr>
+<tr><th id="16">16</th><td><i> * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED</i></td></tr>
+<tr><th id="17">17</th><td><i> * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE</i></td></tr>
+<tr><th id="18">18</th><td><i> * DISCLAIMED. IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="19">19</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="20">20</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR</i></td></tr>
+<tr><th id="21">21</th><td><i> * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="22">22</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="23">23</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="24">24</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="26">26</th><td><i> */</i></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="29">29</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: scheduler.c,v 1.44 2016/02/19 18:38:37 pooka Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: scheduler.c,v 1.44 2016/02/19 18:38:37 pooka Exp $"</q>);</td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><u>#include <a href="../../../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="../../../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="33">33</th><td><u>#include <a href="../../../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="34">34</th><td><u>#include <a href="../../../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="35">35</th><td><u>#include <a href="../../../sys/mutex.h.html">&lt;sys/mutex.h&gt;</a></u></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="../../../sys/namei.h.html">&lt;sys/namei.h&gt;</a></u></td></tr>
+<tr><th id="37">37</th><td><u>#include <a href="../../../sys/queue.h.html">&lt;sys/queue.h&gt;</a></u></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="../../../sys/select.h.html">&lt;sys/select.h&gt;</a></u></td></tr>
+<tr><th id="39">39</th><td><u>#include <a href="../../../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../../include/rump-sys/kern.h.html">&lt;rump-sys/kern.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><u>#include <a href="../../include/rump/rumpuser.h.html">&lt;rump/rumpuser.h&gt;</a></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><em>static</em> <b>struct</b> <dfn class="type def" id="rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu"><a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a></dfn> {</td></tr>
+<tr><th id="46">46</th><td>	<i  data-doc="rumpcpu::rcpu_ci">/* needed in fastpath */</i></td></tr>
+<tr><th id="47">47</th><td>	<b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="tu decl field" id="rumpcpu::rcpu_ci" title='rumpcpu::rcpu_ci' data-type='struct cpu_info *' data-ref="rumpcpu::rcpu_ci" data-ref-filename="rumpcpu..rcpu_ci">rcpu_ci</dfn>;</td></tr>
+<tr><th id="48">48</th><td>	<em>void</em> *<dfn class="tu decl field" id="rumpcpu::rcpu_prevlwp" title='rumpcpu::rcpu_prevlwp' data-type='void *' data-ref="rumpcpu::rcpu_prevlwp" data-ref-filename="rumpcpu..rcpu_prevlwp">rcpu_prevlwp</dfn>;</td></tr>
+<tr><th id="49">49</th><td></td></tr>
+<tr><th id="50">50</th><td>	<i  data-doc="rumpcpu::rcpu_mtx">/* needed in slowpath */</i></td></tr>
+<tr><th id="51">51</th><td>	<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_mtx" title='rumpuser_mtx' data-ref="rumpuser_mtx" data-ref-filename="rumpuser_mtx">rumpuser_mtx</a> *<dfn class="tu decl field" id="rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-type='struct rumpuser_mtx *' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</dfn>;</td></tr>
+<tr><th id="52">52</th><td>	<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_cv" title='rumpuser_cv' data-ref="rumpuser_cv" data-ref-filename="rumpuser_cv">rumpuser_cv</a> *<dfn class="tu decl field" id="rumpcpu::rcpu_cv" title='rumpcpu::rcpu_cv' data-type='struct rumpuser_cv *' data-ref="rumpcpu::rcpu_cv" data-ref-filename="rumpcpu..rcpu_cv">rcpu_cv</dfn>;</td></tr>
+<tr><th id="53">53</th><td>	<em>int</em> <dfn class="tu decl field" id="rumpcpu::rcpu_wanted" title='rumpcpu::rcpu_wanted' data-type='int' data-ref="rumpcpu::rcpu_wanted" data-ref-filename="rumpcpu..rcpu_wanted">rcpu_wanted</dfn>;</td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td>	<i>/* offset 20 (P=4) or 36 (P=8) here */</i></td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td>	<i  data-doc="rumpcpu::rcpu_fastpath">/*</i></td></tr>
+<tr><th id="58">58</th><td><i  data-doc="rumpcpu::rcpu_fastpath">	 * Some stats.  Not really that necessary, but we should</i></td></tr>
+<tr><th id="59">59</th><td><i  data-doc="rumpcpu::rcpu_fastpath">	 * have room.  Note that these overflow quite fast, so need</i></td></tr>
+<tr><th id="60">60</th><td><i  data-doc="rumpcpu::rcpu_fastpath">	 * to be collected often.</i></td></tr>
+<tr><th id="61">61</th><td><i  data-doc="rumpcpu::rcpu_fastpath">	 */</i></td></tr>
+<tr><th id="62">62</th><td>	<em>unsigned</em> <em>int</em> <dfn class="tu decl field" id="rumpcpu::rcpu_fastpath" title='rumpcpu::rcpu_fastpath' data-type='unsigned int' data-ref="rumpcpu::rcpu_fastpath" data-ref-filename="rumpcpu..rcpu_fastpath">rcpu_fastpath</dfn>;</td></tr>
+<tr><th id="63">63</th><td>	<em>unsigned</em> <em>int</em> <dfn class="tu decl field" id="rumpcpu::rcpu_slowpath" title='rumpcpu::rcpu_slowpath' data-type='unsigned int' data-ref="rumpcpu::rcpu_slowpath" data-ref-filename="rumpcpu..rcpu_slowpath">rcpu_slowpath</dfn>;</td></tr>
+<tr><th id="64">64</th><td>	<em>unsigned</em> <em>int</em> <dfn class="tu decl field" id="rumpcpu::rcpu_migrated" title='rumpcpu::rcpu_migrated' data-type='unsigned int' data-ref="rumpcpu::rcpu_migrated" data-ref-filename="rumpcpu..rcpu_migrated">rcpu_migrated</dfn>;</td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td>	<i  data-doc="rumpcpu::rcpu_align">/* offset 32 (P=4) or 50 (P=8) */</i></td></tr>
+<tr><th id="67">67</th><td></td></tr>
+<tr><th id="68">68</th><td>	<em>int</em> <dfn class="tu decl field" id="rumpcpu::rcpu_align" title='rumpcpu::rcpu_align' data-type='int [0]' data-ref="rumpcpu::rcpu_align" data-ref-filename="rumpcpu..rcpu_align">rcpu_align</dfn>[<var>0</var>] <a class="macro" href="../../../sys/cdefs.h.html#392" title="__attribute__((__aligned__(64)))" data-ref="_M/__aligned">__aligned</a>(<a class="macro" href="../../../sys/param.h.html#203" title="64" data-ref="_M/CACHE_LINE_SIZE">CACHE_LINE_SIZE</a>);</td></tr>
+<tr><th id="69">69</th><td>} <dfn class="tu decl def" id="rcpu_storage" title='rcpu_storage' data-type='struct rumpcpu [32]' data-ref="rcpu_storage" data-ref-filename="rcpu_storage">rcpu_storage</dfn>[<a class="macro" href="../../../arch/i386/include/param.h.html#49" title="32" data-ref="_M/MAXCPUS">MAXCPUS</a>];</td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td><em>static</em> <b>inline</b> <b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *</td></tr>
+<tr><th id="72">72</th><td><dfn class="tu decl def fn" id="cpuinfo_to_rumpcpu" title='cpuinfo_to_rumpcpu' data-type='struct rumpcpu * cpuinfo_to_rumpcpu(struct cpu_info * ci)' data-ref="cpuinfo_to_rumpcpu" data-ref-filename="cpuinfo_to_rumpcpu">cpuinfo_to_rumpcpu</dfn>(<b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col1 decl" id="1ci" title='ci' data-type='struct cpu_info *' data-ref="1ci" data-ref-filename="1ci">ci</dfn>)</td></tr>
+<tr><th id="73">73</th><td>{</td></tr>
+<tr><th id="74">74</th><td></td></tr>
+<tr><th id="75">75</th><td>	<b>return</b> &amp;<a class="tu ref" href="#rcpu_storage" title='rcpu_storage' data-use='a' data-ref="rcpu_storage" data-ref-filename="rcpu_storage">rcpu_storage</a>[<a class="ref fn" href="../../../sys/cpu.h.html#cpu_index" title='cpu_index' data-ref="cpu_index" data-ref-filename="cpu_index">cpu_index</a>(<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>)];</td></tr>
+<tr><th id="76">76</th><td>}</td></tr>
+<tr><th id="77">77</th><td></td></tr>
+<tr><th id="78">78</th><td><b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> <dfn class="decl def" id="rump_bootcpu" title='rump_bootcpu' data-ref="rump_bootcpu" data-ref-filename="rump_bootcpu">rump_bootcpu</dfn>;</td></tr>
+<tr><th id="79">79</th><td><a class="typedef" href="../../../sys/kcpuset.h.html#kcpuset_t" title='kcpuset_t' data-type='struct kcpuset' data-ref="kcpuset_t" data-ref-filename="kcpuset_t">kcpuset_t</a> *<dfn class="decl def" id="kcpuset_attached" title='kcpuset_attached' data-ref="kcpuset_attached" data-ref-filename="kcpuset_attached">kcpuset_attached</dfn> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="80">80</th><td><a class="typedef" href="../../../sys/kcpuset.h.html#kcpuset_t" title='kcpuset_t' data-type='struct kcpuset' data-ref="kcpuset_t" data-ref-filename="kcpuset_t">kcpuset_t</a> *<dfn class="decl def" id="kcpuset_running" title='kcpuset_running' data-ref="kcpuset_running" data-ref-filename="kcpuset_running">kcpuset_running</dfn> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="81">81</th><td><em>int</em> <dfn class="decl def" id="ncpu" title='ncpu' data-ref="ncpu" data-ref-filename="ncpu">ncpu</dfn>, <dfn class="decl def" id="ncpuonline" title='ncpuonline' data-ref="ncpuonline" data-ref-filename="ncpuonline">ncpuonline</dfn>;</td></tr>
+<tr><th id="82">82</th><td></td></tr>
+<tr><th id="83">83</th><td><a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl def" id="cpu_lock" title='cpu_lock' data-ref="cpu_lock" data-ref-filename="cpu_lock">cpu_lock</dfn>;</td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td><u>#define <dfn class="macro" id="_M/RCPULWP_BUSY" data-ref="_M/RCPULWP_BUSY">RCPULWP_BUSY</dfn>	((void *)-1)</u></td></tr>
+<tr><th id="86">86</th><td><u>#define <dfn class="macro" id="_M/RCPULWP_WANTED" data-ref="_M/RCPULWP_WANTED">RCPULWP_WANTED</dfn>	((void *)-2)</u></td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td><em>static</em> <b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_mtx" title='rumpuser_mtx' data-ref="rumpuser_mtx" data-ref-filename="rumpuser_mtx">rumpuser_mtx</a> *<dfn class="tu decl def" id="lwp0mtx" title='lwp0mtx' data-type='struct rumpuser_mtx *' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</dfn>;</td></tr>
+<tr><th id="89">89</th><td><em>static</em> <b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_cv" title='rumpuser_cv' data-ref="rumpuser_cv" data-ref-filename="rumpuser_cv">rumpuser_cv</a> *<dfn class="tu decl def" id="lwp0cv" title='lwp0cv' data-type='struct rumpuser_cv *' data-ref="lwp0cv" data-ref-filename="lwp0cv">lwp0cv</dfn>;</td></tr>
+<tr><th id="90">90</th><td><em>static</em> <em>unsigned</em> <dfn class="tu decl def" id="nextcpu" title='nextcpu' data-type='unsigned int' data-ref="nextcpu" data-ref-filename="nextcpu">nextcpu</dfn>;</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td><a class="typedef" href="../../../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl def" id="unruntime_lock" title='unruntime_lock' data-ref="unruntime_lock" data-ref-filename="unruntime_lock">unruntime_lock</dfn>; <i>/* unruntime lwp lock.  practically unused */</i></td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><em>static</em> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="tu decl def" id="lwp0isbusy" title='lwp0isbusy' data-type='_Bool' data-ref="lwp0isbusy" data-ref-filename="lwp0isbusy">lwp0isbusy</dfn> = <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td><i>/*</i></td></tr>
+<tr><th id="97">97</th><td><i> * Keep some stats.</i></td></tr>
+<tr><th id="98">98</th><td><i> *</i></td></tr>
+<tr><th id="99">99</th><td><i> * Keeping track of there is not really critical for speed, unless</i></td></tr>
+<tr><th id="100">100</th><td><i> * stats happen to be on a different cache line (CACHE_LINE_SIZE is</i></td></tr>
+<tr><th id="101">101</th><td><i> * really just a coarse estimate), so default for the performant case</i></td></tr>
+<tr><th id="102">102</th><td><i> * (i.e. no stats).</i></td></tr>
+<tr><th id="103">103</th><td><i> */</i></td></tr>
+<tr><th id="104">104</th><td><u>#<span data-ppcond="104">ifdef</span> <span class="macro" data-ref="_M/RUMPSCHED_STATS">RUMPSCHED_STATS</span></u></td></tr>
+<tr><th id="105">105</th><td><u>#define SCHED_FASTPATH(rcpu) rcpu-&gt;rcpu_fastpath++;</u></td></tr>
+<tr><th id="106">106</th><td><u>#define SCHED_SLOWPATH(rcpu) rcpu-&gt;rcpu_slowpath++;</u></td></tr>
+<tr><th id="107">107</th><td><u>#define SCHED_MIGRATED(rcpu) rcpu-&gt;rcpu_migrated++;</u></td></tr>
+<tr><th id="108">108</th><td><u>#<span data-ppcond="104">else</span></u></td></tr>
+<tr><th id="109">109</th><td><u>#define <dfn class="macro" id="_M/SCHED_FASTPATH" data-ref="_M/SCHED_FASTPATH">SCHED_FASTPATH</dfn>(rcpu)</u></td></tr>
+<tr><th id="110">110</th><td><u>#define <dfn class="macro" id="_M/SCHED_SLOWPATH" data-ref="_M/SCHED_SLOWPATH">SCHED_SLOWPATH</dfn>(rcpu)</u></td></tr>
+<tr><th id="111">111</th><td><u>#define <dfn class="macro" id="_M/SCHED_MIGRATED" data-ref="_M/SCHED_MIGRATED">SCHED_MIGRATED</dfn>(rcpu)</u></td></tr>
+<tr><th id="112">112</th><td><u>#<span data-ppcond="104">endif</span></u></td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td><b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *</td></tr>
+<tr><th id="115">115</th><td><dfn class="decl def fn" id="cpu_lookup" title='cpu_lookup' data-ref="cpu_lookup" data-ref-filename="cpu_lookup">cpu_lookup</dfn>(<a class="typedef" href="../../../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col2 decl" id="2index" title='index' data-type='u_int' data-ref="2index" data-ref-filename="2index">index</dfn>)</td></tr>
+<tr><th id="116">116</th><td>{</td></tr>
+<tr><th id="117">117</th><td></td></tr>
+<tr><th id="118">118</th><td>	<b>return</b> <a class="tu ref" href="#rcpu_storage" title='rcpu_storage' data-use='m' data-ref="rcpu_storage" data-ref-filename="rcpu_storage">rcpu_storage</a>[<a class="local col2 ref" href="#2index" title='index' data-ref="2index" data-ref-filename="2index">index</a>].<a class="tu ref field" href="#rumpcpu::rcpu_ci" title='rumpcpu::rcpu_ci' data-use='r' data-ref="rumpcpu::rcpu_ci" data-ref-filename="rumpcpu..rcpu_ci">rcpu_ci</a>;</td></tr>
+<tr><th id="119">119</th><td>}</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><em>static</em> <b>inline</b> <b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *</td></tr>
+<tr><th id="122">122</th><td><dfn class="tu decl def fn" id="getnextcpu" title='getnextcpu' data-type='struct rumpcpu * getnextcpu()' data-ref="getnextcpu" data-ref-filename="getnextcpu">getnextcpu</dfn>(<em>void</em>)</td></tr>
+<tr><th id="123">123</th><td>{</td></tr>
+<tr><th id="124">124</th><td>	<em>unsigned</em> <dfn class="local col3 decl" id="3newcpu" title='newcpu' data-type='unsigned int' data-ref="3newcpu" data-ref-filename="3newcpu">newcpu</dfn>;</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td>	<a class="local col3 ref" href="#3newcpu" title='newcpu' data-ref="3newcpu" data-ref-filename="3newcpu">newcpu</a> = <a class="ref fn" href="../../../sys/atomic.h.html#atomic_inc_uint_nv" title='atomic_inc_uint_nv' data-ref="atomic_inc_uint_nv" data-ref-filename="atomic_inc_uint_nv">atomic_inc_uint_nv</a>(&amp;<a class="tu ref" href="#nextcpu" title='nextcpu' data-use='a' data-ref="nextcpu" data-ref-filename="nextcpu">nextcpu</a>);</td></tr>
+<tr><th id="127">127</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((ncpu &gt; 0xffffffffU/2) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../../../sys/systm.h.html#ncpu" title='ncpu' data-ref="ncpu" data-ref-filename="ncpu">ncpu</a> &gt; <a class="macro" href="../../../arch/i386/include/limits.h.html#49" title="0xffffffffU" data-ref="_M/UINT_MAX">UINT_MAX</a>/<var>2</var>))</td></tr>
+<tr><th id="128">128</th><td>		<a class="ref fn" href="../../../sys/atomic.h.html#atomic_and_uint" title='atomic_and_uint' data-ref="atomic_and_uint" data-ref-filename="atomic_and_uint">atomic_and_uint</a>(&amp;<a class="tu ref" href="#nextcpu" title='nextcpu' data-use='a' data-ref="nextcpu" data-ref-filename="nextcpu">nextcpu</a>, <var>0</var>);</td></tr>
+<tr><th id="129">129</th><td>	<a class="local col3 ref" href="#3newcpu" title='newcpu' data-ref="3newcpu" data-ref-filename="3newcpu">newcpu</a> = <a class="local col3 ref" href="#3newcpu" title='newcpu' data-ref="3newcpu" data-ref-filename="3newcpu">newcpu</a> % <a class="ref" href="../../../sys/systm.h.html#ncpu" title='ncpu' data-ref="ncpu" data-ref-filename="ncpu">ncpu</a>;</td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td>	<b>return</b> &amp;<a class="tu ref" href="#rcpu_storage" title='rcpu_storage' data-use='a' data-ref="rcpu_storage" data-ref-filename="rcpu_storage">rcpu_storage</a>[<a class="local col3 ref" href="#3newcpu" title='newcpu' data-ref="3newcpu" data-ref-filename="3newcpu">newcpu</a>];</td></tr>
+<tr><th id="132">132</th><td>}</td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td><i>/* this could/should be mi_attach_cpu? */</i></td></tr>
+<tr><th id="135">135</th><td><em>void</em></td></tr>
+<tr><th id="136">136</th><td><dfn class="decl def fn" id="rump_cpus_bootstrap" title='rump_cpus_bootstrap' data-ref="rump_cpus_bootstrap" data-ref-filename="rump_cpus_bootstrap">rump_cpus_bootstrap</dfn>(<em>int</em> *<dfn class="local col4 decl" id="4nump" title='nump' data-type='int *' data-ref="4nump" data-ref-filename="4nump">nump</dfn>)</td></tr>
+<tr><th id="137">137</th><td>{</td></tr>
+<tr><th id="138">138</th><td>	<em>int</em> <dfn class="local col5 decl" id="5num" title='num' data-type='int' data-ref="5num" data-ref-filename="5num">num</dfn> = *<a class="local col4 ref" href="#4nump" title='nump' data-ref="4nump" data-ref-filename="4nump">nump</a>;</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td>	<b>if</b> (<a class="local col5 ref" href="#5num" title='num' data-ref="5num" data-ref-filename="5num">num</a> &gt; <a class="macro" href="../../../arch/i386/include/param.h.html#49" title="32" data-ref="_M/MAXCPUS">MAXCPUS</a>) {</td></tr>
+<tr><th id="141">141</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#aprint_verbose" title='aprint_verbose' data-ref="aprint_verbose" data-ref-filename="aprint_verbose">aprint_verbose</a>(<q>"CPU limit: %d wanted, %d (MAXCPUS) "</q></td></tr>
+<tr><th id="142">142</th><td>		    <q>"available (adjusted)\n"</q>, <a class="local col5 ref" href="#5num" title='num' data-ref="5num" data-ref-filename="5num">num</a>, <a class="macro" href="../../../arch/i386/include/param.h.html#49" title="32" data-ref="_M/MAXCPUS">MAXCPUS</a>);</td></tr>
+<tr><th id="143">143</th><td>		<a class="local col5 ref" href="#5num" title='num' data-ref="5num" data-ref-filename="5num">num</a> = <a class="macro" href="../../../arch/i386/include/param.h.html#49" title="32" data-ref="_M/MAXCPUS">MAXCPUS</a>;</td></tr>
+<tr><th id="144">144</th><td>	}</td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td>	<a class="ref fn" href="../../../sys/mutex.h.html#mutex_init" title='mutex_init' data-ref="mutex_init" data-ref-filename="mutex_init">mutex_init</a>(&amp;<a class="ref" href="../../../sys/cpu.h.html#cpu_lock" title='cpu_lock' data-ref="cpu_lock" data-ref-filename="cpu_lock">cpu_lock</a>, <a class="enum" href="../../../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>, <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a>);</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td>	<a class="ref fn" href="../../../sys/kcpuset.h.html#kcpuset_create" title='kcpuset_create' data-ref="kcpuset_create" data-ref-filename="kcpuset_create">kcpuset_create</a>(&amp;<a class="ref" href="../../../sys/cpu.h.html#kcpuset_attached" title='kcpuset_attached' data-ref="kcpuset_attached" data-ref-filename="kcpuset_attached">kcpuset_attached</a>, <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>);</td></tr>
+<tr><th id="149">149</th><td>	<a class="ref fn" href="../../../sys/kcpuset.h.html#kcpuset_create" title='kcpuset_create' data-ref="kcpuset_create" data-ref-filename="kcpuset_create">kcpuset_create</a>(&amp;<a class="ref" href="../../../sys/cpu.h.html#kcpuset_running" title='kcpuset_running' data-ref="kcpuset_running" data-ref-filename="kcpuset_running">kcpuset_running</a>, <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>);</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td>	<i>/* attach first cpu for bootstrap */</i></td></tr>
+<tr><th id="152">152</th><td>	<a class="ref fn" href="../../include/rump-sys/kern.h.html#rump_cpu_attach" title='rump_cpu_attach' data-ref="rump_cpu_attach" data-ref-filename="rump_cpu_attach">rump_cpu_attach</a>(&amp;<a class="ref" href="../../include/rump-sys/kern.h.html#rump_bootcpu" title='rump_bootcpu' data-ref="rump_bootcpu" data-ref-filename="rump_bootcpu">rump_bootcpu</a>);</td></tr>
+<tr><th id="153">153</th><td>	<a class="ref" href="../../../sys/systm.h.html#ncpu" title='ncpu' data-ref="ncpu" data-ref-filename="ncpu">ncpu</a> = <var>1</var>;</td></tr>
+<tr><th id="154">154</th><td>	*<a class="local col4 ref" href="#4nump" title='nump' data-ref="4nump" data-ref-filename="4nump">nump</a> = <a class="local col5 ref" href="#5num" title='num' data-ref="5num" data-ref-filename="5num">num</a>;</td></tr>
+<tr><th id="155">155</th><td>}</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td><em>void</em></td></tr>
+<tr><th id="158">158</th><td><dfn class="decl def fn" id="rump_scheduler_init" title='rump_scheduler_init' data-ref="rump_scheduler_init" data-ref-filename="rump_scheduler_init">rump_scheduler_init</dfn>(<em>int</em> <dfn class="local col6 decl" id="6numcpu" title='numcpu' data-type='int' data-ref="6numcpu" data-ref-filename="6numcpu">numcpu</dfn>)</td></tr>
+<tr><th id="159">159</th><td>{</td></tr>
+<tr><th id="160">160</th><td>	<b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *<dfn class="local col7 decl" id="7rcpu" title='rcpu' data-type='struct rumpcpu *' data-ref="7rcpu" data-ref-filename="7rcpu">rcpu</dfn>;</td></tr>
+<tr><th id="161">161</th><td>	<b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col8 decl" id="8ci" title='ci' data-type='struct cpu_info *' data-ref="8ci" data-ref-filename="8ci">ci</dfn>;</td></tr>
+<tr><th id="162">162</th><td>	<em>int</em> <dfn class="local col9 decl" id="9i" title='i' data-type='int' data-ref="9i" data-ref-filename="9i">i</dfn>;</td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_init" title='rumpuser_mutex_init' data-ref="rumpuser_mutex_init" data-ref-filename="rumpuser_mutex_init">rumpuser_mutex_init</a>(&amp;<a class="tu ref" href="#lwp0mtx" title='lwp0mtx' data-use='a' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</a>, <a class="macro" href="../../include/rump/rumpuser.h.html#188" title="0x01" data-ref="_M/RUMPUSER_MTX_SPIN">RUMPUSER_MTX_SPIN</a>);</td></tr>
+<tr><th id="165">165</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_init" title='rumpuser_cv_init' data-ref="rumpuser_cv_init" data-ref-filename="rumpuser_cv_init">rumpuser_cv_init</a>(&amp;<a class="tu ref" href="#lwp0cv" title='lwp0cv' data-use='a' data-ref="lwp0cv" data-ref-filename="lwp0cv">lwp0cv</a>);</td></tr>
+<tr><th id="166">166</th><td>	<b>for</b> (<a class="local col9 ref" href="#9i" title='i' data-ref="9i" data-ref-filename="9i">i</a> = <var>0</var>; <a class="local col9 ref" href="#9i" title='i' data-ref="9i" data-ref-filename="9i">i</a> &lt; <a class="local col6 ref" href="#6numcpu" title='numcpu' data-ref="6numcpu" data-ref-filename="6numcpu">numcpu</a>; <a class="local col9 ref" href="#9i" title='i' data-ref="9i" data-ref-filename="9i">i</a>++) {</td></tr>
+<tr><th id="167">167</th><td>		<b>if</b> (<a class="local col9 ref" href="#9i" title='i' data-ref="9i" data-ref-filename="9i">i</a> == <var>0</var>) {</td></tr>
+<tr><th id="168">168</th><td>			<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a> = &amp;<a class="ref" href="../../include/rump-sys/kern.h.html#rump_bootcpu" title='rump_bootcpu' data-ref="rump_bootcpu" data-ref-filename="rump_bootcpu">rump_bootcpu</a>;</td></tr>
+<tr><th id="169">169</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="170">170</th><td>			<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a> = <a class="ref fn" href="../../../sys/kmem.h.html#kmem_zalloc" title='kmem_zalloc' data-ref="kmem_zalloc" data-ref-filename="kmem_zalloc">kmem_zalloc</a>(<b>sizeof</b>(*<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>), <a class="macro" href="../../../sys/kmem.h.html#57" title="0x00000001" data-ref="_M/KM_SLEEP">KM_SLEEP</a>);</td></tr>
+<tr><th id="171">171</th><td>			<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="macro" href="../../../sys/cpu_data.h.html#116" title="ci_data.cpu_index" data-ref="_M/ci_index">ci_index</a> = <a class="local col9 ref" href="#9i" title='i' data-ref="9i" data-ref-filename="9i">i</a>;</td></tr>
+<tr><th id="172">172</th><td>		}</td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td>		<a class="local col7 ref" href="#7rcpu" title='rcpu' data-ref="7rcpu" data-ref-filename="7rcpu">rcpu</a> = &amp;<a class="tu ref" href="#rcpu_storage" title='rcpu_storage' data-use='a' data-ref="rcpu_storage" data-ref-filename="rcpu_storage">rcpu_storage</a>[<a class="local col9 ref" href="#9i" title='i' data-ref="9i" data-ref-filename="9i">i</a>];</td></tr>
+<tr><th id="175">175</th><td>		<a class="local col7 ref" href="#7rcpu" title='rcpu' data-ref="7rcpu" data-ref-filename="7rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_ci" title='rumpcpu::rcpu_ci' data-use='w' data-ref="rumpcpu::rcpu_ci" data-ref-filename="rumpcpu..rcpu_ci">rcpu_ci</a> = <a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>;</td></tr>
+<tr><th id="176">176</th><td>		<a class="local col7 ref" href="#7rcpu" title='rcpu' data-ref="7rcpu" data-ref-filename="7rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_wanted" title='rumpcpu::rcpu_wanted' data-use='w' data-ref="rumpcpu::rcpu_wanted" data-ref-filename="rumpcpu..rcpu_wanted">rcpu_wanted</a> = <var>0</var>;</td></tr>
+<tr><th id="177">177</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_init" title='rumpuser_cv_init' data-ref="rumpuser_cv_init" data-ref-filename="rumpuser_cv_init">rumpuser_cv_init</a>(&amp;<a class="local col7 ref" href="#7rcpu" title='rcpu' data-ref="7rcpu" data-ref-filename="7rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_cv" title='rumpcpu::rcpu_cv' data-use='a' data-ref="rumpcpu::rcpu_cv" data-ref-filename="rumpcpu..rcpu_cv">rcpu_cv</a>);</td></tr>
+<tr><th id="178">178</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_init" title='rumpuser_mutex_init' data-ref="rumpuser_mutex_init" data-ref-filename="rumpuser_mutex_init">rumpuser_mutex_init</a>(&amp;<a class="local col7 ref" href="#7rcpu" title='rcpu' data-ref="7rcpu" data-ref-filename="7rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='a' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>, <a class="macro" href="../../include/rump/rumpuser.h.html#188" title="0x01" data-ref="_M/RUMPUSER_MTX_SPIN">RUMPUSER_MTX_SPIN</a>);</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td>		<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="macro" href="../../../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../../../sys/sched.h.html#schedstate_percpu::spc_mutex" title='schedstate_percpu::spc_mutex' data-ref="schedstate_percpu::spc_mutex" data-ref-filename="schedstate_percpu..spc_mutex">spc_mutex</a> =</td></tr>
+<tr><th id="181">181</th><td>		    <a class="ref fn" href="../../../sys/mutex.h.html#mutex_obj_alloc" title='mutex_obj_alloc' data-ref="mutex_obj_alloc" data-ref-filename="mutex_obj_alloc">mutex_obj_alloc</a>(<a class="enum" href="../../../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>, <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#14" title="0x7" data-ref="_M/IPL_SCHED">IPL_SCHED</a>);</td></tr>
+<tr><th id="182">182</th><td>		<a class="local col8 ref" href="#8ci" title='ci' data-ref="8ci" data-ref-filename="8ci">ci</a>-&gt;<a class="macro" href="../../../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../../../sys/sched.h.html#schedstate_percpu::spc_flags" title='schedstate_percpu::spc_flags' data-ref="schedstate_percpu::spc_flags" data-ref-filename="schedstate_percpu..spc_flags">spc_flags</a> = <a class="macro" href="../../../sys/sched.h.html#179" title="0x0008" data-ref="_M/SPCF_RUNNING">SPCF_RUNNING</a>;</td></tr>
+<tr><th id="183">183</th><td>	}</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>	<a class="ref fn" href="../../../sys/mutex.h.html#mutex_init" title='mutex_init' data-ref="mutex_init" data-ref-filename="mutex_init">mutex_init</a>(&amp;<a class="ref" href="#unruntime_lock" title='unruntime_lock' data-ref="unruntime_lock" data-ref-filename="unruntime_lock">unruntime_lock</a>, <a class="enum" href="../../../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>, <a class="macro" href="../../../arch/x86/include/intrdefs.h.html#14" title="0x7" data-ref="_M/IPL_SCHED">IPL_SCHED</a>);</td></tr>
+<tr><th id="186">186</th><td>}</td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td><i>/*</i></td></tr>
+<tr><th id="189">189</th><td><i> * condvar ops using scheduler lock as the rumpuser interlock.</i></td></tr>
+<tr><th id="190">190</th><td><i> */</i></td></tr>
+<tr><th id="191">191</th><td><em>void</em></td></tr>
+<tr><th id="192">192</th><td><dfn class="decl def fn" id="rump_schedlock_cv_wait" title='rump_schedlock_cv_wait' data-ref="rump_schedlock_cv_wait" data-ref-filename="rump_schedlock_cv_wait">rump_schedlock_cv_wait</dfn>(<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_cv" title='rumpuser_cv' data-ref="rumpuser_cv" data-ref-filename="rumpuser_cv">rumpuser_cv</a> *<dfn class="local col0 decl" id="10cv" title='cv' data-type='struct rumpuser_cv *' data-ref="10cv" data-ref-filename="10cv">cv</dfn>)</td></tr>
+<tr><th id="193">193</th><td>{</td></tr>
+<tr><th id="194">194</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col1 decl" id="11l" title='l' data-type='struct lwp *' data-ref="11l" data-ref-filename="11l">l</dfn> = <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="195">195</th><td>	<b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *<dfn class="local col2 decl" id="12rcpu" title='rcpu' data-type='struct rumpcpu *' data-ref="12rcpu" data-ref-filename="12rcpu">rcpu</dfn> = <a class="tu ref fn" href="#cpuinfo_to_rumpcpu" title='cpuinfo_to_rumpcpu' data-use='c' data-ref="cpuinfo_to_rumpcpu" data-ref-filename="cpuinfo_to_rumpcpu">cpuinfo_to_rumpcpu</a>(<a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>);</td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td>	<i>/* mutex will be taken and released in cpu schedule/unschedule */</i></td></tr>
+<tr><th id="198">198</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_wait" title='rumpuser_cv_wait' data-ref="rumpuser_cv_wait" data-ref-filename="rumpuser_cv_wait">rumpuser_cv_wait</a>(<a class="local col0 ref" href="#10cv" title='cv' data-ref="10cv" data-ref-filename="10cv">cv</a>, <a class="local col2 ref" href="#12rcpu" title='rcpu' data-ref="12rcpu" data-ref-filename="12rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="199">199</th><td>}</td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td><em>int</em></td></tr>
+<tr><th id="202">202</th><td><dfn class="decl def fn" id="rump_schedlock_cv_timedwait" title='rump_schedlock_cv_timedwait' data-ref="rump_schedlock_cv_timedwait" data-ref-filename="rump_schedlock_cv_timedwait">rump_schedlock_cv_timedwait</dfn>(<b>struct</b> <a class="type" href="../../include/rump/rumpuser.h.html#rumpuser_cv" title='rumpuser_cv' data-ref="rumpuser_cv" data-ref-filename="rumpuser_cv">rumpuser_cv</a> *<dfn class="local col3 decl" id="13cv" title='cv' data-type='struct rumpuser_cv *' data-ref="13cv" data-ref-filename="13cv">cv</dfn>, <em>const</em> <b>struct</b> <a class="type" href="../../../sys/timespec.h.html#timespec" title='timespec' data-ref="timespec" data-ref-filename="timespec">timespec</a> *<dfn class="local col4 decl" id="14ts" title='ts' data-type='const struct timespec *' data-ref="14ts" data-ref-filename="14ts">ts</dfn>)</td></tr>
+<tr><th id="203">203</th><td>{</td></tr>
+<tr><th id="204">204</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col5 decl" id="15l" title='l' data-type='struct lwp *' data-ref="15l" data-ref-filename="15l">l</dfn> = <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="205">205</th><td>	<b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *<dfn class="local col6 decl" id="16rcpu" title='rcpu' data-type='struct rumpcpu *' data-ref="16rcpu" data-ref-filename="16rcpu">rcpu</dfn> = <a class="tu ref fn" href="#cpuinfo_to_rumpcpu" title='cpuinfo_to_rumpcpu' data-use='c' data-ref="cpuinfo_to_rumpcpu" data-ref-filename="cpuinfo_to_rumpcpu">cpuinfo_to_rumpcpu</a>(<a class="local col5 ref" href="#15l" title='l' data-ref="15l" data-ref-filename="15l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>);</td></tr>
+<tr><th id="206">206</th><td></td></tr>
+<tr><th id="207">207</th><td>	<i>/* mutex will be taken and released in cpu schedule/unschedule */</i></td></tr>
+<tr><th id="208">208</th><td>	<b>return</b> <a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_timedwait" title='rumpuser_cv_timedwait' data-ref="rumpuser_cv_timedwait" data-ref-filename="rumpuser_cv_timedwait">rumpuser_cv_timedwait</a>(<a class="local col3 ref" href="#13cv" title='cv' data-ref="13cv" data-ref-filename="13cv">cv</a>, <a class="local col6 ref" href="#16rcpu" title='rcpu' data-ref="16rcpu" data-ref-filename="16rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>,</td></tr>
+<tr><th id="209">209</th><td>	    <a class="local col4 ref" href="#14ts" title='ts' data-ref="14ts" data-ref-filename="14ts">ts</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_sec" title='timespec::tv_sec' data-ref="timespec::tv_sec" data-ref-filename="timespec..tv_sec">tv_sec</a>, <a class="local col4 ref" href="#14ts" title='ts' data-ref="14ts" data-ref-filename="14ts">ts</a>-&gt;<a class="ref field" href="../../../sys/timespec.h.html#timespec::tv_nsec" title='timespec::tv_nsec' data-ref="timespec::tv_nsec" data-ref-filename="timespec..tv_nsec">tv_nsec</a>);</td></tr>
+<tr><th id="210">210</th><td>}</td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="213">213</th><td><dfn class="tu decl def fn" id="lwp0busy" title='lwp0busy' data-type='void lwp0busy()' data-ref="lwp0busy" data-ref-filename="lwp0busy">lwp0busy</dfn>(<em>void</em>)</td></tr>
+<tr><th id="214">214</th><td>{</td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td>	<i>/* busy lwp0 */</i></td></tr>
+<tr><th id="217">217</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((x86_curlwp() == ((void *)0) || x86_curlwp()-&gt;l_stat != 7)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;curlwp == NULL || curlwp-&gt;l_stat != LSONPROC&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 217))" data-ref="_M/KASSERT">KASSERT</a>(<a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a> == <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> || <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> != <a class="macro" href="../../../sys/lwp.h.html#293" title="7" data-ref="_M/LSONPROC">LSONPROC</a>);</td></tr>
+<tr><th id="218">218</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="tu ref" href="#lwp0mtx" title='lwp0mtx' data-use='r' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</a>);</td></tr>
+<tr><th id="219">219</th><td>	<b>while</b> (<a class="tu ref" href="#lwp0isbusy" title='lwp0isbusy' data-use='r' data-ref="lwp0isbusy" data-ref-filename="lwp0isbusy">lwp0isbusy</a>)</td></tr>
+<tr><th id="220">220</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_wait_nowrap" title='rumpuser_cv_wait_nowrap' data-ref="rumpuser_cv_wait_nowrap" data-ref-filename="rumpuser_cv_wait_nowrap">rumpuser_cv_wait_nowrap</a>(<a class="tu ref" href="#lwp0cv" title='lwp0cv' data-use='r' data-ref="lwp0cv" data-ref-filename="lwp0cv">lwp0cv</a>, <a class="tu ref" href="#lwp0mtx" title='lwp0mtx' data-use='r' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</a>);</td></tr>
+<tr><th id="221">221</th><td>	<a class="tu ref" href="#lwp0isbusy" title='lwp0isbusy' data-use='w' data-ref="lwp0isbusy" data-ref-filename="lwp0isbusy">lwp0isbusy</a> = <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="222">222</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="tu ref" href="#lwp0mtx" title='lwp0mtx' data-use='r' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</a>);</td></tr>
+<tr><th id="223">223</th><td>}</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="226">226</th><td><dfn class="tu decl def fn" id="lwp0rele" title='lwp0rele' data-type='void lwp0rele()' data-ref="lwp0rele" data-ref-filename="lwp0rele">lwp0rele</dfn>(<em>void</em>)</td></tr>
+<tr><th id="227">227</th><td>{</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="tu ref" href="#lwp0mtx" title='lwp0mtx' data-use='r' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</a>);</td></tr>
+<tr><th id="230">230</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((lwp0isbusy == 1)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;lwp0isbusy == true&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 230))" data-ref="_M/KASSERT">KASSERT</a>(<a class="tu ref" href="#lwp0isbusy" title='lwp0isbusy' data-use='r' data-ref="lwp0isbusy" data-ref-filename="lwp0isbusy">lwp0isbusy</a> == <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>);</td></tr>
+<tr><th id="231">231</th><td>	<a class="tu ref" href="#lwp0isbusy" title='lwp0isbusy' data-use='w' data-ref="lwp0isbusy" data-ref-filename="lwp0isbusy">lwp0isbusy</a> = <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="232">232</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_signal" title='rumpuser_cv_signal' data-ref="rumpuser_cv_signal" data-ref-filename="rumpuser_cv_signal">rumpuser_cv_signal</a>(<a class="tu ref" href="#lwp0cv" title='lwp0cv' data-use='r' data-ref="lwp0cv" data-ref-filename="lwp0cv">lwp0cv</a>);</td></tr>
+<tr><th id="233">233</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="tu ref" href="#lwp0mtx" title='lwp0mtx' data-use='r' data-ref="lwp0mtx" data-ref-filename="lwp0mtx">lwp0mtx</a>);</td></tr>
+<tr><th id="234">234</th><td>}</td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td><i>/*</i></td></tr>
+<tr><th id="237">237</th><td><i> * rump_schedule: ensure that the calling host thread has a valid lwp context.</i></td></tr>
+<tr><th id="238">238</th><td><i> * ie. ensure that curlwp != NULL.  Also, ensure that there</i></td></tr>
+<tr><th id="239">239</th><td><i> * a 1:1 mapping between the lwp and rump kernel cpu.</i></td></tr>
+<tr><th id="240">240</th><td><i> */</i></td></tr>
+<tr><th id="241">241</th><td><em>void</em></td></tr>
+<tr><th id="242">242</th><td><dfn class="decl def fn" id="rump_schedule" title='rump_schedule' data-ref="rump_schedule" data-ref-filename="rump_schedule">rump_schedule</dfn>()</td></tr>
+<tr><th id="243">243</th><td>{</td></tr>
+<tr><th id="244">244</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col7 decl" id="17l" title='l' data-type='struct lwp *' data-ref="17l" data-ref-filename="17l">l</dfn>;</td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td>	<i>/*</i></td></tr>
+<tr><th id="247">247</th><td><i>	 * If there is no dedicated lwp, allocate a temp one and</i></td></tr>
+<tr><th id="248">248</th><td><i>	 * set it to be free'd upon unschedule().  Use lwp0 context</i></td></tr>
+<tr><th id="249">249</th><td><i>	 * for reserving the necessary resources.  Don't optimize</i></td></tr>
+<tr><th id="250">250</th><td><i>	 * for this case -- anyone who cares about performance will</i></td></tr>
+<tr><th id="251">251</th><td><i>	 * start a real thread.</i></td></tr>
+<tr><th id="252">252</th><td><i>	 */</i></td></tr>
+<tr><th id="253">253</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#487" title="__builtin_expect(((l = x86_curlwp()) != ((void *)0)) != 0, 1)" data-ref="_M/__predict_true">__predict_true</a>((<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a> = <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>) != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)) {</td></tr>
+<tr><th id="254">254</th><td>		<a class="ref fn" href="#rump_schedule_cpu" title='rump_schedule_cpu' data-ref="rump_schedule_cpu" data-ref-filename="rump_schedule_cpu">rump_schedule_cpu</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>);</td></tr>
+<tr><th id="255">255</th><td>		<a class="macro" href="../../../sys/lwp.h.html#306" title="do { (void)l-&gt;l_proc; if (__builtin_expect(((l)-&gt;l_prflag &amp; 0x00000100) != 0, 0)) lwp_update_creds(l); } while ( 0)" data-ref="_M/LWP_CACHE_CREDS">LWP_CACHE_CREDS</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>, <a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_proc" title='lwp::l_proc' data-ref="lwp::l_proc" data-ref-filename="lwp..l_proc">l_proc</a>);</td></tr>
+<tr><th id="256">256</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="257">257</th><td>		<a class="tu ref fn" href="#lwp0busy" title='lwp0busy' data-use='c' data-ref="lwp0busy" data-ref-filename="lwp0busy">lwp0busy</a>();</td></tr>
+<tr><th id="258">258</th><td></td></tr>
+<tr><th id="259">259</th><td>		<i>/* schedule cpu and use lwp0 */</i></td></tr>
+<tr><th id="260">260</th><td>		<a class="ref fn" href="#rump_schedule_cpu" title='rump_schedule_cpu' data-ref="rump_schedule_cpu" data-ref-filename="rump_schedule_cpu">rump_schedule_cpu</a>(&amp;<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>);</td></tr>
+<tr><th id="261">261</th><td>		<a class="ref fn" href="../../include/rump-sys/kern.h.html#rump_lwproc_curlwp_set" title='rump_lwproc_curlwp_set' data-ref="rump_lwproc_curlwp_set" data-ref-filename="rump_lwproc_curlwp_set">rump_lwproc_curlwp_set</a>(&amp;<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>);</td></tr>
+<tr><th id="262">262</th><td></td></tr>
+<tr><th id="263">263</th><td>		<i>/* allocate thread, switch to it, and release lwp0 */</i></td></tr>
+<tr><th id="264">264</th><td>		<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a> = <a class="ref fn" href="../../include/rump-sys/kern.h.html#rump__lwproc_alloclwp" title='rump__lwproc_alloclwp' data-ref="rump__lwproc_alloclwp" data-ref-filename="rump__lwproc_alloclwp">rump__lwproc_alloclwp</a>(<a class="ref" href="../../../sys/proc.h.html#initproc" title='initproc' data-ref="initproc" data-ref-filename="initproc">initproc</a>);</td></tr>
+<tr><th id="265">265</th><td>		<a class="ref fn" href="../../include/rump-sys/kern_if.h.html#rump_lwproc_switch" title='rump_lwproc_switch' data-ref="rump_lwproc_switch" data-ref-filename="rump_lwproc_switch">rump_lwproc_switch</a>(<a class="local col7 ref" href="#17l" title='l' data-ref="17l" data-ref-filename="17l">l</a>);</td></tr>
+<tr><th id="266">266</th><td>		<a class="tu ref fn" href="#lwp0rele" title='lwp0rele' data-use='c' data-ref="lwp0rele" data-ref-filename="lwp0rele">lwp0rele</a>();</td></tr>
+<tr><th id="267">267</th><td></td></tr>
+<tr><th id="268">268</th><td>		<i>/*</i></td></tr>
+<tr><th id="269">269</th><td><i>		 * mark new thread dead-on-unschedule.  this</i></td></tr>
+<tr><th id="270">270</th><td><i>		 * means that we'll be running with l_refcnt == 0.</i></td></tr>
+<tr><th id="271">271</th><td><i>		 * relax, it's fine.</i></td></tr>
+<tr><th id="272">272</th><td><i>		 */</i></td></tr>
+<tr><th id="273">273</th><td>		<a class="ref fn" href="../../include/rump-sys/kern_if.h.html#rump_lwproc_releaselwp" title='rump_lwproc_releaselwp' data-ref="rump_lwproc_releaselwp" data-ref-filename="rump_lwproc_releaselwp">rump_lwproc_releaselwp</a>();</td></tr>
+<tr><th id="274">274</th><td>	}</td></tr>
+<tr><th id="275">275</th><td>}</td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td><em>void</em></td></tr>
+<tr><th id="278">278</th><td><dfn class="decl def fn" id="rump_schedule_cpu" title='rump_schedule_cpu' data-ref="rump_schedule_cpu" data-ref-filename="rump_schedule_cpu">rump_schedule_cpu</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col8 decl" id="18l" title='l' data-type='struct lwp *' data-ref="18l" data-ref-filename="18l">l</dfn>)</td></tr>
+<tr><th id="279">279</th><td>{</td></tr>
+<tr><th id="280">280</th><td></td></tr>
+<tr><th id="281">281</th><td>	<a class="ref fn" href="#rump_schedule_cpu_interlock" title='rump_schedule_cpu_interlock' data-ref="rump_schedule_cpu_interlock" data-ref-filename="rump_schedule_cpu_interlock">rump_schedule_cpu_interlock</a>(<a class="local col8 ref" href="#18l" title='l' data-ref="18l" data-ref-filename="18l">l</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="282">282</th><td>}</td></tr>
+<tr><th id="283">283</th><td></td></tr>
+<tr><th id="284">284</th><td><i>/*</i></td></tr>
+<tr><th id="285">285</th><td><i> * Schedule a CPU.  This optimizes for the case where we schedule</i></td></tr>
+<tr><th id="286">286</th><td><i> * the same thread often, and we have nCPU &gt;= nFrequently-Running-Thread</i></td></tr>
+<tr><th id="287">287</th><td><i> * (where CPU is virtual rump cpu, not host CPU).</i></td></tr>
+<tr><th id="288">288</th><td><i> */</i></td></tr>
+<tr><th id="289">289</th><td><em>void</em></td></tr>
+<tr><th id="290">290</th><td><dfn class="decl def fn" id="rump_schedule_cpu_interlock" title='rump_schedule_cpu_interlock' data-ref="rump_schedule_cpu_interlock" data-ref-filename="rump_schedule_cpu_interlock">rump_schedule_cpu_interlock</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col9 decl" id="19l" title='l' data-type='struct lwp *' data-ref="19l" data-ref-filename="19l">l</dfn>, <em>void</em> *<dfn class="local col0 decl" id="20interlock" title='interlock' data-type='void *' data-ref="20interlock" data-ref-filename="20interlock">interlock</dfn>)</td></tr>
+<tr><th id="291">291</th><td>{</td></tr>
+<tr><th id="292">292</th><td>	<b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *<dfn class="local col1 decl" id="21rcpu" title='rcpu' data-type='struct rumpcpu *' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</dfn>;</td></tr>
+<tr><th id="293">293</th><td>	<b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col2 decl" id="22ci" title='ci' data-type='struct cpu_info *' data-ref="22ci" data-ref-filename="22ci">ci</dfn>;</td></tr>
+<tr><th id="294">294</th><td>	<em>void</em> *<dfn class="local col3 decl" id="23old" title='old' data-type='void *' data-ref="23old" data-ref-filename="23old">old</dfn>;</td></tr>
+<tr><th id="295">295</th><td>	<a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col4 decl" id="24domigrate" title='domigrate' data-type='_Bool' data-ref="24domigrate" data-ref-filename="24domigrate">domigrate</dfn>;</td></tr>
+<tr><th id="296">296</th><td>	<a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col5 decl" id="25bound" title='bound' data-type='_Bool' data-ref="25bound" data-ref-filename="25bound">bound</dfn> = <a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_pflag" title='lwp::l_pflag' data-ref="lwp::l_pflag" data-ref-filename="lwp..l_pflag">l_pflag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#264" title="0x80000000" data-ref="_M/LP_BOUND">LP_BOUND</a>;</td></tr>
+<tr><th id="297">297</th><td></td></tr>
+<tr><th id="298">298</th><td>	<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> = <a class="macro" href="../../../sys/lwp.h.html#288" title="2" data-ref="_M/LSRUN">LSRUN</a>;</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td>	<i>/*</i></td></tr>
+<tr><th id="301">301</th><td><i>	 * First, try fastpath: if we were the previous user of the</i></td></tr>
+<tr><th id="302">302</th><td><i>	 * CPU, everything is in order cachewise and we can just</i></td></tr>
+<tr><th id="303">303</th><td><i>	 * proceed to use it.</i></td></tr>
+<tr><th id="304">304</th><td><i>	 *</i></td></tr>
+<tr><th id="305">305</th><td><i>	 * If we are a different thread (i.e. CAS fails), we must go</i></td></tr>
+<tr><th id="306">306</th><td><i>	 * through a memory barrier to ensure we get a truthful</i></td></tr>
+<tr><th id="307">307</th><td><i>	 * view of the world.</i></td></tr>
+<tr><th id="308">308</th><td><i>	 */</i></td></tr>
+<tr><th id="309">309</th><td></td></tr>
+<tr><th id="310">310</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((l-&gt;l_target_cpu != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;l-&gt;l_target_cpu != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 310))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_target_cpu" title='lwp::l_target_cpu' data-ref="lwp::l_target_cpu" data-ref-filename="lwp..l_target_cpu">l_target_cpu</a> != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="311">311</th><td>	<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a> = <a class="tu ref fn" href="#cpuinfo_to_rumpcpu" title='cpuinfo_to_rumpcpu' data-use='c' data-ref="cpuinfo_to_rumpcpu" data-ref-filename="cpuinfo_to_rumpcpu">cpuinfo_to_rumpcpu</a>(<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_target_cpu" title='lwp::l_target_cpu' data-ref="lwp::l_target_cpu" data-ref-filename="lwp..l_target_cpu">l_target_cpu</a>);</td></tr>
+<tr><th id="312">312</th><td>	<b>if</b> (<a class="ref fn" href="../../../sys/atomic.h.html#atomic_cas_ptr" title='atomic_cas_ptr' data-ref="atomic_cas_ptr" data-ref-filename="atomic_cas_ptr">atomic_cas_ptr</a>(&amp;<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_prevlwp" title='rumpcpu::rcpu_prevlwp' data-use='a' data-ref="rumpcpu::rcpu_prevlwp" data-ref-filename="rumpcpu..rcpu_prevlwp">rcpu_prevlwp</a>, <a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>, <a class="macro" href="#85" title="((void *)-1)" data-ref="_M/RCPULWP_BUSY">RCPULWP_BUSY</a>) == <a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>) {</td></tr>
+<tr><th id="313">313</th><td>		<b>if</b> (<a class="local col0 ref" href="#20interlock" title='interlock' data-ref="20interlock" data-ref-filename="20interlock">interlock</a> == <a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>)</td></tr>
+<tr><th id="314">314</th><td>			<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="315">315</th><td>		<a class="macro" href="#109" title="" data-ref="_M/SCHED_FASTPATH">SCHED_FASTPATH</a>(rcpu);</td></tr>
+<tr><th id="316">316</th><td>		<i>/* jones, you're the man */</i></td></tr>
+<tr><th id="317">317</th><td>		<b>goto</b> <a class="lbl" href="#26fastlane" data-ref="26fastlane" data-ref-filename="26fastlane">fastlane</a>;</td></tr>
+<tr><th id="318">318</th><td>	}</td></tr>
+<tr><th id="319">319</th><td></td></tr>
+<tr><th id="320">320</th><td>	<i>/*</i></td></tr>
+<tr><th id="321">321</th><td><i>	 * Else, it's the slowpath for us.  First, determine if we</i></td></tr>
+<tr><th id="322">322</th><td><i>	 * can migrate.</i></td></tr>
+<tr><th id="323">323</th><td><i>	 */</i></td></tr>
+<tr><th id="324">324</th><td>	<b>if</b> (<a class="ref" href="../../../sys/systm.h.html#ncpu" title='ncpu' data-ref="ncpu" data-ref-filename="ncpu">ncpu</a> == <var>1</var>)</td></tr>
+<tr><th id="325">325</th><td>		<a class="local col4 ref" href="#24domigrate" title='domigrate' data-ref="24domigrate" data-ref-filename="24domigrate">domigrate</a> = <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="326">326</th><td>	<b>else</b></td></tr>
+<tr><th id="327">327</th><td>		<a class="local col4 ref" href="#24domigrate" title='domigrate' data-ref="24domigrate" data-ref-filename="24domigrate">domigrate</a> = <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="328">328</th><td></td></tr>
+<tr><th id="329">329</th><td>	<i>/* Take lock.  This acts as a load barrier too. */</i></td></tr>
+<tr><th id="330">330</th><td>	<b>if</b> (<a class="local col0 ref" href="#20interlock" title='interlock' data-ref="20interlock" data-ref-filename="20interlock">interlock</a> != <a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>)</td></tr>
+<tr><th id="331">331</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="332">332</th><td></td></tr>
+<tr><th id="333">333</th><td>	<b>for</b> (;;) {</td></tr>
+<tr><th id="334">334</th><td>		<a class="macro" href="#110" title="" data-ref="_M/SCHED_SLOWPATH">SCHED_SLOWPATH</a>(rcpu);</td></tr>
+<tr><th id="335">335</th><td>		<a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a> = <a class="ref fn" href="../../../sys/atomic.h.html#atomic_swap_ptr" title='atomic_swap_ptr' data-ref="atomic_swap_ptr" data-ref-filename="atomic_swap_ptr">atomic_swap_ptr</a>(&amp;<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_prevlwp" title='rumpcpu::rcpu_prevlwp' data-use='a' data-ref="rumpcpu::rcpu_prevlwp" data-ref-filename="rumpcpu..rcpu_prevlwp">rcpu_prevlwp</a>, <a class="macro" href="#86" title="((void *)-2)" data-ref="_M/RCPULWP_WANTED">RCPULWP_WANTED</a>);</td></tr>
+<tr><th id="336">336</th><td></td></tr>
+<tr><th id="337">337</th><td>		<i>/* CPU is free? */</i></td></tr>
+<tr><th id="338">338</th><td>		<b>if</b> (<a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a> != <a class="macro" href="#85" title="((void *)-1)" data-ref="_M/RCPULWP_BUSY">RCPULWP_BUSY</a> &amp;&amp; <a class="local col3 ref" href="#23old" title='old' data-ref="23old" data-ref-filename="23old">old</a> != <a class="macro" href="#86" title="((void *)-2)" data-ref="_M/RCPULWP_WANTED">RCPULWP_WANTED</a>) {</td></tr>
+<tr><th id="339">339</th><td>			<b>if</b> (<a class="ref fn" href="../../../sys/atomic.h.html#atomic_cas_ptr" title='atomic_cas_ptr' data-ref="atomic_cas_ptr" data-ref-filename="atomic_cas_ptr">atomic_cas_ptr</a>(&amp;<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_prevlwp" title='rumpcpu::rcpu_prevlwp' data-use='a' data-ref="rumpcpu::rcpu_prevlwp" data-ref-filename="rumpcpu..rcpu_prevlwp">rcpu_prevlwp</a>,</td></tr>
+<tr><th id="340">340</th><td>			    <a class="macro" href="#86" title="((void *)-2)" data-ref="_M/RCPULWP_WANTED">RCPULWP_WANTED</a>, <a class="macro" href="#85" title="((void *)-1)" data-ref="_M/RCPULWP_BUSY">RCPULWP_BUSY</a>) == <a class="macro" href="#86" title="((void *)-2)" data-ref="_M/RCPULWP_WANTED">RCPULWP_WANTED</a>) {</td></tr>
+<tr><th id="341">341</th><td>				<b>break</b>;</td></tr>
+<tr><th id="342">342</th><td>			}</td></tr>
+<tr><th id="343">343</th><td>		}</td></tr>
+<tr><th id="344">344</th><td></td></tr>
+<tr><th id="345">345</th><td>		<i>/*</i></td></tr>
+<tr><th id="346">346</th><td><i>		 * Do we want to migrate once?</i></td></tr>
+<tr><th id="347">347</th><td><i>		 * This may need a slightly better algorithm, or we</i></td></tr>
+<tr><th id="348">348</th><td><i>		 * might cache pingpong eternally for non-frequent</i></td></tr>
+<tr><th id="349">349</th><td><i>		 * threads.</i></td></tr>
+<tr><th id="350">350</th><td><i>		 */</i></td></tr>
+<tr><th id="351">351</th><td>		<b>if</b> (<a class="local col4 ref" href="#24domigrate" title='domigrate' data-ref="24domigrate" data-ref-filename="24domigrate">domigrate</a> &amp;&amp; !<a class="local col5 ref" href="#25bound" title='bound' data-ref="25bound" data-ref-filename="25bound">bound</a>) {</td></tr>
+<tr><th id="352">352</th><td>			<a class="local col4 ref" href="#24domigrate" title='domigrate' data-ref="24domigrate" data-ref-filename="24domigrate">domigrate</a> = <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="353">353</th><td>			<a class="macro" href="#111" title="" data-ref="_M/SCHED_MIGRATED">SCHED_MIGRATED</a>(rcpu);</td></tr>
+<tr><th id="354">354</th><td>			<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="355">355</th><td>			<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a> = <a class="tu ref fn" href="#getnextcpu" title='getnextcpu' data-use='c' data-ref="getnextcpu" data-ref-filename="getnextcpu">getnextcpu</a>();</td></tr>
+<tr><th id="356">356</th><td>			<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="357">357</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="358">358</th><td>		}</td></tr>
+<tr><th id="359">359</th><td></td></tr>
+<tr><th id="360">360</th><td>		<i>/* Want CPU, wait until it's released an retry */</i></td></tr>
+<tr><th id="361">361</th><td>		<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_wanted" title='rumpcpu::rcpu_wanted' data-use='w' data-ref="rumpcpu::rcpu_wanted" data-ref-filename="rumpcpu..rcpu_wanted">rcpu_wanted</a>++;</td></tr>
+<tr><th id="362">362</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_wait_nowrap" title='rumpuser_cv_wait_nowrap' data-ref="rumpuser_cv_wait_nowrap" data-ref-filename="rumpuser_cv_wait_nowrap">rumpuser_cv_wait_nowrap</a>(<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_cv" title='rumpcpu::rcpu_cv' data-use='r' data-ref="rumpcpu::rcpu_cv" data-ref-filename="rumpcpu..rcpu_cv">rcpu_cv</a>, <a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="363">363</th><td>		<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_wanted" title='rumpcpu::rcpu_wanted' data-use='w' data-ref="rumpcpu::rcpu_wanted" data-ref-filename="rumpcpu..rcpu_wanted">rcpu_wanted</a>--;</td></tr>
+<tr><th id="364">364</th><td>	}</td></tr>
+<tr><th id="365">365</th><td>	<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="366">366</th><td></td></tr>
+<tr><th id="367">367</th><td> <dfn class="lbl" id="26fastlane" data-ref="26fastlane" data-ref-filename="26fastlane">fastlane</dfn>:</td></tr>
+<tr><th id="368">368</th><td>	<a class="local col2 ref" href="#22ci" title='ci' data-ref="22ci" data-ref-filename="22ci">ci</a> = <a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_ci" title='rumpcpu::rcpu_ci' data-use='r' data-ref="rumpcpu::rcpu_ci" data-ref-filename="rumpcpu..rcpu_ci">rcpu_ci</a>;</td></tr>
+<tr><th id="369">369</th><td>	<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a> = <a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_target_cpu" title='lwp::l_target_cpu' data-ref="lwp::l_target_cpu" data-ref-filename="lwp..l_target_cpu">l_target_cpu</a> = <a class="local col2 ref" href="#22ci" title='ci' data-ref="22ci" data-ref-filename="22ci">ci</a>;</td></tr>
+<tr><th id="370">370</th><td>	<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_mutex" title='lwp::l_mutex' data-ref="lwp::l_mutex" data-ref-filename="lwp..l_mutex">l_mutex</a> = <a class="local col1 ref" href="#21rcpu" title='rcpu' data-ref="21rcpu" data-ref-filename="21rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_ci" title='rumpcpu::rcpu_ci' data-use='r' data-ref="rumpcpu::rcpu_ci" data-ref-filename="rumpcpu..rcpu_ci">rcpu_ci</a>-&gt;<a class="macro" href="../../../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../../../sys/sched.h.html#schedstate_percpu::spc_mutex" title='schedstate_percpu::spc_mutex' data-ref="schedstate_percpu::spc_mutex" data-ref-filename="schedstate_percpu..spc_mutex">spc_mutex</a>;</td></tr>
+<tr><th id="371">371</th><td>	<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_ncsw" title='lwp::l_ncsw' data-ref="lwp::l_ncsw" data-ref-filename="lwp..l_ncsw">l_ncsw</a>++;</td></tr>
+<tr><th id="372">372</th><td>	<a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> = <a class="macro" href="../../../sys/lwp.h.html#293" title="7" data-ref="_M/LSONPROC">LSONPROC</a>;</td></tr>
+<tr><th id="373">373</th><td></td></tr>
+<tr><th id="374">374</th><td>	<i>/*</i></td></tr>
+<tr><th id="375">375</th><td><i>	 * No interrupts, so ci_curlwp === cpu_onproc.</i></td></tr>
+<tr><th id="376">376</th><td><i>	 * Okay, we could make an attempt to not set cpu_onproc</i></td></tr>
+<tr><th id="377">377</th><td><i>	 * in the case that an interrupt is scheduled immediately</i></td></tr>
+<tr><th id="378">378</th><td><i>	 * after a user proc, but leave that for later.</i></td></tr>
+<tr><th id="379">379</th><td><i>	 */</i></td></tr>
+<tr><th id="380">380</th><td>	<a class="local col2 ref" href="#22ci" title='ci' data-ref="22ci" data-ref-filename="22ci">ci</a>-&gt;<a class="ref field" href="../../../arch/x86/include/cpu.h.html#cpu_info::ci_curlwp" title='cpu_info::ci_curlwp' data-ref="cpu_info::ci_curlwp" data-ref-filename="cpu_info..ci_curlwp">ci_curlwp</a> = <a class="local col2 ref" href="#22ci" title='ci' data-ref="22ci" data-ref-filename="22ci">ci</a>-&gt;<a class="ref field" href="../../../arch/x86/include/cpu.h.html#cpu_info::ci_data" title='cpu_info::ci_data' data-ref="cpu_info::ci_data" data-ref-filename="cpu_info..ci_data">ci_data</a>.<a class="ref field" href="../../../sys/cpu_data.h.html#cpu_data::cpu_onproc" title='cpu_data::cpu_onproc' data-ref="cpu_data::cpu_onproc" data-ref-filename="cpu_data..cpu_onproc">cpu_onproc</a> = <a class="local col9 ref" href="#19l" title='l' data-ref="19l" data-ref-filename="19l">l</a>;</td></tr>
+<tr><th id="381">381</th><td>}</td></tr>
+<tr><th id="382">382</th><td></td></tr>
+<tr><th id="383">383</th><td><em>void</em></td></tr>
+<tr><th id="384">384</th><td><dfn class="decl def fn" id="rump_unschedule" title='rump_unschedule' data-ref="rump_unschedule" data-ref-filename="rump_unschedule">rump_unschedule</dfn>()</td></tr>
+<tr><th id="385">385</th><td>{</td></tr>
+<tr><th id="386">386</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col7 decl" id="27l" title='l' data-type='struct lwp *' data-ref="27l" data-ref-filename="27l">l</dfn> = <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="387">387</th><td><u>#<span data-ppcond="387">ifdef</span> <span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span></u></td></tr>
+<tr><th id="388">388</th><td>	<em>int</em> <dfn class="local col8 decl" id="28nlock" title='nlock' data-type='int' data-ref="28nlock" data-ref-filename="28nlock">nlock</dfn>;</td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td>	<a class="macro" href="../../../sys/systm.h.html#622" title="_kernel_unlock((0), ((&amp;nlock)))" data-ref="_M/KERNEL_UNLOCK_ALL">KERNEL_UNLOCK_ALL</a>(l, &amp;<a class="local col8 ref" href="#28nlock" title='nlock' data-ref="28nlock" data-ref-filename="28nlock">nlock</a>);</td></tr>
+<tr><th id="391">391</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((nlock == 0)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;nlock == 0&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 391))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col8 ref" href="#28nlock" title='nlock' data-ref="28nlock" data-ref-filename="28nlock">nlock</a> == <var>0</var>);</td></tr>
+<tr><th id="392">392</th><td><u>#<span data-ppcond="387">endif</span></u></td></tr>
+<tr><th id="393">393</th><td></td></tr>
+<tr><th id="394">394</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((l-&gt;l_mutex == l-&gt;l_cpu-&gt;ci_data.cpu_schedstate.spc_mutex)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;l-&gt;l_mutex == l-&gt;l_cpu-&gt;ci_schedstate.spc_mutex&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 394))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_mutex" title='lwp::l_mutex' data-ref="lwp::l_mutex" data-ref-filename="lwp..l_mutex">l_mutex</a> == <a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>-&gt;<a class="macro" href="../../../sys/cpu_data.h.html#115" title="ci_data.cpu_schedstate" data-ref="_M/ci_schedstate">ci_schedstate</a>.<a class="ref field" href="../../../sys/sched.h.html#schedstate_percpu::spc_mutex" title='schedstate_percpu::spc_mutex' data-ref="schedstate_percpu::spc_mutex" data-ref-filename="schedstate_percpu..spc_mutex">spc_mutex</a>);</td></tr>
+<tr><th id="395">395</th><td>	<a class="ref fn" href="#rump_unschedule_cpu" title='rump_unschedule_cpu' data-ref="rump_unschedule_cpu" data-ref-filename="rump_unschedule_cpu">rump_unschedule_cpu</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>);</td></tr>
+<tr><th id="396">396</th><td>	<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_mutex" title='lwp::l_mutex' data-ref="lwp::l_mutex" data-ref-filename="lwp..l_mutex">l_mutex</a> = &amp;<a class="ref" href="#unruntime_lock" title='unruntime_lock' data-ref="unruntime_lock" data-ref-filename="unruntime_lock">unruntime_lock</a>;</td></tr>
+<tr><th id="397">397</th><td>	<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_stat" title='lwp::l_stat' data-ref="lwp::l_stat" data-ref-filename="lwp..l_stat">l_stat</a> = <a class="macro" href="../../../sys/lwp.h.html#290" title="4" data-ref="_M/LSSTOP">LSSTOP</a>;</td></tr>
+<tr><th id="398">398</th><td></td></tr>
+<tr><th id="399">399</th><td>	<i>/*</i></td></tr>
+<tr><th id="400">400</th><td><i>	 * Check special conditions:</i></td></tr>
+<tr><th id="401">401</th><td><i>	 *  1) do we need to free the lwp which just unscheduled?</i></td></tr>
+<tr><th id="402">402</th><td><i>	 *     (locking order: lwp0, cpu)</i></td></tr>
+<tr><th id="403">403</th><td><i>	 *  2) do we want to clear curlwp for the current host thread</i></td></tr>
+<tr><th id="404">404</th><td><i>	 */</i></td></tr>
+<tr><th id="405">405</th><td>	<b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((l-&gt;l_flag &amp; 0x00100000) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#242" title="0x00100000" data-ref="_M/LW_WEXIT">LW_WEXIT</a>)) {</td></tr>
+<tr><th id="406">406</th><td>		<a class="tu ref fn" href="#lwp0busy" title='lwp0busy' data-use='c' data-ref="lwp0busy" data-ref-filename="lwp0busy">lwp0busy</a>();</td></tr>
+<tr><th id="407">407</th><td></td></tr>
+<tr><th id="408">408</th><td>		<i>/* Now that we have lwp0, we can schedule a CPU again */</i></td></tr>
+<tr><th id="409">409</th><td>		<a class="ref fn" href="#rump_schedule_cpu" title='rump_schedule_cpu' data-ref="rump_schedule_cpu" data-ref-filename="rump_schedule_cpu">rump_schedule_cpu</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>);</td></tr>
+<tr><th id="410">410</th><td></td></tr>
+<tr><th id="411">411</th><td>		<i>/* switch to lwp0.  this frees the old thread */</i></td></tr>
+<tr><th id="412">412</th><td>		<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((l-&gt;l_flag &amp; 0x00100000)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;l-&gt;l_flag &amp; LW_WEXIT&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 412))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#242" title="0x00100000" data-ref="_M/LW_WEXIT">LW_WEXIT</a>);</td></tr>
+<tr><th id="413">413</th><td>		<a class="ref fn" href="../../include/rump-sys/kern_if.h.html#rump_lwproc_switch" title='rump_lwproc_switch' data-ref="rump_lwproc_switch" data-ref-filename="rump_lwproc_switch">rump_lwproc_switch</a>(&amp;<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>);</td></tr>
+<tr><th id="414">414</th><td></td></tr>
+<tr><th id="415">415</th><td>		<i>/* release lwp0 */</i></td></tr>
+<tr><th id="416">416</th><td>		<a class="ref fn" href="#rump_unschedule_cpu" title='rump_unschedule_cpu' data-ref="rump_unschedule_cpu" data-ref-filename="rump_unschedule_cpu">rump_unschedule_cpu</a>(&amp;<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>);</td></tr>
+<tr><th id="417">417</th><td>		<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>.<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_mutex" title='lwp::l_mutex' data-ref="lwp::l_mutex" data-ref-filename="lwp..l_mutex">l_mutex</a> = &amp;<a class="ref" href="#unruntime_lock" title='unruntime_lock' data-ref="unruntime_lock" data-ref-filename="unruntime_lock">unruntime_lock</a>;</td></tr>
+<tr><th id="418">418</th><td>		<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>.<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_pflag" title='lwp::l_pflag' data-ref="lwp::l_pflag" data-ref-filename="lwp..l_pflag">l_pflag</a> &amp;= ~<a class="macro" href="../../../sys/lwp.h.html#263" title="0x20000000" data-ref="_M/LP_RUNNING">LP_RUNNING</a>;</td></tr>
+<tr><th id="419">419</th><td>		<a class="tu ref fn" href="#lwp0rele" title='lwp0rele' data-use='c' data-ref="lwp0rele" data-ref-filename="lwp0rele">lwp0rele</a>();</td></tr>
+<tr><th id="420">420</th><td>		<a class="ref fn" href="../../include/rump-sys/kern.h.html#rump_lwproc_curlwp_clear" title='rump_lwproc_curlwp_clear' data-ref="rump_lwproc_curlwp_clear" data-ref-filename="rump_lwproc_curlwp_clear">rump_lwproc_curlwp_clear</a>(&amp;<a class="ref" href="../../../sys/lwp.h.html#lwp0" title='lwp0' data-ref="lwp0" data-ref-filename="lwp0">lwp0</a>);</td></tr>
+<tr><th id="421">421</th><td></td></tr>
+<tr><th id="422">422</th><td>	} <b>else</b> <b>if</b> (<a class="macro" href="../../../sys/cdefs.h.html#488" title="__builtin_expect((l-&gt;l_flag &amp; 0x40000000) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#247" title="0x40000000" data-ref="_M/LW_RUMP_CLEAR">LW_RUMP_CLEAR</a>)) {</td></tr>
+<tr><th id="423">423</th><td>		<a class="ref fn" href="../../include/rump-sys/kern.h.html#rump_lwproc_curlwp_clear" title='rump_lwproc_curlwp_clear' data-ref="rump_lwproc_curlwp_clear" data-ref-filename="rump_lwproc_curlwp_clear">rump_lwproc_curlwp_clear</a>(<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>);</td></tr>
+<tr><th id="424">424</th><td>		<a class="local col7 ref" href="#27l" title='l' data-ref="27l" data-ref-filename="27l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_flag" title='lwp::l_flag' data-ref="lwp::l_flag" data-ref-filename="lwp..l_flag">l_flag</a> &amp;= ~<a class="macro" href="../../../sys/lwp.h.html#247" title="0x40000000" data-ref="_M/LW_RUMP_CLEAR">LW_RUMP_CLEAR</a>;</td></tr>
+<tr><th id="425">425</th><td>	}</td></tr>
+<tr><th id="426">426</th><td>}</td></tr>
+<tr><th id="427">427</th><td></td></tr>
+<tr><th id="428">428</th><td><em>void</em></td></tr>
+<tr><th id="429">429</th><td><dfn class="decl def fn" id="rump_unschedule_cpu" title='rump_unschedule_cpu' data-ref="rump_unschedule_cpu" data-ref-filename="rump_unschedule_cpu">rump_unschedule_cpu</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col9 decl" id="29l" title='l' data-type='struct lwp *' data-ref="29l" data-ref-filename="29l">l</dfn>)</td></tr>
+<tr><th id="430">430</th><td>{</td></tr>
+<tr><th id="431">431</th><td></td></tr>
+<tr><th id="432">432</th><td>	<a class="ref fn" href="#rump_unschedule_cpu_interlock" title='rump_unschedule_cpu_interlock' data-ref="rump_unschedule_cpu_interlock" data-ref-filename="rump_unschedule_cpu_interlock">rump_unschedule_cpu_interlock</a>(<a class="local col9 ref" href="#29l" title='l' data-ref="29l" data-ref-filename="29l">l</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="433">433</th><td>}</td></tr>
+<tr><th id="434">434</th><td></td></tr>
+<tr><th id="435">435</th><td><em>void</em></td></tr>
+<tr><th id="436">436</th><td><dfn class="decl def fn" id="rump_unschedule_cpu_interlock" title='rump_unschedule_cpu_interlock' data-ref="rump_unschedule_cpu_interlock" data-ref-filename="rump_unschedule_cpu_interlock">rump_unschedule_cpu_interlock</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col0 decl" id="30l" title='l' data-type='struct lwp *' data-ref="30l" data-ref-filename="30l">l</dfn>, <em>void</em> *<dfn class="local col1 decl" id="31interlock" title='interlock' data-type='void *' data-ref="31interlock" data-ref-filename="31interlock">interlock</dfn>)</td></tr>
+<tr><th id="437">437</th><td>{</td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td>	<b>if</b> ((<a class="local col0 ref" href="#30l" title='l' data-ref="30l" data-ref-filename="30l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_pflag" title='lwp::l_pflag' data-ref="lwp::l_pflag" data-ref-filename="lwp..l_pflag">l_pflag</a> &amp; <a class="macro" href="../../../sys/lwp.h.html#257" title="0x00000040" data-ref="_M/LP_INTR">LP_INTR</a>) == <var>0</var>)</td></tr>
+<tr><th id="440">440</th><td>		<a class="ref fn" href="../../include/rump-sys/kern.h.html#rump_softint_run" title='rump_softint_run' data-ref="rump_softint_run" data-ref-filename="rump_softint_run">rump_softint_run</a>(<a class="local col0 ref" href="#30l" title='l' data-ref="30l" data-ref-filename="30l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>);</td></tr>
+<tr><th id="441">441</th><td>	<a class="ref fn" href="#rump_unschedule_cpu1" title='rump_unschedule_cpu1' data-ref="rump_unschedule_cpu1" data-ref-filename="rump_unschedule_cpu1">rump_unschedule_cpu1</a>(<a class="local col0 ref" href="#30l" title='l' data-ref="30l" data-ref-filename="30l">l</a>, <a class="local col1 ref" href="#31interlock" title='interlock' data-ref="31interlock" data-ref-filename="31interlock">interlock</a>);</td></tr>
+<tr><th id="442">442</th><td>}</td></tr>
+<tr><th id="443">443</th><td></td></tr>
+<tr><th id="444">444</th><td><em>void</em></td></tr>
+<tr><th id="445">445</th><td><dfn class="decl def fn" id="rump_unschedule_cpu1" title='rump_unschedule_cpu1' data-ref="rump_unschedule_cpu1" data-ref-filename="rump_unschedule_cpu1">rump_unschedule_cpu1</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col2 decl" id="32l" title='l' data-type='struct lwp *' data-ref="32l" data-ref-filename="32l">l</dfn>, <em>void</em> *<dfn class="local col3 decl" id="33interlock" title='interlock' data-type='void *' data-ref="33interlock" data-ref-filename="33interlock">interlock</dfn>)</td></tr>
+<tr><th id="446">446</th><td>{</td></tr>
+<tr><th id="447">447</th><td>	<b>struct</b> <a class="type" href="#rumpcpu" title='rumpcpu' data-ref="rumpcpu" data-ref-filename="rumpcpu">rumpcpu</a> *<dfn class="local col4 decl" id="34rcpu" title='rcpu' data-type='struct rumpcpu *' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</dfn>;</td></tr>
+<tr><th id="448">448</th><td>	<b>struct</b> <a class="type" href="../../../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col5 decl" id="35ci" title='ci' data-type='struct cpu_info *' data-ref="35ci" data-ref-filename="35ci">ci</dfn>;</td></tr>
+<tr><th id="449">449</th><td>	<em>void</em> *<dfn class="local col6 decl" id="36old" title='old' data-type='void *' data-ref="36old" data-ref-filename="36old">old</dfn>;</td></tr>
+<tr><th id="450">450</th><td></td></tr>
+<tr><th id="451">451</th><td>	<a class="local col5 ref" href="#35ci" title='ci' data-ref="35ci" data-ref-filename="35ci">ci</a> = <a class="local col2 ref" href="#32l" title='l' data-ref="32l" data-ref-filename="32l">l</a>-&gt;<a class="ref field" href="../../../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>;</td></tr>
+<tr><th id="452">452</th><td>	<a class="local col5 ref" href="#35ci" title='ci' data-ref="35ci" data-ref-filename="35ci">ci</a>-&gt;<a class="ref field" href="../../../arch/x86/include/cpu.h.html#cpu_info::ci_curlwp" title='cpu_info::ci_curlwp' data-ref="cpu_info::ci_curlwp" data-ref-filename="cpu_info..ci_curlwp">ci_curlwp</a> = <a class="local col5 ref" href="#35ci" title='ci' data-ref="35ci" data-ref-filename="35ci">ci</a>-&gt;<a class="ref field" href="../../../arch/x86/include/cpu.h.html#cpu_info::ci_data" title='cpu_info::ci_data' data-ref="cpu_info::ci_data" data-ref-filename="cpu_info..ci_data">ci_data</a>.<a class="ref field" href="../../../sys/cpu_data.h.html#cpu_data::cpu_onproc" title='cpu_data::cpu_onproc' data-ref="cpu_data::cpu_onproc" data-ref-filename="cpu_data..cpu_onproc">cpu_onproc</a> = <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="453">453</th><td>	<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a> = <a class="tu ref fn" href="#cpuinfo_to_rumpcpu" title='cpuinfo_to_rumpcpu' data-use='c' data-ref="cpuinfo_to_rumpcpu" data-ref-filename="cpuinfo_to_rumpcpu">cpuinfo_to_rumpcpu</a>(<a class="local col5 ref" href="#35ci" title='ci' data-ref="35ci" data-ref-filename="35ci">ci</a>);</td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((rcpu-&gt;rcpu_ci == ci)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;rcpu-&gt;rcpu_ci == ci&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 455))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_ci" title='rumpcpu::rcpu_ci' data-use='r' data-ref="rumpcpu::rcpu_ci" data-ref-filename="rumpcpu..rcpu_ci">rcpu_ci</a> == <a class="local col5 ref" href="#35ci" title='ci' data-ref="35ci" data-ref-filename="35ci">ci</a>);</td></tr>
+<tr><th id="456">456</th><td></td></tr>
+<tr><th id="457">457</th><td>	<i>/*</i></td></tr>
+<tr><th id="458">458</th><td><i>	 * Make sure all stores are seen before the CPU release.  This</i></td></tr>
+<tr><th id="459">459</th><td><i>	 * is relevant only in the non-fastpath scheduling case, but</i></td></tr>
+<tr><th id="460">460</th><td><i>	 * we don't know here if that's going to happen, so need to</i></td></tr>
+<tr><th id="461">461</th><td><i>	 * expect the worst.</i></td></tr>
+<tr><th id="462">462</th><td><i>	 *</i></td></tr>
+<tr><th id="463">463</th><td><i>	 * If the scheduler interlock was requested by the caller, we</i></td></tr>
+<tr><th id="464">464</th><td><i>	 * need to obtain it before we release the CPU.  Otherwise, we risk a</i></td></tr>
+<tr><th id="465">465</th><td><i>	 * race condition where another thread is scheduled onto the</i></td></tr>
+<tr><th id="466">466</th><td><i>	 * rump kernel CPU before our current thread can</i></td></tr>
+<tr><th id="467">467</th><td><i>	 * grab the interlock.</i></td></tr>
+<tr><th id="468">468</th><td><i>	 */</i></td></tr>
+<tr><th id="469">469</th><td>	<b>if</b> (<a class="local col3 ref" href="#33interlock" title='interlock' data-ref="33interlock" data-ref-filename="33interlock">interlock</a> == <a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>)</td></tr>
+<tr><th id="470">470</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="471">471</th><td>	<b>else</b></td></tr>
+<tr><th id="472">472</th><td>		<a class="ref fn" href="../../../sys/atomic.h.html#membar_exit" title='membar_exit' data-ref="membar_exit" data-ref-filename="membar_exit">membar_exit</a>();</td></tr>
+<tr><th id="473">473</th><td></td></tr>
+<tr><th id="474">474</th><td>	<i>/* Release the CPU. */</i></td></tr>
+<tr><th id="475">475</th><td>	<a class="local col6 ref" href="#36old" title='old' data-ref="36old" data-ref-filename="36old">old</a> = <a class="ref fn" href="../../../sys/atomic.h.html#atomic_swap_ptr" title='atomic_swap_ptr' data-ref="atomic_swap_ptr" data-ref-filename="atomic_swap_ptr">atomic_swap_ptr</a>(&amp;<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_prevlwp" title='rumpcpu::rcpu_prevlwp' data-use='a' data-ref="rumpcpu::rcpu_prevlwp" data-ref-filename="rumpcpu..rcpu_prevlwp">rcpu_prevlwp</a>, <a class="local col2 ref" href="#32l" title='l' data-ref="32l" data-ref-filename="32l">l</a>);</td></tr>
+<tr><th id="476">476</th><td></td></tr>
+<tr><th id="477">477</th><td>	<i>/* No waiters?  No problems.  We're outta here. */</i></td></tr>
+<tr><th id="478">478</th><td>	<b>if</b> (<a class="local col6 ref" href="#36old" title='old' data-ref="36old" data-ref-filename="36old">old</a> == <a class="macro" href="#85" title="((void *)-1)" data-ref="_M/RCPULWP_BUSY">RCPULWP_BUSY</a>) {</td></tr>
+<tr><th id="479">479</th><td>		<b>return</b>;</td></tr>
+<tr><th id="480">480</th><td>	}</td></tr>
+<tr><th id="481">481</th><td></td></tr>
+<tr><th id="482">482</th><td>	<a class="macro" href="../../../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((old == ((void *)-2))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;old == RCPULWP_WANTED&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/rump/librump/rumpkern/scheduler.c&quot;, 482))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col6 ref" href="#36old" title='old' data-ref="36old" data-ref-filename="36old">old</a> == <a class="macro" href="#86" title="((void *)-2)" data-ref="_M/RCPULWP_WANTED">RCPULWP_WANTED</a>);</td></tr>
+<tr><th id="483">483</th><td></td></tr>
+<tr><th id="484">484</th><td>	<i>/*</i></td></tr>
+<tr><th id="485">485</th><td><i>	 * Ok, things weren't so snappy.</i></td></tr>
+<tr><th id="486">486</th><td><i>	 *</i></td></tr>
+<tr><th id="487">487</th><td><i>	 * Snailpath: take lock and signal anyone waiting for this CPU.</i></td></tr>
+<tr><th id="488">488</th><td><i>	 */</i></td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td>	<b>if</b> (<a class="local col3 ref" href="#33interlock" title='interlock' data-ref="33interlock" data-ref-filename="33interlock">interlock</a> != <a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>)</td></tr>
+<tr><th id="491">491</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_enter_nowrap" title='rumpuser_mutex_enter_nowrap' data-ref="rumpuser_mutex_enter_nowrap" data-ref-filename="rumpuser_mutex_enter_nowrap">rumpuser_mutex_enter_nowrap</a>(<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="492">492</th><td>	<b>if</b> (<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_wanted" title='rumpcpu::rcpu_wanted' data-use='r' data-ref="rumpcpu::rcpu_wanted" data-ref-filename="rumpcpu..rcpu_wanted">rcpu_wanted</a>)</td></tr>
+<tr><th id="493">493</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_cv_broadcast" title='rumpuser_cv_broadcast' data-ref="rumpuser_cv_broadcast" data-ref-filename="rumpuser_cv_broadcast">rumpuser_cv_broadcast</a>(<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_cv" title='rumpcpu::rcpu_cv' data-use='r' data-ref="rumpcpu::rcpu_cv" data-ref-filename="rumpcpu..rcpu_cv">rcpu_cv</a>);</td></tr>
+<tr><th id="494">494</th><td>	<b>if</b> (<a class="local col3 ref" href="#33interlock" title='interlock' data-ref="33interlock" data-ref-filename="33interlock">interlock</a> != <a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>)</td></tr>
+<tr><th id="495">495</th><td>		<a class="ref fn" href="../../include/rump/rumpuser.h.html#rumpuser_mutex_exit" title='rumpuser_mutex_exit' data-ref="rumpuser_mutex_exit" data-ref-filename="rumpuser_mutex_exit">rumpuser_mutex_exit</a>(<a class="local col4 ref" href="#34rcpu" title='rcpu' data-ref="34rcpu" data-ref-filename="34rcpu">rcpu</a>-&gt;<a class="tu ref field" href="#rumpcpu::rcpu_mtx" title='rumpcpu::rcpu_mtx' data-use='r' data-ref="rumpcpu::rcpu_mtx" data-ref-filename="rumpcpu..rcpu_mtx">rcpu_mtx</a>);</td></tr>
+<tr><th id="496">496</th><td>}</td></tr>
+<tr><th id="497">497</th><td></td></tr>
+<tr><th id="498">498</th><td><i>/* Give up and retake CPU (perhaps a different one) */</i></td></tr>
+<tr><th id="499">499</th><td><em>void</em></td></tr>
+<tr><th id="500">500</th><td><dfn class="decl def fn" id="yield" title='yield' data-ref="yield" data-ref-filename="yield">yield</dfn>()</td></tr>
+<tr><th id="501">501</th><td>{</td></tr>
+<tr><th id="502">502</th><td>	<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col7 decl" id="37l" title='l' data-type='struct lwp *' data-ref="37l" data-ref-filename="37l">l</dfn> = <a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="503">503</th><td>	<em>int</em> <dfn class="local col8 decl" id="38nlocks" title='nlocks' data-type='int' data-ref="38nlocks" data-ref-filename="38nlocks">nlocks</dfn>;</td></tr>
+<tr><th id="504">504</th><td></td></tr>
+<tr><th id="505">505</th><td>	<a class="macro" href="../../../sys/systm.h.html#622" title="_kernel_unlock((0), ((&amp;nlocks)))" data-ref="_M/KERNEL_UNLOCK_ALL">KERNEL_UNLOCK_ALL</a>(l, &amp;<a class="local col8 ref" href="#38nlocks" title='nlocks' data-ref="38nlocks" data-ref-filename="38nlocks">nlocks</a>);</td></tr>
+<tr><th id="506">506</th><td>	<a class="ref fn" href="#rump_unschedule_cpu" title='rump_unschedule_cpu' data-ref="rump_unschedule_cpu" data-ref-filename="rump_unschedule_cpu">rump_unschedule_cpu</a>(<a class="local col7 ref" href="#37l" title='l' data-ref="37l" data-ref-filename="37l">l</a>);</td></tr>
+<tr><th id="507">507</th><td>	<a class="ref fn" href="#rump_schedule_cpu" title='rump_schedule_cpu' data-ref="rump_schedule_cpu" data-ref-filename="rump_schedule_cpu">rump_schedule_cpu</a>(<a class="local col7 ref" href="#37l" title='l' data-ref="37l" data-ref-filename="37l">l</a>);</td></tr>
+<tr><th id="508">508</th><td>	<a class="macro" href="../../../sys/systm.h.html#608" title="do { if ((nlocks) != 0) _kernel_lock((nlocks)); } while ( 0)" data-ref="_M/KERNEL_LOCK">KERNEL_LOCK</a>(<a class="local col8 ref" href="#38nlocks" title='nlocks' data-ref="38nlocks" data-ref-filename="38nlocks">nlocks</a>, l);</td></tr>
+<tr><th id="509">509</th><td>}</td></tr>
+<tr><th id="510">510</th><td></td></tr>
+<tr><th id="511">511</th><td><em>void</em></td></tr>
+<tr><th id="512">512</th><td><dfn class="decl def fn" id="preempt" title='preempt' data-ref="preempt" data-ref-filename="preempt">preempt</dfn>()</td></tr>
+<tr><th id="513">513</th><td>{</td></tr>
+<tr><th id="514">514</th><td></td></tr>
+<tr><th id="515">515</th><td>	<a class="ref fn" href="#yield" title='yield' data-ref="yield" data-ref-filename="yield">yield</a>();</td></tr>
+<tr><th id="516">516</th><td>}</td></tr>
+<tr><th id="517">517</th><td></td></tr>
+<tr><th id="518">518</th><td><a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="519">519</th><td><dfn class="decl def fn" id="kpreempt" title='kpreempt' data-ref="kpreempt" data-ref-filename="kpreempt">kpreempt</dfn>(<a class="typedef" href="../../../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col9 decl" id="39where" title='where' data-type='uintptr_t' data-ref="39where" data-ref-filename="39where">where</dfn>)</td></tr>
+<tr><th id="520">520</th><td>{</td></tr>
+<tr><th id="521">521</th><td></td></tr>
+<tr><th id="522">522</th><td>	<b>return</b> <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="523">523</th><td>}</td></tr>
+<tr><th id="524">524</th><td></td></tr>
+<tr><th id="525">525</th><td><i>/*</i></td></tr>
+<tr><th id="526">526</th><td><i> * There is no kernel thread preemption in rump currently.  But call</i></td></tr>
+<tr><th id="527">527</th><td><i> * the implementing macros anyway in case they grow some side-effects</i></td></tr>
+<tr><th id="528">528</th><td><i> * down the road.</i></td></tr>
+<tr><th id="529">529</th><td><i> */</i></td></tr>
+<tr><th id="530">530</th><td><em>void</em></td></tr>
+<tr><th id="531">531</th><td><dfn class="decl def fn" id="kpreempt_disable" title='kpreempt_disable' data-ref="kpreempt_disable" data-ref-filename="kpreempt_disable">kpreempt_disable</dfn>(<em>void</em>)</td></tr>
+<tr><th id="532">532</th><td>{</td></tr>
+<tr><th id="533">533</th><td></td></tr>
+<tr><th id="534">534</th><td>	<a class="ref fn" href="../../../sys/lwp.h.html#KPREEMPT_DISABLE" title='KPREEMPT_DISABLE' data-ref="KPREEMPT_DISABLE" data-ref-filename="KPREEMPT_DISABLE">KPREEMPT_DISABLE</a>(<a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="535">535</th><td>}</td></tr>
+<tr><th id="536">536</th><td></td></tr>
+<tr><th id="537">537</th><td><em>void</em></td></tr>
+<tr><th id="538">538</th><td><dfn class="decl def fn" id="kpreempt_enable" title='kpreempt_enable' data-ref="kpreempt_enable" data-ref-filename="kpreempt_enable">kpreempt_enable</dfn>(<em>void</em>)</td></tr>
+<tr><th id="539">539</th><td>{</td></tr>
+<tr><th id="540">540</th><td></td></tr>
+<tr><th id="541">541</th><td>	<a class="ref fn" href="../../../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../../../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="542">542</th><td>}</td></tr>
+<tr><th id="543">543</th><td></td></tr>
+<tr><th id="544">544</th><td><a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="545">545</th><td><dfn class="decl def fn" id="kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</dfn>(<em>void</em>)</td></tr>
+<tr><th id="546">546</th><td>{</td></tr>
+<tr><th id="547">547</th><td><u>#<span data-ppcond="547">if</span> 0</u></td></tr>
+<tr><th id="548">548</th><td>	<em>const</em> lwp_t *l = curlwp;</td></tr>
+<tr><th id="549">549</th><td></td></tr>
+<tr><th id="550">550</th><td>	<b>return</b> l-&gt;l_nopreempt != <var>0</var> || l-&gt;l_stat == LSZOMB ||</td></tr>
+<tr><th id="551">551</th><td>	    (l-&gt;l_flag &amp; LW_IDLE) != <var>0</var> || cpu_kpreempt_disabled();</td></tr>
+<tr><th id="552">552</th><td><u>#<span data-ppcond="547">endif</span></u></td></tr>
+<tr><th id="553">553</th><td>	<i>/* XXX: emulate cpu_kpreempt_disabled() */</i></td></tr>
+<tr><th id="554">554</th><td>	<b>return</b> <a class="macro" href="../../../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="555">555</th><td>}</td></tr>
+<tr><th id="556">556</th><td></td></tr>
+<tr><th id="557">557</th><td><em>void</em></td></tr>
+<tr><th id="558">558</th><td><dfn class="decl def fn" id="suspendsched" title='suspendsched' data-ref="suspendsched" data-ref-filename="suspendsched">suspendsched</dfn>(<em>void</em>)</td></tr>
+<tr><th id="559">559</th><td>{</td></tr>
+<tr><th id="560">560</th><td></td></tr>
+<tr><th id="561">561</th><td>	<i>/*</i></td></tr>
+<tr><th id="562">562</th><td><i>	 * Could wait until everyone is out and block further entries,</i></td></tr>
+<tr><th id="563">563</th><td><i>	 * but skip that for now.</i></td></tr>
+<tr><th id="564">564</th><td><i>	 */</i></td></tr>
+<tr><th id="565">565</th><td>}</td></tr>
+<tr><th id="566">566</th><td></td></tr>
+<tr><th id="567">567</th><td><em>void</em></td></tr>
+<tr><th id="568">568</th><td><dfn class="decl def fn" id="sched_nice" title='sched_nice' data-ref="sched_nice" data-ref-filename="sched_nice">sched_nice</dfn>(<b>struct</b> <a class="type" href="../../../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col0 decl" id="40p" title='p' data-type='struct proc *' data-ref="40p" data-ref-filename="40p">p</dfn>, <em>int</em> <dfn class="local col1 decl" id="41level" title='level' data-type='int' data-ref="41level" data-ref-filename="41level">level</dfn>)</td></tr>
+<tr><th id="569">569</th><td>{</td></tr>
+<tr><th id="570">570</th><td></td></tr>
+<tr><th id="571">571</th><td>	<i>/* nothing to do for now */</i></td></tr>
+<tr><th id="572">572</th><td>}</td></tr>
+<tr><th id="573">573</th><td></td></tr>
+<tr><th id="574">574</th><td><em>void</em></td></tr>
+<tr><th id="575">575</th><td><dfn class="decl def fn" id="sched_enqueue" title='sched_enqueue' data-ref="sched_enqueue" data-ref-filename="sched_enqueue">sched_enqueue</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col2 decl" id="42l" title='l' data-type='struct lwp *' data-ref="42l" data-ref-filename="42l">l</dfn>, <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col3 decl" id="43swtch" title='swtch' data-type='_Bool' data-ref="43swtch" data-ref-filename="43swtch">swtch</dfn>)</td></tr>
+<tr><th id="576">576</th><td>{</td></tr>
+<tr><th id="577">577</th><td></td></tr>
+<tr><th id="578">578</th><td>	<b>if</b> (<a class="local col3 ref" href="#43swtch" title='swtch' data-ref="43swtch" data-ref-filename="43swtch">swtch</a>)</td></tr>
+<tr><th id="579">579</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"sched_enqueue with switcheroo"</q>);</td></tr>
+<tr><th id="580">580</th><td>	<a class="ref fn" href="../../include/rump-sys/kern.h.html#rump_thread_allow" title='rump_thread_allow' data-ref="rump_thread_allow" data-ref-filename="rump_thread_allow">rump_thread_allow</a>(<a class="local col2 ref" href="#42l" title='l' data-ref="42l" data-ref-filename="42l">l</a>);</td></tr>
+<tr><th id="581">581</th><td>}</td></tr>
+<tr><th id="582">582</th><td></td></tr>
+<tr><th id="583">583</th><td><em>void</em></td></tr>
+<tr><th id="584">584</th><td><dfn class="decl def fn" id="sched_dequeue" title='sched_dequeue' data-ref="sched_dequeue" data-ref-filename="sched_dequeue">sched_dequeue</dfn>(<b>struct</b> <a class="type" href="../../../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col4 decl" id="44l" title='l' data-type='struct lwp *' data-ref="44l" data-ref-filename="44l">l</dfn>)</td></tr>
+<tr><th id="585">585</th><td>{</td></tr>
+<tr><th id="586">586</th><td></td></tr>
+<tr><th id="587">587</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"sched_dequeue not implemented"</q>);</td></tr>
+<tr><th id="588">588</th><td>}</td></tr>
+<tr><th id="589">589</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

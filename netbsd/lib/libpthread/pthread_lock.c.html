@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>pthread_lock.c source code [netbsd/lib/libpthread/pthread_lock.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/lib/libpthread/pthread_lock.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>lib</a>/<a href='./'>libpthread</a>/<a href='pthread_lock.c.html'>pthread_lock.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: pthread_lock.c,v 1.34 2008/04/28 20:23:01 martin Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2001, 2006, 2007 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Nathan J. Williams and Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i> * libpthread internal spinlock routines.</i></td></tr>
+<tr><th id="34">34</th><td><i> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="../../sys/sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="37">37</th><td><a class="macro" href="../../sys/sys/cdefs_elf.h.html#151" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: pthread_lock.c,v 1.34 2008/04/28 20:23:01 martin Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__RCSID">__RCSID</a>(<q>"$NetBSD: pthread_lock.c,v 1.34 2008/04/28 20:23:01 martin Exp $"</q>);</td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><u>#include <a href="../../sys/sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../../sys/sys/ras.h.html">&lt;sys/ras.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/amd64/lock.h.html">&lt;machine/lock.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/errno.h.html">&lt;errno.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html">&lt;unistd.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html">&lt;stdlib.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="pthread.h.html">"pthread.h"</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="pthread_int.h.html">"pthread_int.h"</a></u></td></tr>
+<tr><th id="51">51</th><td></td></tr>
+<tr><th id="52">52</th><td><i>/* How many times to try acquiring spin locks on MP systems. */</i></td></tr>
+<tr><th id="53">53</th><td><u>#define	<dfn class="macro" id="_M/PTHREAD__NSPINS" data-ref="_M/PTHREAD__NSPINS">PTHREAD__NSPINS</dfn>         64</u></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><a class="macro" href="../../sys/sys/ras.h.html#66" title="extern void pthread__lock_ras_start(void), pthread__lock_ras_end(void)" data-ref="_M/RAS_DECL">RAS_DECL</a>(pthread__lock);</td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td><em>static</em> <em>void</em> 	<a class="tu decl fn" href="#pthread__spinlock_slow" title='pthread__spinlock_slow' data-type='void pthread__spinlock_slow(pthread_spin_t * )' data-ref="pthread__spinlock_slow" data-ref-filename="pthread__spinlock_slow">pthread__spinlock_slow</a>(<a class="typedef" href="pthread_types.h.html#pthread_spin_t" title='pthread_spin_t' data-type='__cpu_simple_lock_t' data-ref="pthread_spin_t" data-ref-filename="pthread_spin_t">pthread_spin_t</a> *);</td></tr>
+<tr><th id="58">58</th><td></td></tr>
+<tr><th id="59">59</th><td><u>#<span data-ppcond="59">ifdef</span> <span class="macro" data-ref="_M/PTHREAD__ASM_RASOPS">PTHREAD__ASM_RASOPS</span></u></td></tr>
+<tr><th id="60">60</th><td></td></tr>
+<tr><th id="61">61</th><td><em>void</em> pthread__ras_simple_lock_init(__cpu_simple_lock_t *);</td></tr>
+<tr><th id="62">62</th><td><em>int</em> pthread__ras_simple_lock_try(__cpu_simple_lock_t *);</td></tr>
+<tr><th id="63">63</th><td><em>void</em> pthread__ras_simple_unlock(__cpu_simple_lock_t *);</td></tr>
+<tr><th id="64">64</th><td></td></tr>
+<tr><th id="65">65</th><td><u>#<span data-ppcond="59">else</span></u></td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="68">68</th><td><dfn class="tu decl def fn" id="pthread__ras_simple_lock_init" title='pthread__ras_simple_lock_init' data-type='void pthread__ras_simple_lock_init(__cpu_simple_lock_t * alp)' data-ref="pthread__ras_simple_lock_init" data-ref-filename="pthread__ras_simple_lock_init">pthread__ras_simple_lock_init</dfn>(<a class="typedef" href="../../sys/sys/types.h.html#__cpu_simple_lock_t" title='__cpu_simple_lock_t' data-type='volatile __cpu_simple_lock_nv_t' data-ref="__cpu_simple_lock_t" data-ref-filename="__cpu_simple_lock_t">__cpu_simple_lock_t</a> *<dfn class="local col1 decl" id="1alp" title='alp' data-type='__cpu_simple_lock_t *' data-ref="1alp" data-ref-filename="1alp">alp</dfn>)</td></tr>
+<tr><th id="69">69</th><td>{</td></tr>
+<tr><th id="70">70</th><td></td></tr>
+<tr><th id="71">71</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__cpu_simple_lock_clear" title='__cpu_simple_lock_clear' data-ref="__cpu_simple_lock_clear" data-ref-filename="__cpu_simple_lock_clear">__cpu_simple_lock_clear</a>(<a class="local col1 ref" href="#1alp" title='alp' data-ref="1alp" data-ref-filename="1alp">alp</a>);</td></tr>
+<tr><th id="72">72</th><td>}</td></tr>
+<tr><th id="73">73</th><td></td></tr>
+<tr><th id="74">74</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="75">75</th><td><dfn class="tu decl def fn" id="pthread__ras_simple_lock_try" title='pthread__ras_simple_lock_try' data-type='int pthread__ras_simple_lock_try(__cpu_simple_lock_t * alp)' data-ref="pthread__ras_simple_lock_try" data-ref-filename="pthread__ras_simple_lock_try">pthread__ras_simple_lock_try</dfn>(<a class="typedef" href="../../sys/sys/types.h.html#__cpu_simple_lock_t" title='__cpu_simple_lock_t' data-type='volatile __cpu_simple_lock_nv_t' data-ref="__cpu_simple_lock_t" data-ref-filename="__cpu_simple_lock_t">__cpu_simple_lock_t</a> *<dfn class="local col2 decl" id="2alp" title='alp' data-type='__cpu_simple_lock_t *' data-ref="2alp" data-ref-filename="2alp">alp</dfn>)</td></tr>
+<tr><th id="76">76</th><td>{</td></tr>
+<tr><th id="77">77</th><td>	<em>int</em> <dfn class="local col3 decl" id="3locked" title='locked' data-type='int' data-ref="3locked" data-ref-filename="3locked">locked</dfn>;</td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td>	<a class="macro" href="../../sys/sys/ras.h.html#78" title="__asm volatile(&quot;.globl &quot; &quot;pthread__lock&quot; &quot;_ras_start\n&quot; &quot;pthread__lock&quot; &quot;_ras_start:&quot; ::: &quot;memory&quot;)" data-ref="_M/RAS_START">RAS_START</a>(pthread__lock);</td></tr>
+<tr><th id="80">80</th><td>	<a class="local col3 ref" href="#3locked" title='locked' data-ref="3locked" data-ref-filename="3locked">locked</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__SIMPLELOCK_LOCKED_P" title='__SIMPLELOCK_LOCKED_P' data-ref="__SIMPLELOCK_LOCKED_P" data-ref-filename="__SIMPLELOCK_LOCKED_P">__SIMPLELOCK_LOCKED_P</a>(<a class="local col2 ref" href="#2alp" title='alp' data-ref="2alp" data-ref-filename="2alp">alp</a>);</td></tr>
+<tr><th id="81">81</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__cpu_simple_lock_set" title='__cpu_simple_lock_set' data-ref="__cpu_simple_lock_set" data-ref-filename="__cpu_simple_lock_set">__cpu_simple_lock_set</a>(<a class="local col2 ref" href="#2alp" title='alp' data-ref="2alp" data-ref-filename="2alp">alp</a>);</td></tr>
+<tr><th id="82">82</th><td>	<a class="macro" href="../../sys/sys/ras.h.html#83" title="__asm volatile(&quot;.globl &quot; &quot;pthread__lock&quot; &quot;_ras_end\n&quot; &quot;pthread__lock&quot; &quot;_ras_end:&quot; ::: &quot;memory&quot;)" data-ref="_M/RAS_END">RAS_END</a>(pthread__lock);</td></tr>
+<tr><th id="83">83</th><td></td></tr>
+<tr><th id="84">84</th><td>	<b>return</b> !<a class="local col3 ref" href="#3locked" title='locked' data-ref="3locked" data-ref-filename="3locked">locked</a>;</td></tr>
+<tr><th id="85">85</th><td>}</td></tr>
+<tr><th id="86">86</th><td></td></tr>
+<tr><th id="87">87</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="88">88</th><td><dfn class="tu decl def fn" id="pthread__ras_simple_unlock" title='pthread__ras_simple_unlock' data-type='void pthread__ras_simple_unlock(__cpu_simple_lock_t * alp)' data-ref="pthread__ras_simple_unlock" data-ref-filename="pthread__ras_simple_unlock">pthread__ras_simple_unlock</dfn>(<a class="typedef" href="../../sys/sys/types.h.html#__cpu_simple_lock_t" title='__cpu_simple_lock_t' data-type='volatile __cpu_simple_lock_nv_t' data-ref="__cpu_simple_lock_t" data-ref-filename="__cpu_simple_lock_t">__cpu_simple_lock_t</a> *<dfn class="local col4 decl" id="4alp" title='alp' data-type='__cpu_simple_lock_t *' data-ref="4alp" data-ref-filename="4alp">alp</dfn>)</td></tr>
+<tr><th id="89">89</th><td>{</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__cpu_simple_lock_clear" title='__cpu_simple_lock_clear' data-ref="__cpu_simple_lock_clear" data-ref-filename="__cpu_simple_lock_clear">__cpu_simple_lock_clear</a>(<a class="local col4 ref" href="#4alp" title='alp' data-ref="4alp" data-ref-filename="4alp">alp</a>);</td></tr>
+<tr><th id="92">92</th><td>}</td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><u>#<span data-ppcond="59">endif</span> /* PTHREAD__ASM_RASOPS */</u></td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td><em>static</em> <em>const</em> <b>struct</b> <a class="type" href="pthread_int.h.html#pthread_lock_ops" title='pthread_lock_ops' data-ref="pthread_lock_ops" data-ref-filename="pthread_lock_ops">pthread_lock_ops</a> <dfn class="tu decl def" id="pthread__lock_ops_ras" title='pthread__lock_ops_ras' data-type='const struct pthread_lock_ops' data-ref="pthread__lock_ops_ras" data-ref-filename="pthread__lock_ops_ras">pthread__lock_ops_ras</dfn> = {</td></tr>
+<tr><th id="97">97</th><td>	<a class="tu ref fn" href="#pthread__ras_simple_lock_init" title='pthread__ras_simple_lock_init' data-use='r' data-ref="pthread__ras_simple_lock_init" data-ref-filename="pthread__ras_simple_lock_init">pthread__ras_simple_lock_init</a>,</td></tr>
+<tr><th id="98">98</th><td>	<a class="tu ref fn" href="#pthread__ras_simple_lock_try" title='pthread__ras_simple_lock_try' data-use='r' data-ref="pthread__ras_simple_lock_try" data-ref-filename="pthread__ras_simple_lock_try">pthread__ras_simple_lock_try</a>,</td></tr>
+<tr><th id="99">99</th><td>	<a class="tu ref fn" href="#pthread__ras_simple_unlock" title='pthread__ras_simple_unlock' data-use='r' data-ref="pthread__ras_simple_unlock" data-ref-filename="pthread__ras_simple_unlock">pthread__ras_simple_unlock</a>,</td></tr>
+<tr><th id="100">100</th><td>	<a class="tu ref fn" href="#pthread__spinlock_slow" title='pthread__spinlock_slow' data-use='r' data-ref="pthread__spinlock_slow" data-ref-filename="pthread__spinlock_slow">pthread__spinlock_slow</a>,</td></tr>
+<tr><th id="101">101</th><td>};</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="104">104</th><td><dfn class="tu decl def fn" id="pthread__atomic_simple_lock_init" title='pthread__atomic_simple_lock_init' data-type='void pthread__atomic_simple_lock_init(__cpu_simple_lock_t * alp)' data-ref="pthread__atomic_simple_lock_init" data-ref-filename="pthread__atomic_simple_lock_init">pthread__atomic_simple_lock_init</dfn>(<a class="typedef" href="../../sys/sys/types.h.html#__cpu_simple_lock_t" title='__cpu_simple_lock_t' data-type='volatile __cpu_simple_lock_nv_t' data-ref="__cpu_simple_lock_t" data-ref-filename="__cpu_simple_lock_t">__cpu_simple_lock_t</a> *<dfn class="local col5 decl" id="5alp" title='alp' data-type='__cpu_simple_lock_t *' data-ref="5alp" data-ref-filename="5alp">alp</dfn>)</td></tr>
+<tr><th id="105">105</th><td>{</td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__cpu_simple_lock_init" title='__cpu_simple_lock_init' data-ref="__cpu_simple_lock_init" data-ref-filename="__cpu_simple_lock_init">__cpu_simple_lock_init</a>(<a class="local col5 ref" href="#5alp" title='alp' data-ref="5alp" data-ref-filename="5alp">alp</a>);</td></tr>
+<tr><th id="108">108</th><td>}</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="111">111</th><td><dfn class="tu decl def fn" id="pthread__atomic_simple_lock_try" title='pthread__atomic_simple_lock_try' data-type='int pthread__atomic_simple_lock_try(__cpu_simple_lock_t * alp)' data-ref="pthread__atomic_simple_lock_try" data-ref-filename="pthread__atomic_simple_lock_try">pthread__atomic_simple_lock_try</dfn>(<a class="typedef" href="../../sys/sys/types.h.html#__cpu_simple_lock_t" title='__cpu_simple_lock_t' data-type='volatile __cpu_simple_lock_nv_t' data-ref="__cpu_simple_lock_t" data-ref-filename="__cpu_simple_lock_t">__cpu_simple_lock_t</a> *<dfn class="local col6 decl" id="6alp" title='alp' data-type='__cpu_simple_lock_t *' data-ref="6alp" data-ref-filename="6alp">alp</dfn>)</td></tr>
+<tr><th id="112">112</th><td>{</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td>	<b>return</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__cpu_simple_lock_try" title='__cpu_simple_lock_try' data-ref="__cpu_simple_lock_try" data-ref-filename="__cpu_simple_lock_try">__cpu_simple_lock_try</a>(<a class="local col6 ref" href="#6alp" title='alp' data-ref="6alp" data-ref-filename="6alp">alp</a>));</td></tr>
+<tr><th id="115">115</th><td>}</td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="118">118</th><td><dfn class="tu decl def fn" id="pthread__atomic_simple_unlock" title='pthread__atomic_simple_unlock' data-type='void pthread__atomic_simple_unlock(__cpu_simple_lock_t * alp)' data-ref="pthread__atomic_simple_unlock" data-ref-filename="pthread__atomic_simple_unlock">pthread__atomic_simple_unlock</dfn>(<a class="typedef" href="../../sys/sys/types.h.html#__cpu_simple_lock_t" title='__cpu_simple_lock_t' data-type='volatile __cpu_simple_lock_nv_t' data-ref="__cpu_simple_lock_t" data-ref-filename="__cpu_simple_lock_t">__cpu_simple_lock_t</a> *<dfn class="local col7 decl" id="7alp" title='alp' data-type='__cpu_simple_lock_t *' data-ref="7alp" data-ref-filename="7alp">alp</dfn>)</td></tr>
+<tr><th id="119">119</th><td>{</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td>	<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__cpu_simple_unlock" title='__cpu_simple_unlock' data-ref="__cpu_simple_unlock" data-ref-filename="__cpu_simple_unlock">__cpu_simple_unlock</a>(<a class="local col7 ref" href="#7alp" title='alp' data-ref="7alp" data-ref-filename="7alp">alp</a>);</td></tr>
+<tr><th id="122">122</th><td>}</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td><em>static</em> <em>const</em> <b>struct</b> <a class="type" href="pthread_int.h.html#pthread_lock_ops" title='pthread_lock_ops' data-ref="pthread_lock_ops" data-ref-filename="pthread_lock_ops">pthread_lock_ops</a> <dfn class="tu decl def" id="pthread__lock_ops_atomic" title='pthread__lock_ops_atomic' data-type='const struct pthread_lock_ops' data-ref="pthread__lock_ops_atomic" data-ref-filename="pthread__lock_ops_atomic">pthread__lock_ops_atomic</dfn> = {</td></tr>
+<tr><th id="125">125</th><td>	<a class="tu ref fn" href="#pthread__atomic_simple_lock_init" title='pthread__atomic_simple_lock_init' data-ref="pthread__atomic_simple_lock_init" data-ref-filename="pthread__atomic_simple_lock_init">pthread__atomic_simple_lock_init</a>,</td></tr>
+<tr><th id="126">126</th><td>	<a class="tu ref fn" href="#pthread__atomic_simple_lock_try" title='pthread__atomic_simple_lock_try' data-ref="pthread__atomic_simple_lock_try" data-ref-filename="pthread__atomic_simple_lock_try">pthread__atomic_simple_lock_try</a>,</td></tr>
+<tr><th id="127">127</th><td>	<a class="tu ref fn" href="#pthread__atomic_simple_unlock" title='pthread__atomic_simple_unlock' data-ref="pthread__atomic_simple_unlock" data-ref-filename="pthread__atomic_simple_unlock">pthread__atomic_simple_unlock</a>,</td></tr>
+<tr><th id="128">128</th><td>	<a class="tu ref fn" href="#pthread__spinlock_slow" title='pthread__spinlock_slow' data-ref="pthread__spinlock_slow" data-ref-filename="pthread__spinlock_slow">pthread__spinlock_slow</a>,</td></tr>
+<tr><th id="129">129</th><td>};</td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td><i>/*</i></td></tr>
+<tr><th id="132">132</th><td><i> * We default to pointing to the RAS primitives; we might need to use</i></td></tr>
+<tr><th id="133">133</th><td><i> * locks early, but before main() starts.  This is safe, since no other</i></td></tr>
+<tr><th id="134">134</th><td><i> * threads will be active for the process, so atomicity will not be</i></td></tr>
+<tr><th id="135">135</th><td><i> * required.</i></td></tr>
+<tr><th id="136">136</th><td><i> */</i></td></tr>
+<tr><th id="137">137</th><td><em>const</em> <b>struct</b> <a class="type" href="pthread_int.h.html#pthread_lock_ops" title='pthread_lock_ops' data-ref="pthread_lock_ops" data-ref-filename="pthread_lock_ops">pthread_lock_ops</a> *<dfn class="decl def" id="pthread__lock_ops" title='pthread__lock_ops' data-ref="pthread__lock_ops" data-ref-filename="pthread__lock_ops">pthread__lock_ops</dfn> = &amp;<a class="tu ref" href="#pthread__lock_ops_ras" title='pthread__lock_ops_ras' data-use='a' data-ref="pthread__lock_ops_ras" data-ref-filename="pthread__lock_ops_ras">pthread__lock_ops_ras</a>;</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td><i  data-doc="pthread__spinlock_slow">/*</i></td></tr>
+<tr><th id="140">140</th><td><i  data-doc="pthread__spinlock_slow"> * Prevent this routine from being inlined.  The common case is no</i></td></tr>
+<tr><th id="141">141</th><td><i  data-doc="pthread__spinlock_slow"> * contention and it's better to not burden the instruction decoder.</i></td></tr>
+<tr><th id="142">142</th><td><i  data-doc="pthread__spinlock_slow"> */</i></td></tr>
+<tr><th id="143">143</th><td><em>static</em> <em>void</em> </td></tr>
+<tr><th id="144">144</th><td><dfn class="tu decl def fn" id="pthread__spinlock_slow" title='pthread__spinlock_slow' data-type='void pthread__spinlock_slow(pthread_spin_t * lock)' data-ref="pthread__spinlock_slow" data-ref-filename="pthread__spinlock_slow">pthread__spinlock_slow</dfn>(<a class="typedef" href="pthread_types.h.html#pthread_spin_t" title='pthread_spin_t' data-type='__cpu_simple_lock_t' data-ref="pthread_spin_t" data-ref-filename="pthread_spin_t">pthread_spin_t</a> *<dfn class="local col8 decl" id="8lock" title='lock' data-type='pthread_spin_t *' data-ref="8lock" data-ref-filename="8lock">lock</dfn>)</td></tr>
+<tr><th id="145">145</th><td>{</td></tr>
+<tr><th id="146">146</th><td>	<a class="typedef" href="pthread_types.h.html#pthread_t" title='pthread_t' data-type='struct __pthread_st *' data-ref="pthread_t" data-ref-filename="pthread_t">pthread_t</a> <dfn class="local col9 decl" id="9self" title='self' data-type='pthread_t' data-ref="9self" data-ref-filename="9self">self</dfn>;</td></tr>
+<tr><th id="147">147</th><td>	<em>int</em> <dfn class="local col0 decl" id="10count" title='count' data-type='int' data-ref="10count" data-ref-filename="10count">count</dfn>;</td></tr>
+<tr><th id="148">148</th><td></td></tr>
+<tr><th id="149">149</th><td>	<a class="local col9 ref" href="#9self" title='self' data-ref="9self" data-ref-filename="9self">self</a> = <a class="ref fn" href="pthread_int.h.html#pthread__self" title='pthread__self' data-ref="pthread__self" data-ref-filename="pthread__self">pthread__self</a>();</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td>	<b>do</b> {</td></tr>
+<tr><th id="152">152</th><td>		<a class="local col0 ref" href="#10count" title='count' data-ref="10count" data-ref-filename="10count">count</a> = <a class="ref" href="pthread_int.h.html#pthread__nspins" title='pthread__nspins' data-ref="pthread__nspins" data-ref-filename="pthread__nspins">pthread__nspins</a>;</td></tr>
+<tr><th id="153">153</th><td>		<b>while</b> (<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/x86/lock.h.html#__SIMPLELOCK_LOCKED_P" title='__SIMPLELOCK_LOCKED_P' data-ref="__SIMPLELOCK_LOCKED_P" data-ref-filename="__SIMPLELOCK_LOCKED_P">__SIMPLELOCK_LOCKED_P</a>(<a class="local col8 ref" href="#8lock" title='lock' data-ref="8lock" data-ref-filename="8lock">lock</a>) &amp;&amp; --<a class="local col0 ref" href="#10count" title='count' data-ref="10count" data-ref-filename="10count">count</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="154">154</th><td>			<a class="macro" href="arch/i386/pthread_md.h.html#63" title="__asm volatile(&quot;rep; nop&quot; ::: &quot;memory&quot;)" data-ref="_M/pthread__smt_pause">pthread__smt_pause</a>();</td></tr>
+<tr><th id="155">155</th><td>		<b>if</b> (<a class="local col0 ref" href="#10count" title='count' data-ref="10count" data-ref-filename="10count">count</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="156">156</th><td>			<b>if</b> ((*<a class="local col9 ref" href="#9self" title='self' data-ref="9self" data-ref-filename="9self">self</a>-&gt;<a class="ref field" href="pthread_int.h.html#__pthread_st::pt_lockops" title='__pthread_st::pt_lockops' data-ref="__pthread_st::pt_lockops" data-ref-filename="__pthread_st..pt_lockops">pt_lockops</a>.<a class="ref field" href="pthread_int.h.html#pthread_lock_ops::plo_try" title='pthread_lock_ops::plo_try' data-ref="pthread_lock_ops::plo_try" data-ref-filename="pthread_lock_ops..plo_try">plo_try</a>)(<a class="local col8 ref" href="#8lock" title='lock' data-ref="8lock" data-ref-filename="8lock">lock</a>))</td></tr>
+<tr><th id="157">157</th><td>				<b>break</b>;</td></tr>
+<tr><th id="158">158</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="159">159</th><td>		}</td></tr>
+<tr><th id="160">160</th><td>		<a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/sched.h.html#sched_yield" title='sched_yield' data-ref="sched_yield" data-ref-filename="sched_yield">sched_yield</a>();</td></tr>
+<tr><th id="161">161</th><td>	} <b>while</b> (<i>/*CONSTCOND*/</i> <var>1</var>);</td></tr>
+<tr><th id="162">162</th><td>}</td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td><i>/*</i></td></tr>
+<tr><th id="165">165</th><td><i> * Initialize the locking primitives.  On uniprocessors, we always</i></td></tr>
+<tr><th id="166">166</th><td><i> * use Restartable Atomic Sequences if they are available.  Otherwise,</i></td></tr>
+<tr><th id="167">167</th><td><i> * we fall back onto machine-dependent atomic lock primitives.</i></td></tr>
+<tr><th id="168">168</th><td><i> */</i></td></tr>
+<tr><th id="169">169</th><td><em>void</em></td></tr>
+<tr><th id="170">170</th><td><dfn class="decl def fn" id="pthread__lockprim_init" title='pthread__lockprim_init' data-ref="pthread__lockprim_init" data-ref-filename="pthread__lockprim_init">pthread__lockprim_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="171">171</th><td>{</td></tr>
+<tr><th id="172">172</th><td>	<em>char</em> *<dfn class="local col1 decl" id="11p" title='p' data-type='char *' data-ref="11p" data-ref-filename="11p">p</dfn>;</td></tr>
+<tr><th id="173">173</th><td></td></tr>
+<tr><th id="174">174</th><td>	<b>if</b> ((<a class="local col1 ref" href="#11p" title='p' data-ref="11p" data-ref-filename="11p">p</a> = <a class="ref fn" href="pthread_int.h.html#pthread__getenv" title='pthread__getenv' data-ref="pthread__getenv" data-ref-filename="pthread__getenv">pthread__getenv</a>(<q>"PTHREAD_NSPINS"</q>)) != <a class="macro" href="../../sys/sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="175">175</th><td>		<a class="ref" href="pthread_int.h.html#pthread__nspins" title='pthread__nspins' data-ref="pthread__nspins" data-ref-filename="pthread__nspins">pthread__nspins</a> = <a class="ref fn" href="../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#atoi" title='atoi' data-ref="atoi" data-ref-filename="atoi">atoi</a>(<a class="local col1 ref" href="#11p" title='p' data-ref="11p" data-ref-filename="11p">p</a>);</td></tr>
+<tr><th id="176">176</th><td>	<b>else</b> <b>if</b> (<a class="ref" href="pthread_int.h.html#pthread__concurrency" title='pthread__concurrency' data-ref="pthread__concurrency" data-ref-filename="pthread__concurrency">pthread__concurrency</a> != <var>1</var>)</td></tr>
+<tr><th id="177">177</th><td>		<a class="ref" href="pthread_int.h.html#pthread__nspins" title='pthread__nspins' data-ref="pthread__nspins" data-ref-filename="pthread__nspins">pthread__nspins</a> = <a class="macro" href="#53" title="64" data-ref="_M/PTHREAD__NSPINS">PTHREAD__NSPINS</a>;</td></tr>
+<tr><th id="178">178</th><td>	<b>else</b></td></tr>
+<tr><th id="179">179</th><td>		<a class="ref" href="pthread_int.h.html#pthread__nspins" title='pthread__nspins' data-ref="pthread__nspins" data-ref-filename="pthread__nspins">pthread__nspins</a> = <var>1</var>;</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>	<b>if</b> (<a class="ref" href="pthread_int.h.html#pthread__concurrency" title='pthread__concurrency' data-ref="pthread__concurrency" data-ref-filename="pthread__concurrency">pthread__concurrency</a> != <var>1</var>) {</td></tr>
+<tr><th id="182">182</th><td>		<a class="ref" href="pthread_int.h.html#pthread__lock_ops" title='pthread__lock_ops' data-ref="pthread__lock_ops" data-ref-filename="pthread__lock_ops">pthread__lock_ops</a> = &amp;<a class="tu ref" href="#pthread__lock_ops_atomic" title='pthread__lock_ops_atomic' data-use='a' data-ref="pthread__lock_ops_atomic" data-ref-filename="pthread__lock_ops_atomic">pthread__lock_ops_atomic</a>;</td></tr>
+<tr><th id="183">183</th><td>		<b>return</b>;</td></tr>
+<tr><th id="184">184</th><td>	}</td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td>	<b>if</b> (<a class="ref fn" href="../../sys/sys/ras.h.html#rasctl" title='rasctl' data-ref="rasctl" data-ref-filename="rasctl">rasctl</a>(<a class="macro" href="../../sys/sys/ras.h.html#88" title="((void *)(uintptr_t) pthread__lock_ras_start)" data-ref="_M/RAS_ADDR">RAS_ADDR</a>(pthread__lock), <a class="macro" href="../../sys/sys/ras.h.html#89" title="((size_t)((uintptr_t) pthread__lock_ras_end - (uintptr_t) pthread__lock_ras_start))" data-ref="_M/RAS_SIZE">RAS_SIZE</a>(pthread__lock),</td></tr>
+<tr><th id="187">187</th><td>	    <a class="macro" href="../../sys/sys/ras.h.html#45" title="0" data-ref="_M/RAS_INSTALL">RAS_INSTALL</a>) != <var>0</var>) {</td></tr>
+<tr><th id="188">188</th><td>		<a class="ref" href="pthread_int.h.html#pthread__lock_ops" title='pthread__lock_ops' data-ref="pthread__lock_ops" data-ref-filename="pthread__lock_ops">pthread__lock_ops</a> = &amp;<a class="tu ref" href="#pthread__lock_ops_atomic" title='pthread__lock_ops_atomic' data-use='a' data-ref="pthread__lock_ops_atomic" data-ref-filename="pthread__lock_ops_atomic">pthread__lock_ops_atomic</a>;</td></tr>
+<tr><th id="189">189</th><td>		<b>return</b>;</td></tr>
+<tr><th id="190">190</th><td>	}</td></tr>
+<tr><th id="191">191</th><td>}</td></tr>
+<tr><th id="192">192</th><td></td></tr>
+<tr><th id="193">193</th><td><em>void</em></td></tr>
+<tr><th id="194">194</th><td><dfn class="decl def fn" id="pthread_lockinit" title='pthread_lockinit' data-ref="pthread_lockinit" data-ref-filename="pthread_lockinit">pthread_lockinit</dfn>(<a class="typedef" href="pthread_types.h.html#pthread_spin_t" title='pthread_spin_t' data-type='__cpu_simple_lock_t' data-ref="pthread_spin_t" data-ref-filename="pthread_spin_t">pthread_spin_t</a> *<dfn class="local col2 decl" id="12lock" title='lock' data-type='pthread_spin_t *' data-ref="12lock" data-ref-filename="12lock">lock</dfn>)</td></tr>
+<tr><th id="195">195</th><td>{</td></tr>
+<tr><th id="196">196</th><td></td></tr>
+<tr><th id="197">197</th><td>	<a class="macro" href="pthread_int.h.html#234" title="(*pthread__lock_ops-&gt;plo_init)(lock)" data-ref="_M/pthread__simple_lock_init">pthread__simple_lock_init</a>(<a class="local col2 ref" href="#12lock" title='lock' data-ref="12lock" data-ref-filename="12lock">lock</a>);</td></tr>
+<tr><th id="198">198</th><td>}</td></tr>
+<tr><th id="199">199</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

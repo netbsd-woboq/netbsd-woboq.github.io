@@ -1,0 +1,215 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>substring-locations.c source code [netbsd/external/gpl3/gcc/dist/gcc/substring-locations.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/gcc/dist/gcc/substring-locations.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>gcc</a>/<a href='..'>dist</a>/<a href='./'>gcc</a>/<a href='substring-locations.c.html'>substring-locations.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* Source locations within string literals.</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 2016-2017 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i></i></td></tr>
+<tr><th id="4">4</th><td><i>This file is part of GCC.</i></td></tr>
+<tr><th id="5">5</th><td><i></i></td></tr>
+<tr><th id="6">6</th><td><i>GCC is free software; you can redistribute it and/or modify it under</i></td></tr>
+<tr><th id="7">7</th><td><i>the terms of the GNU General Public License as published by the Free</i></td></tr>
+<tr><th id="8">8</th><td><i>Software Foundation; either version 3, or (at your option) any later</i></td></tr>
+<tr><th id="9">9</th><td><i>version.</i></td></tr>
+<tr><th id="10">10</th><td><i></i></td></tr>
+<tr><th id="11">11</th><td><i>GCC is distributed in the hope that it will be useful, but WITHOUT ANY</i></td></tr>
+<tr><th id="12">12</th><td><i>WARRANTY; without even the implied warranty of MERCHANTABILITY or</i></td></tr>
+<tr><th id="13">13</th><td><i>FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License</i></td></tr>
+<tr><th id="14">14</th><td><i>for more details.</i></td></tr>
+<tr><th id="15">15</th><td><i></i></td></tr>
+<tr><th id="16">16</th><td><i>You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="17">17</th><td><i>along with GCC; see the file COPYING3.  If not see</i></td></tr>
+<tr><th id="18">18</th><td><i>&lt;<a href="http://www.gnu.org/licenses/">http://www.gnu.org/licenses/</a>&gt;.  */</i></td></tr>
+<tr><th id="19">19</th><td></td></tr>
+<tr><th id="20">20</th><td><u>#include <a href="../../../../../objdir.amd64/tools/gcc/build/gcc/config.h.html">"config.h"</a></u></td></tr>
+<tr><th id="21">21</th><td><u>#include <a href="system.h.html">"system.h"</a></u></td></tr>
+<tr><th id="22">22</th><td><u>#include <a href="coretypes.h.html">"coretypes.h"</a></u></td></tr>
+<tr><th id="23">23</th><td><u>#include <a href="diagnostic.h.html">"diagnostic.h"</a></u></td></tr>
+<tr><th id="24">24</th><td><u>#include <a href="../libcpp/include/cpplib.h.html">"cpplib.h"</a></u></td></tr>
+<tr><th id="25">25</th><td><u>#include <a href="tree.h.html">"tree.h"</a></u></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="langhooks.h.html">"langhooks.h"</a></u></td></tr>
+<tr><th id="27">27</th><td><u>#include <a href="substring-locations.h.html">"substring-locations.h"</a></u></td></tr>
+<tr><th id="28">28</th><td></td></tr>
+<tr><th id="29">29</th><td><i>/* Emit a warning governed by option OPT, using GMSGID as the format</i></td></tr>
+<tr><th id="30">30</th><td><i>   string and AP as its arguments.</i></td></tr>
+<tr><th id="31">31</th><td><i></i></td></tr>
+<tr><th id="32">32</th><td><i>   Attempt to obtain precise location information within a string</i></td></tr>
+<tr><th id="33">33</th><td><i>   literal from FMT_LOC.</i></td></tr>
+<tr><th id="34">34</th><td><i></i></td></tr>
+<tr><th id="35">35</th><td><i>   Case 1: if substring location is available, and is within the range of</i></td></tr>
+<tr><th id="36">36</th><td><i>   the format string itself, the primary location of the</i></td></tr>
+<tr><th id="37">37</th><td><i>   diagnostic is the substring range obtained from FMT_LOC, with the</i></td></tr>
+<tr><th id="38">38</th><td><i>   caret at the *end* of the substring range.</i></td></tr>
+<tr><th id="39">39</th><td><i></i></td></tr>
+<tr><th id="40">40</th><td><i>   For example:</i></td></tr>
+<tr><th id="41">41</th><td><i></i></td></tr>
+<tr><th id="42">42</th><td><i>     test.c:90:10: warning: problem with '%i' here [-Wformat=]</i></td></tr>
+<tr><th id="43">43</th><td><i>     printf ("hello %i", msg);</i></td></tr>
+<tr><th id="44">44</th><td><i>                    ~^</i></td></tr>
+<tr><th id="45">45</th><td><i></i></td></tr>
+<tr><th id="46">46</th><td><i>   Case 2: if the substring location is available, but is not within</i></td></tr>
+<tr><th id="47">47</th><td><i>   the range of the format string, the primary location is that of the</i></td></tr>
+<tr><th id="48">48</th><td><i>   format string, and an note is emitted showing the substring location.</i></td></tr>
+<tr><th id="49">49</th><td><i></i></td></tr>
+<tr><th id="50">50</th><td><i>   For example:</i></td></tr>
+<tr><th id="51">51</th><td><i>     test.c:90:10: warning: problem with '%i' here [-Wformat=]</i></td></tr>
+<tr><th id="52">52</th><td><i>     printf("hello " INT_FMT " world", msg);</i></td></tr>
+<tr><th id="53">53</th><td><i>            ^~~~~~~~~~~~~~~~~~~~~~~~~</i></td></tr>
+<tr><th id="54">54</th><td><i>     test.c:19: note: format string is defined here</i></td></tr>
+<tr><th id="55">55</th><td><i>     #define INT_FMT "%i"</i></td></tr>
+<tr><th id="56">56</th><td><i>                      ~^</i></td></tr>
+<tr><th id="57">57</th><td><i></i></td></tr>
+<tr><th id="58">58</th><td><i>   Case 3: if precise substring information is unavailable, the primary</i></td></tr>
+<tr><th id="59">59</th><td><i>   location is that of the whole string passed to FMT_LOC's constructor.</i></td></tr>
+<tr><th id="60">60</th><td><i>   For example:</i></td></tr>
+<tr><th id="61">61</th><td><i></i></td></tr>
+<tr><th id="62">62</th><td><i>     test.c:90:10: warning: problem with '%i' here [-Wformat=]</i></td></tr>
+<tr><th id="63">63</th><td><i>     printf(fmt, msg);</i></td></tr>
+<tr><th id="64">64</th><td><i>            ^~~</i></td></tr>
+<tr><th id="65">65</th><td><i></i></td></tr>
+<tr><th id="66">66</th><td><i>   For each of cases 1-3, if param_range is non-NULL, then it is used</i></td></tr>
+<tr><th id="67">67</th><td><i>   as a secondary range within the warning.  For example, here it</i></td></tr>
+<tr><th id="68">68</th><td><i>   is used with case 1:</i></td></tr>
+<tr><th id="69">69</th><td><i></i></td></tr>
+<tr><th id="70">70</th><td><i>     test.c:90:16: warning: '%s' here but arg 2 has 'long' type [-Wformat=]</i></td></tr>
+<tr><th id="71">71</th><td><i>     printf ("foo %s bar", long_i + long_j);</i></td></tr>
+<tr><th id="72">72</th><td><i>                  ~^       ~~~~~~~~~~~~~~~</i></td></tr>
+<tr><th id="73">73</th><td><i></i></td></tr>
+<tr><th id="74">74</th><td><i>   and here with case 2:</i></td></tr>
+<tr><th id="75">75</th><td><i></i></td></tr>
+<tr><th id="76">76</th><td><i>     test.c:90:16: warning: '%s' here but arg 2 has 'long' type [-Wformat=]</i></td></tr>
+<tr><th id="77">77</th><td><i>     printf ("foo " STR_FMT " bar", long_i + long_j);</i></td></tr>
+<tr><th id="78">78</th><td><i>             ^~~~~~~~~~~~~~~~~~~~~  ~~~~~~~~~~~~~~~</i></td></tr>
+<tr><th id="79">79</th><td><i>     test.c:89:16: note: format string is defined here</i></td></tr>
+<tr><th id="80">80</th><td><i>     #define STR_FMT "%s"</i></td></tr>
+<tr><th id="81">81</th><td><i>                      ~^</i></td></tr>
+<tr><th id="82">82</th><td><i></i></td></tr>
+<tr><th id="83">83</th><td><i>   and with case 3:</i></td></tr>
+<tr><th id="84">84</th><td><i></i></td></tr>
+<tr><th id="85">85</th><td><i>     test.c:90:10: warning: '%i' here, but arg 2 is "const char *' [-Wformat=]</i></td></tr>
+<tr><th id="86">86</th><td><i>     printf(fmt, msg);</i></td></tr>
+<tr><th id="87">87</th><td><i>            ^~~  ~~~</i></td></tr>
+<tr><th id="88">88</th><td><i></i></td></tr>
+<tr><th id="89">89</th><td><i>   If CORRECTED_SUBSTRING is non-NULL, use it for cases 1 and 2 to provide</i></td></tr>
+<tr><th id="90">90</th><td><i>   a fix-it hint, suggesting that it should replace the text within the</i></td></tr>
+<tr><th id="91">91</th><td><i>   substring range.  For example:</i></td></tr>
+<tr><th id="92">92</th><td><i></i></td></tr>
+<tr><th id="93">93</th><td><i>     test.c:90:10: warning: problem with '%i' here [-Wformat=]</i></td></tr>
+<tr><th id="94">94</th><td><i>     printf ("hello %i", msg);</i></td></tr>
+<tr><th id="95">95</th><td><i>                    ~^</i></td></tr>
+<tr><th id="96">96</th><td><i>                    %s</i></td></tr>
+<tr><th id="97">97</th><td><i></i></td></tr>
+<tr><th id="98">98</th><td><i>   Return true if a warning was emitted, false otherwise.  */</i></td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td><a class="macro" href="diagnostic-core.h.html#54" title="__attribute__ ((__nonnull__ (5)))" data-ref="_M/ATTRIBUTE_GCC_DIAG">ATTRIBUTE_GCC_DIAG</a> (<var>5</var>,<var>0</var>)</td></tr>
+<tr><th id="101">101</th><td><em>bool</em></td></tr>
+<tr><th id="102">102</th><td><dfn class="decl def fn" id="_Z17format_warning_vaRK13substring_locPK12source_rangePKciS6_PA1_13__va_list_tag" title='format_warning_va' data-ref="_Z17format_warning_vaRK13substring_locPK12source_rangePKciS6_PA1_13__va_list_tag" data-ref-filename="_Z17format_warning_vaRK13substring_locPK12source_rangePKciS6_PA1_13__va_list_tag">format_warning_va</dfn> (<em>const</em> <a class="type" href="substring-locations.h.html#substring_loc" title='substring_loc' data-ref="substring_loc" data-ref-filename="substring_loc">substring_loc</a> &amp;<dfn class="local col1 decl" id="1fmt_loc" title='fmt_loc' data-type='const substring_loc &amp;' data-ref="1fmt_loc" data-ref-filename="1fmt_loc">fmt_loc</dfn>,</td></tr>
+<tr><th id="103">103</th><td>		   <em>const</em> <a class="type" href="../libcpp/include/line-map.h.html#source_range" title='source_range' data-ref="source_range" data-ref-filename="source_range">source_range</a> *<dfn class="local col2 decl" id="2param_range" title='param_range' data-type='const source_range *' data-ref="2param_range" data-ref-filename="2param_range">param_range</dfn>,</td></tr>
+<tr><th id="104">104</th><td>		   <em>const</em> <em>char</em> *<dfn class="local col3 decl" id="3corrected_substring" title='corrected_substring' data-type='const char *' data-ref="3corrected_substring" data-ref-filename="3corrected_substring">corrected_substring</dfn>,</td></tr>
+<tr><th id="105">105</th><td>		   <em>int</em> <dfn class="local col4 decl" id="4opt" title='opt' data-type='int' data-ref="4opt" data-ref-filename="4opt">opt</dfn>, <em>const</em> <em>char</em> *<dfn class="local col5 decl" id="5gmsgid" title='gmsgid' data-type='const char *' data-ref="5gmsgid" data-ref-filename="5gmsgid">gmsgid</dfn>, <span class='typedef' title='va_list' data-type='__gnuc_va_list' data-ref="va_list" data-ref-filename="va_list">va_list</span> *<dfn class="local col6 decl" id="6ap" title='ap' data-type='va_list *' data-ref="6ap" data-ref-filename="6ap">ap</dfn>)</td></tr>
+<tr><th id="106">106</th><td>{</td></tr>
+<tr><th id="107">107</th><td>  <em>bool</em> <dfn class="local col7 decl" id="7substring_within_range" title='substring_within_range' data-type='bool' data-ref="7substring_within_range" data-ref-filename="7substring_within_range">substring_within_range</dfn> = <b>false</b>;</td></tr>
+<tr><th id="108">108</th><td>  <a class="typedef" href="input.h.html#location_t" title='location_t' data-type='source_location' data-ref="location_t" data-ref-filename="location_t">location_t</a> <dfn class="local col8 decl" id="8primary_loc" title='primary_loc' data-type='location_t' data-ref="8primary_loc" data-ref-filename="8primary_loc">primary_loc</dfn>;</td></tr>
+<tr><th id="109">109</th><td>  <a class="typedef" href="input.h.html#location_t" title='location_t' data-type='source_location' data-ref="location_t" data-ref-filename="location_t">location_t</a> <dfn class="local col9 decl" id="9fmt_substring_loc" title='fmt_substring_loc' data-type='location_t' data-ref="9fmt_substring_loc" data-ref-filename="9fmt_substring_loc">fmt_substring_loc</dfn> = <a class="macro" href="input.h.html#30" title="((source_location) 0)" data-ref="_M/UNKNOWN_LOCATION">UNKNOWN_LOCATION</a>;</td></tr>
+<tr><th id="110">110</th><td>  <a class="type" href="../libcpp/include/line-map.h.html#source_range" title='source_range' data-ref="source_range" data-ref-filename="source_range">source_range</a> <dfn class="local col0 decl" id="10fmt_loc_range" title='fmt_loc_range' data-type='source_range' data-ref="10fmt_loc_range" data-ref-filename="10fmt_loc_range">fmt_loc_range</dfn></td></tr>
+<tr><th id="111">111</th><td>    = <a class="ref fn" href="../libcpp/include/line-map.h.html#_Z18get_range_from_locP9line_mapsj" title='get_range_from_loc' data-ref="_Z18get_range_from_locP9line_mapsj" data-ref-filename="_Z18get_range_from_locP9line_mapsj">get_range_from_loc</a> (<a class="ref" href="input.h.html#line_table" title='line_table' data-ref="line_table" data-ref-filename="line_table">line_table</a>, <a class="local col1 ref" href="#1fmt_loc" title='fmt_loc' data-ref="1fmt_loc" data-ref-filename="1fmt_loc">fmt_loc</a>.<a class="ref fn" href="substring-locations.h.html#_ZNK13substring_loc18get_fmt_string_locEv" title='substring_loc::get_fmt_string_loc' data-ref="_ZNK13substring_loc18get_fmt_string_locEv" data-ref-filename="_ZNK13substring_loc18get_fmt_string_locEv">get_fmt_string_loc</a> ());</td></tr>
+<tr><th id="112">112</th><td>  <em>const</em> <em>char</em> *<dfn class="local col1 decl" id="11err" title='err' data-type='const char *' data-ref="11err" data-ref-filename="11err">err</dfn> = <a class="local col1 ref" href="#1fmt_loc" title='fmt_loc' data-ref="1fmt_loc" data-ref-filename="1fmt_loc">fmt_loc</a>.<a class="ref fn" href="#_ZNK13substring_loc12get_locationEPj" title='substring_loc::get_location' data-ref="_ZNK13substring_loc12get_locationEPj" data-ref-filename="_ZNK13substring_loc12get_locationEPj">get_location</a> (&amp;<a class="local col9 ref" href="#9fmt_substring_loc" title='fmt_substring_loc' data-ref="9fmt_substring_loc" data-ref-filename="9fmt_substring_loc">fmt_substring_loc</a>);</td></tr>
+<tr><th id="113">113</th><td>  <a class="type" href="../libcpp/include/line-map.h.html#source_range" title='source_range' data-ref="source_range" data-ref-filename="source_range">source_range</a> <dfn class="local col2 decl" id="12fmt_substring_range" title='fmt_substring_range' data-type='source_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</dfn></td></tr>
+<tr><th id="114">114</th><td>    = <a class="ref fn" href="../libcpp/include/line-map.h.html#_Z18get_range_from_locP9line_mapsj" title='get_range_from_loc' data-ref="_Z18get_range_from_locP9line_mapsj" data-ref-filename="_Z18get_range_from_locP9line_mapsj">get_range_from_loc</a> (<a class="ref" href="input.h.html#line_table" title='line_table' data-ref="line_table" data-ref-filename="line_table">line_table</a>, <a class="local col9 ref" href="#9fmt_substring_loc" title='fmt_substring_loc' data-ref="9fmt_substring_loc" data-ref-filename="9fmt_substring_loc">fmt_substring_loc</a>);</td></tr>
+<tr><th id="115">115</th><td>  <b>if</b> (<a class="local col1 ref" href="#11err" title='err' data-ref="11err" data-ref-filename="11err">err</a>)</td></tr>
+<tr><th id="116">116</th><td>    <i>/* Case 3: unable to get substring location.  */</i></td></tr>
+<tr><th id="117">117</th><td>    <a class="local col8 ref" href="#8primary_loc" title='primary_loc' data-ref="8primary_loc" data-ref-filename="8primary_loc">primary_loc</a> = <a class="local col1 ref" href="#1fmt_loc" title='fmt_loc' data-ref="1fmt_loc" data-ref-filename="1fmt_loc">fmt_loc</a>.<a class="ref fn" href="substring-locations.h.html#_ZNK13substring_loc18get_fmt_string_locEv" title='substring_loc::get_fmt_string_loc' data-ref="_ZNK13substring_loc18get_fmt_string_locEv" data-ref-filename="_ZNK13substring_loc18get_fmt_string_locEv">get_fmt_string_loc</a> ();</td></tr>
+<tr><th id="118">118</th><td>  <b>else</b></td></tr>
+<tr><th id="119">119</th><td>    {</td></tr>
+<tr><th id="120">120</th><td>      <b>if</b> (<a class="local col2 ref" href="#12fmt_substring_range" title='fmt_substring_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_start" title='source_range::m_start' data-ref="source_range::m_start" data-ref-filename="source_range..m_start">m_start</a> &gt;= <a class="local col0 ref" href="#10fmt_loc_range" title='fmt_loc_range' data-ref="10fmt_loc_range" data-ref-filename="10fmt_loc_range">fmt_loc_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_start" title='source_range::m_start' data-ref="source_range::m_start" data-ref-filename="source_range..m_start">m_start</a></td></tr>
+<tr><th id="121">121</th><td>	  &amp;&amp; <a class="local col2 ref" href="#12fmt_substring_range" title='fmt_substring_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_start" title='source_range::m_start' data-ref="source_range::m_start" data-ref-filename="source_range..m_start">m_start</a> &lt;= <a class="local col0 ref" href="#10fmt_loc_range" title='fmt_loc_range' data-ref="10fmt_loc_range" data-ref-filename="10fmt_loc_range">fmt_loc_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_finish" title='source_range::m_finish' data-ref="source_range::m_finish" data-ref-filename="source_range..m_finish">m_finish</a></td></tr>
+<tr><th id="122">122</th><td>	  &amp;&amp; <a class="local col2 ref" href="#12fmt_substring_range" title='fmt_substring_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_finish" title='source_range::m_finish' data-ref="source_range::m_finish" data-ref-filename="source_range..m_finish">m_finish</a> &gt;= <a class="local col0 ref" href="#10fmt_loc_range" title='fmt_loc_range' data-ref="10fmt_loc_range" data-ref-filename="10fmt_loc_range">fmt_loc_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_start" title='source_range::m_start' data-ref="source_range::m_start" data-ref-filename="source_range..m_start">m_start</a></td></tr>
+<tr><th id="123">123</th><td>	  &amp;&amp; <a class="local col2 ref" href="#12fmt_substring_range" title='fmt_substring_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_finish" title='source_range::m_finish' data-ref="source_range::m_finish" data-ref-filename="source_range..m_finish">m_finish</a> &lt;= <a class="local col0 ref" href="#10fmt_loc_range" title='fmt_loc_range' data-ref="10fmt_loc_range" data-ref-filename="10fmt_loc_range">fmt_loc_range</a>.<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_finish" title='source_range::m_finish' data-ref="source_range::m_finish" data-ref-filename="source_range..m_finish">m_finish</a>)</td></tr>
+<tr><th id="124">124</th><td>	<i>/* Case 1.  */</i></td></tr>
+<tr><th id="125">125</th><td>	{</td></tr>
+<tr><th id="126">126</th><td>	  <a class="local col7 ref" href="#7substring_within_range" title='substring_within_range' data-ref="7substring_within_range" data-ref-filename="7substring_within_range">substring_within_range</a> = <b>true</b>;</td></tr>
+<tr><th id="127">127</th><td>	  <a class="local col8 ref" href="#8primary_loc" title='primary_loc' data-ref="8primary_loc" data-ref-filename="8primary_loc">primary_loc</a> = <a class="local col9 ref" href="#9fmt_substring_loc" title='fmt_substring_loc' data-ref="9fmt_substring_loc" data-ref-filename="9fmt_substring_loc">fmt_substring_loc</a>;</td></tr>
+<tr><th id="128">128</th><td>	}</td></tr>
+<tr><th id="129">129</th><td>      <b>else</b></td></tr>
+<tr><th id="130">130</th><td>	<i>/* Case 2.  */</i></td></tr>
+<tr><th id="131">131</th><td>	{</td></tr>
+<tr><th id="132">132</th><td>	  <a class="local col7 ref" href="#7substring_within_range" title='substring_within_range' data-ref="7substring_within_range" data-ref-filename="7substring_within_range">substring_within_range</a> = <b>false</b>;</td></tr>
+<tr><th id="133">133</th><td>	  <a class="local col8 ref" href="#8primary_loc" title='primary_loc' data-ref="8primary_loc" data-ref-filename="8primary_loc">primary_loc</a> = <a class="local col1 ref" href="#1fmt_loc" title='fmt_loc' data-ref="1fmt_loc" data-ref-filename="1fmt_loc">fmt_loc</a>.<a class="ref fn" href="substring-locations.h.html#_ZNK13substring_loc18get_fmt_string_locEv" title='substring_loc::get_fmt_string_loc' data-ref="_ZNK13substring_loc18get_fmt_string_locEv" data-ref-filename="_ZNK13substring_loc18get_fmt_string_locEv">get_fmt_string_loc</a> ();</td></tr>
+<tr><th id="134">134</th><td>	}</td></tr>
+<tr><th id="135">135</th><td>    }</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td>  <a class="type" href="../libcpp/include/line-map.h.html#rich_location" title='rich_location' data-ref="rich_location" data-ref-filename="rich_location">rich_location</a> <dfn class="local col3 decl" id="13richloc" title='richloc' data-type='rich_location' data-ref="13richloc" data-ref-filename="13richloc">richloc</dfn> <a class="ref fn" href="../libcpp/include/line-map.h.html#_ZN13rich_locationC1EP9line_mapsj" title='rich_location::rich_location' data-ref="_ZN13rich_locationC1EP9line_mapsj" data-ref-filename="_ZN13rich_locationC1EP9line_mapsj">(</a><a class="ref" href="input.h.html#line_table" title='line_table' data-ref="line_table" data-ref-filename="line_table">line_table</a>, <a class="local col8 ref" href="#8primary_loc" title='primary_loc' data-ref="8primary_loc" data-ref-filename="8primary_loc">primary_loc</a>);</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td>  <b>if</b> (<a class="local col2 ref" href="#2param_range" title='param_range' data-ref="2param_range" data-ref-filename="2param_range">param_range</a>)</td></tr>
+<tr><th id="140">140</th><td>    {</td></tr>
+<tr><th id="141">141</th><td>      <a class="typedef" href="input.h.html#location_t" title='location_t' data-type='source_location' data-ref="location_t" data-ref-filename="location_t">location_t</a> <dfn class="local col4 decl" id="14param_loc" title='param_loc' data-type='location_t' data-ref="14param_loc" data-ref-filename="14param_loc">param_loc</dfn> = <a class="ref fn" href="input.h.html#_Z13make_locationjjj" title='make_location' data-ref="_Z13make_locationjjj" data-ref-filename="_Z13make_locationjjj">make_location</a> (<a class="local col2 ref" href="#2param_range" title='param_range' data-ref="2param_range" data-ref-filename="2param_range">param_range</a>-&gt;<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_start" title='source_range::m_start' data-ref="source_range::m_start" data-ref-filename="source_range..m_start">m_start</a>,</td></tr>
+<tr><th id="142">142</th><td>					    <a class="local col2 ref" href="#2param_range" title='param_range' data-ref="2param_range" data-ref-filename="2param_range">param_range</a>-&gt;<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_start" title='source_range::m_start' data-ref="source_range::m_start" data-ref-filename="source_range..m_start">m_start</a>,</td></tr>
+<tr><th id="143">143</th><td>					    <a class="local col2 ref" href="#2param_range" title='param_range' data-ref="2param_range" data-ref-filename="2param_range">param_range</a>-&gt;<a class="ref field" href="../libcpp/include/line-map.h.html#source_range::m_finish" title='source_range::m_finish' data-ref="source_range::m_finish" data-ref-filename="source_range..m_finish">m_finish</a>);</td></tr>
+<tr><th id="144">144</th><td>      <a class="local col3 ref" href="#13richloc" title='richloc' data-ref="13richloc" data-ref-filename="13richloc">richloc</a>.<a class="ref fn" href="../libcpp/include/line-map.h.html#_ZN13rich_location9add_rangeEjb" title='rich_location::add_range' data-ref="_ZN13rich_location9add_rangeEjb" data-ref-filename="_ZN13rich_location9add_rangeEjb">add_range</a> (<a class="local col4 ref" href="#14param_loc" title='param_loc' data-ref="14param_loc" data-ref-filename="14param_loc">param_loc</a>, <b>false</b>);</td></tr>
+<tr><th id="145">145</th><td>    }</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td>  <b>if</b> (!<a class="local col1 ref" href="#11err" title='err' data-ref="11err" data-ref-filename="11err">err</a> &amp;&amp; <a class="local col3 ref" href="#3corrected_substring" title='corrected_substring' data-ref="3corrected_substring" data-ref-filename="3corrected_substring">corrected_substring</a> &amp;&amp; <a class="local col7 ref" href="#7substring_within_range" title='substring_within_range' data-ref="7substring_within_range" data-ref-filename="7substring_within_range">substring_within_range</a>)</td></tr>
+<tr><th id="148">148</th><td>    <a class="local col3 ref" href="#13richloc" title='richloc' data-ref="13richloc" data-ref-filename="13richloc">richloc</a>.<a class="ref fn" href="../libcpp/include/line-map.h.html#_ZN13rich_location17add_fixit_replaceE12source_rangePKc" title='rich_location::add_fixit_replace' data-ref="_ZN13rich_location17add_fixit_replaceE12source_rangePKc" data-ref-filename="_ZN13rich_location17add_fixit_replaceE12source_rangePKc">add_fixit_replace</a> (<a class="ref fn fake" href="../libcpp/include/line-map.h.html#281" title='source_range::source_range' data-ref="_ZN12source_rangeC1ERKS_" data-ref-filename="_ZN12source_rangeC1ERKS_"></a><a class="local col2 ref" href="#12fmt_substring_range" title='fmt_substring_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</a>, <a class="local col3 ref" href="#3corrected_substring" title='corrected_substring' data-ref="3corrected_substring" data-ref-filename="3corrected_substring">corrected_substring</a>);</td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td>  <a class="type" href="diagnostic.h.html#diagnostic_info" title='diagnostic_info' data-ref="diagnostic_info" data-ref-filename="diagnostic_info">diagnostic_info</a> <a class="ref fn fake" href="diagnostic.h.html#30" title='diagnostic_info::diagnostic_info' data-ref="_ZN15diagnostic_infoC1Ev" data-ref-filename="_ZN15diagnostic_infoC1Ev"></a><dfn class="local col5 decl" id="15diagnostic" title='diagnostic' data-type='diagnostic_info' data-ref="15diagnostic" data-ref-filename="15diagnostic">diagnostic</dfn>;</td></tr>
+<tr><th id="151">151</th><td>  <a class="ref fn" href="diagnostic.h.html#_Z19diagnostic_set_infoP15diagnostic_infoPKcPA1_13__va_list_tagP13rich_location12diagnostic_t" title='diagnostic_set_info' data-ref="_Z19diagnostic_set_infoP15diagnostic_infoPKcPA1_13__va_list_tagP13rich_location12diagnostic_t" data-ref-filename="_Z19diagnostic_set_infoP15diagnostic_infoPKcPA1_13__va_list_tagP13rich_location12diagnostic_t">diagnostic_set_info</a> (&amp;<a class="local col5 ref" href="#15diagnostic" title='diagnostic' data-ref="15diagnostic" data-ref-filename="15diagnostic">diagnostic</a>, <a class="local col5 ref" href="#5gmsgid" title='gmsgid' data-ref="5gmsgid" data-ref-filename="5gmsgid">gmsgid</a>, <a class="local col6 ref" href="#6ap" title='ap' data-ref="6ap" data-ref-filename="6ap">ap</a>, &amp;<a class="local col3 ref" href="#13richloc" title='richloc' data-ref="13richloc" data-ref-filename="13richloc">richloc</a>, <a class="enum" href="diagnostic.def.html#37" title='DK_WARNING' data-ref="DK_WARNING" data-ref-filename="DK_WARNING">DK_WARNING</a>);</td></tr>
+<tr><th id="152">152</th><td>  <a class="local col5 ref" href="#15diagnostic" title='diagnostic' data-ref="15diagnostic" data-ref-filename="15diagnostic">diagnostic</a>.<a class="ref field" href="diagnostic.h.html#diagnostic_info::option_index" title='diagnostic_info::option_index' data-ref="diagnostic_info::option_index" data-ref-filename="diagnostic_info..option_index">option_index</a> = <a class="local col4 ref" href="#4opt" title='opt' data-ref="4opt" data-ref-filename="4opt">opt</a>;</td></tr>
+<tr><th id="153">153</th><td>  <em>bool</em> <dfn class="local col6 decl" id="16warned" title='warned' data-type='bool' data-ref="16warned" data-ref-filename="16warned">warned</dfn> = <a class="macro" href="diagnostic.h.html#281" title="diagnostic_report_diagnostic (global_dc, &amp;diagnostic)" data-ref="_M/report_diagnostic">report_diagnostic</a> (&amp;<a class="local col5 ref" href="#15diagnostic" title='diagnostic' data-ref="15diagnostic" data-ref-filename="15diagnostic">diagnostic</a>);</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td>  <b>if</b> (!<a class="local col1 ref" href="#11err" title='err' data-ref="11err" data-ref-filename="11err">err</a> &amp;&amp; <a class="local col9 ref" href="#9fmt_substring_loc" title='fmt_substring_loc' data-ref="9fmt_substring_loc" data-ref-filename="9fmt_substring_loc">fmt_substring_loc</a> &amp;&amp; !<a class="local col7 ref" href="#7substring_within_range" title='substring_within_range' data-ref="7substring_within_range" data-ref-filename="7substring_within_range">substring_within_range</a>)</td></tr>
+<tr><th id="156">156</th><td>    <i>/* Case 2.  */</i></td></tr>
+<tr><th id="157">157</th><td>    <b>if</b> (<a class="local col6 ref" href="#16warned" title='warned' data-ref="16warned" data-ref-filename="16warned">warned</a>)</td></tr>
+<tr><th id="158">158</th><td>      {</td></tr>
+<tr><th id="159">159</th><td>	<a class="type" href="../libcpp/include/line-map.h.html#rich_location" title='rich_location' data-ref="rich_location" data-ref-filename="rich_location">rich_location</a> <dfn class="local col7 decl" id="17substring_richloc" title='substring_richloc' data-type='rich_location' data-ref="17substring_richloc" data-ref-filename="17substring_richloc">substring_richloc</dfn> <a class="ref fn" href="../libcpp/include/line-map.h.html#_ZN13rich_locationC1EP9line_mapsj" title='rich_location::rich_location' data-ref="_ZN13rich_locationC1EP9line_mapsj" data-ref-filename="_ZN13rich_locationC1EP9line_mapsj">(</a><a class="ref" href="input.h.html#line_table" title='line_table' data-ref="line_table" data-ref-filename="line_table">line_table</a>, <a class="local col9 ref" href="#9fmt_substring_loc" title='fmt_substring_loc' data-ref="9fmt_substring_loc" data-ref-filename="9fmt_substring_loc">fmt_substring_loc</a>);</td></tr>
+<tr><th id="160">160</th><td>	<b>if</b> (<a class="local col3 ref" href="#3corrected_substring" title='corrected_substring' data-ref="3corrected_substring" data-ref-filename="3corrected_substring">corrected_substring</a>)</td></tr>
+<tr><th id="161">161</th><td>	  <a class="local col7 ref" href="#17substring_richloc" title='substring_richloc' data-ref="17substring_richloc" data-ref-filename="17substring_richloc">substring_richloc</a>.<a class="ref fn" href="../libcpp/include/line-map.h.html#_ZN13rich_location17add_fixit_replaceE12source_rangePKc" title='rich_location::add_fixit_replace' data-ref="_ZN13rich_location17add_fixit_replaceE12source_rangePKc" data-ref-filename="_ZN13rich_location17add_fixit_replaceE12source_rangePKc">add_fixit_replace</a> (<a class="ref fn fake" href="../libcpp/include/line-map.h.html#281" title='source_range::source_range' data-ref="_ZN12source_rangeC1ERKS_" data-ref-filename="_ZN12source_rangeC1ERKS_"></a><a class="local col2 ref" href="#12fmt_substring_range" title='fmt_substring_range' data-ref="12fmt_substring_range" data-ref-filename="12fmt_substring_range">fmt_substring_range</a>,</td></tr>
+<tr><th id="162">162</th><td>					       <a class="local col3 ref" href="#3corrected_substring" title='corrected_substring' data-ref="3corrected_substring" data-ref-filename="3corrected_substring">corrected_substring</a>);</td></tr>
+<tr><th id="163">163</th><td>	<a class="ref fn" href="diagnostic-core.h.html#_Z18inform_at_rich_locP13rich_locationPKcz" title='inform_at_rich_loc' data-ref="_Z18inform_at_rich_locP13rich_locationPKcz" data-ref-filename="_Z18inform_at_rich_locP13rich_locationPKcz">inform_at_rich_loc</a> (&amp;<a class="local col7 ref" href="#17substring_richloc" title='substring_richloc' data-ref="17substring_richloc" data-ref-filename="17substring_richloc">substring_richloc</a>,</td></tr>
+<tr><th id="164">164</th><td>			    <q>"format string is defined here"</q>);</td></tr>
+<tr><th id="165">165</th><td>      }</td></tr>
+<tr><th id="166">166</th><td></td></tr>
+<tr><th id="167">167</th><td>  <b>return</b> <a class="local col6 ref" href="#16warned" title='warned' data-ref="16warned" data-ref-filename="16warned">warned</a>;</td></tr>
+<tr><th id="168">168</th><td>}</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><i>/* Variadic call to format_warning_va.  */</i></td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td><em>bool</em></td></tr>
+<tr><th id="173">173</th><td><dfn class="decl def fn" id="_Z27format_warning_at_substringRK13substring_locPK12source_rangePKciS6_z" title='format_warning_at_substring' data-ref="_Z27format_warning_at_substringRK13substring_locPK12source_rangePKciS6_z" data-ref-filename="_Z27format_warning_at_substringRK13substring_locPK12source_rangePKciS6_z">format_warning_at_substring</dfn> (<em>const</em> <a class="type" href="substring-locations.h.html#substring_loc" title='substring_loc' data-ref="substring_loc" data-ref-filename="substring_loc">substring_loc</a> &amp;<dfn class="local col8 decl" id="18fmt_loc" title='fmt_loc' data-type='const substring_loc &amp;' data-ref="18fmt_loc" data-ref-filename="18fmt_loc">fmt_loc</dfn>,</td></tr>
+<tr><th id="174">174</th><td>			     <em>const</em> <a class="type" href="../libcpp/include/line-map.h.html#source_range" title='source_range' data-ref="source_range" data-ref-filename="source_range">source_range</a> *<dfn class="local col9 decl" id="19param_range" title='param_range' data-type='const source_range *' data-ref="19param_range" data-ref-filename="19param_range">param_range</dfn>,</td></tr>
+<tr><th id="175">175</th><td>			     <em>const</em> <em>char</em> *<dfn class="local col0 decl" id="20corrected_substring" title='corrected_substring' data-type='const char *' data-ref="20corrected_substring" data-ref-filename="20corrected_substring">corrected_substring</dfn>,</td></tr>
+<tr><th id="176">176</th><td>			     <em>int</em> <dfn class="local col1 decl" id="21opt" title='opt' data-type='int' data-ref="21opt" data-ref-filename="21opt">opt</dfn>, <em>const</em> <em>char</em> *<dfn class="local col2 decl" id="22gmsgid" title='gmsgid' data-type='const char *' data-ref="22gmsgid" data-ref-filename="22gmsgid">gmsgid</dfn>, ...)</td></tr>
+<tr><th id="177">177</th><td>{</td></tr>
+<tr><th id="178">178</th><td>  <span class='typedef' title='va_list' data-type='__gnuc_va_list' data-ref="va_list" data-ref-filename="va_list">va_list</span> <span class='ref fn fake' title='__va_list_tag::__va_list_tag' data-ref="__va_list_tag::__va_list_tag" data-ref-filename="__va_list_tag..__va_list_tag"></span><dfn class="local col3 decl" id="23ap" title='ap' data-type='va_list' data-ref="23ap" data-ref-filename="23ap">ap</dfn>;</td></tr>
+<tr><th id="179">179</th><td>  <span class="macro" title="__builtin_va_start(ap, gmsgid)" data-ref="_M/va_start">va_start</span> (<a class="local col3 ref" href="#23ap" title='ap' data-ref="23ap" data-ref-filename="23ap">ap</a>, <a class="local col2 ref" href="#22gmsgid" title='gmsgid' data-ref="22gmsgid" data-ref-filename="22gmsgid">gmsgid</a>);</td></tr>
+<tr><th id="180">180</th><td>  <em>bool</em> <dfn class="local col4 decl" id="24warned" title='warned' data-type='bool' data-ref="24warned" data-ref-filename="24warned">warned</dfn> = <a class="ref fn" href="#_Z17format_warning_vaRK13substring_locPK12source_rangePKciS6_PA1_13__va_list_tag" title='format_warning_va' data-ref="_Z17format_warning_vaRK13substring_locPK12source_rangePKciS6_PA1_13__va_list_tag" data-ref-filename="_Z17format_warning_vaRK13substring_locPK12source_rangePKciS6_PA1_13__va_list_tag">format_warning_va</a> (<a class="local col8 ref" href="#18fmt_loc" title='fmt_loc' data-ref="18fmt_loc" data-ref-filename="18fmt_loc">fmt_loc</a>, <a class="local col9 ref" href="#19param_range" title='param_range' data-ref="19param_range" data-ref-filename="19param_range">param_range</a>, <a class="local col0 ref" href="#20corrected_substring" title='corrected_substring' data-ref="20corrected_substring" data-ref-filename="20corrected_substring">corrected_substring</a>,</td></tr>
+<tr><th id="181">181</th><td>				   <a class="local col1 ref" href="#21opt" title='opt' data-ref="21opt" data-ref-filename="21opt">opt</a>, <a class="local col2 ref" href="#22gmsgid" title='gmsgid' data-ref="22gmsgid" data-ref-filename="22gmsgid">gmsgid</a>, &amp;<a class="local col3 ref" href="#23ap" title='ap' data-ref="23ap" data-ref-filename="23ap">ap</a>);</td></tr>
+<tr><th id="182">182</th><td>  <span class="macro" title="__builtin_va_end(ap)" data-ref="_M/va_end">va_end</span> (<a class="local col3 ref" href="#23ap" title='ap' data-ref="23ap" data-ref-filename="23ap">ap</a>);</td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td>  <b>return</b> <a class="local col4 ref" href="#24warned" title='warned' data-ref="24warned" data-ref-filename="24warned">warned</a>;</td></tr>
+<tr><th id="185">185</th><td>}</td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td><i>/* Attempt to determine the source location of the substring.</i></td></tr>
+<tr><th id="188">188</th><td><i>   If successful, return NULL and write the source location to *OUT_LOC.</i></td></tr>
+<tr><th id="189">189</th><td><i>   Otherwise return an error message.  Error messages are intended</i></td></tr>
+<tr><th id="190">190</th><td><i>   for GCC developers (to help debugging) rather than for end-users.  */</i></td></tr>
+<tr><th id="191">191</th><td></td></tr>
+<tr><th id="192">192</th><td><em>const</em> <em>char</em> *</td></tr>
+<tr><th id="193">193</th><td><a class="type" href="substring-locations.h.html#substring_loc" title='substring_loc' data-ref="substring_loc" data-ref-filename="substring_loc">substring_loc</a>::<dfn class="decl def fn" id="_ZNK13substring_loc12get_locationEPj" title='substring_loc::get_location' data-ref="_ZNK13substring_loc12get_locationEPj" data-ref-filename="_ZNK13substring_loc12get_locationEPj">get_location</dfn> (<a class="typedef" href="input.h.html#location_t" title='location_t' data-type='source_location' data-ref="location_t" data-ref-filename="location_t">location_t</a> *<dfn class="local col5 decl" id="25out_loc" title='out_loc' data-type='location_t *' data-ref="25out_loc" data-ref-filename="25out_loc">out_loc</dfn>) <em>const</em></td></tr>
+<tr><th id="194">194</th><td>{</td></tr>
+<tr><th id="195">195</th><td>  <a class="macro" href="system.h.html#736" title="((void)(!(out_loc) ? fancy_abort (&quot;/___NETBSD_SRC___/objdir.amd64/tools/gcc/build/gcc/../../../../../external/gpl3/gcc/dist/gcc/substring-locations.c&quot;, 195, __FUNCTION__), 0 : 0))" data-ref="_M/gcc_assert">gcc_assert</a> (<a class="local col5 ref" href="#25out_loc" title='out_loc' data-ref="25out_loc" data-ref-filename="25out_loc">out_loc</a>);</td></tr>
+<tr><th id="196">196</th><td>  <b>return</b> <a class="ref" href="langhooks.h.html#lang_hooks" title='lang_hooks' data-ref="lang_hooks" data-ref-filename="lang_hooks">lang_hooks</a>.<a class="ref field" href="langhooks.h.html#lang_hooks::get_substring_location" title='lang_hooks::get_substring_location' data-ref="lang_hooks::get_substring_location" data-ref-filename="lang_hooks..get_substring_location">get_substring_location</a> (*<b>this</b>, <a class="local col5 ref" href="#25out_loc" title='out_loc' data-ref="25out_loc" data-ref-filename="25out_loc">out_loc</a>);</td></tr>
+<tr><th id="197">197</th><td>}</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

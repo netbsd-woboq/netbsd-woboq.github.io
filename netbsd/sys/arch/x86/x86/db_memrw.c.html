@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>db_memrw.c source code [netbsd/sys/arch/x86/x86/db_memrw.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/arch/x86/x86/db_memrw.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>arch</a>/<a href='..'>x86</a>/<a href='./'>x86</a>/<a href='db_memrw.c.html'>db_memrw.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: db_memrw.c,v 1.11 2019/04/21 06:37:21 maxv Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 1996, 2000 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Gordon W. Ross and Jason R. Thorpe.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i> * Interface to the debugger for virtual memory read/write.</i></td></tr>
+<tr><th id="34">34</th><td><i> * This file is shared by DDB and KGDB, and must work even</i></td></tr>
+<tr><th id="35">35</th><td><i> * when only KGDB is included (thus no db_printf calls).</i></td></tr>
+<tr><th id="36">36</th><td><i> *</i></td></tr>
+<tr><th id="37">37</th><td><i> * To write in the text segment, we have to first make</i></td></tr>
+<tr><th id="38">38</th><td><i> * the page writable, do the write, then restore the PTE.</i></td></tr>
+<tr><th id="39">39</th><td><i> * For writes outside the text segment, and all reads,</i></td></tr>
+<tr><th id="40">40</th><td><i> * just do the access -- if it causes a fault, the debugger</i></td></tr>
+<tr><th id="41">41</th><td><i> * will recover with a longjmp to an appropriate place.</i></td></tr>
+<tr><th id="42">42</th><td><i> *</i></td></tr>
+<tr><th id="43">43</th><td><i> * ALERT!  If you want to access device registers with a</i></td></tr>
+<tr><th id="44">44</th><td><i> * specific size, then the read/write functions have to</i></td></tr>
+<tr><th id="45">45</th><td><i> * make sure to do the correct sized pointer access.</i></td></tr>
+<tr><th id="46">46</th><td><i> *</i></td></tr>
+<tr><th id="47">47</th><td><i> * Modified for i386 from hp300 version by</i></td></tr>
+<tr><th id="48">48</th><td><i> * Jason R. Thorpe &lt;thorpej@zembu.com&gt;.</i></td></tr>
+<tr><th id="49">49</th><td><i> *</i></td></tr>
+<tr><th id="50">50</th><td><i> * Basic copy to amd64 by fvdl.</i></td></tr>
+<tr><th id="51">51</th><td><i> * </i></td></tr>
+<tr><th id="52">52</th><td><i> * i386 and amd64 merge by jym.</i></td></tr>
+<tr><th id="53">53</th><td><i> */</i></td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="56">56</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: db_memrw.c,v 1.11 2019/04/21 06:37:21 maxv Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: db_memrw.c,v 1.11 2019/04/21 06:37:21 maxv Exp $"</q>);</td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td><u>#include <a href="../../../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="59">59</th><td><u>#include <a href="../../../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../../../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="61">61</th><td></td></tr>
+<tr><th id="62">62</th><td><u>#include <a href="../../amd64/include/db_machdep.h.html">&lt;machine/db_machdep.h&gt;</a></u></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><u>#include <a href="../../../ddb/db_access.h.html">&lt;ddb/db_access.h&gt;</a></u></td></tr>
+<tr><th id="65">65</th><td><u>#include <a href="../../../ddb/db_output.h.html">&lt;ddb/db_output.h&gt;</a></u></td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="68">68</th><td><dfn class="tu decl def fn" id="db_validate_address" title='db_validate_address' data-type='int db_validate_address(vaddr_t addr)' data-ref="db_validate_address" data-ref-filename="db_validate_address">db_validate_address</dfn>(<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col1 decl" id="1addr" title='addr' data-type='vaddr_t' data-ref="1addr" data-ref-filename="1addr">addr</dfn>)</td></tr>
+<tr><th id="69">69</th><td>{</td></tr>
+<tr><th id="70">70</th><td>	<b>struct</b> <a class="type" href="../../../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col2 decl" id="2p" title='p' data-type='struct proc *' data-ref="2p" data-ref-filename="2p">p</dfn> = <a class="macro" href="../../../sys/lwp.h.html#478" title="(x86_curlwp()-&gt;l_proc)" data-ref="_M/curproc">curproc</a>;</td></tr>
+<tr><th id="71">71</th><td>	<b>struct</b> <a class="type" href="../include/pmap.h.html#pmap" title='pmap' data-ref="pmap" data-ref-filename="pmap">pmap</a> *<dfn class="local col3 decl" id="3pmap" title='pmap' data-type='struct pmap *' data-ref="3pmap" data-ref-filename="3pmap">pmap</dfn>;</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td>	<b>if</b> (!<a class="local col2 ref" href="#2p" title='p' data-ref="2p" data-ref-filename="2p">p</a> || !<a class="local col2 ref" href="#2p" title='p' data-ref="2p" data-ref-filename="2p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_vmspace" title='proc::p_vmspace' data-ref="proc::p_vmspace" data-ref-filename="proc..p_vmspace">p_vmspace</a> || !<a class="local col2 ref" href="#2p" title='p' data-ref="2p" data-ref-filename="2p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_vmspace" title='proc::p_vmspace' data-ref="proc::p_vmspace" data-ref-filename="proc..p_vmspace">p_vmspace</a>-&gt;<a class="ref field" href="../../../uvm/uvm_extern.h.html#vmspace::vm_map" title='vmspace::vm_map' data-ref="vmspace::vm_map" data-ref-filename="vmspace..vm_map">vm_map</a>.<a class="ref field" href="../../../uvm/uvm_map.h.html#vm_map::pmap" title='vm_map::pmap' data-ref="vm_map::pmap" data-ref-filename="vm_map..pmap">pmap</a> ||</td></tr>
+<tr><th id="74">74</th><td>	    <a class="local col1 ref" href="#1addr" title='addr' data-ref="1addr" data-ref-filename="1addr">addr</a> &gt;= <a class="macro" href="../../amd64/include/vmparam.h.html#139" title="vm_min_kernel_address" data-ref="_M/VM_MIN_KERNEL_ADDRESS">VM_MIN_KERNEL_ADDRESS</a>)</td></tr>
+<tr><th id="75">75</th><td>		<a class="local col3 ref" href="#3pmap" title='pmap' data-ref="3pmap" data-ref-filename="3pmap">pmap</a> = <a class="macro" href="../../../uvm/uvm_pmap.h.html#91" title="kernel_pmap_ptr" data-ref="_M/pmap_kernel">pmap_kernel</a>();</td></tr>
+<tr><th id="76">76</th><td>	<b>else</b></td></tr>
+<tr><th id="77">77</th><td>		<a class="local col3 ref" href="#3pmap" title='pmap' data-ref="3pmap" data-ref-filename="3pmap">pmap</a> = <a class="local col2 ref" href="#2p" title='p' data-ref="2p" data-ref-filename="2p">p</a>-&gt;<a class="ref field" href="../../../sys/proc.h.html#proc::p_vmspace" title='proc::p_vmspace' data-ref="proc::p_vmspace" data-ref-filename="proc..p_vmspace">p_vmspace</a>-&gt;<a class="ref field" href="../../../uvm/uvm_extern.h.html#vmspace::vm_map" title='vmspace::vm_map' data-ref="vmspace::vm_map" data-ref-filename="vmspace..vm_map">vm_map</a>.<a class="ref field" href="../../../uvm/uvm_map.h.html#vm_map::pmap" title='vm_map::pmap' data-ref="vm_map::pmap" data-ref-filename="vm_map..pmap">pmap</a>;</td></tr>
+<tr><th id="78">78</th><td></td></tr>
+<tr><th id="79">79</th><td>	<b>return</b> (<a class="ref fn" href="../../../uvm/uvm_pmap.h.html#pmap_extract" title='pmap_extract' data-ref="pmap_extract" data-ref-filename="pmap_extract">pmap_extract</a>(<a class="local col3 ref" href="#3pmap" title='pmap' data-ref="3pmap" data-ref-filename="3pmap">pmap</a>, <a class="local col1 ref" href="#1addr" title='addr' data-ref="1addr" data-ref-filename="1addr">addr</a>, <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) == <a class="macro" href="../../../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>);</td></tr>
+<tr><th id="80">80</th><td>}</td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><i>/*</i></td></tr>
+<tr><th id="83">83</th><td><i> * Read bytes from kernel address space for debugger.</i></td></tr>
+<tr><th id="84">84</th><td><i> */</i></td></tr>
+<tr><th id="85">85</th><td><em>void</em></td></tr>
+<tr><th id="86">86</th><td><dfn class="decl def fn" id="db_read_bytes" title='db_read_bytes' data-ref="db_read_bytes" data-ref-filename="db_read_bytes">db_read_bytes</dfn>(<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col4 decl" id="4addr" title='addr' data-type='vaddr_t' data-ref="4addr" data-ref-filename="4addr">addr</dfn>, <a class="typedef" href="../../../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="5size" title='size' data-type='size_t' data-ref="5size" data-ref-filename="5size">size</dfn>, <em>char</em> *<dfn class="local col6 decl" id="6data" title='data' data-type='char *' data-ref="6data" data-ref-filename="6data">data</dfn>)</td></tr>
+<tr><th id="87">87</th><td>{</td></tr>
+<tr><th id="88">88</th><td>	<em>char</em> *<dfn class="local col7 decl" id="7src" title='src' data-type='char *' data-ref="7src" data-ref-filename="7src">src</dfn>;</td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td>	<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a> = (<em>char</em> *)<a class="local col4 ref" href="#4addr" title='addr' data-ref="4addr" data-ref-filename="4addr">addr</a>;</td></tr>
+<tr><th id="91">91</th><td></td></tr>
+<tr><th id="92">92</th><td>	<b>if</b> (<a class="tu ref fn" href="#db_validate_address" title='db_validate_address' data-use='c' data-ref="db_validate_address" data-ref-filename="db_validate_address">db_validate_address</a>((<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a>)<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>)) {</td></tr>
+<tr><th id="93">93</th><td><u>#<span data-ppcond="93">ifdef</span> <a class="macro" href="../../../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_ddb.h.html#10" data-ref="_M/DDB">DDB</a></u></td></tr>
+<tr><th id="94">94</th><td>		<a class="ref fn" href="../../../ddb/db_output.h.html#db_printf" title='db_printf' data-ref="db_printf" data-ref-filename="db_printf">db_printf</a>(<q>"address %p is invalid\n"</q>, <a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>);</td></tr>
+<tr><th id="95">95</th><td><u>#<span data-ppcond="93">endif</span></u></td></tr>
+<tr><th id="96">96</th><td>		<b>return</b>;</td></tr>
+<tr><th id="97">97</th><td>	}</td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td>	<b>if</b> (<a class="local col5 ref" href="#5size" title='size' data-ref="5size" data-ref-filename="5size">size</a> == <var>8</var>) {</td></tr>
+<tr><th id="100">100</th><td>		*((<em>long</em> *)<a class="local col6 ref" href="#6data" title='data' data-ref="6data" data-ref-filename="6data">data</a>) = *((<em>long</em> *)<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>);</td></tr>
+<tr><th id="101">101</th><td>		<b>return</b>;</td></tr>
+<tr><th id="102">102</th><td>	}</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td>	<b>if</b> (<a class="local col5 ref" href="#5size" title='size' data-ref="5size" data-ref-filename="5size">size</a> == <var>4</var>) {</td></tr>
+<tr><th id="105">105</th><td>		*((<em>int</em> *)<a class="local col6 ref" href="#6data" title='data' data-ref="6data" data-ref-filename="6data">data</a>) = *((<em>int</em> *)<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>);</td></tr>
+<tr><th id="106">106</th><td>		<b>return</b>;</td></tr>
+<tr><th id="107">107</th><td>	}</td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td>	<b>if</b> (<a class="local col5 ref" href="#5size" title='size' data-ref="5size" data-ref-filename="5size">size</a> == <var>2</var>) {</td></tr>
+<tr><th id="110">110</th><td>		*((<em>short</em> *)<a class="local col6 ref" href="#6data" title='data' data-ref="6data" data-ref-filename="6data">data</a>) = *((<em>short</em> *)<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>);</td></tr>
+<tr><th id="111">111</th><td>		<b>return</b>;</td></tr>
+<tr><th id="112">112</th><td>	}</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td>	<b>while</b> (<a class="local col5 ref" href="#5size" title='size' data-ref="5size" data-ref-filename="5size">size</a>-- &gt; <var>0</var>) {</td></tr>
+<tr><th id="115">115</th><td>		<b>if</b> (<a class="tu ref fn" href="#db_validate_address" title='db_validate_address' data-use='c' data-ref="db_validate_address" data-ref-filename="db_validate_address">db_validate_address</a>((<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a>)<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>)) {</td></tr>
+<tr><th id="116">116</th><td><u>#<span data-ppcond="116">ifdef</span> <a class="macro" href="../../../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_ddb.h.html#10" data-ref="_M/DDB">DDB</a></u></td></tr>
+<tr><th id="117">117</th><td>			<a class="ref fn" href="../../../ddb/db_output.h.html#db_printf" title='db_printf' data-ref="db_printf" data-ref-filename="db_printf">db_printf</a>(<q>"address %p is invalid\n"</q>, <a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>);</td></tr>
+<tr><th id="118">118</th><td><u>#<span data-ppcond="116">endif</span></u></td></tr>
+<tr><th id="119">119</th><td>			<b>return</b>;</td></tr>
+<tr><th id="120">120</th><td>		}</td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td>		*<a class="local col6 ref" href="#6data" title='data' data-ref="6data" data-ref-filename="6data">data</a>++ = *<a class="local col7 ref" href="#7src" title='src' data-ref="7src" data-ref-filename="7src">src</a>++;</td></tr>
+<tr><th id="123">123</th><td>	}</td></tr>
+<tr><th id="124">124</th><td>}</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td><i  data-doc="db_write_text">/*</i></td></tr>
+<tr><th id="127">127</th><td><i  data-doc="db_write_text"> * Write bytes somewhere in the kernel text.  Make the text</i></td></tr>
+<tr><th id="128">128</th><td><i  data-doc="db_write_text"> * pages writable temporarily.</i></td></tr>
+<tr><th id="129">129</th><td><i  data-doc="db_write_text"> */</i></td></tr>
+<tr><th id="130">130</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="131">131</th><td><dfn class="tu decl def fn" id="db_write_text" title='db_write_text' data-type='void db_write_text(vaddr_t addr, size_t size, const char * data)' data-ref="db_write_text" data-ref-filename="db_write_text">db_write_text</dfn>(<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col8 decl" id="8addr" title='addr' data-type='vaddr_t' data-ref="8addr" data-ref-filename="8addr">addr</dfn>, <a class="typedef" href="../../../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col9 decl" id="9size" title='size' data-type='size_t' data-ref="9size" data-ref-filename="9size">size</dfn>, <em>const</em> <em>char</em> *<dfn class="local col0 decl" id="10data" title='data' data-type='const char *' data-ref="10data" data-ref-filename="10data">data</dfn>)</td></tr>
+<tr><th id="132">132</th><td>{</td></tr>
+<tr><th id="133">133</th><td>	<a class="typedef" href="../../amd64/include/pte.h.html#pt_entry_t" title='pt_entry_t' data-type='uint64_t' data-ref="pt_entry_t" data-ref-filename="pt_entry_t">pt_entry_t</a> *<dfn class="local col1 decl" id="11ppte" title='ppte' data-type='pt_entry_t *' data-ref="11ppte" data-ref-filename="11ppte">ppte</dfn>, <dfn class="local col2 decl" id="12pte" title='pte' data-type='pt_entry_t' data-ref="12pte" data-ref-filename="12pte">pte</dfn>;</td></tr>
+<tr><th id="134">134</th><td>	<a class="typedef" href="../../../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col3 decl" id="13limit" title='limit' data-type='size_t' data-ref="13limit" data-ref-filename="13limit">limit</dfn>;</td></tr>
+<tr><th id="135">135</th><td>	<em>char</em> *<dfn class="local col4 decl" id="14dst" title='dst' data-type='char *' data-ref="14dst" data-ref-filename="14dst">dst</dfn>;</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td>	<b>if</b> (<a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a> == <var>0</var>)</td></tr>
+<tr><th id="138">138</th><td>		<b>return</b>;</td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td>	<a class="local col4 ref" href="#14dst" title='dst' data-ref="14dst" data-ref-filename="14dst">dst</a> = (<em>char</em> *)<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a>;</td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td>	<b>do</b> {</td></tr>
+<tr><th id="143">143</th><td>		<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a> = (<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a>)<a class="local col4 ref" href="#14dst" title='dst' data-ref="14dst" data-ref-filename="14dst">dst</a>;</td></tr>
+<tr><th id="144">144</th><td>		<i>/*</i></td></tr>
+<tr><th id="145">145</th><td><i>		 * Get the PTE for the page.</i></td></tr>
+<tr><th id="146">146</th><td><i>		 */</i></td></tr>
+<tr><th id="147">147</th><td>		<a class="local col1 ref" href="#11ppte" title='ppte' data-ref="11ppte" data-ref-filename="11ppte">ppte</a> = <a class="ref fn" href="../include/pmap.h.html#kvtopte" title='kvtopte' data-ref="kvtopte" data-ref-filename="kvtopte">kvtopte</a>(<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a>);</td></tr>
+<tr><th id="148">148</th><td>		<a class="local col2 ref" href="#12pte" title='pte' data-ref="12pte" data-ref-filename="12pte">pte</a> = *<a class="local col1 ref" href="#11ppte" title='ppte' data-ref="11ppte" data-ref-filename="11ppte">ppte</a>;</td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td>		<b>if</b> ((<a class="local col2 ref" href="#12pte" title='pte' data-ref="12pte" data-ref-filename="12pte">pte</a> &amp; <a class="macro" href="../../amd64/include/pte.h.html#100" title="0x0000000000000001" data-ref="_M/PTE_P">PTE_P</a>) == <var>0</var>) {</td></tr>
+<tr><th id="151">151</th><td><u>#<span data-ppcond="151">ifdef</span> <a class="macro" href="../../../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_ddb.h.html#10" data-ref="_M/DDB">DDB</a></u></td></tr>
+<tr><th id="152">152</th><td>			<a class="ref fn" href="../../../ddb/db_output.h.html#db_printf" title='db_printf' data-ref="db_printf" data-ref-filename="db_printf">db_printf</a>(<q>" address %p not a valid page\n"</q>, <a class="local col4 ref" href="#14dst" title='dst' data-ref="14dst" data-ref-filename="14dst">dst</a>);</td></tr>
+<tr><th id="153">153</th><td><u>#<span data-ppcond="151">endif</span></u></td></tr>
+<tr><th id="154">154</th><td>			<b>return</b>;</td></tr>
+<tr><th id="155">155</th><td>		}</td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td>		<i>/*</i></td></tr>
+<tr><th id="158">158</th><td><i>		 * Compute number of bytes that can be written</i></td></tr>
+<tr><th id="159">159</th><td><i>		 * with this mapping and subtract it from the</i></td></tr>
+<tr><th id="160">160</th><td><i>		 * total size.</i></td></tr>
+<tr><th id="161">161</th><td><i>		 */</i></td></tr>
+<tr><th id="162">162</th><td>		<b>if</b> (<a class="local col2 ref" href="#12pte" title='pte' data-ref="12pte" data-ref-filename="12pte">pte</a> &amp; <a class="macro" href="../../amd64/include/pte.h.html#108" title="0x0000000000000080" data-ref="_M/PTE_PS">PTE_PS</a>)</td></tr>
+<tr><th id="163">163</th><td>			<a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a> = <a class="macro" href="../../amd64/include/pte.h.html#83" title="(1UL &lt;&lt; 21)" data-ref="_M/NBPD_L2">NBPD_L2</a> - (<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a> &amp; (<a class="macro" href="../../amd64/include/pte.h.html#83" title="(1UL &lt;&lt; 21)" data-ref="_M/NBPD_L2">NBPD_L2</a> - <var>1</var>));</td></tr>
+<tr><th id="164">164</th><td>		<b>else</b></td></tr>
+<tr><th id="165">165</th><td>			<a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a> = <a class="macro" href="../../amd64/include/vmparam.h.html#56" title="(1 &lt;&lt; 12)" data-ref="_M/PAGE_SIZE">PAGE_SIZE</a> - (<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a> &amp; <a class="macro" href="../../amd64/include/param.h.html#38" title="((1 &lt;&lt; 12)-1)" data-ref="_M/PGOFSET">PGOFSET</a>);</td></tr>
+<tr><th id="166">166</th><td>		<b>if</b> (<a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a> &gt; <a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a>)</td></tr>
+<tr><th id="167">167</th><td>			<a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a> = <a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a>;</td></tr>
+<tr><th id="168">168</th><td>		<a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a> -= <a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a>;</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>		<i>/*</i></td></tr>
+<tr><th id="171">171</th><td><i>		 * Make the kernel text page writable.</i></td></tr>
+<tr><th id="172">172</th><td><i>		 */</i></td></tr>
+<tr><th id="173">173</th><td>		<a class="macro" href="../../amd64/include/pmap.h.html#193" title="atomic_or_ulong((volatile unsigned long *)ppte, 0x0000000000000002)" data-ref="_M/pmap_pte_setbits">pmap_pte_setbits</a>(<a class="local col1 ref" href="#11ppte" title='ppte' data-ref="11ppte" data-ref-filename="11ppte">ppte</a>, <a class="macro" href="../../amd64/include/pte.h.html#101" title="0x0000000000000002" data-ref="_M/PTE_W">PTE_W</a>);</td></tr>
+<tr><th id="174">174</th><td>		<a class="ref fn" href="../include/pmap.h.html#pmap_update_pg" title='pmap_update_pg' data-ref="pmap_update_pg" data-ref-filename="pmap_update_pg">pmap_update_pg</a>(<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a>);</td></tr>
+<tr><th id="175">175</th><td></td></tr>
+<tr><th id="176">176</th><td>		<i>/*</i></td></tr>
+<tr><th id="177">177</th><td><i>		 * MULTIPROCESSOR: no shootdown required as the PTE continues to</i></td></tr>
+<tr><th id="178">178</th><td><i>		 * map the same page and other CPUs do not need write access.</i></td></tr>
+<tr><th id="179">179</th><td><i>		 */</i></td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>		<i>/*</i></td></tr>
+<tr><th id="182">182</th><td><i>		 * Page is now writable.  Do as much access as we</i></td></tr>
+<tr><th id="183">183</th><td><i>		 * can in this page.</i></td></tr>
+<tr><th id="184">184</th><td><i>		 */</i></td></tr>
+<tr><th id="185">185</th><td>		<b>for</b> (; <a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a> &gt; <var>0</var>; <a class="local col3 ref" href="#13limit" title='limit' data-ref="13limit" data-ref-filename="13limit">limit</a>--)</td></tr>
+<tr><th id="186">186</th><td>			*<a class="local col4 ref" href="#14dst" title='dst' data-ref="14dst" data-ref-filename="14dst">dst</a>++ = *<a class="local col0 ref" href="#10data" title='data' data-ref="10data" data-ref-filename="10data">data</a>++;</td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td>		<i>/*</i></td></tr>
+<tr><th id="189">189</th><td><i>		 * Turn the page back to read-only.</i></td></tr>
+<tr><th id="190">190</th><td><i>		 */</i></td></tr>
+<tr><th id="191">191</th><td>		<a class="macro" href="../../amd64/include/pmap.h.html#195" title="atomic_and_ulong((volatile unsigned long *)ppte, ~(0x0000000000000002))" data-ref="_M/pmap_pte_clearbits">pmap_pte_clearbits</a>(<a class="local col1 ref" href="#11ppte" title='ppte' data-ref="11ppte" data-ref-filename="11ppte">ppte</a>, <a class="macro" href="../../amd64/include/pte.h.html#101" title="0x0000000000000002" data-ref="_M/PTE_W">PTE_W</a>);</td></tr>
+<tr><th id="192">192</th><td>		<a class="ref fn" href="../include/pmap.h.html#pmap_update_pg" title='pmap_update_pg' data-ref="pmap_update_pg" data-ref-filename="pmap_update_pg">pmap_update_pg</a>(<a class="local col8 ref" href="#8addr" title='addr' data-ref="8addr" data-ref-filename="8addr">addr</a>);</td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>		<i>/*</i></td></tr>
+<tr><th id="195">195</th><td><i>		 * MULTIPROCESSOR: no shootdown required as all other CPUs</i></td></tr>
+<tr><th id="196">196</th><td><i>		 * should be in CPUF_PAUSE state and will not cache the PTE</i></td></tr>
+<tr><th id="197">197</th><td><i>		 * with the write access set.</i></td></tr>
+<tr><th id="198">198</th><td><i>		 */</i></td></tr>
+<tr><th id="199">199</th><td>	} <b>while</b> (<a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a> != <var>0</var>);</td></tr>
+<tr><th id="200">200</th><td>}</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td><i>/*</i></td></tr>
+<tr><th id="203">203</th><td><i> * Write bytes to kernel address space for debugger.</i></td></tr>
+<tr><th id="204">204</th><td><i> */</i></td></tr>
+<tr><th id="205">205</th><td><em>void</em></td></tr>
+<tr><th id="206">206</th><td><dfn class="decl def fn" id="db_write_bytes" title='db_write_bytes' data-ref="db_write_bytes" data-ref-filename="db_write_bytes">db_write_bytes</dfn>(<a class="typedef" href="../../amd64/include/types.h.html#vaddr_t" title='vaddr_t' data-type='unsigned long' data-ref="vaddr_t" data-ref-filename="vaddr_t">vaddr_t</a> <dfn class="local col5 decl" id="15addr" title='addr' data-type='vaddr_t' data-ref="15addr" data-ref-filename="15addr">addr</dfn>, <a class="typedef" href="../../../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col6 decl" id="16size" title='size' data-type='size_t' data-ref="16size" data-ref-filename="16size">size</dfn>, <em>const</em> <em>char</em> *<dfn class="local col7 decl" id="17data" title='data' data-type='const char *' data-ref="17data" data-ref-filename="17data">data</dfn>)</td></tr>
+<tr><th id="207">207</th><td>{</td></tr>
+<tr><th id="208">208</th><td>	<b>extern</b> <b>struct</b> <a class="type" href="../include/pmap.h.html#bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</a> <dfn class="decl" id="bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</dfn>;</td></tr>
+<tr><th id="209">209</th><td>	<em>char</em> *<dfn class="local col8 decl" id="18dst" title='dst' data-type='char *' data-ref="18dst" data-ref-filename="18dst">dst</dfn>;</td></tr>
+<tr><th id="210">210</th><td>	<a class="typedef" href="../../../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col9 decl" id="19i" title='i' data-type='size_t' data-ref="19i" data-ref-filename="19i">i</dfn>;</td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td>	<a class="local col8 ref" href="#18dst" title='dst' data-ref="18dst" data-ref-filename="18dst">dst</a> = (<em>char</em> *)<a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a>;</td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td>	<i>/* If any part is in kernel text or rodata, use db_write_text() */</i></td></tr>
+<tr><th id="215">215</th><td>	<b>for</b> (<a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a> = <var>0</var>; <a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a> &lt; <a class="macro" href="../include/pmap.h.html#129" title="64" data-ref="_M/BTSPACE_NSEGS">BTSPACE_NSEGS</a>; <a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a>++) {</td></tr>
+<tr><th id="216">216</th><td>		<b>if</b> (<a class="ref" href="#bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</a>.<a class="ref field" href="../include/pmap.h.html#bootspace::segs" title='bootspace::segs' data-ref="bootspace::segs" data-ref-filename="bootspace..segs">segs</a>[<a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a>].<a class="ref field" href="../include/pmap.h.html#bootspace::(anonymous)::type" title='bootspace::(anonymous struct)::type' data-ref="bootspace::(anonymous)::type" data-ref-filename="bootspace..(anonymous)..type">type</a> != <a class="macro" href="../include/pmap.h.html#126" title="1" data-ref="_M/BTSEG_TEXT">BTSEG_TEXT</a> &amp;&amp;</td></tr>
+<tr><th id="217">217</th><td>		    <a class="ref" href="#bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</a>.<a class="ref field" href="../include/pmap.h.html#bootspace::segs" title='bootspace::segs' data-ref="bootspace::segs" data-ref-filename="bootspace..segs">segs</a>[<a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a>].<a class="ref field" href="../include/pmap.h.html#bootspace::(anonymous)::type" title='bootspace::(anonymous struct)::type' data-ref="bootspace::(anonymous)::type" data-ref-filename="bootspace..(anonymous)..type">type</a> != <a class="macro" href="../include/pmap.h.html#127" title="2" data-ref="_M/BTSEG_RODATA">BTSEG_RODATA</a>) {</td></tr>
+<tr><th id="218">218</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="219">219</th><td>		}</td></tr>
+<tr><th id="220">220</th><td>		<b>if</b> (<a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a> &gt;= <a class="ref" href="#bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</a>.<a class="ref field" href="../include/pmap.h.html#bootspace::segs" title='bootspace::segs' data-ref="bootspace::segs" data-ref-filename="bootspace..segs">segs</a>[<a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a>].<a class="ref field" href="../include/pmap.h.html#bootspace::(anonymous)::va" title='bootspace::(anonymous struct)::va' data-ref="bootspace::(anonymous)::va" data-ref-filename="bootspace..(anonymous)..va">va</a> &amp;&amp;</td></tr>
+<tr><th id="221">221</th><td>		    <a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a> &lt; (<a class="ref" href="#bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</a>.<a class="ref field" href="../include/pmap.h.html#bootspace::segs" title='bootspace::segs' data-ref="bootspace::segs" data-ref-filename="bootspace..segs">segs</a>[<a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a>].<a class="ref field" href="../include/pmap.h.html#bootspace::(anonymous)::va" title='bootspace::(anonymous struct)::va' data-ref="bootspace::(anonymous)::va" data-ref-filename="bootspace..(anonymous)..va">va</a> + <a class="ref" href="#bootspace" title='bootspace' data-ref="bootspace" data-ref-filename="bootspace">bootspace</a>.<a class="ref field" href="../include/pmap.h.html#bootspace::segs" title='bootspace::segs' data-ref="bootspace::segs" data-ref-filename="bootspace..segs">segs</a>[<a class="local col9 ref" href="#19i" title='i' data-ref="19i" data-ref-filename="19i">i</a>].<a class="ref field" href="../include/pmap.h.html#bootspace::(anonymous)::sz" title='bootspace::(anonymous struct)::sz' data-ref="bootspace::(anonymous)::sz" data-ref-filename="bootspace..(anonymous)..sz">sz</a>)) {</td></tr>
+<tr><th id="222">222</th><td>			<a class="tu ref fn" href="#db_write_text" title='db_write_text' data-use='c' data-ref="db_write_text" data-ref-filename="db_write_text">db_write_text</a>(<a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a>, <a class="local col6 ref" href="#16size" title='size' data-ref="16size" data-ref-filename="16size">size</a>, <a class="local col7 ref" href="#17data" title='data' data-ref="17data" data-ref-filename="17data">data</a>);</td></tr>
+<tr><th id="223">223</th><td>			<b>return</b>;</td></tr>
+<tr><th id="224">224</th><td>		}</td></tr>
+<tr><th id="225">225</th><td>	}</td></tr>
+<tr><th id="226">226</th><td></td></tr>
+<tr><th id="227">227</th><td>	<a class="local col8 ref" href="#18dst" title='dst' data-ref="18dst" data-ref-filename="18dst">dst</a> = (<em>char</em> *)<a class="local col5 ref" href="#15addr" title='addr' data-ref="15addr" data-ref-filename="15addr">addr</a>;</td></tr>
+<tr><th id="228">228</th><td></td></tr>
+<tr><th id="229">229</th><td>	<b>if</b> (<a class="local col6 ref" href="#16size" title='size' data-ref="16size" data-ref-filename="16size">size</a> == <var>8</var>) {</td></tr>
+<tr><th id="230">230</th><td>		*((<em>long</em> *)<a class="local col8 ref" href="#18dst" title='dst' data-ref="18dst" data-ref-filename="18dst">dst</a>) = *((<em>const</em> <em>long</em> *)<a class="local col7 ref" href="#17data" title='data' data-ref="17data" data-ref-filename="17data">data</a>);</td></tr>
+<tr><th id="231">231</th><td>		<b>return</b>;</td></tr>
+<tr><th id="232">232</th><td>	}</td></tr>
+<tr><th id="233">233</th><td></td></tr>
+<tr><th id="234">234</th><td>	<b>if</b> (<a class="local col6 ref" href="#16size" title='size' data-ref="16size" data-ref-filename="16size">size</a> == <var>4</var>) {</td></tr>
+<tr><th id="235">235</th><td>		*((<em>int</em> *)<a class="local col8 ref" href="#18dst" title='dst' data-ref="18dst" data-ref-filename="18dst">dst</a>) = *((<em>const</em> <em>int</em> *)<a class="local col7 ref" href="#17data" title='data' data-ref="17data" data-ref-filename="17data">data</a>);</td></tr>
+<tr><th id="236">236</th><td>		<b>return</b>;</td></tr>
+<tr><th id="237">237</th><td>	}</td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<b>if</b> (<a class="local col6 ref" href="#16size" title='size' data-ref="16size" data-ref-filename="16size">size</a> == <var>2</var>) {</td></tr>
+<tr><th id="240">240</th><td>		*((<em>short</em> *)<a class="local col8 ref" href="#18dst" title='dst' data-ref="18dst" data-ref-filename="18dst">dst</a>) = *((<em>const</em> <em>short</em> *)<a class="local col7 ref" href="#17data" title='data' data-ref="17data" data-ref-filename="17data">data</a>);</td></tr>
+<tr><th id="241">241</th><td>		<b>return</b>;</td></tr>
+<tr><th id="242">242</th><td>	}</td></tr>
+<tr><th id="243">243</th><td></td></tr>
+<tr><th id="244">244</th><td>	<b>while</b> (<a class="local col6 ref" href="#16size" title='size' data-ref="16size" data-ref-filename="16size">size</a>-- &gt; <var>0</var>)</td></tr>
+<tr><th id="245">245</th><td>		*<a class="local col8 ref" href="#18dst" title='dst' data-ref="18dst" data-ref-filename="18dst">dst</a>++ = *<a class="local col7 ref" href="#17data" title='data' data-ref="17data" data-ref-filename="17data">data</a>++;</td></tr>
+<tr><th id="246">246</th><td>}</td></tr>
+<tr><th id="247">247</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

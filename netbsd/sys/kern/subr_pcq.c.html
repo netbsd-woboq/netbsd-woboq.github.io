@@ -1,0 +1,245 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>subr_pcq.c source code [netbsd/sys/kern/subr_pcq.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="pcq "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/subr_pcq.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='subr_pcq.c.html'>subr_pcq.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: subr_pcq.c,v 1.10 2018/02/08 09:05:20 dholland Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2009 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i> * Lockless producer/consumer queue.</i></td></tr>
+<tr><th id="34">34</th><td><i> */</i></td></tr>
+<tr><th id="35">35</th><td></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="37">37</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: subr_pcq.c,v 1.10 2018/02/08 09:05:20 dholland Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: subr_pcq.c,v 1.10 2018/02/08 09:05:20 dholland Exp $"</q>);</td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="40">40</th><td><u>#include <a href="../sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="41">41</th><td><u>#include <a href="../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td></td></tr>
+<tr><th id="44">44</th><td><u>#include <a href="../sys/pcq.h.html">&lt;sys/pcq.h&gt;</a></u></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><i>/*</i></td></tr>
+<tr><th id="47">47</th><td><i> * Internal producer-consumer queue structure.  Note: providing a separate</i></td></tr>
+<tr><th id="48">48</th><td><i> * cache-line both for pcq_t::pcq_pc and pcq_t::pcq_items.</i></td></tr>
+<tr><th id="49">49</th><td><i> */</i></td></tr>
+<tr><th id="50">50</th><td><b>struct</b> <dfn class="type def" id="pcq" title='pcq' data-ref="pcq" data-ref-filename="pcq">pcq</dfn> {</td></tr>
+<tr><th id="51">51</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>			<dfn class="decl field" id="pcq::pcq_nitems" title='pcq::pcq_nitems' data-ref="pcq::pcq_nitems" data-ref-filename="pcq..pcq_nitems">pcq_nitems</dfn>;</td></tr>
+<tr><th id="52">52</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>			<dfn class="decl field" id="pcq::pcq_pad1" title='pcq::pcq_pad1' data-ref="pcq::pcq_pad1" data-ref-filename="pcq..pcq_pad1">pcq_pad1</dfn>[<a class="macro" href="../sys/param.h.html#200" title="64" data-ref="_M/COHERENCY_UNIT">COHERENCY_UNIT</a> - <b>sizeof</b>(<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>)];</td></tr>
+<tr><th id="53">53</th><td>	<em>volatile</em> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>	<dfn class="decl field" id="pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</dfn>;</td></tr>
+<tr><th id="54">54</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>			<dfn class="decl field" id="pcq::pcq_pad2" title='pcq::pcq_pad2' data-ref="pcq::pcq_pad2" data-ref-filename="pcq..pcq_pad2">pcq_pad2</dfn>[<a class="macro" href="../sys/param.h.html#200" title="64" data-ref="_M/COHERENCY_UNIT">COHERENCY_UNIT</a> - <b>sizeof</b>(<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a>)];</td></tr>
+<tr><th id="55">55</th><td>	<em>void</em> * <em>volatile</em>		<dfn class="decl field" id="pcq::pcq_items" title='pcq::pcq_items' data-ref="pcq::pcq_items" data-ref-filename="pcq..pcq_items">pcq_items</dfn>[];</td></tr>
+<tr><th id="56">56</th><td>};</td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td><i  data-doc="pcq_split">/*</i></td></tr>
+<tr><th id="59">59</th><td><i  data-doc="pcq_split"> * Producer (p) - stored in the lower 16 bits of pcq_t::pcq_pc.</i></td></tr>
+<tr><th id="60">60</th><td><i  data-doc="pcq_split"> * Consumer (c) - in the higher 16 bits.</i></td></tr>
+<tr><th id="61">61</th><td><i  data-doc="pcq_split"> *</i></td></tr>
+<tr><th id="62">62</th><td><i  data-doc="pcq_split"> * We have a limitation of 16 bits i.e. 0xffff items in the queue.</i></td></tr>
+<tr><th id="63">63</th><td><i  data-doc="pcq_split"> * The PCQ_MAXLEN constant is set accordingly.</i></td></tr>
+<tr><th id="64">64</th><td><i  data-doc="pcq_split"> */</i></td></tr>
+<tr><th id="65">65</th><td></td></tr>
+<tr><th id="66">66</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="67">67</th><td><dfn class="tu decl def fn" id="pcq_split" title='pcq_split' data-type='void pcq_split(uint32_t v, u_int * p, u_int * c)' data-ref="pcq_split" data-ref-filename="pcq_split">pcq_split</dfn>(<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col1 decl" id="1v" title='v' data-type='uint32_t' data-ref="1v" data-ref-filename="1v">v</dfn>, <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> *<dfn class="local col2 decl" id="2p" title='p' data-type='u_int *' data-ref="2p" data-ref-filename="2p">p</dfn>, <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> *<dfn class="local col3 decl" id="3c" title='c' data-type='u_int *' data-ref="3c" data-ref-filename="3c">c</dfn>)</td></tr>
+<tr><th id="68">68</th><td>{</td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td>	*<a class="local col2 ref" href="#2p" title='p' data-ref="2p" data-ref-filename="2p">p</a> = <a class="local col1 ref" href="#1v" title='v' data-ref="1v" data-ref-filename="1v">v</a> &amp; <var>0xffff</var>;</td></tr>
+<tr><th id="71">71</th><td>	*<a class="local col3 ref" href="#3c" title='c' data-ref="3c" data-ref-filename="3c">c</a> = <a class="local col1 ref" href="#1v" title='v' data-ref="1v" data-ref-filename="1v">v</a> &gt;&gt; <var>16</var>;</td></tr>
+<tr><th id="72">72</th><td>}</td></tr>
+<tr><th id="73">73</th><td></td></tr>
+<tr><th id="74">74</th><td><em>static</em> <b>inline</b> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a></td></tr>
+<tr><th id="75">75</th><td><dfn class="tu decl def fn" id="pcq_combine" title='pcq_combine' data-type='uint32_t pcq_combine(u_int p, u_int c)' data-ref="pcq_combine" data-ref-filename="pcq_combine">pcq_combine</dfn>(<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col4 decl" id="4p" title='p' data-type='u_int' data-ref="4p" data-ref-filename="4p">p</dfn>, <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col5 decl" id="5c" title='c' data-type='u_int' data-ref="5c" data-ref-filename="5c">c</dfn>)</td></tr>
+<tr><th id="76">76</th><td>{</td></tr>
+<tr><th id="77">77</th><td></td></tr>
+<tr><th id="78">78</th><td>	<b>return</b> <a class="local col4 ref" href="#4p" title='p' data-ref="4p" data-ref-filename="4p">p</a> | (<a class="local col5 ref" href="#5c" title='c' data-ref="5c" data-ref-filename="5c">c</a> &lt;&lt; <var>16</var>);</td></tr>
+<tr><th id="79">79</th><td>}</td></tr>
+<tr><th id="80">80</th><td></td></tr>
+<tr><th id="81">81</th><td><em>static</em> <b>inline</b> <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a></td></tr>
+<tr><th id="82">82</th><td><dfn class="tu decl def fn" id="pcq_advance" title='pcq_advance' data-type='u_int pcq_advance(pcq_t * pcq, u_int pc)' data-ref="pcq_advance" data-ref-filename="pcq_advance">pcq_advance</dfn>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col6 decl" id="6pcq" title='pcq' data-type='pcq_t *' data-ref="6pcq" data-ref-filename="6pcq">pcq</dfn>, <a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col7 decl" id="7pc" title='pc' data-type='u_int' data-ref="7pc" data-ref-filename="7pc">pc</dfn>)</td></tr>
+<tr><th id="83">83</th><td>{</td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((++pc == pcq-&gt;pcq_nitems) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(++<a class="local col7 ref" href="#7pc" title='pc' data-ref="7pc" data-ref-filename="7pc">pc</a> == <a class="local col6 ref" href="#6pcq" title='pcq' data-ref="6pcq" data-ref-filename="6pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_nitems" title='pcq::pcq_nitems' data-ref="pcq::pcq_nitems" data-ref-filename="pcq..pcq_nitems">pcq_nitems</a>)) {</td></tr>
+<tr><th id="86">86</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="87">87</th><td>	}</td></tr>
+<tr><th id="88">88</th><td>	<b>return</b> <a class="local col7 ref" href="#7pc" title='pc' data-ref="7pc" data-ref-filename="7pc">pc</a>;</td></tr>
+<tr><th id="89">89</th><td>}</td></tr>
+<tr><th id="90">90</th><td></td></tr>
+<tr><th id="91">91</th><td><i>/*</i></td></tr>
+<tr><th id="92">92</th><td><i> * pcq_put: place an item at the end of the queue.</i></td></tr>
+<tr><th id="93">93</th><td><i> */</i></td></tr>
+<tr><th id="94">94</th><td><a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="95">95</th><td><dfn class="decl def fn" id="pcq_put" title='pcq_put' data-ref="pcq_put" data-ref-filename="pcq_put">pcq_put</dfn>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col8 decl" id="8pcq" title='pcq' data-type='pcq_t *' data-ref="8pcq" data-ref-filename="8pcq">pcq</dfn>, <em>void</em> *<dfn class="local col9 decl" id="9item" title='item' data-type='void *' data-ref="9item" data-ref-filename="9item">item</dfn>)</td></tr>
+<tr><th id="96">96</th><td>{</td></tr>
+<tr><th id="97">97</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="10v" title='v' data-type='uint32_t' data-ref="10v" data-ref-filename="10v">v</dfn>, <dfn class="local col1 decl" id="11nv" title='nv' data-type='uint32_t' data-ref="11nv" data-ref-filename="11nv">nv</dfn>;</td></tr>
+<tr><th id="98">98</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col2 decl" id="12op" title='op' data-type='u_int' data-ref="12op" data-ref-filename="12op">op</dfn>, <dfn class="local col3 decl" id="13p" title='p' data-type='u_int' data-ref="13p" data-ref-filename="13p">p</dfn>, <dfn class="local col4 decl" id="14c" title='c' data-type='u_int' data-ref="14c" data-ref-filename="14c">c</dfn>;</td></tr>
+<tr><th id="99">99</th><td></td></tr>
+<tr><th id="100">100</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((item != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;item != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pcq.c&quot;, 100))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col9 ref" href="#9item" title='item' data-ref="9item" data-ref-filename="9item">item</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td>	<b>do</b> {</td></tr>
+<tr><th id="103">103</th><td>		<a class="local col0 ref" href="#10v" title='v' data-ref="10v" data-ref-filename="10v">v</a> = <a class="local col8 ref" href="#8pcq" title='pcq' data-ref="8pcq" data-ref-filename="8pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</a>;</td></tr>
+<tr><th id="104">104</th><td>		<a class="tu ref fn" href="#pcq_split" title='pcq_split' data-use='c' data-ref="pcq_split" data-ref-filename="pcq_split">pcq_split</a>(<a class="local col0 ref" href="#10v" title='v' data-ref="10v" data-ref-filename="10v">v</a>, &amp;<a class="local col2 ref" href="#12op" title='op' data-ref="12op" data-ref-filename="12op">op</a>, &amp;<a class="local col4 ref" href="#14c" title='c' data-ref="14c" data-ref-filename="14c">c</a>);</td></tr>
+<tr><th id="105">105</th><td>		<a class="local col3 ref" href="#13p" title='p' data-ref="13p" data-ref-filename="13p">p</a> = <a class="tu ref fn" href="#pcq_advance" title='pcq_advance' data-use='c' data-ref="pcq_advance" data-ref-filename="pcq_advance">pcq_advance</a>(<a class="local col8 ref" href="#8pcq" title='pcq' data-ref="8pcq" data-ref-filename="8pcq">pcq</a>, <a class="local col2 ref" href="#12op" title='op' data-ref="12op" data-ref-filename="12op">op</a>);</td></tr>
+<tr><th id="106">106</th><td>		<b>if</b> (<a class="local col3 ref" href="#13p" title='p' data-ref="13p" data-ref-filename="13p">p</a> == <a class="local col4 ref" href="#14c" title='c' data-ref="14c" data-ref-filename="14c">c</a>) {</td></tr>
+<tr><th id="107">107</th><td>			<i>/* Queue is full. */</i></td></tr>
+<tr><th id="108">108</th><td>			<b>return</b> <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="109">109</th><td>		}</td></tr>
+<tr><th id="110">110</th><td>		<a class="local col1 ref" href="#11nv" title='nv' data-ref="11nv" data-ref-filename="11nv">nv</a> = <a class="tu ref fn" href="#pcq_combine" title='pcq_combine' data-use='c' data-ref="pcq_combine" data-ref-filename="pcq_combine">pcq_combine</a>(<a class="local col3 ref" href="#13p" title='p' data-ref="13p" data-ref-filename="13p">p</a>, <a class="local col4 ref" href="#14c" title='c' data-ref="14c" data-ref-filename="14c">c</a>);</td></tr>
+<tr><th id="111">111</th><td>	} <b>while</b> (<a class="ref fn" href="../sys/atomic.h.html#atomic_cas_32" title='atomic_cas_32' data-ref="atomic_cas_32" data-ref-filename="atomic_cas_32">atomic_cas_32</a>(&amp;<a class="local col8 ref" href="#8pcq" title='pcq' data-ref="8pcq" data-ref-filename="8pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</a>, <a class="local col0 ref" href="#10v" title='v' data-ref="10v" data-ref-filename="10v">v</a>, <a class="local col1 ref" href="#11nv" title='nv' data-ref="11nv" data-ref-filename="11nv">nv</a>) != <a class="local col0 ref" href="#10v" title='v' data-ref="10v" data-ref-filename="10v">v</a>);</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td>	<i>/*</i></td></tr>
+<tr><th id="114">114</th><td><i>	 * Ensure that the update to pcq_pc is globally visible before the</i></td></tr>
+<tr><th id="115">115</th><td><i>	 * data item.  See pcq_get().  This also ensures that any changes</i></td></tr>
+<tr><th id="116">116</th><td><i>	 * that the caller made to the data item are globally visible</i></td></tr>
+<tr><th id="117">117</th><td><i>	 * before we put it onto the list.</i></td></tr>
+<tr><th id="118">118</th><td><i>	 */</i></td></tr>
+<tr><th id="119">119</th><td><u>#<span data-ppcond="119">ifndef</span> <a class="macro" href="../arch/i386/include/types.h.html#125" data-ref="_M/__HAVE_ATOMIC_AS_MEMBAR">__HAVE_ATOMIC_AS_MEMBAR</a></u></td></tr>
+<tr><th id="120">120</th><td>	membar_producer();</td></tr>
+<tr><th id="121">121</th><td><u>#<span data-ppcond="119">endif</span></u></td></tr>
+<tr><th id="122">122</th><td>	<a class="local col8 ref" href="#8pcq" title='pcq' data-ref="8pcq" data-ref-filename="8pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_items" title='pcq::pcq_items' data-ref="pcq::pcq_items" data-ref-filename="pcq..pcq_items">pcq_items</a>[<a class="local col2 ref" href="#12op" title='op' data-ref="12op" data-ref-filename="12op">op</a>] = <a class="local col9 ref" href="#9item" title='item' data-ref="9item" data-ref-filename="9item">item</a>;</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td>	<i>/*</i></td></tr>
+<tr><th id="125">125</th><td><i>	 * Synchronization activity to wake up the consumer will ensure</i></td></tr>
+<tr><th id="126">126</th><td><i>	 * that the update to pcq_items[] is visible before the wakeup</i></td></tr>
+<tr><th id="127">127</th><td><i>	 * arrives.  So, we do not need an additonal memory barrier here.</i></td></tr>
+<tr><th id="128">128</th><td><i>	 */</i></td></tr>
+<tr><th id="129">129</th><td>	<b>return</b> <a class="macro" href="../sys/stdbool.h.html#39" title="1" data-ref="_M/true">true</a>;</td></tr>
+<tr><th id="130">130</th><td>}</td></tr>
+<tr><th id="131">131</th><td></td></tr>
+<tr><th id="132">132</th><td><i>/*</i></td></tr>
+<tr><th id="133">133</th><td><i> * pcq_peek: return the next item from the queue without removal.</i></td></tr>
+<tr><th id="134">134</th><td><i> */</i></td></tr>
+<tr><th id="135">135</th><td><em>void</em> *</td></tr>
+<tr><th id="136">136</th><td><dfn class="decl def fn" id="pcq_peek" title='pcq_peek' data-ref="pcq_peek" data-ref-filename="pcq_peek">pcq_peek</dfn>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col5 decl" id="15pcq" title='pcq' data-type='pcq_t *' data-ref="15pcq" data-ref-filename="15pcq">pcq</dfn>)</td></tr>
+<tr><th id="137">137</th><td>{</td></tr>
+<tr><th id="138">138</th><td>	<em>const</em> <a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col6 decl" id="16v" title='v' data-type='const uint32_t' data-ref="16v" data-ref-filename="16v">v</dfn> = <a class="local col5 ref" href="#15pcq" title='pcq' data-ref="15pcq" data-ref-filename="15pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</a>;</td></tr>
+<tr><th id="139">139</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col7 decl" id="17p" title='p' data-type='u_int' data-ref="17p" data-ref-filename="17p">p</dfn>, <dfn class="local col8 decl" id="18c" title='c' data-type='u_int' data-ref="18c" data-ref-filename="18c">c</dfn>;</td></tr>
+<tr><th id="140">140</th><td></td></tr>
+<tr><th id="141">141</th><td>	<a class="tu ref fn" href="#pcq_split" title='pcq_split' data-use='c' data-ref="pcq_split" data-ref-filename="pcq_split">pcq_split</a>(<a class="local col6 ref" href="#16v" title='v' data-ref="16v" data-ref-filename="16v">v</a>, &amp;<a class="local col7 ref" href="#17p" title='p' data-ref="17p" data-ref-filename="17p">p</a>, &amp;<a class="local col8 ref" href="#18c" title='c' data-ref="18c" data-ref-filename="18c">c</a>);</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td>	<i>/* See comment on race below in pcq_get(). */</i></td></tr>
+<tr><th id="144">144</th><td>	<b>return</b> (<a class="local col7 ref" href="#17p" title='p' data-ref="17p" data-ref-filename="17p">p</a> == <a class="local col8 ref" href="#18c" title='c' data-ref="18c" data-ref-filename="18c">c</a>) ? <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> :</td></tr>
+<tr><th id="145">145</th><td>	    (<a class="macro" href="../sys/atomic.h.html#162" title="((void)0)" data-ref="_M/membar_datadep_consumer">membar_datadep_consumer</a>(), <a class="local col5 ref" href="#15pcq" title='pcq' data-ref="15pcq" data-ref-filename="15pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_items" title='pcq::pcq_items' data-ref="pcq::pcq_items" data-ref-filename="pcq..pcq_items">pcq_items</a>[<a class="local col8 ref" href="#18c" title='c' data-ref="18c" data-ref-filename="18c">c</a>]);</td></tr>
+<tr><th id="146">146</th><td>}</td></tr>
+<tr><th id="147">147</th><td></td></tr>
+<tr><th id="148">148</th><td><i>/*</i></td></tr>
+<tr><th id="149">149</th><td><i> * pcq_get: remove and return the next item for consumption or NULL if empty.</i></td></tr>
+<tr><th id="150">150</th><td><i> *</i></td></tr>
+<tr><th id="151">151</th><td><i> * =&gt; The caller must prevent concurrent gets from occurring.</i></td></tr>
+<tr><th id="152">152</th><td><i> */</i></td></tr>
+<tr><th id="153">153</th><td><em>void</em> *</td></tr>
+<tr><th id="154">154</th><td><dfn class="decl def fn" id="pcq_get" title='pcq_get' data-ref="pcq_get" data-ref-filename="pcq_get">pcq_get</dfn>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col9 decl" id="19pcq" title='pcq' data-type='pcq_t *' data-ref="19pcq" data-ref-filename="19pcq">pcq</dfn>)</td></tr>
+<tr><th id="155">155</th><td>{</td></tr>
+<tr><th id="156">156</th><td>	<a class="typedef" href="../sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="20v" title='v' data-type='uint32_t' data-ref="20v" data-ref-filename="20v">v</dfn>, <dfn class="local col1 decl" id="21nv" title='nv' data-type='uint32_t' data-ref="21nv" data-ref-filename="21nv">nv</dfn>;</td></tr>
+<tr><th id="157">157</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col2 decl" id="22p" title='p' data-type='u_int' data-ref="22p" data-ref-filename="22p">p</dfn>, <dfn class="local col3 decl" id="23c" title='c' data-type='u_int' data-ref="23c" data-ref-filename="23c">c</dfn>;</td></tr>
+<tr><th id="158">158</th><td>	<em>void</em> *<dfn class="local col4 decl" id="24item" title='item' data-type='void *' data-ref="24item" data-ref-filename="24item">item</dfn>;</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td>	<a class="local col0 ref" href="#20v" title='v' data-ref="20v" data-ref-filename="20v">v</a> = <a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</a>;</td></tr>
+<tr><th id="161">161</th><td>	<a class="tu ref fn" href="#pcq_split" title='pcq_split' data-use='c' data-ref="pcq_split" data-ref-filename="pcq_split">pcq_split</a>(<a class="local col0 ref" href="#20v" title='v' data-ref="20v" data-ref-filename="20v">v</a>, &amp;<a class="local col2 ref" href="#22p" title='p' data-ref="22p" data-ref-filename="22p">p</a>, &amp;<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>);</td></tr>
+<tr><th id="162">162</th><td>	<b>if</b> (<a class="local col2 ref" href="#22p" title='p' data-ref="22p" data-ref-filename="22p">p</a> == <a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>) {</td></tr>
+<tr><th id="163">163</th><td>		<i>/* Queue is empty: nothing to return. */</i></td></tr>
+<tr><th id="164">164</th><td>		<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="165">165</th><td>	}</td></tr>
+<tr><th id="166">166</th><td>	<i>/* Make sure we read pcq-&gt;pcq_pc before pcq-&gt;pcq_items[c].  */</i></td></tr>
+<tr><th id="167">167</th><td>	<a class="macro" href="../sys/atomic.h.html#162" title="((void)0)" data-ref="_M/membar_datadep_consumer">membar_datadep_consumer</a>();</td></tr>
+<tr><th id="168">168</th><td>	<a class="local col4 ref" href="#24item" title='item' data-ref="24item" data-ref-filename="24item">item</a> = <a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_items" title='pcq::pcq_items' data-ref="pcq::pcq_items" data-ref-filename="pcq..pcq_items">pcq_items</a>[<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>];</td></tr>
+<tr><th id="169">169</th><td>	<b>if</b> (<a class="local col4 ref" href="#24item" title='item' data-ref="24item" data-ref-filename="24item">item</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="170">170</th><td>		<i>/*</i></td></tr>
+<tr><th id="171">171</th><td><i>		 * Raced with sender: we rely on a notification (e.g. softint</i></td></tr>
+<tr><th id="172">172</th><td><i>		 * or wakeup) being generated after the producer's pcq_put(),</i></td></tr>
+<tr><th id="173">173</th><td><i>		 * causing us to retry pcq_get() later.</i></td></tr>
+<tr><th id="174">174</th><td><i>		 */</i></td></tr>
+<tr><th id="175">175</th><td>		<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="176">176</th><td>	}</td></tr>
+<tr><th id="177">177</th><td>	<a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_items" title='pcq::pcq_items' data-ref="pcq::pcq_items" data-ref-filename="pcq..pcq_items">pcq_items</a>[<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>] = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="178">178</th><td>	<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a> = <a class="tu ref fn" href="#pcq_advance" title='pcq_advance' data-use='c' data-ref="pcq_advance" data-ref-filename="pcq_advance">pcq_advance</a>(<a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>, <a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>);</td></tr>
+<tr><th id="179">179</th><td>	<a class="local col1 ref" href="#21nv" title='nv' data-ref="21nv" data-ref-filename="21nv">nv</a> = <a class="tu ref fn" href="#pcq_combine" title='pcq_combine' data-use='c' data-ref="pcq_combine" data-ref-filename="pcq_combine">pcq_combine</a>(<a class="local col2 ref" href="#22p" title='p' data-ref="22p" data-ref-filename="22p">p</a>, <a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>);</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>	<i>/*</i></td></tr>
+<tr><th id="182">182</th><td><i>	 * Ensure that update to pcq_items[] becomes globally visible</i></td></tr>
+<tr><th id="183">183</th><td><i>	 * before the update to pcq_pc.  If it were reodered to occur</i></td></tr>
+<tr><th id="184">184</th><td><i>	 * after it, we could in theory wipe out a modification made</i></td></tr>
+<tr><th id="185">185</th><td><i>	 * to pcq_items[] by pcq_put().</i></td></tr>
+<tr><th id="186">186</th><td><i>	 */</i></td></tr>
+<tr><th id="187">187</th><td><u>#<span data-ppcond="187">ifndef</span> <a class="macro" href="../arch/i386/include/types.h.html#125" data-ref="_M/__HAVE_ATOMIC_AS_MEMBAR">__HAVE_ATOMIC_AS_MEMBAR</a></u></td></tr>
+<tr><th id="188">188</th><td>	membar_producer();</td></tr>
+<tr><th id="189">189</th><td><u>#<span data-ppcond="187">endif</span></u></td></tr>
+<tr><th id="190">190</th><td>	<b>while</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((atomic_cas_32(&amp;pcq-&gt;pcq_pc, v, nv) != v) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref fn" href="../sys/atomic.h.html#atomic_cas_32" title='atomic_cas_32' data-ref="atomic_cas_32" data-ref-filename="atomic_cas_32">atomic_cas_32</a>(&amp;<a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</a>, <a class="local col0 ref" href="#20v" title='v' data-ref="20v" data-ref-filename="20v">v</a>, <a class="local col1 ref" href="#21nv" title='nv' data-ref="21nv" data-ref-filename="21nv">nv</a>) != <a class="local col0 ref" href="#20v" title='v' data-ref="20v" data-ref-filename="20v">v</a>)) {</td></tr>
+<tr><th id="191">191</th><td>		<a class="local col0 ref" href="#20v" title='v' data-ref="20v" data-ref-filename="20v">v</a> = <a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_pc" title='pcq::pcq_pc' data-ref="pcq::pcq_pc" data-ref-filename="pcq..pcq_pc">pcq_pc</a>;</td></tr>
+<tr><th id="192">192</th><td>		<a class="tu ref fn" href="#pcq_split" title='pcq_split' data-use='c' data-ref="pcq_split" data-ref-filename="pcq_split">pcq_split</a>(<a class="local col0 ref" href="#20v" title='v' data-ref="20v" data-ref-filename="20v">v</a>, &amp;<a class="local col2 ref" href="#22p" title='p' data-ref="22p" data-ref-filename="22p">p</a>, &amp;<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>);</td></tr>
+<tr><th id="193">193</th><td>		<a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a> = <a class="tu ref fn" href="#pcq_advance" title='pcq_advance' data-use='c' data-ref="pcq_advance" data-ref-filename="pcq_advance">pcq_advance</a>(<a class="local col9 ref" href="#19pcq" title='pcq' data-ref="19pcq" data-ref-filename="19pcq">pcq</a>, <a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>);</td></tr>
+<tr><th id="194">194</th><td>		<a class="local col1 ref" href="#21nv" title='nv' data-ref="21nv" data-ref-filename="21nv">nv</a> = <a class="tu ref fn" href="#pcq_combine" title='pcq_combine' data-use='c' data-ref="pcq_combine" data-ref-filename="pcq_combine">pcq_combine</a>(<a class="local col2 ref" href="#22p" title='p' data-ref="22p" data-ref-filename="22p">p</a>, <a class="local col3 ref" href="#23c" title='c' data-ref="23c" data-ref-filename="23c">c</a>);</td></tr>
+<tr><th id="195">195</th><td>	}</td></tr>
+<tr><th id="196">196</th><td>	<b>return</b> <a class="local col4 ref" href="#24item" title='item' data-ref="24item" data-ref-filename="24item">item</a>;</td></tr>
+<tr><th id="197">197</th><td>}</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td><a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *</td></tr>
+<tr><th id="200">200</th><td><dfn class="decl def fn" id="pcq_create" title='pcq_create' data-ref="pcq_create" data-ref-filename="pcq_create">pcq_create</dfn>(<a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="25nitems" title='nitems' data-type='size_t' data-ref="25nitems" data-ref-filename="25nitems">nitems</dfn>, <a class="typedef" href="../sys/kmem.h.html#km_flag_t" title='km_flag_t' data-type='unsigned int' data-ref="km_flag_t" data-ref-filename="km_flag_t">km_flag_t</a> <dfn class="local col6 decl" id="26kmflags" title='kmflags' data-type='km_flag_t' data-ref="26kmflags" data-ref-filename="26kmflags">kmflags</dfn>)</td></tr>
+<tr><th id="201">201</th><td>{</td></tr>
+<tr><th id="202">202</th><td>	<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col7 decl" id="27pcq" title='pcq' data-type='pcq_t *' data-ref="27pcq" data-ref-filename="27pcq">pcq</dfn>;</td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((nitems &gt; 0 || nitems &lt;= (0xffffU))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;nitems &gt; 0 || nitems &lt;= PCQ_MAXLEN&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librump/../../../../../../sys/kern/subr_pcq.c&quot;, 204))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col5 ref" href="#25nitems" title='nitems' data-ref="25nitems" data-ref-filename="25nitems">nitems</a> &gt; <var>0</var> || <a class="local col5 ref" href="#25nitems" title='nitems' data-ref="25nitems" data-ref-filename="25nitems">nitems</a> &lt;= <a class="macro" href="../sys/pcq.h.html#41" title="(0xffffU)" data-ref="_M/PCQ_MAXLEN">PCQ_MAXLEN</a>);</td></tr>
+<tr><th id="205">205</th><td></td></tr>
+<tr><th id="206">206</th><td>	<a class="local col7 ref" href="#27pcq" title='pcq' data-ref="27pcq" data-ref-filename="27pcq">pcq</a> = <a class="ref fn" href="../sys/kmem.h.html#kmem_zalloc" title='kmem_zalloc' data-ref="kmem_zalloc" data-ref-filename="kmem_zalloc">kmem_zalloc</a>(<a class="macro" href="../lib/libkern/libkern.h.html#310" title="__builtin_offsetof(pcq_t, pcq_items[nitems])" data-ref="_M/offsetof">offsetof</a>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a>, pcq_items[<a class="local col5 ref" href="#25nitems" title='nitems' data-ref="25nitems" data-ref-filename="25nitems">nitems</a>]), <a class="local col6 ref" href="#26kmflags" title='kmflags' data-ref="26kmflags" data-ref-filename="26kmflags">kmflags</a>);</td></tr>
+<tr><th id="207">207</th><td>	<b>if</b> (<a class="local col7 ref" href="#27pcq" title='pcq' data-ref="27pcq" data-ref-filename="27pcq">pcq</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="208">208</th><td>		<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="209">209</th><td>	}</td></tr>
+<tr><th id="210">210</th><td>	<a class="local col7 ref" href="#27pcq" title='pcq' data-ref="27pcq" data-ref-filename="27pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_nitems" title='pcq::pcq_nitems' data-ref="pcq::pcq_nitems" data-ref-filename="pcq..pcq_nitems">pcq_nitems</a> = <a class="local col5 ref" href="#25nitems" title='nitems' data-ref="25nitems" data-ref-filename="25nitems">nitems</a>;</td></tr>
+<tr><th id="211">211</th><td>	<b>return</b> <a class="local col7 ref" href="#27pcq" title='pcq' data-ref="27pcq" data-ref-filename="27pcq">pcq</a>;</td></tr>
+<tr><th id="212">212</th><td>}</td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td><em>void</em></td></tr>
+<tr><th id="215">215</th><td><dfn class="decl def fn" id="pcq_destroy" title='pcq_destroy' data-ref="pcq_destroy" data-ref-filename="pcq_destroy">pcq_destroy</dfn>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col8 decl" id="28pcq" title='pcq' data-type='pcq_t *' data-ref="28pcq" data-ref-filename="28pcq">pcq</dfn>)</td></tr>
+<tr><th id="216">216</th><td>{</td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td>	<a class="ref fn" href="../sys/kmem.h.html#kmem_free" title='kmem_free' data-ref="kmem_free" data-ref-filename="kmem_free">kmem_free</a>(<a class="local col8 ref" href="#28pcq" title='pcq' data-ref="28pcq" data-ref-filename="28pcq">pcq</a>, <a class="macro" href="../lib/libkern/libkern.h.html#310" title="__builtin_offsetof(pcq_t, pcq_items[pcq-&gt;pcq_nitems])" data-ref="_M/offsetof">offsetof</a>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a>, pcq_items[<a class="local col8 ref" href="#28pcq" title='pcq' data-ref="28pcq" data-ref-filename="28pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_nitems" title='pcq::pcq_nitems' data-ref="pcq::pcq_nitems" data-ref-filename="pcq..pcq_nitems">pcq_nitems</a>]));</td></tr>
+<tr><th id="219">219</th><td>}</td></tr>
+<tr><th id="220">220</th><td></td></tr>
+<tr><th id="221">221</th><td><a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a></td></tr>
+<tr><th id="222">222</th><td><dfn class="decl def fn" id="pcq_maxitems" title='pcq_maxitems' data-ref="pcq_maxitems" data-ref-filename="pcq_maxitems">pcq_maxitems</dfn>(<a class="typedef" href="../sys/pcq.h.html#pcq_t" title='pcq_t' data-type='struct pcq' data-ref="pcq_t" data-ref-filename="pcq_t">pcq_t</a> *<dfn class="local col9 decl" id="29pcq" title='pcq' data-type='pcq_t *' data-ref="29pcq" data-ref-filename="29pcq">pcq</dfn>)</td></tr>
+<tr><th id="223">223</th><td>{</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td>	<b>return</b> <a class="local col9 ref" href="#29pcq" title='pcq' data-ref="29pcq" data-ref-filename="29pcq">pcq</a>-&gt;<a class="ref field" href="#pcq::pcq_nitems" title='pcq::pcq_nitems' data-ref="pcq::pcq_nitems" data-ref-filename="pcq..pcq_nitems">pcq_nitems</a>;</td></tr>
+<tr><th id="226">226</th><td>}</td></tr>
+<tr><th id="227">227</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

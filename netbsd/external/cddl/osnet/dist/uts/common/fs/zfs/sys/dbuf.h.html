@@ -1,0 +1,416 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>dbuf.h source code [netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/sys/dbuf.h] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="dbuf_dirty_record,dbuf_hash_table,dbuf_states,dirty_indirect,dirty_leaf,dirty_types,dmu_buf_impl,override_states "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/sys/dbuf.h'; var root_path = '../../../../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../../../../..'>netbsd</a>/<a href='../../../../../../../..'>external</a>/<a href='../../../../../../..'>cddl</a>/<a href='../../../../../..'>osnet</a>/<a href='../../../../..'>dist</a>/<a href='../../../..'>uts</a>/<a href='../../..'>common</a>/<a href='../..'>fs</a>/<a href='..'>zfs</a>/<a href='./'>sys</a>/<a href='dbuf.h.html'>dbuf.h</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*</i></td></tr>
+<tr><th id="2">2</th><td><i> * CDDL HEADER START</i></td></tr>
+<tr><th id="3">3</th><td><i> *</i></td></tr>
+<tr><th id="4">4</th><td><i> * The contents of this file are subject to the terms of the</i></td></tr>
+<tr><th id="5">5</th><td><i> * Common Development and Distribution License (the "License").</i></td></tr>
+<tr><th id="6">6</th><td><i> * You may not use this file except in compliance with the License.</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE</i></td></tr>
+<tr><th id="9">9</th><td><i> * or <a href="http://www.opensolaris.org/os/licensing">http://www.opensolaris.org/os/licensing</a>.</i></td></tr>
+<tr><th id="10">10</th><td><i> * See the License for the specific language governing permissions</i></td></tr>
+<tr><th id="11">11</th><td><i> * and limitations under the License.</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * When distributing Covered Code, include this CDDL HEADER in each</i></td></tr>
+<tr><th id="14">14</th><td><i> * file and include the License file at usr/src/OPENSOLARIS.LICENSE.</i></td></tr>
+<tr><th id="15">15</th><td><i> * If applicable, add the following below this CDDL HEADER, with the</i></td></tr>
+<tr><th id="16">16</th><td><i> * fields enclosed by brackets "[]" replaced with your own identifying</i></td></tr>
+<tr><th id="17">17</th><td><i> * information: Portions Copyright [yyyy] [name of copyright owner]</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * CDDL HEADER END</i></td></tr>
+<tr><th id="20">20</th><td><i> */</i></td></tr>
+<tr><th id="21">21</th><td><i>/*</i></td></tr>
+<tr><th id="22">22</th><td><i> * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.</i></td></tr>
+<tr><th id="23">23</th><td><i> * Copyright (c) 2012, 2015 by Delphix. All rights reserved.</i></td></tr>
+<tr><th id="24">24</th><td><i> * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.</i></td></tr>
+<tr><th id="25">25</th><td><i> * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.</i></td></tr>
+<tr><th id="26">26</th><td><i> */</i></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><u>#<span data-ppcond="28">ifndef</span>	<span class="macro" data-ref="_M/_SYS_DBUF_H">_SYS_DBUF_H</span></u></td></tr>
+<tr><th id="29">29</th><td><u>#define	<dfn class="macro" id="_M/_SYS_DBUF_H" data-ref="_M/_SYS_DBUF_H">_SYS_DBUF_H</dfn></u></td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><u>#include <a href="dmu.h.html">&lt;sys/dmu.h&gt;</a></u></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="spa.h.html">&lt;sys/spa.h&gt;</a></u></td></tr>
+<tr><th id="33">33</th><td><u>#include <a href="txg.h.html">&lt;sys/txg.h&gt;</a></u></td></tr>
+<tr><th id="34">34</th><td><u>#include <a href="zio.h.html">&lt;sys/zio.h&gt;</a></u></td></tr>
+<tr><th id="35">35</th><td><u>#include <a href="arc.h.html">&lt;sys/arc.h&gt;</a></u></td></tr>
+<tr><th id="36">36</th><td><u>#include <a href="../../../../../lib/libzpool/common/sys/zfs_context.h.html">&lt;sys/zfs_context.h&gt;</a></u></td></tr>
+<tr><th id="37">37</th><td><u>#include <a href="refcount.h.html">&lt;sys/refcount.h&gt;</a></u></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="zrlock.h.html">&lt;sys/zrlock.h&gt;</a></u></td></tr>
+<tr><th id="39">39</th><td><u>#include <a href="multilist.h.html">&lt;sys/multilist.h&gt;</a></u></td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td><u>#<span data-ppcond="41">ifdef</span>	<span class="macro" data-ref="_M/__cplusplus">__cplusplus</span></u></td></tr>
+<tr><th id="42">42</th><td><b>extern</b> <q>"C"</q> {</td></tr>
+<tr><th id="43">43</th><td><u>#<span data-ppcond="41">endif</span></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#define	<dfn class="macro" id="_M/IN_DMU_SYNC" data-ref="_M/IN_DMU_SYNC">IN_DMU_SYNC</dfn> 2</u></td></tr>
+<tr><th id="46">46</th><td></td></tr>
+<tr><th id="47">47</th><td><i>/*</i></td></tr>
+<tr><th id="48">48</th><td><i> * define flags for dbuf_read</i></td></tr>
+<tr><th id="49">49</th><td><i> */</i></td></tr>
+<tr><th id="50">50</th><td></td></tr>
+<tr><th id="51">51</th><td><u>#define	<dfn class="macro" id="_M/DB_RF_MUST_SUCCEED" data-ref="_M/DB_RF_MUST_SUCCEED">DB_RF_MUST_SUCCEED</dfn>	(1 &lt;&lt; 0)</u></td></tr>
+<tr><th id="52">52</th><td><u>#define	<dfn class="macro" id="_M/DB_RF_CANFAIL" data-ref="_M/DB_RF_CANFAIL">DB_RF_CANFAIL</dfn>		(1 &lt;&lt; 1)</u></td></tr>
+<tr><th id="53">53</th><td><u>#define	<dfn class="macro" id="_M/DB_RF_HAVESTRUCT" data-ref="_M/DB_RF_HAVESTRUCT">DB_RF_HAVESTRUCT</dfn>	(1 &lt;&lt; 2)</u></td></tr>
+<tr><th id="54">54</th><td><u>#define	<dfn class="macro" id="_M/DB_RF_NOPREFETCH" data-ref="_M/DB_RF_NOPREFETCH">DB_RF_NOPREFETCH</dfn>	(1 &lt;&lt; 3)</u></td></tr>
+<tr><th id="55">55</th><td><u>#define	<dfn class="macro" id="_M/DB_RF_NEVERWAIT" data-ref="_M/DB_RF_NEVERWAIT">DB_RF_NEVERWAIT</dfn>		(1 &lt;&lt; 4)</u></td></tr>
+<tr><th id="56">56</th><td><u>#define	<dfn class="macro" id="_M/DB_RF_CACHED" data-ref="_M/DB_RF_CACHED">DB_RF_CACHED</dfn>		(1 &lt;&lt; 5)</u></td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td><i>/*</i></td></tr>
+<tr><th id="59">59</th><td><i> * The simplified state transition diagram for dbufs looks like:</i></td></tr>
+<tr><th id="60">60</th><td><i> *</i></td></tr>
+<tr><th id="61">61</th><td><i> *		+----&gt; READ ----+</i></td></tr>
+<tr><th id="62">62</th><td><i> *		|		|</i></td></tr>
+<tr><th id="63">63</th><td><i> *		|		V</i></td></tr>
+<tr><th id="64">64</th><td><i> *  (alloc)--&gt;UNCACHED	     CACHED--&gt;EVICTING--&gt;(free)</i></td></tr>
+<tr><th id="65">65</th><td><i> *		|		^	 ^</i></td></tr>
+<tr><th id="66">66</th><td><i> *		|		|	 |</i></td></tr>
+<tr><th id="67">67</th><td><i> *		+----&gt; FILL ----+	 |</i></td></tr>
+<tr><th id="68">68</th><td><i> *		|			 |</i></td></tr>
+<tr><th id="69">69</th><td><i> *		|			 |</i></td></tr>
+<tr><th id="70">70</th><td><i> *		+--------&gt; NOFILL -------+</i></td></tr>
+<tr><th id="71">71</th><td><i> *</i></td></tr>
+<tr><th id="72">72</th><td><i> * DB_SEARCH is an invalid state for a dbuf. It is used by dbuf_free_range</i></td></tr>
+<tr><th id="73">73</th><td><i> * to find all dbufs in a range of a dnode and must be less than any other</i></td></tr>
+<tr><th id="74">74</th><td><i> * dbuf_states_t (see comment on dn_dbufs in dnode.h).</i></td></tr>
+<tr><th id="75">75</th><td><i> */</i></td></tr>
+<tr><th id="76">76</th><td><b>typedef</b> <b>enum</b> <dfn class="type def" id="dbuf_states" title='dbuf_states' data-ref="dbuf_states" data-ref-filename="dbuf_states"><a class="type" href="#dbuf_states" title='dbuf_states' data-ref="dbuf_states" data-ref-filename="dbuf_states">dbuf_states</a></dfn> {</td></tr>
+<tr><th id="77">77</th><td>	<dfn class="enum" id="DB_SEARCH" title='DB_SEARCH' data-ref="DB_SEARCH" data-ref-filename="DB_SEARCH">DB_SEARCH</dfn> = -<var>1</var>,</td></tr>
+<tr><th id="78">78</th><td>	<dfn class="enum" id="DB_UNCACHED" title='DB_UNCACHED' data-ref="DB_UNCACHED" data-ref-filename="DB_UNCACHED">DB_UNCACHED</dfn>,</td></tr>
+<tr><th id="79">79</th><td>	<dfn class="enum" id="DB_FILL" title='DB_FILL' data-ref="DB_FILL" data-ref-filename="DB_FILL">DB_FILL</dfn>,</td></tr>
+<tr><th id="80">80</th><td>	<dfn class="enum" id="DB_NOFILL" title='DB_NOFILL' data-ref="DB_NOFILL" data-ref-filename="DB_NOFILL">DB_NOFILL</dfn>,</td></tr>
+<tr><th id="81">81</th><td>	<dfn class="enum" id="DB_READ" title='DB_READ' data-ref="DB_READ" data-ref-filename="DB_READ">DB_READ</dfn>,</td></tr>
+<tr><th id="82">82</th><td>	<dfn class="enum" id="DB_CACHED" title='DB_CACHED' data-ref="DB_CACHED" data-ref-filename="DB_CACHED">DB_CACHED</dfn>,</td></tr>
+<tr><th id="83">83</th><td>	<dfn class="enum" id="DB_EVICTING" title='DB_EVICTING' data-ref="DB_EVICTING" data-ref-filename="DB_EVICTING">DB_EVICTING</dfn></td></tr>
+<tr><th id="84">84</th><td>} <dfn class="typedef" id="dbuf_states_t" title='dbuf_states_t' data-type='enum dbuf_states' data-ref="dbuf_states_t" data-ref-filename="dbuf_states_t">dbuf_states_t</dfn>;</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode" id="dnode">dnode</a>;</td></tr>
+<tr><th id="87">87</th><td><b>struct</b> <a class="type" href="dmu_tx.h.html#dmu_tx" title='dmu_tx' data-ref="dmu_tx" data-ref-filename="dmu_tx" id="dmu_tx">dmu_tx</a>;</td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td><i>/*</i></td></tr>
+<tr><th id="90">90</th><td><i> * level = 0 means the user data</i></td></tr>
+<tr><th id="91">91</th><td><i> * level = 1 means the single indirect block</i></td></tr>
+<tr><th id="92">92</th><td><i> * etc.</i></td></tr>
+<tr><th id="93">93</th><td><i> */</i></td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><b>struct</b> <a class="type" href="#dmu_buf_impl" title='dmu_buf_impl' data-ref="dmu_buf_impl" data-ref-filename="dmu_buf_impl">dmu_buf_impl</a>;</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><b>typedef</b> <b>enum</b> <dfn class="type def" id="override_states" title='override_states' data-ref="override_states" data-ref-filename="override_states"><a class="type" href="#override_states" title='override_states' data-ref="override_states" data-ref-filename="override_states">override_states</a></dfn> {</td></tr>
+<tr><th id="98">98</th><td>	<dfn class="enum" id="DR_NOT_OVERRIDDEN" title='DR_NOT_OVERRIDDEN' data-ref="DR_NOT_OVERRIDDEN" data-ref-filename="DR_NOT_OVERRIDDEN">DR_NOT_OVERRIDDEN</dfn>,</td></tr>
+<tr><th id="99">99</th><td>	<dfn class="enum" id="DR_IN_DMU_SYNC" title='DR_IN_DMU_SYNC' data-ref="DR_IN_DMU_SYNC" data-ref-filename="DR_IN_DMU_SYNC">DR_IN_DMU_SYNC</dfn>,</td></tr>
+<tr><th id="100">100</th><td>	<dfn class="enum" id="DR_OVERRIDDEN" title='DR_OVERRIDDEN' data-ref="DR_OVERRIDDEN" data-ref-filename="DR_OVERRIDDEN">DR_OVERRIDDEN</dfn></td></tr>
+<tr><th id="101">101</th><td>} <dfn class="typedef" id="override_states_t" title='override_states_t' data-type='enum override_states' data-ref="override_states_t" data-ref-filename="override_states_t">override_states_t</dfn>;</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="dbuf_dirty_record" title='dbuf_dirty_record' data-ref="dbuf_dirty_record" data-ref-filename="dbuf_dirty_record"><a class="type" href="#dbuf_dirty_record" title='dbuf_dirty_record' data-ref="dbuf_dirty_record" data-ref-filename="dbuf_dirty_record">dbuf_dirty_record</a></dfn> {</td></tr>
+<tr><th id="104">104</th><td>	<i>/* link on our parents dirty list */</i></td></tr>
+<tr><th id="105">105</th><td>	<a class="typedef" href="../../../sys/list.h.html#list_node_t" title='list_node_t' data-type='struct list_node' data-ref="list_node_t" data-ref-filename="list_node_t">list_node_t</a> <dfn class="decl field" id="dbuf_dirty_record::dr_dirty_node" title='dbuf_dirty_record::dr_dirty_node' data-ref="dbuf_dirty_record::dr_dirty_node" data-ref-filename="dbuf_dirty_record..dr_dirty_node">dr_dirty_node</dfn>;</td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td>	<i>/* transaction group this data will sync in */</i></td></tr>
+<tr><th id="108">108</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="decl field" id="dbuf_dirty_record::dr_txg" title='dbuf_dirty_record::dr_txg' data-ref="dbuf_dirty_record::dr_txg" data-ref-filename="dbuf_dirty_record..dr_txg">dr_txg</dfn>;</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td>	<i>/* zio of outstanding write IO */</i></td></tr>
+<tr><th id="111">111</th><td>	<a class="typedef" href="spa.h.html#zio_t" title='zio_t' data-type='struct zio' data-ref="zio_t" data-ref-filename="zio_t">zio_t</a> *<dfn class="decl field" id="dbuf_dirty_record::dr_zio" title='dbuf_dirty_record::dr_zio' data-ref="dbuf_dirty_record::dr_zio" data-ref-filename="dbuf_dirty_record..dr_zio">dr_zio</dfn>;</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td>	<i>/* pointer back to our dbuf */</i></td></tr>
+<tr><th id="114">114</th><td>	<b>struct</b> <a class="type" href="#dmu_buf_impl" title='dmu_buf_impl' data-ref="dmu_buf_impl" data-ref-filename="dmu_buf_impl">dmu_buf_impl</a> *<dfn class="decl field" id="dbuf_dirty_record::dr_dbuf" title='dbuf_dirty_record::dr_dbuf' data-ref="dbuf_dirty_record::dr_dbuf" data-ref-filename="dbuf_dirty_record..dr_dbuf">dr_dbuf</dfn>;</td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td>	<i>/* pointer to next dirty record */</i></td></tr>
+<tr><th id="117">117</th><td>	<b>struct</b> <a class="type" href="#dbuf_dirty_record" title='dbuf_dirty_record' data-ref="dbuf_dirty_record" data-ref-filename="dbuf_dirty_record">dbuf_dirty_record</a> *<dfn class="decl field" id="dbuf_dirty_record::dr_next" title='dbuf_dirty_record::dr_next' data-ref="dbuf_dirty_record::dr_next" data-ref-filename="dbuf_dirty_record..dr_next">dr_next</dfn>;</td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td>	<i>/* pointer to parent dirty record */</i></td></tr>
+<tr><th id="120">120</th><td>	<b>struct</b> <a class="type" href="#dbuf_dirty_record" title='dbuf_dirty_record' data-ref="dbuf_dirty_record" data-ref-filename="dbuf_dirty_record">dbuf_dirty_record</a> *<dfn class="decl field" id="dbuf_dirty_record::dr_parent" title='dbuf_dirty_record::dr_parent' data-ref="dbuf_dirty_record::dr_parent" data-ref-filename="dbuf_dirty_record..dr_parent">dr_parent</dfn>;</td></tr>
+<tr><th id="121">121</th><td></td></tr>
+<tr><th id="122">122</th><td>	<i>/* How much space was changed to dsl_pool_dirty_space() for this? */</i></td></tr>
+<tr><th id="123">123</th><td>	<em>unsigned</em> <em>int</em> <dfn class="decl field" id="dbuf_dirty_record::dr_accounted" title='dbuf_dirty_record::dr_accounted' data-ref="dbuf_dirty_record::dr_accounted" data-ref-filename="dbuf_dirty_record..dr_accounted">dr_accounted</dfn>;</td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td>	<i>/* A copy of the bp that points to us */</i></td></tr>
+<tr><th id="126">126</th><td>	<a class="typedef" href="spa.h.html#blkptr_t" title='blkptr_t' data-type='struct blkptr' data-ref="blkptr_t" data-ref-filename="blkptr_t">blkptr_t</a> <dfn class="decl field" id="dbuf_dirty_record::dr_bp_copy" title='dbuf_dirty_record::dr_bp_copy' data-ref="dbuf_dirty_record::dr_bp_copy" data-ref-filename="dbuf_dirty_record..dr_bp_copy">dr_bp_copy</dfn>;</td></tr>
+<tr><th id="127">127</th><td></td></tr>
+<tr><th id="128">128</th><td>	<b>union</b> <dfn class="type def" id="dirty_types" title='dirty_types' data-ref="dirty_types" data-ref-filename="dirty_types"><a class="type" href="#dirty_types" title='dirty_types' data-ref="dirty_types" data-ref-filename="dirty_types">dirty_types</a></dfn> {</td></tr>
+<tr><th id="129">129</th><td>		<b>struct</b> <dfn class="type def" id="dirty_indirect" title='dirty_indirect' data-ref="dirty_indirect" data-ref-filename="dirty_indirect"><a class="type" href="#dirty_indirect" title='dirty_indirect' data-ref="dirty_indirect" data-ref-filename="dirty_indirect">dirty_indirect</a></dfn> {</td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td>			<i>/* protect access to list */</i></td></tr>
+<tr><th id="132">132</th><td>			<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl field" id="dirty_indirect::dr_mtx" title='dirty_indirect::dr_mtx' data-ref="dirty_indirect::dr_mtx" data-ref-filename="dirty_indirect..dr_mtx">dr_mtx</dfn>;</td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td>			<i>/* Our list of dirty children */</i></td></tr>
+<tr><th id="135">135</th><td>			<a class="typedef" href="../../../sys/list.h.html#list_t" title='list_t' data-type='struct list' data-ref="list_t" data-ref-filename="list_t">list_t</a> <dfn class="decl field" id="dirty_indirect::dr_children" title='dirty_indirect::dr_children' data-ref="dirty_indirect::dr_children" data-ref-filename="dirty_indirect..dr_children">dr_children</dfn>;</td></tr>
+<tr><th id="136">136</th><td>		} <dfn class="decl field" id="dirty_types::di" title='dirty_types::di' data-ref="dirty_types::di" data-ref-filename="dirty_types..di">di</dfn>;</td></tr>
+<tr><th id="137">137</th><td>		<b>struct</b> <dfn class="type def" id="dirty_leaf" title='dirty_leaf' data-ref="dirty_leaf" data-ref-filename="dirty_leaf"><a class="type" href="#dirty_leaf" title='dirty_leaf' data-ref="dirty_leaf" data-ref-filename="dirty_leaf">dirty_leaf</a></dfn> {</td></tr>
+<tr><th id="138">138</th><td></td></tr>
+<tr><th id="139">139</th><td>			<i>/*</i></td></tr>
+<tr><th id="140">140</th><td><i>			 * dr_data is set when we dirty the buffer</i></td></tr>
+<tr><th id="141">141</th><td><i>			 * so that we can retain the pointer even if it</i></td></tr>
+<tr><th id="142">142</th><td><i>			 * gets COW'd in a subsequent transaction group.</i></td></tr>
+<tr><th id="143">143</th><td><i>			 */</i></td></tr>
+<tr><th id="144">144</th><td>			<a class="typedef" href="arc.h.html#arc_buf_t" title='arc_buf_t' data-type='struct arc_buf' data-ref="arc_buf_t" data-ref-filename="arc_buf_t">arc_buf_t</a> *<dfn class="decl field" id="dirty_leaf::dr_data" title='dirty_leaf::dr_data' data-ref="dirty_leaf::dr_data" data-ref-filename="dirty_leaf..dr_data">dr_data</dfn>;</td></tr>
+<tr><th id="145">145</th><td>			<a class="typedef" href="spa.h.html#blkptr_t" title='blkptr_t' data-type='struct blkptr' data-ref="blkptr_t" data-ref-filename="blkptr_t">blkptr_t</a> <dfn class="decl field" id="dirty_leaf::dr_overridden_by" title='dirty_leaf::dr_overridden_by' data-ref="dirty_leaf::dr_overridden_by" data-ref-filename="dirty_leaf..dr_overridden_by">dr_overridden_by</dfn>;</td></tr>
+<tr><th id="146">146</th><td>			<a class="typedef" href="#override_states_t" title='override_states_t' data-type='enum override_states' data-ref="override_states_t" data-ref-filename="override_states_t">override_states_t</a> <dfn class="decl field" id="dirty_leaf::dr_override_state" title='dirty_leaf::dr_override_state' data-ref="dirty_leaf::dr_override_state" data-ref-filename="dirty_leaf..dr_override_state">dr_override_state</dfn>;</td></tr>
+<tr><th id="147">147</th><td>			<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="dirty_leaf::dr_copies" title='dirty_leaf::dr_copies' data-ref="dirty_leaf::dr_copies" data-ref-filename="dirty_leaf..dr_copies">dr_copies</dfn>;</td></tr>
+<tr><th id="148">148</th><td>			<a class="typedef" href="../../../../../../sys/sys/opentypes.h.html#boolean_t" title='boolean_t' data-type='int' data-ref="boolean_t" data-ref-filename="boolean_t">boolean_t</a> <dfn class="decl field" id="dirty_leaf::dr_nopwrite" title='dirty_leaf::dr_nopwrite' data-ref="dirty_leaf::dr_nopwrite" data-ref-filename="dirty_leaf..dr_nopwrite">dr_nopwrite</dfn>;</td></tr>
+<tr><th id="149">149</th><td>		} <dfn class="decl field" id="dirty_types::dl" title='dirty_types::dl' data-ref="dirty_types::dl" data-ref-filename="dirty_types..dl">dl</dfn>;</td></tr>
+<tr><th id="150">150</th><td>	} <dfn class="decl field" id="dbuf_dirty_record::dt" title='dbuf_dirty_record::dt' data-ref="dbuf_dirty_record::dt" data-ref-filename="dbuf_dirty_record..dt">dt</dfn>;</td></tr>
+<tr><th id="151">151</th><td>} <dfn class="typedef" id="dbuf_dirty_record_t" title='dbuf_dirty_record_t' data-type='struct dbuf_dirty_record' data-ref="dbuf_dirty_record_t" data-ref-filename="dbuf_dirty_record_t">dbuf_dirty_record_t</dfn>;</td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="dmu_buf_impl" title='dmu_buf_impl' data-ref="dmu_buf_impl" data-ref-filename="dmu_buf_impl"><a class="type" href="#dmu_buf_impl" title='dmu_buf_impl' data-ref="dmu_buf_impl" data-ref-filename="dmu_buf_impl">dmu_buf_impl</a></dfn> {</td></tr>
+<tr><th id="154">154</th><td>	<i>/*</i></td></tr>
+<tr><th id="155">155</th><td><i>	 * The following members are immutable, with the exception of</i></td></tr>
+<tr><th id="156">156</th><td><i>	 * db.db_data, which is protected by db_mtx.</i></td></tr>
+<tr><th id="157">157</th><td><i>	 */</i></td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td>	<i>/* the publicly visible structure */</i></td></tr>
+<tr><th id="160">160</th><td>	<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> <dfn class="decl field" id="dmu_buf_impl::db" title='dmu_buf_impl::db' data-ref="dmu_buf_impl::db" data-ref-filename="dmu_buf_impl..db">db</dfn>;</td></tr>
+<tr><th id="161">161</th><td></td></tr>
+<tr><th id="162">162</th><td>	<i>/* the objset we belong to */</i></td></tr>
+<tr><th id="163">163</th><td>	<b>struct</b> <a class="type" href="dmu_objset.h.html#objset" title='objset' data-ref="objset" data-ref-filename="objset">objset</a> *<dfn class="decl field" id="dmu_buf_impl::db_objset" title='dmu_buf_impl::db_objset' data-ref="dmu_buf_impl::db_objset" data-ref-filename="dmu_buf_impl..db_objset">db_objset</dfn>;</td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td>	<i>/*</i></td></tr>
+<tr><th id="166">166</th><td><i>	 * handle to safely access the dnode we belong to (NULL when evicted)</i></td></tr>
+<tr><th id="167">167</th><td><i>	 */</i></td></tr>
+<tr><th id="168">168</th><td>	<b>struct</b> <a class="type" href="dnode.h.html#dnode_handle" title='dnode_handle' data-ref="dnode_handle" data-ref-filename="dnode_handle">dnode_handle</a> *<dfn class="decl field" id="dmu_buf_impl::db_dnode_handle" title='dmu_buf_impl::db_dnode_handle' data-ref="dmu_buf_impl::db_dnode_handle" data-ref-filename="dmu_buf_impl..db_dnode_handle">db_dnode_handle</dfn>;</td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td>	<i>/*</i></td></tr>
+<tr><th id="171">171</th><td><i>	 * our parent buffer; if the dnode points to us directly,</i></td></tr>
+<tr><th id="172">172</th><td><i>	 * db_parent == db_dnode_handle-&gt;dnh_dnode-&gt;dn_dbuf</i></td></tr>
+<tr><th id="173">173</th><td><i>	 * only accessed by sync thread ???</i></td></tr>
+<tr><th id="174">174</th><td><i>	 * (NULL when evicted)</i></td></tr>
+<tr><th id="175">175</th><td><i>	 * May change from NULL to non-NULL under the protection of db_mtx</i></td></tr>
+<tr><th id="176">176</th><td><i>	 * (see dbuf_check_blkptr())</i></td></tr>
+<tr><th id="177">177</th><td><i>	 */</i></td></tr>
+<tr><th id="178">178</th><td>	<b>struct</b> <a class="type" href="#dmu_buf_impl" title='dmu_buf_impl' data-ref="dmu_buf_impl" data-ref-filename="dmu_buf_impl">dmu_buf_impl</a> *<dfn class="decl field" id="dmu_buf_impl::db_parent" title='dmu_buf_impl::db_parent' data-ref="dmu_buf_impl::db_parent" data-ref-filename="dmu_buf_impl..db_parent">db_parent</dfn>;</td></tr>
+<tr><th id="179">179</th><td></td></tr>
+<tr><th id="180">180</th><td>	<i>/*</i></td></tr>
+<tr><th id="181">181</th><td><i>	 * link for hash table of all dmu_buf_impl_t's</i></td></tr>
+<tr><th id="182">182</th><td><i>	 */</i></td></tr>
+<tr><th id="183">183</th><td>	<b>struct</b> <a class="type" href="#dmu_buf_impl" title='dmu_buf_impl' data-ref="dmu_buf_impl" data-ref-filename="dmu_buf_impl">dmu_buf_impl</a> *<dfn class="decl field" id="dmu_buf_impl::db_hash_next" title='dmu_buf_impl::db_hash_next' data-ref="dmu_buf_impl::db_hash_next" data-ref-filename="dmu_buf_impl..db_hash_next">db_hash_next</dfn>;</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td>	<i>/* our block number */</i></td></tr>
+<tr><th id="186">186</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="decl field" id="dmu_buf_impl::db_blkid" title='dmu_buf_impl::db_blkid' data-ref="dmu_buf_impl::db_blkid" data-ref-filename="dmu_buf_impl..db_blkid">db_blkid</dfn>;</td></tr>
+<tr><th id="187">187</th><td></td></tr>
+<tr><th id="188">188</th><td>	<i>/*</i></td></tr>
+<tr><th id="189">189</th><td><i>	 * Pointer to the blkptr_t which points to us. May be NULL if we</i></td></tr>
+<tr><th id="190">190</th><td><i>	 * don't have one yet. (NULL when evicted)</i></td></tr>
+<tr><th id="191">191</th><td><i>	 */</i></td></tr>
+<tr><th id="192">192</th><td>	<a class="typedef" href="spa.h.html#blkptr_t" title='blkptr_t' data-type='struct blkptr' data-ref="blkptr_t" data-ref-filename="blkptr_t">blkptr_t</a> *<dfn class="decl field" id="dmu_buf_impl::db_blkptr" title='dmu_buf_impl::db_blkptr' data-ref="dmu_buf_impl::db_blkptr" data-ref-filename="dmu_buf_impl..db_blkptr">db_blkptr</dfn>;</td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>	<i>/*</i></td></tr>
+<tr><th id="195">195</th><td><i>	 * Our indirection level.  Data buffers have db_level==0.</i></td></tr>
+<tr><th id="196">196</th><td><i>	 * Indirect buffers which point to data buffers have</i></td></tr>
+<tr><th id="197">197</th><td><i>	 * db_level==1. etc.  Buffers which contain dnodes have</i></td></tr>
+<tr><th id="198">198</th><td><i>	 * db_level==0, since the dnodes are stored in a file.</i></td></tr>
+<tr><th id="199">199</th><td><i>	 */</i></td></tr>
+<tr><th id="200">200</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="dmu_buf_impl::db_level" title='dmu_buf_impl::db_level' data-ref="dmu_buf_impl::db_level" data-ref-filename="dmu_buf_impl..db_level">db_level</dfn>;</td></tr>
+<tr><th id="201">201</th><td></td></tr>
+<tr><th id="202">202</th><td>	<i>/* db_mtx protects the members below */</i></td></tr>
+<tr><th id="203">203</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl field" id="dmu_buf_impl::db_mtx" title='dmu_buf_impl::db_mtx' data-ref="dmu_buf_impl::db_mtx" data-ref-filename="dmu_buf_impl..db_mtx">db_mtx</dfn>;</td></tr>
+<tr><th id="204">204</th><td></td></tr>
+<tr><th id="205">205</th><td>	<i>/*</i></td></tr>
+<tr><th id="206">206</th><td><i>	 * Current state of the buffer</i></td></tr>
+<tr><th id="207">207</th><td><i>	 */</i></td></tr>
+<tr><th id="208">208</th><td>	<a class="typedef" href="#dbuf_states_t" title='dbuf_states_t' data-type='enum dbuf_states' data-ref="dbuf_states_t" data-ref-filename="dbuf_states_t">dbuf_states_t</a> <dfn class="decl field" id="dmu_buf_impl::db_state" title='dmu_buf_impl::db_state' data-ref="dmu_buf_impl::db_state" data-ref-filename="dmu_buf_impl..db_state">db_state</dfn>;</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td>	<i>/*</i></td></tr>
+<tr><th id="211">211</th><td><i>	 * Refcount accessed by dmu_buf_{hold,rele}.</i></td></tr>
+<tr><th id="212">212</th><td><i>	 * If nonzero, the buffer can't be destroyed.</i></td></tr>
+<tr><th id="213">213</th><td><i>	 * Protected by db_mtx.</i></td></tr>
+<tr><th id="214">214</th><td><i>	 */</i></td></tr>
+<tr><th id="215">215</th><td>	<a class="typedef" href="refcount.h.html#refcount_t" title='refcount_t' data-type='struct refcount' data-ref="refcount_t" data-ref-filename="refcount_t">refcount_t</a> <dfn class="decl field" id="dmu_buf_impl::db_holds" title='dmu_buf_impl::db_holds' data-ref="dmu_buf_impl::db_holds" data-ref-filename="dmu_buf_impl..db_holds">db_holds</dfn>;</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td>	<i>/* buffer holding our data */</i></td></tr>
+<tr><th id="218">218</th><td>	<a class="typedef" href="arc.h.html#arc_buf_t" title='arc_buf_t' data-type='struct arc_buf' data-ref="arc_buf_t" data-ref-filename="arc_buf_t">arc_buf_t</a> *<dfn class="decl field" id="dmu_buf_impl::db_buf" title='dmu_buf_impl::db_buf' data-ref="dmu_buf_impl::db_buf" data-ref-filename="dmu_buf_impl..db_buf">db_buf</dfn>;</td></tr>
+<tr><th id="219">219</th><td></td></tr>
+<tr><th id="220">220</th><td>	<a class="typedef" href="../../../../../lib/libzpool/common/sys/zfs_context.h.html#kcondvar_t" title='kcondvar_t' data-type='cond_t' data-ref="kcondvar_t" data-ref-filename="kcondvar_t">kcondvar_t</a> <dfn class="decl field" id="dmu_buf_impl::db_changed" title='dmu_buf_impl::db_changed' data-ref="dmu_buf_impl::db_changed" data-ref-filename="dmu_buf_impl..db_changed">db_changed</dfn>;</td></tr>
+<tr><th id="221">221</th><td>	<a class="typedef" href="#dbuf_dirty_record_t" title='dbuf_dirty_record_t' data-type='struct dbuf_dirty_record' data-ref="dbuf_dirty_record_t" data-ref-filename="dbuf_dirty_record_t">dbuf_dirty_record_t</a> *<dfn class="decl field" id="dmu_buf_impl::db_data_pending" title='dmu_buf_impl::db_data_pending' data-ref="dmu_buf_impl::db_data_pending" data-ref-filename="dmu_buf_impl..db_data_pending">db_data_pending</dfn>;</td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td>	<i>/* pointer to most recent dirty record for this buffer */</i></td></tr>
+<tr><th id="224">224</th><td>	<a class="typedef" href="#dbuf_dirty_record_t" title='dbuf_dirty_record_t' data-type='struct dbuf_dirty_record' data-ref="dbuf_dirty_record_t" data-ref-filename="dbuf_dirty_record_t">dbuf_dirty_record_t</a> *<dfn class="decl field" id="dmu_buf_impl::db_last_dirty" title='dmu_buf_impl::db_last_dirty' data-ref="dmu_buf_impl::db_last_dirty" data-ref-filename="dmu_buf_impl..db_last_dirty">db_last_dirty</dfn>;</td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td>	<i>/*</i></td></tr>
+<tr><th id="227">227</th><td><i>	 * Our link on the owner dnodes's dn_dbufs list.</i></td></tr>
+<tr><th id="228">228</th><td><i>	 * Protected by its dn_dbufs_mtx.</i></td></tr>
+<tr><th id="229">229</th><td><i>	 */</i></td></tr>
+<tr><th id="230">230</th><td>	<a class="typedef" href="../../../sys/avl.h.html#avl_node_t" title='avl_node_t' data-type='struct avl_node' data-ref="avl_node_t" data-ref-filename="avl_node_t">avl_node_t</a> <dfn class="decl field" id="dmu_buf_impl::db_link" title='dmu_buf_impl::db_link' data-ref="dmu_buf_impl::db_link" data-ref-filename="dmu_buf_impl..db_link">db_link</dfn>;</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td>	<i>/*</i></td></tr>
+<tr><th id="233">233</th><td><i>	 * Link in dbuf_cache.</i></td></tr>
+<tr><th id="234">234</th><td><i>	 */</i></td></tr>
+<tr><th id="235">235</th><td>	<a class="typedef" href="multilist.h.html#multilist_node_t" title='multilist_node_t' data-type='list_node_t' data-ref="multilist_node_t" data-ref-filename="multilist_node_t">multilist_node_t</a> <dfn class="decl field" id="dmu_buf_impl::db_cache_link" title='dmu_buf_impl::db_cache_link' data-ref="dmu_buf_impl::db_cache_link" data-ref-filename="dmu_buf_impl..db_cache_link">db_cache_link</dfn>;</td></tr>
+<tr><th id="236">236</th><td></td></tr>
+<tr><th id="237">237</th><td>	<i>/* Data which is unique to data (leaf) blocks: */</i></td></tr>
+<tr><th id="238">238</th><td></td></tr>
+<tr><th id="239">239</th><td>	<i>/* User callback information. */</i></td></tr>
+<tr><th id="240">240</th><td>	<a class="typedef" href="dmu.h.html#dmu_buf_user_t" title='dmu_buf_user_t' data-type='struct dmu_buf_user' data-ref="dmu_buf_user_t" data-ref-filename="dmu_buf_user_t">dmu_buf_user_t</a> *<dfn class="decl field" id="dmu_buf_impl::db_user" title='dmu_buf_impl::db_user' data-ref="dmu_buf_impl::db_user" data-ref-filename="dmu_buf_impl..db_user">db_user</dfn>;</td></tr>
+<tr><th id="241">241</th><td></td></tr>
+<tr><th id="242">242</th><td>	<i>/*</i></td></tr>
+<tr><th id="243">243</th><td><i>	 * Evict user data as soon as the dirty and reference</i></td></tr>
+<tr><th id="244">244</th><td><i>	 * counts are equal.</i></td></tr>
+<tr><th id="245">245</th><td><i>	 */</i></td></tr>
+<tr><th id="246">246</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="dmu_buf_impl::db_user_immediate_evict" title='dmu_buf_impl::db_user_immediate_evict' data-ref="dmu_buf_impl::db_user_immediate_evict" data-ref-filename="dmu_buf_impl..db_user_immediate_evict">db_user_immediate_evict</dfn>;</td></tr>
+<tr><th id="247">247</th><td></td></tr>
+<tr><th id="248">248</th><td>	<i>/*</i></td></tr>
+<tr><th id="249">249</th><td><i>	 * This block was freed while a read or write was</i></td></tr>
+<tr><th id="250">250</th><td><i>	 * active.</i></td></tr>
+<tr><th id="251">251</th><td><i>	 */</i></td></tr>
+<tr><th id="252">252</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="dmu_buf_impl::db_freed_in_flight" title='dmu_buf_impl::db_freed_in_flight' data-ref="dmu_buf_impl::db_freed_in_flight" data-ref-filename="dmu_buf_impl..db_freed_in_flight">db_freed_in_flight</dfn>;</td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>	<i>/*</i></td></tr>
+<tr><th id="255">255</th><td><i>	 * dnode_evict_dbufs() or dnode_evict_bonus() tried to</i></td></tr>
+<tr><th id="256">256</th><td><i>	 * evict this dbuf, but couldn't due to outstanding</i></td></tr>
+<tr><th id="257">257</th><td><i>	 * references.  Evict once the refcount drops to 0.</i></td></tr>
+<tr><th id="258">258</th><td><i>	 */</i></td></tr>
+<tr><th id="259">259</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="dmu_buf_impl::db_pending_evict" title='dmu_buf_impl::db_pending_evict' data-ref="dmu_buf_impl::db_pending_evict" data-ref-filename="dmu_buf_impl..db_pending_evict">db_pending_evict</dfn>;</td></tr>
+<tr><th id="260">260</th><td></td></tr>
+<tr><th id="261">261</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="decl field" id="dmu_buf_impl::db_dirtycnt" title='dmu_buf_impl::db_dirtycnt' data-ref="dmu_buf_impl::db_dirtycnt" data-ref-filename="dmu_buf_impl..db_dirtycnt">db_dirtycnt</dfn>;</td></tr>
+<tr><th id="262">262</th><td>} <dfn class="typedef" id="dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</dfn>;</td></tr>
+<tr><th id="263">263</th><td></td></tr>
+<tr><th id="264">264</th><td><i>/* Note: the dbuf hash table is exposed only for the mdb module */</i></td></tr>
+<tr><th id="265">265</th><td><u>#define	<dfn class="macro" id="_M/DBUF_MUTEXES" data-ref="_M/DBUF_MUTEXES">DBUF_MUTEXES</dfn> 256</u></td></tr>
+<tr><th id="266">266</th><td><u>#define	<dfn class="macro" id="_M/DBUF_HASH_MUTEX" data-ref="_M/DBUF_HASH_MUTEX">DBUF_HASH_MUTEX</dfn>(h, idx) (&amp;(h)-&gt;hash_mutexes[(idx) &amp; (DBUF_MUTEXES-1)])</u></td></tr>
+<tr><th id="267">267</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="dbuf_hash_table" title='dbuf_hash_table' data-ref="dbuf_hash_table" data-ref-filename="dbuf_hash_table"><a class="type" href="#dbuf_hash_table" title='dbuf_hash_table' data-ref="dbuf_hash_table" data-ref-filename="dbuf_hash_table">dbuf_hash_table</a></dfn> {</td></tr>
+<tr><th id="268">268</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="decl field" id="dbuf_hash_table::hash_table_mask" title='dbuf_hash_table::hash_table_mask' data-ref="dbuf_hash_table::hash_table_mask" data-ref-filename="dbuf_hash_table..hash_table_mask">hash_table_mask</dfn>;</td></tr>
+<tr><th id="269">269</th><td>	<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> **<dfn class="decl field" id="dbuf_hash_table::hash_table" title='dbuf_hash_table::hash_table' data-ref="dbuf_hash_table::hash_table" data-ref-filename="dbuf_hash_table..hash_table">hash_table</dfn>;</td></tr>
+<tr><th id="270">270</th><td>	<a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> <dfn class="decl field" id="dbuf_hash_table::hash_mutexes" title='dbuf_hash_table::hash_mutexes' data-ref="dbuf_hash_table::hash_mutexes" data-ref-filename="dbuf_hash_table..hash_mutexes">hash_mutexes</dfn>[<a class="macro" href="#265" title="256" data-ref="_M/DBUF_MUTEXES">DBUF_MUTEXES</a>];</td></tr>
+<tr><th id="271">271</th><td>} <dfn class="typedef" id="dbuf_hash_table_t" title='dbuf_hash_table_t' data-type='struct dbuf_hash_table' data-ref="dbuf_hash_table_t" data-ref-filename="dbuf_hash_table_t">dbuf_hash_table_t</dfn>;</td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td><a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <a class="decl fn" href="../dbuf.c.html#dbuf_whichblock" title='dbuf_whichblock' data-ref="dbuf_whichblock" data-ref-filename="dbuf_whichblock" id="dbuf_whichblock">dbuf_whichblock</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col9 decl" id="39di" title='di' data-type='struct dnode *' data-ref="39di" data-ref-filename="39di">di</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col0 decl" id="40level" title='level' data-type='int64_t' data-ref="40level" data-ref-filename="40level">level</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col1 decl" id="41offset" title='offset' data-type='uint64_t' data-ref="41offset" data-ref-filename="41offset">offset</dfn>);</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td><a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="decl fn" id="dbuf_create_tlib" title='dbuf_create_tlib' data-ref="dbuf_create_tlib" data-ref-filename="dbuf_create_tlib">dbuf_create_tlib</dfn>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col2 decl" id="42dn" title='dn' data-type='struct dnode *' data-ref="42dn" data-ref-filename="42dn">dn</dfn>, <em>char</em> *<dfn class="local col3 decl" id="43data" title='data' data-type='char *' data-ref="43data" data-ref-filename="43data">data</dfn>);</td></tr>
+<tr><th id="276">276</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_create_bonus" title='dbuf_create_bonus' data-ref="dbuf_create_bonus" data-ref-filename="dbuf_create_bonus" id="dbuf_create_bonus">dbuf_create_bonus</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col4 decl" id="44dn" title='dn' data-type='struct dnode *' data-ref="44dn" data-ref-filename="44dn">dn</dfn>);</td></tr>
+<tr><th id="277">277</th><td><em>int</em> <a class="decl fn" href="../dbuf.c.html#dbuf_spill_set_blksz" title='dbuf_spill_set_blksz' data-ref="dbuf_spill_set_blksz" data-ref-filename="dbuf_spill_set_blksz" id="dbuf_spill_set_blksz">dbuf_spill_set_blksz</a>(<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> *<dfn class="local col5 decl" id="45db" title='db' data-type='dmu_buf_t *' data-ref="45db" data-ref-filename="45db">db</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="46blksz" title='blksz' data-type='uint64_t' data-ref="46blksz" data-ref-filename="46blksz">blksz</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col7 decl" id="47tx" title='tx' data-type='dmu_tx_t *' data-ref="47tx" data-ref-filename="47tx">tx</dfn>);</td></tr>
+<tr><th id="278">278</th><td><em>void</em> <dfn class="decl fn" id="dbuf_spill_hold" title='dbuf_spill_hold' data-ref="dbuf_spill_hold" data-ref-filename="dbuf_spill_hold">dbuf_spill_hold</dfn>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col8 decl" id="48dn" title='dn' data-type='struct dnode *' data-ref="48dn" data-ref-filename="48dn">dn</dfn>, <a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> **<dfn class="local col9 decl" id="49dbp" title='dbp' data-type='dmu_buf_impl_t **' data-ref="49dbp" data-ref-filename="49dbp">dbp</dfn>, <em>void</em> *<dfn class="local col0 decl" id="50tag" title='tag' data-type='void *' data-ref="50tag" data-ref-filename="50tag">tag</dfn>);</td></tr>
+<tr><th id="279">279</th><td></td></tr>
+<tr><th id="280">280</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_rm_spill" title='dbuf_rm_spill' data-ref="dbuf_rm_spill" data-ref-filename="dbuf_rm_spill" id="dbuf_rm_spill">dbuf_rm_spill</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col1 decl" id="51dn" title='dn' data-type='struct dnode *' data-ref="51dn" data-ref-filename="51dn">dn</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col2 decl" id="52tx" title='tx' data-type='dmu_tx_t *' data-ref="52tx" data-ref-filename="52tx">tx</dfn>);</td></tr>
+<tr><th id="281">281</th><td></td></tr>
+<tr><th id="282">282</th><td><a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<a class="decl fn" href="../dbuf.c.html#dbuf_hold" title='dbuf_hold' data-ref="dbuf_hold" data-ref-filename="dbuf_hold" id="dbuf_hold">dbuf_hold</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col3 decl" id="53dn" title='dn' data-type='struct dnode *' data-ref="53dn" data-ref-filename="53dn">dn</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col4 decl" id="54blkid" title='blkid' data-type='uint64_t' data-ref="54blkid" data-ref-filename="54blkid">blkid</dfn>, <em>void</em> *<dfn class="local col5 decl" id="55tag" title='tag' data-type='void *' data-ref="55tag" data-ref-filename="55tag">tag</dfn>);</td></tr>
+<tr><th id="283">283</th><td><a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<a class="decl fn" href="../dbuf.c.html#dbuf_hold_level" title='dbuf_hold_level' data-ref="dbuf_hold_level" data-ref-filename="dbuf_hold_level" id="dbuf_hold_level">dbuf_hold_level</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col6 decl" id="56dn" title='dn' data-type='struct dnode *' data-ref="56dn" data-ref-filename="56dn">dn</dfn>, <em>int</em> <dfn class="local col7 decl" id="57level" title='level' data-type='int' data-ref="57level" data-ref-filename="57level">level</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col8 decl" id="58blkid" title='blkid' data-type='uint64_t' data-ref="58blkid" data-ref-filename="58blkid">blkid</dfn>,</td></tr>
+<tr><th id="284">284</th><td>    <em>void</em> *<dfn class="local col9 decl" id="59tag" title='tag' data-type='void *' data-ref="59tag" data-ref-filename="59tag">tag</dfn>);</td></tr>
+<tr><th id="285">285</th><td><em>int</em> <a class="decl fn" href="../dbuf.c.html#dbuf_hold_impl" title='dbuf_hold_impl' data-ref="dbuf_hold_impl" data-ref-filename="dbuf_hold_impl" id="dbuf_hold_impl">dbuf_hold_impl</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col0 decl" id="60dn" title='dn' data-type='struct dnode *' data-ref="60dn" data-ref-filename="60dn">dn</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="local col1 decl" id="61level" title='level' data-type='uint8_t' data-ref="61level" data-ref-filename="61level">level</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col2 decl" id="62blkid" title='blkid' data-type='uint64_t' data-ref="62blkid" data-ref-filename="62blkid">blkid</dfn>,</td></tr>
+<tr><th id="286">286</th><td>    <a class="typedef" href="../../../../../../sys/sys/opentypes.h.html#boolean_t" title='boolean_t' data-type='int' data-ref="boolean_t" data-ref-filename="boolean_t">boolean_t</a> <dfn class="local col3 decl" id="63fail_sparse" title='fail_sparse' data-type='boolean_t' data-ref="63fail_sparse" data-ref-filename="63fail_sparse">fail_sparse</dfn>, <a class="typedef" href="../../../../../../sys/sys/opentypes.h.html#boolean_t" title='boolean_t' data-type='int' data-ref="boolean_t" data-ref-filename="boolean_t">boolean_t</a> <dfn class="local col4 decl" id="64fail_uncached" title='fail_uncached' data-type='boolean_t' data-ref="64fail_uncached" data-ref-filename="64fail_uncached">fail_uncached</dfn>,</td></tr>
+<tr><th id="287">287</th><td>    <em>void</em> *<dfn class="local col5 decl" id="65tag" title='tag' data-type='void *' data-ref="65tag" data-ref-filename="65tag">tag</dfn>, <a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> **<dfn class="local col6 decl" id="66dbp" title='dbp' data-type='dmu_buf_impl_t **' data-ref="66dbp" data-ref-filename="66dbp">dbp</dfn>);</td></tr>
+<tr><th id="288">288</th><td></td></tr>
+<tr><th id="289">289</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_prefetch" title='dbuf_prefetch' data-ref="dbuf_prefetch" data-ref-filename="dbuf_prefetch" id="dbuf_prefetch">dbuf_prefetch</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col7 decl" id="67dn" title='dn' data-type='struct dnode *' data-ref="67dn" data-ref-filename="67dn">dn</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#int64_t" title='int64_t' data-type='__int64_t' data-ref="int64_t" data-ref-filename="int64_t">int64_t</a> <dfn class="local col8 decl" id="68level" title='level' data-type='int64_t' data-ref="68level" data-ref-filename="68level">level</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col9 decl" id="69blkid" title='blkid' data-type='uint64_t' data-ref="69blkid" data-ref-filename="69blkid">blkid</dfn>,</td></tr>
+<tr><th id="290">290</th><td>    <a class="typedef" href="zio_priority.h.html#zio_priority_t" title='zio_priority_t' data-type='enum zio_priority' data-ref="zio_priority_t" data-ref-filename="zio_priority_t">zio_priority_t</a> <dfn class="local col0 decl" id="70prio" title='prio' data-type='zio_priority_t' data-ref="70prio" data-ref-filename="70prio">prio</dfn>, <a class="typedef" href="arc.h.html#arc_flags_t" title='arc_flags_t' data-type='enum arc_flags' data-ref="arc_flags_t" data-ref-filename="arc_flags_t">arc_flags_t</a> <dfn class="local col1 decl" id="71aflags" title='aflags' data-type='arc_flags_t' data-ref="71aflags" data-ref-filename="71aflags">aflags</dfn>);</td></tr>
+<tr><th id="291">291</th><td></td></tr>
+<tr><th id="292">292</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_add_ref" title='dbuf_add_ref' data-ref="dbuf_add_ref" data-ref-filename="dbuf_add_ref" id="dbuf_add_ref">dbuf_add_ref</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col2 decl" id="72db" title='db' data-type='dmu_buf_impl_t *' data-ref="72db" data-ref-filename="72db">db</dfn>, <em>void</em> *<dfn class="local col3 decl" id="73tag" title='tag' data-type='void *' data-ref="73tag" data-ref-filename="73tag">tag</dfn>);</td></tr>
+<tr><th id="293">293</th><td><a class="typedef" href="../../../../../../sys/sys/opentypes.h.html#boolean_t" title='boolean_t' data-type='int' data-ref="boolean_t" data-ref-filename="boolean_t">boolean_t</a> <a class="decl fn" href="../dbuf.c.html#dbuf_try_add_ref" title='dbuf_try_add_ref' data-ref="dbuf_try_add_ref" data-ref-filename="dbuf_try_add_ref" id="dbuf_try_add_ref">dbuf_try_add_ref</a>(<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> *<dfn class="local col4 decl" id="74db" title='db' data-type='dmu_buf_t *' data-ref="74db" data-ref-filename="74db">db</dfn>, <a class="typedef" href="dmu.h.html#objset_t" title='objset_t' data-type='struct objset' data-ref="objset_t" data-ref-filename="objset_t">objset_t</a> *<dfn class="local col5 decl" id="75os" title='os' data-type='objset_t *' data-ref="75os" data-ref-filename="75os">os</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="76obj" title='obj' data-type='uint64_t' data-ref="76obj" data-ref-filename="76obj">obj</dfn>,</td></tr>
+<tr><th id="294">294</th><td>    <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col7 decl" id="77blkid" title='blkid' data-type='uint64_t' data-ref="77blkid" data-ref-filename="77blkid">blkid</dfn>, <em>void</em> *<dfn class="local col8 decl" id="78tag" title='tag' data-type='void *' data-ref="78tag" data-ref-filename="78tag">tag</dfn>);</td></tr>
+<tr><th id="295">295</th><td><a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <a class="decl fn" href="../dbuf.c.html#dbuf_refcount" title='dbuf_refcount' data-ref="dbuf_refcount" data-ref-filename="dbuf_refcount" id="dbuf_refcount">dbuf_refcount</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col9 decl" id="79db" title='db' data-type='dmu_buf_impl_t *' data-ref="79db" data-ref-filename="79db">db</dfn>);</td></tr>
+<tr><th id="296">296</th><td></td></tr>
+<tr><th id="297">297</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_rele" title='dbuf_rele' data-ref="dbuf_rele" data-ref-filename="dbuf_rele" id="dbuf_rele">dbuf_rele</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col0 decl" id="80db" title='db' data-type='dmu_buf_impl_t *' data-ref="80db" data-ref-filename="80db">db</dfn>, <em>void</em> *<dfn class="local col1 decl" id="81tag" title='tag' data-type='void *' data-ref="81tag" data-ref-filename="81tag">tag</dfn>);</td></tr>
+<tr><th id="298">298</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_rele_and_unlock" title='dbuf_rele_and_unlock' data-ref="dbuf_rele_and_unlock" data-ref-filename="dbuf_rele_and_unlock" id="dbuf_rele_and_unlock">dbuf_rele_and_unlock</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col2 decl" id="82db" title='db' data-type='dmu_buf_impl_t *' data-ref="82db" data-ref-filename="82db">db</dfn>, <em>void</em> *<dfn class="local col3 decl" id="83tag" title='tag' data-type='void *' data-ref="83tag" data-ref-filename="83tag">tag</dfn>);</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td><a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<a class="decl fn" href="../dbuf.c.html#dbuf_find" title='dbuf_find' data-ref="dbuf_find" data-ref-filename="dbuf_find" id="dbuf_find">dbuf_find</a>(<b>struct</b> <a class="type" href="dmu_objset.h.html#objset" title='objset' data-ref="objset" data-ref-filename="objset">objset</a> *<dfn class="local col4 decl" id="84os" title='os' data-type='struct objset *' data-ref="84os" data-ref-filename="84os">os</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col5 decl" id="85object" title='object' data-type='uint64_t' data-ref="85object" data-ref-filename="85object">object</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="local col6 decl" id="86level" title='level' data-type='uint8_t' data-ref="86level" data-ref-filename="86level">level</dfn>,</td></tr>
+<tr><th id="301">301</th><td>    <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col7 decl" id="87blkid" title='blkid' data-type='uint64_t' data-ref="87blkid" data-ref-filename="87blkid">blkid</dfn>);</td></tr>
+<tr><th id="302">302</th><td></td></tr>
+<tr><th id="303">303</th><td><em>int</em> <a class="decl fn" href="../dbuf.c.html#dbuf_read" title='dbuf_read' data-ref="dbuf_read" data-ref-filename="dbuf_read" id="dbuf_read">dbuf_read</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col8 decl" id="88db" title='db' data-type='dmu_buf_impl_t *' data-ref="88db" data-ref-filename="88db">db</dfn>, <a class="typedef" href="spa.h.html#zio_t" title='zio_t' data-type='struct zio' data-ref="zio_t" data-ref-filename="zio_t">zio_t</a> *<dfn class="local col9 decl" id="89zio" title='zio' data-type='zio_t *' data-ref="89zio" data-ref-filename="89zio">zio</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col0 decl" id="90flags" title='flags' data-type='uint32_t' data-ref="90flags" data-ref-filename="90flags">flags</dfn>);</td></tr>
+<tr><th id="304">304</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dmu_buf_will_not_fill" title='dmu_buf_will_not_fill' data-ref="dmu_buf_will_not_fill" data-ref-filename="dmu_buf_will_not_fill" id="dmu_buf_will_not_fill">dmu_buf_will_not_fill</a>(<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> *<dfn class="local col1 decl" id="91db" title='db' data-type='dmu_buf_t *' data-ref="91db" data-ref-filename="91db">db</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col2 decl" id="92tx" title='tx' data-type='dmu_tx_t *' data-ref="92tx" data-ref-filename="92tx">tx</dfn>);</td></tr>
+<tr><th id="305">305</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dmu_buf_will_fill" title='dmu_buf_will_fill' data-ref="dmu_buf_will_fill" data-ref-filename="dmu_buf_will_fill" id="dmu_buf_will_fill">dmu_buf_will_fill</a>(<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> *<dfn class="local col3 decl" id="93db" title='db' data-type='dmu_buf_t *' data-ref="93db" data-ref-filename="93db">db</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col4 decl" id="94tx" title='tx' data-type='dmu_tx_t *' data-ref="94tx" data-ref-filename="94tx">tx</dfn>);</td></tr>
+<tr><th id="306">306</th><td><em>void</em> <dfn class="decl fn" id="dmu_buf_fill_done" title='dmu_buf_fill_done' data-ref="dmu_buf_fill_done" data-ref-filename="dmu_buf_fill_done">dmu_buf_fill_done</dfn>(<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> *<dfn class="local col5 decl" id="95db" title='db' data-type='dmu_buf_t *' data-ref="95db" data-ref-filename="95db">db</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col6 decl" id="96tx" title='tx' data-type='dmu_tx_t *' data-ref="96tx" data-ref-filename="96tx">tx</dfn>);</td></tr>
+<tr><th id="307">307</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_assign_arcbuf" title='dbuf_assign_arcbuf' data-ref="dbuf_assign_arcbuf" data-ref-filename="dbuf_assign_arcbuf" id="dbuf_assign_arcbuf">dbuf_assign_arcbuf</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col7 decl" id="97db" title='db' data-type='dmu_buf_impl_t *' data-ref="97db" data-ref-filename="97db">db</dfn>, <a class="typedef" href="arc.h.html#arc_buf_t" title='arc_buf_t' data-type='struct arc_buf' data-ref="arc_buf_t" data-ref-filename="arc_buf_t">arc_buf_t</a> *<dfn class="local col8 decl" id="98buf" title='buf' data-type='arc_buf_t *' data-ref="98buf" data-ref-filename="98buf">buf</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col9 decl" id="99tx" title='tx' data-type='dmu_tx_t *' data-ref="99tx" data-ref-filename="99tx">tx</dfn>);</td></tr>
+<tr><th id="308">308</th><td><a class="typedef" href="#dbuf_dirty_record_t" title='dbuf_dirty_record_t' data-type='struct dbuf_dirty_record' data-ref="dbuf_dirty_record_t" data-ref-filename="dbuf_dirty_record_t">dbuf_dirty_record_t</a> *<a class="decl fn" href="../dbuf.c.html#dbuf_dirty" title='dbuf_dirty' data-ref="dbuf_dirty" data-ref-filename="dbuf_dirty" id="dbuf_dirty">dbuf_dirty</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col0 decl" id="100db" title='db' data-type='dmu_buf_impl_t *' data-ref="100db" data-ref-filename="100db">db</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col1 decl" id="101tx" title='tx' data-type='dmu_tx_t *' data-ref="101tx" data-ref-filename="101tx">tx</dfn>);</td></tr>
+<tr><th id="309">309</th><td><a class="typedef" href="arc.h.html#arc_buf_t" title='arc_buf_t' data-type='struct arc_buf' data-ref="arc_buf_t" data-ref-filename="arc_buf_t">arc_buf_t</a> *<a class="decl fn" href="../dbuf.c.html#dbuf_loan_arcbuf" title='dbuf_loan_arcbuf' data-ref="dbuf_loan_arcbuf" data-ref-filename="dbuf_loan_arcbuf" id="dbuf_loan_arcbuf">dbuf_loan_arcbuf</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col2 decl" id="102db" title='db' data-type='dmu_buf_impl_t *' data-ref="102db" data-ref-filename="102db">db</dfn>);</td></tr>
+<tr><th id="310">310</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dmu_buf_write_embedded" title='dmu_buf_write_embedded' data-ref="dmu_buf_write_embedded" data-ref-filename="dmu_buf_write_embedded" id="dmu_buf_write_embedded">dmu_buf_write_embedded</a>(<a class="typedef" href="dmu.h.html#dmu_buf_t" title='dmu_buf_t' data-type='struct dmu_buf' data-ref="dmu_buf_t" data-ref-filename="dmu_buf_t">dmu_buf_t</a> *<dfn class="local col3 decl" id="103dbuf" title='dbuf' data-type='dmu_buf_t *' data-ref="103dbuf" data-ref-filename="103dbuf">dbuf</dfn>, <em>void</em> *<dfn class="local col4 decl" id="104data" title='data' data-type='void *' data-ref="104data" data-ref-filename="104data">data</dfn>,</td></tr>
+<tr><th id="311">311</th><td>    <a class="typedef" href="spa.h.html#bp_embedded_type_t" title='bp_embedded_type_t' data-type='enum bp_embedded_type' data-ref="bp_embedded_type_t" data-ref-filename="bp_embedded_type_t">bp_embedded_type_t</a> <dfn class="local col5 decl" id="105etype" title='etype' data-type='bp_embedded_type_t' data-ref="105etype" data-ref-filename="105etype">etype</dfn>, <b>enum</b> <a class="type" href="zio.h.html#zio_compress" title='zio_compress' data-ref="zio_compress" data-ref-filename="zio_compress">zio_compress</a> <dfn class="local col6 decl" id="106comp" title='comp' data-type='enum zio_compress' data-ref="106comp" data-ref-filename="106comp">comp</dfn>,</td></tr>
+<tr><th id="312">312</th><td>    <em>int</em> <dfn class="local col7 decl" id="107uncompressed_size" title='uncompressed_size' data-type='int' data-ref="107uncompressed_size" data-ref-filename="107uncompressed_size">uncompressed_size</dfn>, <em>int</em> <dfn class="local col8 decl" id="108compressed_size" title='compressed_size' data-type='int' data-ref="108compressed_size" data-ref-filename="108compressed_size">compressed_size</dfn>, <em>int</em> <dfn class="local col9 decl" id="109byteorder" title='byteorder' data-type='int' data-ref="109byteorder" data-ref-filename="109byteorder">byteorder</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col0 decl" id="110tx" title='tx' data-type='dmu_tx_t *' data-ref="110tx" data-ref-filename="110tx">tx</dfn>);</td></tr>
+<tr><th id="313">313</th><td></td></tr>
+<tr><th id="314">314</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_destroy" title='dbuf_destroy' data-ref="dbuf_destroy" data-ref-filename="dbuf_destroy" id="dbuf_destroy">dbuf_destroy</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col1 decl" id="111db" title='db' data-type='dmu_buf_impl_t *' data-ref="111db" data-ref-filename="111db">db</dfn>);</td></tr>
+<tr><th id="315">315</th><td></td></tr>
+<tr><th id="316">316</th><td><em>void</em> <dfn class="decl fn" id="dbuf_setdirty" title='dbuf_setdirty' data-ref="dbuf_setdirty" data-ref-filename="dbuf_setdirty">dbuf_setdirty</dfn>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col2 decl" id="112db" title='db' data-type='dmu_buf_impl_t *' data-ref="112db" data-ref-filename="112db">db</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col3 decl" id="113tx" title='tx' data-type='dmu_tx_t *' data-ref="113tx" data-ref-filename="113tx">tx</dfn>);</td></tr>
+<tr><th id="317">317</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_unoverride" title='dbuf_unoverride' data-ref="dbuf_unoverride" data-ref-filename="dbuf_unoverride" id="dbuf_unoverride">dbuf_unoverride</a>(<a class="typedef" href="#dbuf_dirty_record_t" title='dbuf_dirty_record_t' data-type='struct dbuf_dirty_record' data-ref="dbuf_dirty_record_t" data-ref-filename="dbuf_dirty_record_t">dbuf_dirty_record_t</a> *<dfn class="local col4 decl" id="114dr" title='dr' data-type='dbuf_dirty_record_t *' data-ref="114dr" data-ref-filename="114dr">dr</dfn>);</td></tr>
+<tr><th id="318">318</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_sync_list" title='dbuf_sync_list' data-ref="dbuf_sync_list" data-ref-filename="dbuf_sync_list" id="dbuf_sync_list">dbuf_sync_list</a>(<a class="typedef" href="../../../sys/list.h.html#list_t" title='list_t' data-type='struct list' data-ref="list_t" data-ref-filename="list_t">list_t</a> *<dfn class="local col5 decl" id="115list" title='list' data-type='list_t *' data-ref="115list" data-ref-filename="115list">list</dfn>, <em>int</em> <dfn class="local col6 decl" id="116level" title='level' data-type='int' data-ref="116level" data-ref-filename="116level">level</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col7 decl" id="117tx" title='tx' data-type='dmu_tx_t *' data-ref="117tx" data-ref-filename="117tx">tx</dfn>);</td></tr>
+<tr><th id="319">319</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_release_bp" title='dbuf_release_bp' data-ref="dbuf_release_bp" data-ref-filename="dbuf_release_bp" id="dbuf_release_bp">dbuf_release_bp</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col8 decl" id="118db" title='db' data-type='dmu_buf_impl_t *' data-ref="118db" data-ref-filename="118db">db</dfn>);</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_free_range" title='dbuf_free_range' data-ref="dbuf_free_range" data-ref-filename="dbuf_free_range" id="dbuf_free_range">dbuf_free_range</a>(<b>struct</b> <a class="type" href="dnode.h.html#dnode" title='dnode' data-ref="dnode" data-ref-filename="dnode">dnode</a> *<dfn class="local col9 decl" id="119dn" title='dn' data-type='struct dnode *' data-ref="119dn" data-ref-filename="119dn">dn</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col0 decl" id="120start" title='start' data-type='uint64_t' data-ref="120start" data-ref-filename="120start">start</dfn>, <a class="typedef" href="../../../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/stdint.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col1 decl" id="121end" title='end' data-type='uint64_t' data-ref="121end" data-ref-filename="121end">end</dfn>,</td></tr>
+<tr><th id="322">322</th><td>    <b>struct</b> <a class="type" href="dmu_tx.h.html#dmu_tx" title='dmu_tx' data-ref="dmu_tx" data-ref-filename="dmu_tx">dmu_tx</a> *);</td></tr>
+<tr><th id="323">323</th><td></td></tr>
+<tr><th id="324">324</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_new_size" title='dbuf_new_size' data-ref="dbuf_new_size" data-ref-filename="dbuf_new_size" id="dbuf_new_size">dbuf_new_size</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col2 decl" id="122db" title='db' data-type='dmu_buf_impl_t *' data-ref="122db" data-ref-filename="122db">db</dfn>, <em>int</em> <dfn class="local col3 decl" id="123size" title='size' data-type='int' data-ref="123size" data-ref-filename="123size">size</dfn>, <a class="typedef" href="dmu.h.html#dmu_tx_t" title='dmu_tx_t' data-type='struct dmu_tx' data-ref="dmu_tx_t" data-ref-filename="dmu_tx_t">dmu_tx_t</a> *<dfn class="local col4 decl" id="124tx" title='tx' data-type='dmu_tx_t *' data-ref="124tx" data-ref-filename="124tx">tx</dfn>);</td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td><u>#define	<dfn class="macro" id="_M/DB_DNODE" data-ref="_M/DB_DNODE">DB_DNODE</dfn>(_db)		((_db)-&gt;db_dnode_handle-&gt;dnh_dnode)</u></td></tr>
+<tr><th id="327">327</th><td><u>#define	<dfn class="macro" id="_M/DB_DNODE_LOCK" data-ref="_M/DB_DNODE_LOCK">DB_DNODE_LOCK</dfn>(_db)	((_db)-&gt;db_dnode_handle-&gt;dnh_zrlock)</u></td></tr>
+<tr><th id="328">328</th><td><u>#define	<dfn class="macro" id="_M/DB_DNODE_ENTER" data-ref="_M/DB_DNODE_ENTER">DB_DNODE_ENTER</dfn>(_db)	(zrl_add(&amp;DB_DNODE_LOCK(_db)))</u></td></tr>
+<tr><th id="329">329</th><td><u>#define	<dfn class="macro" id="_M/DB_DNODE_EXIT" data-ref="_M/DB_DNODE_EXIT">DB_DNODE_EXIT</dfn>(_db)	(zrl_remove(&amp;DB_DNODE_LOCK(_db)))</u></td></tr>
+<tr><th id="330">330</th><td><u>#define	<dfn class="macro" id="_M/DB_DNODE_HELD" data-ref="_M/DB_DNODE_HELD">DB_DNODE_HELD</dfn>(_db)	(!zrl_is_zero(&amp;DB_DNODE_LOCK(_db)))</u></td></tr>
+<tr><th id="331">331</th><td></td></tr>
+<tr><th id="332">332</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_init" title='dbuf_init' data-ref="dbuf_init" data-ref-filename="dbuf_init" id="dbuf_init">dbuf_init</a>(<em>void</em>);</td></tr>
+<tr><th id="333">333</th><td><em>void</em> <a class="decl fn" href="../dbuf.c.html#dbuf_fini" title='dbuf_fini' data-ref="dbuf_fini" data-ref-filename="dbuf_fini" id="dbuf_fini">dbuf_fini</a>(<em>void</em>);</td></tr>
+<tr><th id="334">334</th><td></td></tr>
+<tr><th id="335">335</th><td><a class="typedef" href="../../../../../../sys/sys/opentypes.h.html#boolean_t" title='boolean_t' data-type='int' data-ref="boolean_t" data-ref-filename="boolean_t">boolean_t</a> <a class="decl fn" href="../dbuf.c.html#dbuf_is_metadata" title='dbuf_is_metadata' data-ref="dbuf_is_metadata" data-ref-filename="dbuf_is_metadata" id="dbuf_is_metadata">dbuf_is_metadata</a>(<a class="typedef" href="#dmu_buf_impl_t" title='dmu_buf_impl_t' data-type='struct dmu_buf_impl' data-ref="dmu_buf_impl_t" data-ref-filename="dmu_buf_impl_t">dmu_buf_impl_t</a> *<dfn class="local col5 decl" id="125db" title='db' data-type='dmu_buf_impl_t *' data-ref="125db" data-ref-filename="125db">db</dfn>);</td></tr>
+<tr><th id="336">336</th><td></td></tr>
+<tr><th id="337">337</th><td><u>#define	<dfn class="macro" id="_M/DBUF_GET_BUFC_TYPE" data-ref="_M/DBUF_GET_BUFC_TYPE">DBUF_GET_BUFC_TYPE</dfn>(_db)	\</u></td></tr>
+<tr><th id="338">338</th><td><u>	(dbuf_is_metadata(_db) ? ARC_BUFC_METADATA : ARC_BUFC_DATA)</u></td></tr>
+<tr><th id="339">339</th><td></td></tr>
+<tr><th id="340">340</th><td><u>#define	<dfn class="macro" id="_M/DBUF_IS_CACHEABLE" data-ref="_M/DBUF_IS_CACHEABLE">DBUF_IS_CACHEABLE</dfn>(_db)						\</u></td></tr>
+<tr><th id="341">341</th><td><u>	((_db)-&gt;db_objset-&gt;os_primary_cache == ZFS_CACHE_ALL ||		\</u></td></tr>
+<tr><th id="342">342</th><td><u>	(dbuf_is_metadata(_db) &amp;&amp;					\</u></td></tr>
+<tr><th id="343">343</th><td><u>	((_db)-&gt;db_objset-&gt;os_primary_cache == ZFS_CACHE_METADATA)))</u></td></tr>
+<tr><th id="344">344</th><td></td></tr>
+<tr><th id="345">345</th><td><u>#define	<dfn class="macro" id="_M/DBUF_IS_L2CACHEABLE" data-ref="_M/DBUF_IS_L2CACHEABLE">DBUF_IS_L2CACHEABLE</dfn>(_db)					\</u></td></tr>
+<tr><th id="346">346</th><td><u>	((_db)-&gt;db_objset-&gt;os_secondary_cache == ZFS_CACHE_ALL ||	\</u></td></tr>
+<tr><th id="347">347</th><td><u>	(dbuf_is_metadata(_db) &amp;&amp;					\</u></td></tr>
+<tr><th id="348">348</th><td><u>	((_db)-&gt;db_objset-&gt;os_secondary_cache == ZFS_CACHE_METADATA)))</u></td></tr>
+<tr><th id="349">349</th><td></td></tr>
+<tr><th id="350">350</th><td><u>#<span data-ppcond="350">ifdef</span> <a class="macro" href="zfs_debug.h.html#47" data-ref="_M/ZFS_DEBUG">ZFS_DEBUG</a></u></td></tr>
+<tr><th id="351">351</th><td></td></tr>
+<tr><th id="352">352</th><td><i>/*</i></td></tr>
+<tr><th id="353">353</th><td><i> * There should be a ## between the string literal and fmt, to make it</i></td></tr>
+<tr><th id="354">354</th><td><i> * clear that we're joining two strings together, but gcc does not</i></td></tr>
+<tr><th id="355">355</th><td><i> * support that preprocessor token.</i></td></tr>
+<tr><th id="356">356</th><td><i> */</i></td></tr>
+<tr><th id="357">357</th><td><u>#define	<dfn class="macro" id="_M/dprintf_dbuf" data-ref="_M/dprintf_dbuf">dprintf_dbuf</dfn>(dbuf, fmt, ...) do { \</u></td></tr>
+<tr><th id="358">358</th><td><u>	if (zfs_flags &amp; ZFS_DEBUG_DPRINTF) { \</u></td></tr>
+<tr><th id="359">359</th><td><u>	char __db_buf[32]; \</u></td></tr>
+<tr><th id="360">360</th><td><u>	uint64_t __db_obj = (dbuf)-&gt;db.db_object; \</u></td></tr>
+<tr><th id="361">361</th><td><u>	if (__db_obj == DMU_META_DNODE_OBJECT) \</u></td></tr>
+<tr><th id="362">362</th><td><u>		(void) strcpy(__db_buf, "mdn"); \</u></td></tr>
+<tr><th id="363">363</th><td><u>	else \</u></td></tr>
+<tr><th id="364">364</th><td><u>		(void) snprintf(__db_buf, sizeof (__db_buf), "%lld", \</u></td></tr>
+<tr><th id="365">365</th><td><u>		    (u_longlong_t)__db_obj); \</u></td></tr>
+<tr><th id="366">366</th><td><u>	dprintf_ds((dbuf)-&gt;db_objset-&gt;os_dsl_dataset, \</u></td></tr>
+<tr><th id="367">367</th><td><u>	    "obj=%s lvl=%u blkid=%lld " fmt, \</u></td></tr>
+<tr><th id="368">368</th><td><u>	    __db_buf, (dbuf)-&gt;db_level, \</u></td></tr>
+<tr><th id="369">369</th><td><u>	    (u_longlong_t)(dbuf)-&gt;db_blkid, __VA_ARGS__); \</u></td></tr>
+<tr><th id="370">370</th><td><u>	} \</u></td></tr>
+<tr><th id="371">371</th><td><u>_NOTE(CONSTCOND) } while (0)</u></td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td><u>#define	<dfn class="macro" id="_M/dprintf_dbuf_bp" data-ref="_M/dprintf_dbuf_bp">dprintf_dbuf_bp</dfn>(db, bp, fmt, ...) do {			\</u></td></tr>
+<tr><th id="374">374</th><td><u>	if (zfs_flags &amp; ZFS_DEBUG_DPRINTF) {			\</u></td></tr>
+<tr><th id="375">375</th><td><u>	char *__blkbuf = kmem_alloc(BP_SPRINTF_LEN, KM_SLEEP);	\</u></td></tr>
+<tr><th id="376">376</th><td><u>	snprintf_blkptr(__blkbuf, BP_SPRINTF_LEN, bp);		\</u></td></tr>
+<tr><th id="377">377</th><td><u>	dprintf_dbuf(db, fmt " %s\n", __VA_ARGS__, __blkbuf);	\</u></td></tr>
+<tr><th id="378">378</th><td><u>	kmem_free(__blkbuf, BP_SPRINTF_LEN);			\</u></td></tr>
+<tr><th id="379">379</th><td><u>	}							\</u></td></tr>
+<tr><th id="380">380</th><td><u>_NOTE(CONSTCOND) } while (0)</u></td></tr>
+<tr><th id="381">381</th><td></td></tr>
+<tr><th id="382">382</th><td><u>#define	<dfn class="macro" id="_M/DBUF_VERIFY" data-ref="_M/DBUF_VERIFY">DBUF_VERIFY</dfn>(db)	dbuf_verify(db)</u></td></tr>
+<tr><th id="383">383</th><td></td></tr>
+<tr><th id="384">384</th><td><u>#<span data-ppcond="350">else</span></u></td></tr>
+<tr><th id="385">385</th><td></td></tr>
+<tr><th id="386">386</th><td><u>#define	dprintf_dbuf(db, fmt, ...)</u></td></tr>
+<tr><th id="387">387</th><td><u>#define	dprintf_dbuf_bp(db, bp, fmt, ...)</u></td></tr>
+<tr><th id="388">388</th><td><u>#define	DBUF_VERIFY(db)</u></td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td><u>#<span data-ppcond="350">endif</span></u></td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td><u>#<span data-ppcond="393">ifdef</span>	<span class="macro" data-ref="_M/__cplusplus">__cplusplus</span></u></td></tr>
+<tr><th id="394">394</th><td>}</td></tr>
+<tr><th id="395">395</th><td><u>#<span data-ppcond="393">endif</span></u></td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td><u>#<span data-ppcond="28">endif</span> /* _SYS_DBUF_H */</u></td></tr>
+<tr><th id="398">398</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated while processing <a href='../dbuf.c.html'>netbsd/external/cddl/osnet/dist/uts/common/fs/zfs/dbuf.c</a><br/>Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

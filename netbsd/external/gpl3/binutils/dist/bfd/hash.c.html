@@ -1,0 +1,932 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>hash.c source code [netbsd/external/gpl3/binutils/dist/bfd/hash.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="bfd_strtab_hash,strtab_hash_entry "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/gpl3/binutils/dist/bfd/hash.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>gpl3</a>/<a href='../..'>binutils</a>/<a href='..'>dist</a>/<a href='./'>bfd</a>/<a href='hash.c.html'>hash.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/* hash.c -- hash table routines for BFD</i></td></tr>
+<tr><th id="2">2</th><td><i>   Copyright (C) 1993-2018 Free Software Foundation, Inc.</i></td></tr>
+<tr><th id="3">3</th><td><i>   Written by Steve Chamberlain &lt;sac@cygnus.com&gt;</i></td></tr>
+<tr><th id="4">4</th><td><i></i></td></tr>
+<tr><th id="5">5</th><td><i>   This file is part of BFD, the Binary File Descriptor library.</i></td></tr>
+<tr><th id="6">6</th><td><i></i></td></tr>
+<tr><th id="7">7</th><td><i>   This program is free software; you can redistribute it and/or modify</i></td></tr>
+<tr><th id="8">8</th><td><i>   it under the terms of the GNU General Public License as published by</i></td></tr>
+<tr><th id="9">9</th><td><i>   the Free Software Foundation; either version 3 of the License, or</i></td></tr>
+<tr><th id="10">10</th><td><i>   (at your option) any later version.</i></td></tr>
+<tr><th id="11">11</th><td><i></i></td></tr>
+<tr><th id="12">12</th><td><i>   This program is distributed in the hope that it will be useful,</i></td></tr>
+<tr><th id="13">13</th><td><i>   but WITHOUT ANY WARRANTY; without even the implied warranty of</i></td></tr>
+<tr><th id="14">14</th><td><i>   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the</i></td></tr>
+<tr><th id="15">15</th><td><i>   GNU General Public License for more details.</i></td></tr>
+<tr><th id="16">16</th><td><i></i></td></tr>
+<tr><th id="17">17</th><td><i>   You should have received a copy of the GNU General Public License</i></td></tr>
+<tr><th id="18">18</th><td><i>   along with this program; if not, write to the Free Software</i></td></tr>
+<tr><th id="19">19</th><td><i>   Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,</i></td></tr>
+<tr><th id="20">20</th><td><i>   MA 02110-1301, USA.  */</i></td></tr>
+<tr><th id="21">21</th><td></td></tr>
+<tr><th id="22">22</th><td><u>#include <a href="sysdep.h.html">"sysdep.h"</a></u></td></tr>
+<tr><th id="23">23</th><td><u>#include <a href="../../lib/libbfd/arch/i386/bfd.h.html">"bfd.h"</a></u></td></tr>
+<tr><th id="24">24</th><td><u>#include <a href="libbfd.h.html">"libbfd.h"</a></u></td></tr>
+<tr><th id="25">25</th><td><u>#include <a href="../include/objalloc.h.html">"objalloc.h"</a></u></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="../include/libiberty.h.html">"libiberty.h"</a></u></td></tr>
+<tr><th id="27">27</th><td></td></tr>
+<tr><th id="28">28</th><td><i>/*</i></td></tr>
+<tr><th id="29">29</th><td><i>SECTION</i></td></tr>
+<tr><th id="30">30</th><td><i>	Hash Tables</i></td></tr>
+<tr><th id="31">31</th><td><i></i></td></tr>
+<tr><th id="32">32</th><td><i>@cindex Hash tables</i></td></tr>
+<tr><th id="33">33</th><td><i>	BFD provides a simple set of hash table functions.  Routines</i></td></tr>
+<tr><th id="34">34</th><td><i>	are provided to initialize a hash table, to free a hash table,</i></td></tr>
+<tr><th id="35">35</th><td><i>	to look up a string in a hash table and optionally create an</i></td></tr>
+<tr><th id="36">36</th><td><i>	entry for it, and to traverse a hash table.  There is</i></td></tr>
+<tr><th id="37">37</th><td><i>	currently no routine to delete an string from a hash table.</i></td></tr>
+<tr><th id="38">38</th><td><i></i></td></tr>
+<tr><th id="39">39</th><td><i>	The basic hash table does not permit any data to be stored</i></td></tr>
+<tr><th id="40">40</th><td><i>	with a string.  However, a hash table is designed to present a</i></td></tr>
+<tr><th id="41">41</th><td><i>	base class from which other types of hash tables may be</i></td></tr>
+<tr><th id="42">42</th><td><i>	derived.  These derived types may store additional information</i></td></tr>
+<tr><th id="43">43</th><td><i>	with the string.  Hash tables were implemented in this way,</i></td></tr>
+<tr><th id="44">44</th><td><i>	rather than simply providing a data pointer in a hash table</i></td></tr>
+<tr><th id="45">45</th><td><i>	entry, because they were designed for use by the linker back</i></td></tr>
+<tr><th id="46">46</th><td><i>	ends.  The linker may create thousands of hash table entries,</i></td></tr>
+<tr><th id="47">47</th><td><i>	and the overhead of allocating private data and storing and</i></td></tr>
+<tr><th id="48">48</th><td><i>	following pointers becomes noticeable.</i></td></tr>
+<tr><th id="49">49</th><td><i></i></td></tr>
+<tr><th id="50">50</th><td><i>	The basic hash table code is in &lt;&lt;hash.c&gt;&gt;.</i></td></tr>
+<tr><th id="51">51</th><td><i></i></td></tr>
+<tr><th id="52">52</th><td><i>@menu</i></td></tr>
+<tr><th id="53">53</th><td><i>@* Creating and Freeing a Hash Table::</i></td></tr>
+<tr><th id="54">54</th><td><i>@* Looking Up or Entering a String::</i></td></tr>
+<tr><th id="55">55</th><td><i>@* Traversing a Hash Table::</i></td></tr>
+<tr><th id="56">56</th><td><i>@* Deriving a New Hash Table Type::</i></td></tr>
+<tr><th id="57">57</th><td><i>@end menu</i></td></tr>
+<tr><th id="58">58</th><td><i></i></td></tr>
+<tr><th id="59">59</th><td><i>INODE</i></td></tr>
+<tr><th id="60">60</th><td><i>Creating and Freeing a Hash Table, Looking Up or Entering a String, Hash Tables, Hash Tables</i></td></tr>
+<tr><th id="61">61</th><td><i>SUBSECTION</i></td></tr>
+<tr><th id="62">62</th><td><i>	Creating and freeing a hash table</i></td></tr>
+<tr><th id="63">63</th><td><i></i></td></tr>
+<tr><th id="64">64</th><td><i>@findex bfd_hash_table_init</i></td></tr>
+<tr><th id="65">65</th><td><i>@findex bfd_hash_table_init_n</i></td></tr>
+<tr><th id="66">66</th><td><i>	To create a hash table, create an instance of a &lt;&lt;struct</i></td></tr>
+<tr><th id="67">67</th><td><i>	bfd_hash_table&gt;&gt; (defined in &lt;&lt;bfd.h&gt;&gt;) and call</i></td></tr>
+<tr><th id="68">68</th><td><i>	&lt;&lt;bfd_hash_table_init&gt;&gt; (if you know approximately how many</i></td></tr>
+<tr><th id="69">69</th><td><i>	entries you will need, the function &lt;&lt;bfd_hash_table_init_n&gt;&gt;,</i></td></tr>
+<tr><th id="70">70</th><td><i>	which takes a @var{size} argument, may be used).</i></td></tr>
+<tr><th id="71">71</th><td><i>	&lt;&lt;bfd_hash_table_init&gt;&gt; returns &lt;&lt;FALSE&gt;&gt; if some sort of</i></td></tr>
+<tr><th id="72">72</th><td><i>	error occurs.</i></td></tr>
+<tr><th id="73">73</th><td><i></i></td></tr>
+<tr><th id="74">74</th><td><i>@findex bfd_hash_newfunc</i></td></tr>
+<tr><th id="75">75</th><td><i>	The function &lt;&lt;bfd_hash_table_init&gt;&gt; take as an argument a</i></td></tr>
+<tr><th id="76">76</th><td><i>	function to use to create new entries.  For a basic hash</i></td></tr>
+<tr><th id="77">77</th><td><i>	table, use the function &lt;&lt;bfd_hash_newfunc&gt;&gt;.  @xref{Deriving</i></td></tr>
+<tr><th id="78">78</th><td><i>	a New Hash Table Type}, for why you would want to use a</i></td></tr>
+<tr><th id="79">79</th><td><i>	different value for this argument.</i></td></tr>
+<tr><th id="80">80</th><td><i></i></td></tr>
+<tr><th id="81">81</th><td><i>@findex bfd_hash_allocate</i></td></tr>
+<tr><th id="82">82</th><td><i>	&lt;&lt;bfd_hash_table_init&gt;&gt; will create an objalloc which will be</i></td></tr>
+<tr><th id="83">83</th><td><i>	used to allocate new entries.  You may allocate memory on this</i></td></tr>
+<tr><th id="84">84</th><td><i>	objalloc using &lt;&lt;bfd_hash_allocate&gt;&gt;.</i></td></tr>
+<tr><th id="85">85</th><td><i></i></td></tr>
+<tr><th id="86">86</th><td><i>@findex bfd_hash_table_free</i></td></tr>
+<tr><th id="87">87</th><td><i>	Use &lt;&lt;bfd_hash_table_free&gt;&gt; to free up all the memory that has</i></td></tr>
+<tr><th id="88">88</th><td><i>	been allocated for a hash table.  This will not free up the</i></td></tr>
+<tr><th id="89">89</th><td><i>	&lt;&lt;struct bfd_hash_table&gt;&gt; itself, which you must provide.</i></td></tr>
+<tr><th id="90">90</th><td><i></i></td></tr>
+<tr><th id="91">91</th><td><i>@findex bfd_hash_set_default_size</i></td></tr>
+<tr><th id="92">92</th><td><i>	Use &lt;&lt;bfd_hash_set_default_size&gt;&gt; to set the default size of</i></td></tr>
+<tr><th id="93">93</th><td><i>	hash table to use.</i></td></tr>
+<tr><th id="94">94</th><td><i></i></td></tr>
+<tr><th id="95">95</th><td><i>INODE</i></td></tr>
+<tr><th id="96">96</th><td><i>Looking Up or Entering a String, Traversing a Hash Table, Creating and Freeing a Hash Table, Hash Tables</i></td></tr>
+<tr><th id="97">97</th><td><i>SUBSECTION</i></td></tr>
+<tr><th id="98">98</th><td><i>	Looking up or entering a string</i></td></tr>
+<tr><th id="99">99</th><td><i></i></td></tr>
+<tr><th id="100">100</th><td><i>@findex bfd_hash_lookup</i></td></tr>
+<tr><th id="101">101</th><td><i>	The function &lt;&lt;bfd_hash_lookup&gt;&gt; is used both to look up a</i></td></tr>
+<tr><th id="102">102</th><td><i>	string in the hash table and to create a new entry.</i></td></tr>
+<tr><th id="103">103</th><td><i></i></td></tr>
+<tr><th id="104">104</th><td><i>	If the @var{create} argument is &lt;&lt;FALSE&gt;&gt;, &lt;&lt;bfd_hash_lookup&gt;&gt;</i></td></tr>
+<tr><th id="105">105</th><td><i>	will look up a string.  If the string is found, it will</i></td></tr>
+<tr><th id="106">106</th><td><i>	returns a pointer to a &lt;&lt;struct bfd_hash_entry&gt;&gt;.  If the</i></td></tr>
+<tr><th id="107">107</th><td><i>	string is not found in the table &lt;&lt;bfd_hash_lookup&gt;&gt; will</i></td></tr>
+<tr><th id="108">108</th><td><i>	return &lt;&lt;NULL&gt;&gt;.  You should not modify any of the fields in</i></td></tr>
+<tr><th id="109">109</th><td><i>	the returns &lt;&lt;struct bfd_hash_entry&gt;&gt;.</i></td></tr>
+<tr><th id="110">110</th><td><i></i></td></tr>
+<tr><th id="111">111</th><td><i>	If the @var{create} argument is &lt;&lt;TRUE&gt;&gt;, the string will be</i></td></tr>
+<tr><th id="112">112</th><td><i>	entered into the hash table if it is not already there.</i></td></tr>
+<tr><th id="113">113</th><td><i>	Either way a pointer to a &lt;&lt;struct bfd_hash_entry&gt;&gt; will be</i></td></tr>
+<tr><th id="114">114</th><td><i>	returned, either to the existing structure or to a newly</i></td></tr>
+<tr><th id="115">115</th><td><i>	created one.  In this case, a &lt;&lt;NULL&gt;&gt; return means that an</i></td></tr>
+<tr><th id="116">116</th><td><i>	error occurred.</i></td></tr>
+<tr><th id="117">117</th><td><i></i></td></tr>
+<tr><th id="118">118</th><td><i>	If the @var{create} argument is &lt;&lt;TRUE&gt;&gt;, and a new entry is</i></td></tr>
+<tr><th id="119">119</th><td><i>	created, the @var{copy} argument is used to decide whether to</i></td></tr>
+<tr><th id="120">120</th><td><i>	copy the string onto the hash table objalloc or not.  If</i></td></tr>
+<tr><th id="121">121</th><td><i>	@var{copy} is passed as &lt;&lt;FALSE&gt;&gt;, you must be careful not to</i></td></tr>
+<tr><th id="122">122</th><td><i>	deallocate or modify the string as long as the hash table</i></td></tr>
+<tr><th id="123">123</th><td><i>	exists.</i></td></tr>
+<tr><th id="124">124</th><td><i></i></td></tr>
+<tr><th id="125">125</th><td><i>INODE</i></td></tr>
+<tr><th id="126">126</th><td><i>Traversing a Hash Table, Deriving a New Hash Table Type, Looking Up or Entering a String, Hash Tables</i></td></tr>
+<tr><th id="127">127</th><td><i>SUBSECTION</i></td></tr>
+<tr><th id="128">128</th><td><i>	Traversing a hash table</i></td></tr>
+<tr><th id="129">129</th><td><i></i></td></tr>
+<tr><th id="130">130</th><td><i>@findex bfd_hash_traverse</i></td></tr>
+<tr><th id="131">131</th><td><i>	The function &lt;&lt;bfd_hash_traverse&gt;&gt; may be used to traverse a</i></td></tr>
+<tr><th id="132">132</th><td><i>	hash table, calling a function on each element.  The traversal</i></td></tr>
+<tr><th id="133">133</th><td><i>	is done in a random order.</i></td></tr>
+<tr><th id="134">134</th><td><i></i></td></tr>
+<tr><th id="135">135</th><td><i>	&lt;&lt;bfd_hash_traverse&gt;&gt; takes as arguments a function and a</i></td></tr>
+<tr><th id="136">136</th><td><i>	generic &lt;&lt;void *&gt;&gt; pointer.  The function is called with a</i></td></tr>
+<tr><th id="137">137</th><td><i>	hash table entry (a &lt;&lt;struct bfd_hash_entry *&gt;&gt;) and the</i></td></tr>
+<tr><th id="138">138</th><td><i>	generic pointer passed to &lt;&lt;bfd_hash_traverse&gt;&gt;.  The function</i></td></tr>
+<tr><th id="139">139</th><td><i>	must return a &lt;&lt;boolean&gt;&gt; value, which indicates whether to</i></td></tr>
+<tr><th id="140">140</th><td><i>	continue traversing the hash table.  If the function returns</i></td></tr>
+<tr><th id="141">141</th><td><i>	&lt;&lt;FALSE&gt;&gt;, &lt;&lt;bfd_hash_traverse&gt;&gt; will stop the traversal and</i></td></tr>
+<tr><th id="142">142</th><td><i>	return immediately.</i></td></tr>
+<tr><th id="143">143</th><td><i></i></td></tr>
+<tr><th id="144">144</th><td><i>INODE</i></td></tr>
+<tr><th id="145">145</th><td><i>Deriving a New Hash Table Type, , Traversing a Hash Table, Hash Tables</i></td></tr>
+<tr><th id="146">146</th><td><i>SUBSECTION</i></td></tr>
+<tr><th id="147">147</th><td><i>	Deriving a new hash table type</i></td></tr>
+<tr><th id="148">148</th><td><i></i></td></tr>
+<tr><th id="149">149</th><td><i>	Many uses of hash tables want to store additional information</i></td></tr>
+<tr><th id="150">150</th><td><i>	which each entry in the hash table.  Some also find it</i></td></tr>
+<tr><th id="151">151</th><td><i>	convenient to store additional information with the hash table</i></td></tr>
+<tr><th id="152">152</th><td><i>	itself.  This may be done using a derived hash table.</i></td></tr>
+<tr><th id="153">153</th><td><i></i></td></tr>
+<tr><th id="154">154</th><td><i>	Since C is not an object oriented language, creating a derived</i></td></tr>
+<tr><th id="155">155</th><td><i>	hash table requires sticking together some boilerplate</i></td></tr>
+<tr><th id="156">156</th><td><i>	routines with a few differences specific to the type of hash</i></td></tr>
+<tr><th id="157">157</th><td><i>	table you want to create.</i></td></tr>
+<tr><th id="158">158</th><td><i></i></td></tr>
+<tr><th id="159">159</th><td><i>	An example of a derived hash table is the linker hash table.</i></td></tr>
+<tr><th id="160">160</th><td><i>	The structures for this are defined in &lt;&lt;bfdlink.h&gt;&gt;.  The</i></td></tr>
+<tr><th id="161">161</th><td><i>	functions are in &lt;&lt;linker.c&gt;&gt;.</i></td></tr>
+<tr><th id="162">162</th><td><i></i></td></tr>
+<tr><th id="163">163</th><td><i>	You may also derive a hash table from an already derived hash</i></td></tr>
+<tr><th id="164">164</th><td><i>	table.  For example, the a.out linker backend code uses a hash</i></td></tr>
+<tr><th id="165">165</th><td><i>	table derived from the linker hash table.</i></td></tr>
+<tr><th id="166">166</th><td><i></i></td></tr>
+<tr><th id="167">167</th><td><i>@menu</i></td></tr>
+<tr><th id="168">168</th><td><i>@* Define the Derived Structures::</i></td></tr>
+<tr><th id="169">169</th><td><i>@* Write the Derived Creation Routine::</i></td></tr>
+<tr><th id="170">170</th><td><i>@* Write Other Derived Routines::</i></td></tr>
+<tr><th id="171">171</th><td><i>@end menu</i></td></tr>
+<tr><th id="172">172</th><td><i></i></td></tr>
+<tr><th id="173">173</th><td><i>INODE</i></td></tr>
+<tr><th id="174">174</th><td><i>Define the Derived Structures, Write the Derived Creation Routine, Deriving a New Hash Table Type, Deriving a New Hash Table Type</i></td></tr>
+<tr><th id="175">175</th><td><i>SUBSUBSECTION</i></td></tr>
+<tr><th id="176">176</th><td><i>	Define the derived structures</i></td></tr>
+<tr><th id="177">177</th><td><i></i></td></tr>
+<tr><th id="178">178</th><td><i>	You must define a structure for an entry in the hash table,</i></td></tr>
+<tr><th id="179">179</th><td><i>	and a structure for the hash table itself.</i></td></tr>
+<tr><th id="180">180</th><td><i></i></td></tr>
+<tr><th id="181">181</th><td><i>	The first field in the structure for an entry in the hash</i></td></tr>
+<tr><th id="182">182</th><td><i>	table must be of the type used for an entry in the hash table</i></td></tr>
+<tr><th id="183">183</th><td><i>	you are deriving from.  If you are deriving from a basic hash</i></td></tr>
+<tr><th id="184">184</th><td><i>	table this is &lt;&lt;struct bfd_hash_entry&gt;&gt;, which is defined in</i></td></tr>
+<tr><th id="185">185</th><td><i>	&lt;&lt;bfd.h&gt;&gt;.  The first field in the structure for the hash</i></td></tr>
+<tr><th id="186">186</th><td><i>	table itself must be of the type of the hash table you are</i></td></tr>
+<tr><th id="187">187</th><td><i>	deriving from itself.  If you are deriving from a basic hash</i></td></tr>
+<tr><th id="188">188</th><td><i>	table, this is &lt;&lt;struct bfd_hash_table&gt;&gt;.</i></td></tr>
+<tr><th id="189">189</th><td><i></i></td></tr>
+<tr><th id="190">190</th><td><i>	For example, the linker hash table defines &lt;&lt;struct</i></td></tr>
+<tr><th id="191">191</th><td><i>	bfd_link_hash_entry&gt;&gt; (in &lt;&lt;bfdlink.h&gt;&gt;).  The first field,</i></td></tr>
+<tr><th id="192">192</th><td><i>	&lt;&lt;root&gt;&gt;, is of type &lt;&lt;struct bfd_hash_entry&gt;&gt;.  Similarly,</i></td></tr>
+<tr><th id="193">193</th><td><i>	the first field in &lt;&lt;struct bfd_link_hash_table&gt;&gt;, &lt;&lt;table&gt;&gt;,</i></td></tr>
+<tr><th id="194">194</th><td><i>	is of type &lt;&lt;struct bfd_hash_table&gt;&gt;.</i></td></tr>
+<tr><th id="195">195</th><td><i></i></td></tr>
+<tr><th id="196">196</th><td><i>INODE</i></td></tr>
+<tr><th id="197">197</th><td><i>Write the Derived Creation Routine, Write Other Derived Routines, Define the Derived Structures, Deriving a New Hash Table Type</i></td></tr>
+<tr><th id="198">198</th><td><i>SUBSUBSECTION</i></td></tr>
+<tr><th id="199">199</th><td><i>	Write the derived creation routine</i></td></tr>
+<tr><th id="200">200</th><td><i></i></td></tr>
+<tr><th id="201">201</th><td><i>	You must write a routine which will create and initialize an</i></td></tr>
+<tr><th id="202">202</th><td><i>	entry in the hash table.  This routine is passed as the</i></td></tr>
+<tr><th id="203">203</th><td><i>	function argument to &lt;&lt;bfd_hash_table_init&gt;&gt;.</i></td></tr>
+<tr><th id="204">204</th><td><i></i></td></tr>
+<tr><th id="205">205</th><td><i>	In order to permit other hash tables to be derived from the</i></td></tr>
+<tr><th id="206">206</th><td><i>	hash table you are creating, this routine must be written in a</i></td></tr>
+<tr><th id="207">207</th><td><i>	standard way.</i></td></tr>
+<tr><th id="208">208</th><td><i></i></td></tr>
+<tr><th id="209">209</th><td><i>	The first argument to the creation routine is a pointer to a</i></td></tr>
+<tr><th id="210">210</th><td><i>	hash table entry.  This may be &lt;&lt;NULL&gt;&gt;, in which case the</i></td></tr>
+<tr><th id="211">211</th><td><i>	routine should allocate the right amount of space.  Otherwise</i></td></tr>
+<tr><th id="212">212</th><td><i>	the space has already been allocated by a hash table type</i></td></tr>
+<tr><th id="213">213</th><td><i>	derived from this one.</i></td></tr>
+<tr><th id="214">214</th><td><i></i></td></tr>
+<tr><th id="215">215</th><td><i>	After allocating space, the creation routine must call the</i></td></tr>
+<tr><th id="216">216</th><td><i>	creation routine of the hash table type it is derived from,</i></td></tr>
+<tr><th id="217">217</th><td><i>	passing in a pointer to the space it just allocated.  This</i></td></tr>
+<tr><th id="218">218</th><td><i>	will initialize any fields used by the base hash table.</i></td></tr>
+<tr><th id="219">219</th><td><i></i></td></tr>
+<tr><th id="220">220</th><td><i>	Finally the creation routine must initialize any local fields</i></td></tr>
+<tr><th id="221">221</th><td><i>	for the new hash table type.</i></td></tr>
+<tr><th id="222">222</th><td><i></i></td></tr>
+<tr><th id="223">223</th><td><i>	Here is a boilerplate example of a creation routine.</i></td></tr>
+<tr><th id="224">224</th><td><i>	@var{function_name} is the name of the routine.</i></td></tr>
+<tr><th id="225">225</th><td><i>	@var{entry_type} is the type of an entry in the hash table you</i></td></tr>
+<tr><th id="226">226</th><td><i>	are creating.  @var{base_newfunc} is the name of the creation</i></td></tr>
+<tr><th id="227">227</th><td><i>	routine of the hash table type your hash table is derived</i></td></tr>
+<tr><th id="228">228</th><td><i>	from.</i></td></tr>
+<tr><th id="229">229</th><td><i></i></td></tr>
+<tr><th id="230">230</th><td><i>EXAMPLE</i></td></tr>
+<tr><th id="231">231</th><td><i></i></td></tr>
+<tr><th id="232">232</th><td><i>.struct bfd_hash_entry *</i></td></tr>
+<tr><th id="233">233</th><td><i>.@var{function_name} (struct bfd_hash_entry *entry,</i></td></tr>
+<tr><th id="234">234</th><td><i>.		      struct bfd_hash_table *table,</i></td></tr>
+<tr><th id="235">235</th><td><i>.		      const char *string)</i></td></tr>
+<tr><th id="236">236</th><td><i>.{</i></td></tr>
+<tr><th id="237">237</th><td><i>.  struct @var{entry_type} *ret = (@var{entry_type} *) entry;</i></td></tr>
+<tr><th id="238">238</th><td><i>.</i></td></tr>
+<tr><th id="239">239</th><td><i>. {* Allocate the structure if it has not already been allocated by a</i></td></tr>
+<tr><th id="240">240</th><td><i>.    derived class.  *}</i></td></tr>
+<tr><th id="241">241</th><td><i>.  if (ret == NULL)</i></td></tr>
+<tr><th id="242">242</th><td><i>.    {</i></td></tr>
+<tr><th id="243">243</th><td><i>.      ret = bfd_hash_allocate (table, sizeof (* ret));</i></td></tr>
+<tr><th id="244">244</th><td><i>.      if (ret == NULL)</i></td></tr>
+<tr><th id="245">245</th><td><i>.	 return NULL;</i></td></tr>
+<tr><th id="246">246</th><td><i>.    }</i></td></tr>
+<tr><th id="247">247</th><td><i>.</i></td></tr>
+<tr><th id="248">248</th><td><i>. {* Call the allocation method of the base class.  *}</i></td></tr>
+<tr><th id="249">249</th><td><i>.  ret = ((@var{entry_type} *)</i></td></tr>
+<tr><th id="250">250</th><td><i>.	  @var{base_newfunc} ((struct bfd_hash_entry *) ret, table, string));</i></td></tr>
+<tr><th id="251">251</th><td><i>.</i></td></tr>
+<tr><th id="252">252</th><td><i>. {* Initialize the local fields here.  *}</i></td></tr>
+<tr><th id="253">253</th><td><i>.</i></td></tr>
+<tr><th id="254">254</th><td><i>.  return (struct bfd_hash_entry *) ret;</i></td></tr>
+<tr><th id="255">255</th><td><i>.}</i></td></tr>
+<tr><th id="256">256</th><td><i></i></td></tr>
+<tr><th id="257">257</th><td><i>DESCRIPTION</i></td></tr>
+<tr><th id="258">258</th><td><i>	The creation routine for the linker hash table, which is in</i></td></tr>
+<tr><th id="259">259</th><td><i>	&lt;&lt;linker.c&gt;&gt;, looks just like this example.</i></td></tr>
+<tr><th id="260">260</th><td><i>	@var{function_name} is &lt;&lt;_bfd_link_hash_newfunc&gt;&gt;.</i></td></tr>
+<tr><th id="261">261</th><td><i>	@var{entry_type} is &lt;&lt;struct bfd_link_hash_entry&gt;&gt;.</i></td></tr>
+<tr><th id="262">262</th><td><i>	@var{base_newfunc} is &lt;&lt;bfd_hash_newfunc&gt;&gt;, the creation</i></td></tr>
+<tr><th id="263">263</th><td><i>	routine for a basic hash table.</i></td></tr>
+<tr><th id="264">264</th><td><i></i></td></tr>
+<tr><th id="265">265</th><td><i>	&lt;&lt;_bfd_link_hash_newfunc&gt;&gt; also initializes the local fields</i></td></tr>
+<tr><th id="266">266</th><td><i>	in a linker hash table entry: &lt;&lt;type&gt;&gt;, &lt;&lt;written&gt;&gt; and</i></td></tr>
+<tr><th id="267">267</th><td><i>	&lt;&lt;next&gt;&gt;.</i></td></tr>
+<tr><th id="268">268</th><td><i></i></td></tr>
+<tr><th id="269">269</th><td><i>INODE</i></td></tr>
+<tr><th id="270">270</th><td><i>Write Other Derived Routines, , Write the Derived Creation Routine, Deriving a New Hash Table Type</i></td></tr>
+<tr><th id="271">271</th><td><i>SUBSUBSECTION</i></td></tr>
+<tr><th id="272">272</th><td><i>	Write other derived routines</i></td></tr>
+<tr><th id="273">273</th><td><i></i></td></tr>
+<tr><th id="274">274</th><td><i>	You will want to write other routines for your new hash table,</i></td></tr>
+<tr><th id="275">275</th><td><i>	as well.</i></td></tr>
+<tr><th id="276">276</th><td><i></i></td></tr>
+<tr><th id="277">277</th><td><i>	You will want an initialization routine which calls the</i></td></tr>
+<tr><th id="278">278</th><td><i>	initialization routine of the hash table you are deriving from</i></td></tr>
+<tr><th id="279">279</th><td><i>	and initializes any other local fields.  For the linker hash</i></td></tr>
+<tr><th id="280">280</th><td><i>	table, this is &lt;&lt;_bfd_link_hash_table_init&gt;&gt; in &lt;&lt;linker.c&gt;&gt;.</i></td></tr>
+<tr><th id="281">281</th><td><i></i></td></tr>
+<tr><th id="282">282</th><td><i>	You will want a lookup routine which calls the lookup routine</i></td></tr>
+<tr><th id="283">283</th><td><i>	of the hash table you are deriving from and casts the result.</i></td></tr>
+<tr><th id="284">284</th><td><i>	The linker hash table uses &lt;&lt;bfd_link_hash_lookup&gt;&gt; in</i></td></tr>
+<tr><th id="285">285</th><td><i>	&lt;&lt;linker.c&gt;&gt; (this actually takes an additional argument which</i></td></tr>
+<tr><th id="286">286</th><td><i>	it uses to decide how to return the looked up value).</i></td></tr>
+<tr><th id="287">287</th><td><i></i></td></tr>
+<tr><th id="288">288</th><td><i>	You may want a traversal routine.  This should just call the</i></td></tr>
+<tr><th id="289">289</th><td><i>	traversal routine of the hash table you are deriving from with</i></td></tr>
+<tr><th id="290">290</th><td><i>	appropriate casts.  The linker hash table uses</i></td></tr>
+<tr><th id="291">291</th><td><i>	&lt;&lt;bfd_link_hash_traverse&gt;&gt; in &lt;&lt;linker.c&gt;&gt;.</i></td></tr>
+<tr><th id="292">292</th><td><i></i></td></tr>
+<tr><th id="293">293</th><td><i>	These routines may simply be defined as macros.  For example,</i></td></tr>
+<tr><th id="294">294</th><td><i>	the a.out backend linker hash table, which is derived from the</i></td></tr>
+<tr><th id="295">295</th><td><i>	linker hash table, uses macros for the lookup and traversal</i></td></tr>
+<tr><th id="296">296</th><td><i>	routines.  These are &lt;&lt;aout_link_hash_lookup&gt;&gt; and</i></td></tr>
+<tr><th id="297">297</th><td><i>	&lt;&lt;aout_link_hash_traverse&gt;&gt; in aoutx.h.</i></td></tr>
+<tr><th id="298">298</th><td><i>*/</i></td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td><i>/* The default number of entries to use when creating a hash table.  */</i></td></tr>
+<tr><th id="301">301</th><td><u>#define <dfn class="macro" id="_M/DEFAULT_SIZE" data-ref="_M/DEFAULT_SIZE">DEFAULT_SIZE</dfn> 4051</u></td></tr>
+<tr><th id="302">302</th><td></td></tr>
+<tr><th id="303">303</th><td><i  data-doc="higher_prime_number">/* The following function returns a nearest prime number which is</i></td></tr>
+<tr><th id="304">304</th><td><i  data-doc="higher_prime_number">   greater than N, and near a power of two.  Copied from libiberty.</i></td></tr>
+<tr><th id="305">305</th><td><i  data-doc="higher_prime_number">   Returns zero for ridiculously large N to signify an error.  */</i></td></tr>
+<tr><th id="306">306</th><td></td></tr>
+<tr><th id="307">307</th><td><em>static</em> <em>unsigned</em> <em>long</em></td></tr>
+<tr><th id="308">308</th><td><dfn class="tu decl def fn" id="higher_prime_number" title='higher_prime_number' data-type='unsigned long higher_prime_number(unsigned long n)' data-ref="higher_prime_number" data-ref-filename="higher_prime_number">higher_prime_number</dfn> (<em>unsigned</em> <em>long</em> <dfn class="local col1 decl" id="1n" title='n' data-type='unsigned long' data-ref="1n" data-ref-filename="1n">n</dfn>)</td></tr>
+<tr><th id="309">309</th><td>{</td></tr>
+<tr><th id="310">310</th><td>  <i>/* These are primes that are near, but slightly smaller than, a</i></td></tr>
+<tr><th id="311">311</th><td><i>     power of two.  */</i></td></tr>
+<tr><th id="312">312</th><td>  <em>static</em> <em>const</em> <em>unsigned</em> <em>long</em> <dfn class="local col2 decl" id="2primes" title='primes' data-type='const unsigned long [28]' data-ref="2primes" data-ref-filename="2primes">primes</dfn>[] =</td></tr>
+<tr><th id="313">313</th><td>    {</td></tr>
+<tr><th id="314">314</th><td>      (<em>unsigned</em> <em>long</em>) <var>31</var>,</td></tr>
+<tr><th id="315">315</th><td>      (<em>unsigned</em> <em>long</em>) <var>61</var>,</td></tr>
+<tr><th id="316">316</th><td>      (<em>unsigned</em> <em>long</em>) <var>127</var>,</td></tr>
+<tr><th id="317">317</th><td>      (<em>unsigned</em> <em>long</em>) <var>251</var>,</td></tr>
+<tr><th id="318">318</th><td>      (<em>unsigned</em> <em>long</em>) <var>509</var>,</td></tr>
+<tr><th id="319">319</th><td>      (<em>unsigned</em> <em>long</em>) <var>1021</var>,</td></tr>
+<tr><th id="320">320</th><td>      (<em>unsigned</em> <em>long</em>) <var>2039</var>,</td></tr>
+<tr><th id="321">321</th><td>      (<em>unsigned</em> <em>long</em>) <var>4093</var>,</td></tr>
+<tr><th id="322">322</th><td>      (<em>unsigned</em> <em>long</em>) <var>8191</var>,</td></tr>
+<tr><th id="323">323</th><td>      (<em>unsigned</em> <em>long</em>) <var>16381</var>,</td></tr>
+<tr><th id="324">324</th><td>      (<em>unsigned</em> <em>long</em>) <var>32749</var>,</td></tr>
+<tr><th id="325">325</th><td>      (<em>unsigned</em> <em>long</em>) <var>65521</var>,</td></tr>
+<tr><th id="326">326</th><td>      (<em>unsigned</em> <em>long</em>) <var>131071</var>,</td></tr>
+<tr><th id="327">327</th><td>      (<em>unsigned</em> <em>long</em>) <var>262139</var>,</td></tr>
+<tr><th id="328">328</th><td>      (<em>unsigned</em> <em>long</em>) <var>524287</var>,</td></tr>
+<tr><th id="329">329</th><td>      (<em>unsigned</em> <em>long</em>) <var>1048573</var>,</td></tr>
+<tr><th id="330">330</th><td>      (<em>unsigned</em> <em>long</em>) <var>2097143</var>,</td></tr>
+<tr><th id="331">331</th><td>      (<em>unsigned</em> <em>long</em>) <var>4194301</var>,</td></tr>
+<tr><th id="332">332</th><td>      (<em>unsigned</em> <em>long</em>) <var>8388593</var>,</td></tr>
+<tr><th id="333">333</th><td>      (<em>unsigned</em> <em>long</em>) <var>16777213</var>,</td></tr>
+<tr><th id="334">334</th><td>      (<em>unsigned</em> <em>long</em>) <var>33554393</var>,</td></tr>
+<tr><th id="335">335</th><td>      (<em>unsigned</em> <em>long</em>) <var>67108859</var>,</td></tr>
+<tr><th id="336">336</th><td>      (<em>unsigned</em> <em>long</em>) <var>134217689</var>,</td></tr>
+<tr><th id="337">337</th><td>      (<em>unsigned</em> <em>long</em>) <var>268435399</var>,</td></tr>
+<tr><th id="338">338</th><td>      (<em>unsigned</em> <em>long</em>) <var>536870909</var>,</td></tr>
+<tr><th id="339">339</th><td>      (<em>unsigned</em> <em>long</em>) <var>1073741789</var>,</td></tr>
+<tr><th id="340">340</th><td>      (<em>unsigned</em> <em>long</em>) <var>2147483647</var>,</td></tr>
+<tr><th id="341">341</th><td>					<i>/* 4294967291L */</i></td></tr>
+<tr><th id="342">342</th><td>      ((<em>unsigned</em> <em>long</em>) <var>2147483647</var>) + ((<em>unsigned</em> <em>long</em>) <var>2147483644</var>),</td></tr>
+<tr><th id="343">343</th><td>  };</td></tr>
+<tr><th id="344">344</th><td></td></tr>
+<tr><th id="345">345</th><td>  <em>const</em> <em>unsigned</em> <em>long</em> *<dfn class="local col3 decl" id="3low" title='low' data-type='const unsigned long *' data-ref="3low" data-ref-filename="3low">low</dfn> = &amp;<a class="local col2 ref" href="#2primes" title='primes' data-ref="2primes" data-ref-filename="2primes">primes</a>[<var>0</var>];</td></tr>
+<tr><th id="346">346</th><td>  <em>const</em> <em>unsigned</em> <em>long</em> *<dfn class="local col4 decl" id="4high" title='high' data-type='const unsigned long *' data-ref="4high" data-ref-filename="4high">high</dfn> = &amp;<a class="local col2 ref" href="#2primes" title='primes' data-ref="2primes" data-ref-filename="2primes">primes</a>[<b>sizeof</b> (<a class="local col2 ref" href="#2primes" title='primes' data-ref="2primes" data-ref-filename="2primes">primes</a>) / <b>sizeof</b> (<a class="local col2 ref" href="#2primes" title='primes' data-ref="2primes" data-ref-filename="2primes">primes</a>[<var>0</var>])];</td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td>  <b>while</b> (<a class="local col3 ref" href="#3low" title='low' data-ref="3low" data-ref-filename="3low">low</a> != <a class="local col4 ref" href="#4high" title='high' data-ref="4high" data-ref-filename="4high">high</a>)</td></tr>
+<tr><th id="349">349</th><td>    {</td></tr>
+<tr><th id="350">350</th><td>      <em>const</em> <em>unsigned</em> <em>long</em> *<dfn class="local col5 decl" id="5mid" title='mid' data-type='const unsigned long *' data-ref="5mid" data-ref-filename="5mid">mid</dfn> = <a class="local col3 ref" href="#3low" title='low' data-ref="3low" data-ref-filename="3low">low</a> + (<a class="local col4 ref" href="#4high" title='high' data-ref="4high" data-ref-filename="4high">high</a> - <a class="local col3 ref" href="#3low" title='low' data-ref="3low" data-ref-filename="3low">low</a>) / <var>2</var>;</td></tr>
+<tr><th id="351">351</th><td>      <b>if</b> (<a class="local col1 ref" href="#1n" title='n' data-ref="1n" data-ref-filename="1n">n</a> &gt;= *<a class="local col5 ref" href="#5mid" title='mid' data-ref="5mid" data-ref-filename="5mid">mid</a>)</td></tr>
+<tr><th id="352">352</th><td>	<a class="local col3 ref" href="#3low" title='low' data-ref="3low" data-ref-filename="3low">low</a> = <a class="local col5 ref" href="#5mid" title='mid' data-ref="5mid" data-ref-filename="5mid">mid</a> + <var>1</var>;</td></tr>
+<tr><th id="353">353</th><td>      <b>else</b></td></tr>
+<tr><th id="354">354</th><td>	<a class="local col4 ref" href="#4high" title='high' data-ref="4high" data-ref-filename="4high">high</a> = <a class="local col5 ref" href="#5mid" title='mid' data-ref="5mid" data-ref-filename="5mid">mid</a>;</td></tr>
+<tr><th id="355">355</th><td>    }</td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td>  <b>if</b> (<a class="local col1 ref" href="#1n" title='n' data-ref="1n" data-ref-filename="1n">n</a> &gt;= *<a class="local col3 ref" href="#3low" title='low' data-ref="3low" data-ref-filename="3low">low</a>)</td></tr>
+<tr><th id="358">358</th><td>    <b>return</b> <var>0</var>;</td></tr>
+<tr><th id="359">359</th><td></td></tr>
+<tr><th id="360">360</th><td>  <b>return</b> *<a class="local col3 ref" href="#3low" title='low' data-ref="3low" data-ref-filename="3low">low</a>;</td></tr>
+<tr><th id="361">361</th><td>}</td></tr>
+<tr><th id="362">362</th><td></td></tr>
+<tr><th id="363">363</th><td><em>static</em> <em>unsigned</em> <em>long</em> <dfn class="tu decl def" id="bfd_default_hash_table_size" title='bfd_default_hash_table_size' data-type='unsigned long' data-ref="bfd_default_hash_table_size" data-ref-filename="bfd_default_hash_table_size">bfd_default_hash_table_size</dfn> = <a class="macro" href="#301" title="4051" data-ref="_M/DEFAULT_SIZE">DEFAULT_SIZE</a>;</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td><i>/* Create a new hash table, given a number of entries.  */</i></td></tr>
+<tr><th id="366">366</th><td></td></tr>
+<tr><th id="367">367</th><td><a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a></td></tr>
+<tr><th id="368">368</th><td><dfn class="decl def fn" id="bfd_hash_table_init_n" title='bfd_hash_table_init_n' data-ref="bfd_hash_table_init_n" data-ref-filename="bfd_hash_table_init_n">bfd_hash_table_init_n</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col6 decl" id="6table" title='table' data-type='struct bfd_hash_table *' data-ref="6table" data-ref-filename="6table">table</dfn>,</td></tr>
+<tr><th id="369">369</th><td>		       <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *(*<dfn class="local col7 decl" id="7newfunc" title='newfunc' data-type='struct bfd_hash_entry *(*)(struct bfd_hash_entry *, struct bfd_hash_table *, const char *)' data-ref="7newfunc" data-ref-filename="7newfunc">newfunc</dfn>) (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *,</td></tr>
+<tr><th id="370">370</th><td>							  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *,</td></tr>
+<tr><th id="371">371</th><td>							  <em>const</em> <em>char</em> *),</td></tr>
+<tr><th id="372">372</th><td>		       <em>unsigned</em> <em>int</em> <dfn class="local col8 decl" id="8entsize" title='entsize' data-type='unsigned int' data-ref="8entsize" data-ref-filename="8entsize">entsize</dfn>,</td></tr>
+<tr><th id="373">373</th><td>		       <em>unsigned</em> <em>int</em> <dfn class="local col9 decl" id="9size" title='size' data-type='unsigned int' data-ref="9size" data-ref-filename="9size">size</dfn>)</td></tr>
+<tr><th id="374">374</th><td>{</td></tr>
+<tr><th id="375">375</th><td>  <em>unsigned</em> <em>long</em> <dfn class="local col0 decl" id="10alloc" title='alloc' data-type='unsigned long' data-ref="10alloc" data-ref-filename="10alloc">alloc</dfn>;</td></tr>
+<tr><th id="376">376</th><td></td></tr>
+<tr><th id="377">377</th><td>  <a class="local col0 ref" href="#10alloc" title='alloc' data-ref="10alloc" data-ref-filename="10alloc">alloc</a> = <a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a>;</td></tr>
+<tr><th id="378">378</th><td>  <a class="local col0 ref" href="#10alloc" title='alloc' data-ref="10alloc" data-ref-filename="10alloc">alloc</a> *= <b>sizeof</b> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *);</td></tr>
+<tr><th id="379">379</th><td>  <b>if</b> (<a class="local col0 ref" href="#10alloc" title='alloc' data-ref="10alloc" data-ref-filename="10alloc">alloc</a> / <b>sizeof</b> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *) != <a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a>)</td></tr>
+<tr><th id="380">380</th><td>    {</td></tr>
+<tr><th id="381">381</th><td>      <a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_set_error" title='bfd_set_error' data-ref="bfd_set_error" data-ref-filename="bfd_set_error">bfd_set_error</a> (<a class="enum" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_error_no_memory" title='bfd_error_no_memory' data-ref="bfd_error_no_memory" data-ref-filename="bfd_error_no_memory">bfd_error_no_memory</a>);</td></tr>
+<tr><th id="382">382</th><td>      <b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#155" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="383">383</th><td>    }</td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a> = (<em>void</em> *) <a class="ref fn" href="../include/objalloc.h.html#objalloc_create" title='objalloc_create' data-ref="objalloc_create" data-ref-filename="objalloc_create">objalloc_create</a> ();</td></tr>
+<tr><th id="386">386</th><td>  <b>if</b> (<a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="387">387</th><td>    {</td></tr>
+<tr><th id="388">388</th><td>      <a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_set_error" title='bfd_set_error' data-ref="bfd_set_error" data-ref-filename="bfd_set_error">bfd_set_error</a> (<a class="enum" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_error_no_memory" title='bfd_error_no_memory' data-ref="bfd_error_no_memory" data-ref-filename="bfd_error_no_memory">bfd_error_no_memory</a>);</td></tr>
+<tr><th id="389">389</th><td>      <b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#155" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="390">390</th><td>    }</td></tr>
+<tr><th id="391">391</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a> = (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> **)</td></tr>
+<tr><th id="392">392</th><td>      <a class="macro" href="../include/objalloc.h.html#87" title="__extension__ ({ struct objalloc *__o = ((struct objalloc *) table-&gt;memory); unsigned long __len = (alloc); if (__len == 0) __len = 1; __len = (__len + __builtin_offsetof(struct objalloc_align, d) - 1) &amp;~ (__builtin_offsetof(struct objalloc_align, d) - 1); (__len != 0 &amp;&amp; __len &lt;= __o-&gt;current_space ? (__o-&gt;current_ptr += __len, __o-&gt;current_space -= __len, (void *) (__o-&gt;current_ptr - __len)) : _objalloc_alloc (__o, __len)); })" data-ref="_M/objalloc_alloc">objalloc_alloc</a> ((<b>struct</b> <a class="type" href="../include/objalloc.h.html#objalloc" title='objalloc' data-ref="objalloc" data-ref-filename="objalloc">objalloc</a> *) <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a>, <a class="local col0 ref" href="#10alloc" title='alloc' data-ref="10alloc" data-ref-filename="10alloc">alloc</a>);</td></tr>
+<tr><th id="393">393</th><td>  <b>if</b> (<a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="394">394</th><td>    {</td></tr>
+<tr><th id="395">395</th><td>      <a class="ref fn" href="#bfd_hash_table_free" title='bfd_hash_table_free' data-ref="bfd_hash_table_free" data-ref-filename="bfd_hash_table_free">bfd_hash_table_free</a> (<a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>);</td></tr>
+<tr><th id="396">396</th><td>      <a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_set_error" title='bfd_set_error' data-ref="bfd_set_error" data-ref-filename="bfd_set_error">bfd_set_error</a> (<a class="enum" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_error_no_memory" title='bfd_error_no_memory' data-ref="bfd_error_no_memory" data-ref-filename="bfd_error_no_memory">bfd_error_no_memory</a>);</td></tr>
+<tr><th id="397">397</th><td>      <b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#155" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="398">398</th><td>    }</td></tr>
+<tr><th id="399">399</th><td>  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memset" title='memset' data-ref="memset" data-ref-filename="memset">memset</a> ((<em>void</em> *) <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>, <var>0</var>, <a class="local col0 ref" href="#10alloc" title='alloc' data-ref="10alloc" data-ref-filename="10alloc">alloc</a>);</td></tr>
+<tr><th id="400">400</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a> = <a class="local col9 ref" href="#9size" title='size' data-ref="9size" data-ref-filename="9size">size</a>;</td></tr>
+<tr><th id="401">401</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::entsize" title='bfd_hash_table::entsize' data-ref="bfd_hash_table::entsize" data-ref-filename="bfd_hash_table..entsize">entsize</a> = <a class="local col8 ref" href="#8entsize" title='entsize' data-ref="8entsize" data-ref-filename="8entsize">entsize</a>;</td></tr>
+<tr><th id="402">402</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::count" title='bfd_hash_table::count' data-ref="bfd_hash_table::count" data-ref-filename="bfd_hash_table..count">count</a> = <var>0</var>;</td></tr>
+<tr><th id="403">403</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::frozen" title='bfd_hash_table::frozen' data-ref="bfd_hash_table::frozen" data-ref-filename="bfd_hash_table..frozen">frozen</a> = <var>0</var>;</td></tr>
+<tr><th id="404">404</th><td>  <a class="local col6 ref" href="#6table" title='table' data-ref="6table" data-ref-filename="6table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::newfunc" title='bfd_hash_table::newfunc' data-ref="bfd_hash_table::newfunc" data-ref-filename="bfd_hash_table..newfunc">newfunc</a> = <a class="local col7 ref" href="#7newfunc" title='newfunc' data-ref="7newfunc" data-ref-filename="7newfunc">newfunc</a>;</td></tr>
+<tr><th id="405">405</th><td>  <b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#156" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="406">406</th><td>}</td></tr>
+<tr><th id="407">407</th><td></td></tr>
+<tr><th id="408">408</th><td><i>/* Create a new hash table with the default number of entries.  */</i></td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td><a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a></td></tr>
+<tr><th id="411">411</th><td><dfn class="decl def fn" id="bfd_hash_table_init" title='bfd_hash_table_init' data-ref="bfd_hash_table_init" data-ref-filename="bfd_hash_table_init">bfd_hash_table_init</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col1 decl" id="11table" title='table' data-type='struct bfd_hash_table *' data-ref="11table" data-ref-filename="11table">table</dfn>,</td></tr>
+<tr><th id="412">412</th><td>		     <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *(*<dfn class="local col2 decl" id="12newfunc" title='newfunc' data-type='struct bfd_hash_entry *(*)(struct bfd_hash_entry *, struct bfd_hash_table *, const char *)' data-ref="12newfunc" data-ref-filename="12newfunc">newfunc</dfn>) (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *,</td></tr>
+<tr><th id="413">413</th><td>							<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *,</td></tr>
+<tr><th id="414">414</th><td>							<em>const</em> <em>char</em> *),</td></tr>
+<tr><th id="415">415</th><td>		     <em>unsigned</em> <em>int</em> <dfn class="local col3 decl" id="13entsize" title='entsize' data-type='unsigned int' data-ref="13entsize" data-ref-filename="13entsize">entsize</dfn>)</td></tr>
+<tr><th id="416">416</th><td>{</td></tr>
+<tr><th id="417">417</th><td>  <b>return</b> <a class="ref fn" href="#bfd_hash_table_init_n" title='bfd_hash_table_init_n' data-ref="bfd_hash_table_init_n" data-ref-filename="bfd_hash_table_init_n">bfd_hash_table_init_n</a> (<a class="local col1 ref" href="#11table" title='table' data-ref="11table" data-ref-filename="11table">table</a>, <a class="local col2 ref" href="#12newfunc" title='newfunc' data-ref="12newfunc" data-ref-filename="12newfunc">newfunc</a>, <a class="local col3 ref" href="#13entsize" title='entsize' data-ref="13entsize" data-ref-filename="13entsize">entsize</a>,</td></tr>
+<tr><th id="418">418</th><td>				<a class="tu ref" href="#bfd_default_hash_table_size" title='bfd_default_hash_table_size' data-use='r' data-ref="bfd_default_hash_table_size" data-ref-filename="bfd_default_hash_table_size">bfd_default_hash_table_size</a>);</td></tr>
+<tr><th id="419">419</th><td>}</td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td><i>/* Free a hash table.  */</i></td></tr>
+<tr><th id="422">422</th><td></td></tr>
+<tr><th id="423">423</th><td><em>void</em></td></tr>
+<tr><th id="424">424</th><td><dfn class="decl def fn" id="bfd_hash_table_free" title='bfd_hash_table_free' data-ref="bfd_hash_table_free" data-ref-filename="bfd_hash_table_free">bfd_hash_table_free</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col4 decl" id="14table" title='table' data-type='struct bfd_hash_table *' data-ref="14table" data-ref-filename="14table">table</dfn>)</td></tr>
+<tr><th id="425">425</th><td>{</td></tr>
+<tr><th id="426">426</th><td>  <a class="ref fn" href="../include/objalloc.h.html#objalloc_free" title='objalloc_free' data-ref="objalloc_free" data-ref-filename="objalloc_free">objalloc_free</a> ((<b>struct</b> <a class="type" href="../include/objalloc.h.html#objalloc" title='objalloc' data-ref="objalloc" data-ref-filename="objalloc">objalloc</a> *) <a class="local col4 ref" href="#14table" title='table' data-ref="14table" data-ref-filename="14table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a>);</td></tr>
+<tr><th id="427">427</th><td>  <a class="local col4 ref" href="#14table" title='table' data-ref="14table" data-ref-filename="14table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="428">428</th><td>}</td></tr>
+<tr><th id="429">429</th><td></td></tr>
+<tr><th id="430">430</th><td><em>static</em> <b>inline</b> <em>unsigned</em> <em>long</em></td></tr>
+<tr><th id="431">431</th><td><dfn class="tu decl def fn" id="bfd_hash_hash" title='bfd_hash_hash' data-type='unsigned long bfd_hash_hash(const char * string, unsigned int * lenp)' data-ref="bfd_hash_hash" data-ref-filename="bfd_hash_hash">bfd_hash_hash</dfn> (<em>const</em> <em>char</em> *<dfn class="local col5 decl" id="15string" title='string' data-type='const char *' data-ref="15string" data-ref-filename="15string">string</dfn>, <em>unsigned</em> <em>int</em> *<dfn class="local col6 decl" id="16lenp" title='lenp' data-type='unsigned int *' data-ref="16lenp" data-ref-filename="16lenp">lenp</dfn>)</td></tr>
+<tr><th id="432">432</th><td>{</td></tr>
+<tr><th id="433">433</th><td>  <em>const</em> <em>unsigned</em> <em>char</em> *<dfn class="local col7 decl" id="17s" title='s' data-type='const unsigned char *' data-ref="17s" data-ref-filename="17s">s</dfn>;</td></tr>
+<tr><th id="434">434</th><td>  <em>unsigned</em> <em>long</em> <dfn class="local col8 decl" id="18hash" title='hash' data-type='unsigned long' data-ref="18hash" data-ref-filename="18hash">hash</dfn>;</td></tr>
+<tr><th id="435">435</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col9 decl" id="19len" title='len' data-type='unsigned int' data-ref="19len" data-ref-filename="19len">len</dfn>;</td></tr>
+<tr><th id="436">436</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col0 decl" id="20c" title='c' data-type='unsigned int' data-ref="20c" data-ref-filename="20c">c</dfn>;</td></tr>
+<tr><th id="437">437</th><td></td></tr>
+<tr><th id="438">438</th><td>  <a class="macro" href="libbfd.h.html#802" title="do { if (!(string != ((void*)0))) bfd_assert(&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/binutils/lib/libbfd/../../../../../../../../../external/gpl3/binutils/dist/bfd/hash.c&quot;,438); } while (0)" data-ref="_M/BFD_ASSERT">BFD_ASSERT</a> (<a class="local col5 ref" href="#15string" title='string' data-ref="15string" data-ref-filename="15string">string</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="439">439</th><td>  <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> = <var>0</var>;</td></tr>
+<tr><th id="440">440</th><td>  <a class="local col9 ref" href="#19len" title='len' data-ref="19len" data-ref-filename="19len">len</a> = <var>0</var>;</td></tr>
+<tr><th id="441">441</th><td>  <a class="local col7 ref" href="#17s" title='s' data-ref="17s" data-ref-filename="17s">s</a> = (<em>const</em> <em>unsigned</em> <em>char</em> *) <a class="local col5 ref" href="#15string" title='string' data-ref="15string" data-ref-filename="15string">string</a>;</td></tr>
+<tr><th id="442">442</th><td>  <b>while</b> ((<a class="local col0 ref" href="#20c" title='c' data-ref="20c" data-ref-filename="20c">c</a> = *<a class="local col7 ref" href="#17s" title='s' data-ref="17s" data-ref-filename="17s">s</a>++) != <kbd>'\0'</kbd>)</td></tr>
+<tr><th id="443">443</th><td>    {</td></tr>
+<tr><th id="444">444</th><td>      <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> += <a class="local col0 ref" href="#20c" title='c' data-ref="20c" data-ref-filename="20c">c</a> + (<a class="local col0 ref" href="#20c" title='c' data-ref="20c" data-ref-filename="20c">c</a> &lt;&lt; <var>17</var>);</td></tr>
+<tr><th id="445">445</th><td>      <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> ^= <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> &gt;&gt; <var>2</var>;</td></tr>
+<tr><th id="446">446</th><td>    }</td></tr>
+<tr><th id="447">447</th><td>  <a class="local col9 ref" href="#19len" title='len' data-ref="19len" data-ref-filename="19len">len</a> = (<a class="local col7 ref" href="#17s" title='s' data-ref="17s" data-ref-filename="17s">s</a> - (<em>const</em> <em>unsigned</em> <em>char</em> *) <a class="local col5 ref" href="#15string" title='string' data-ref="15string" data-ref-filename="15string">string</a>) - <var>1</var>;</td></tr>
+<tr><th id="448">448</th><td>  <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> += <a class="local col9 ref" href="#19len" title='len' data-ref="19len" data-ref-filename="19len">len</a> + (<a class="local col9 ref" href="#19len" title='len' data-ref="19len" data-ref-filename="19len">len</a> &lt;&lt; <var>17</var>);</td></tr>
+<tr><th id="449">449</th><td>  <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> ^= <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a> &gt;&gt; <var>2</var>;</td></tr>
+<tr><th id="450">450</th><td>  <b>if</b> (<a class="local col6 ref" href="#16lenp" title='lenp' data-ref="16lenp" data-ref-filename="16lenp">lenp</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="451">451</th><td>    *<a class="local col6 ref" href="#16lenp" title='lenp' data-ref="16lenp" data-ref-filename="16lenp">lenp</a> = <a class="local col9 ref" href="#19len" title='len' data-ref="19len" data-ref-filename="19len">len</a>;</td></tr>
+<tr><th id="452">452</th><td>  <b>return</b> <a class="local col8 ref" href="#18hash" title='hash' data-ref="18hash" data-ref-filename="18hash">hash</a>;</td></tr>
+<tr><th id="453">453</th><td>}</td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td><i>/* Look up a string in a hash table.  */</i></td></tr>
+<tr><th id="456">456</th><td></td></tr>
+<tr><th id="457">457</th><td><b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *</td></tr>
+<tr><th id="458">458</th><td><dfn class="decl def fn" id="bfd_hash_lookup" title='bfd_hash_lookup' data-ref="bfd_hash_lookup" data-ref-filename="bfd_hash_lookup">bfd_hash_lookup</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col1 decl" id="21table" title='table' data-type='struct bfd_hash_table *' data-ref="21table" data-ref-filename="21table">table</dfn>,</td></tr>
+<tr><th id="459">459</th><td>		 <em>const</em> <em>char</em> *<dfn class="local col2 decl" id="22string" title='string' data-type='const char *' data-ref="22string" data-ref-filename="22string">string</dfn>,</td></tr>
+<tr><th id="460">460</th><td>		 <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> <dfn class="local col3 decl" id="23create" title='create' data-type='bfd_boolean' data-ref="23create" data-ref-filename="23create">create</dfn>,</td></tr>
+<tr><th id="461">461</th><td>		 <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> <dfn class="local col4 decl" id="24copy" title='copy' data-type='bfd_boolean' data-ref="24copy" data-ref-filename="24copy">copy</dfn>)</td></tr>
+<tr><th id="462">462</th><td>{</td></tr>
+<tr><th id="463">463</th><td>  <em>unsigned</em> <em>long</em> <dfn class="local col5 decl" id="25hash" title='hash' data-type='unsigned long' data-ref="25hash" data-ref-filename="25hash">hash</dfn>;</td></tr>
+<tr><th id="464">464</th><td>  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col6 decl" id="26hashp" title='hashp' data-type='struct bfd_hash_entry *' data-ref="26hashp" data-ref-filename="26hashp">hashp</dfn>;</td></tr>
+<tr><th id="465">465</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col7 decl" id="27len" title='len' data-type='unsigned int' data-ref="27len" data-ref-filename="27len">len</dfn>;</td></tr>
+<tr><th id="466">466</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col8 decl" id="28_index" title='_index' data-type='unsigned int' data-ref="28_index" data-ref-filename="28_index">_index</dfn>;</td></tr>
+<tr><th id="467">467</th><td></td></tr>
+<tr><th id="468">468</th><td>  <a class="local col5 ref" href="#25hash" title='hash' data-ref="25hash" data-ref-filename="25hash">hash</a> = <a class="tu ref fn" href="#bfd_hash_hash" title='bfd_hash_hash' data-use='c' data-ref="bfd_hash_hash" data-ref-filename="bfd_hash_hash">bfd_hash_hash</a> (<a class="local col2 ref" href="#22string" title='string' data-ref="22string" data-ref-filename="22string">string</a>, &amp;<a class="local col7 ref" href="#27len" title='len' data-ref="27len" data-ref-filename="27len">len</a>);</td></tr>
+<tr><th id="469">469</th><td>  <a class="local col8 ref" href="#28_index" title='_index' data-ref="28_index" data-ref-filename="28_index">_index</a> = <a class="local col5 ref" href="#25hash" title='hash' data-ref="25hash" data-ref-filename="25hash">hash</a> % <a class="local col1 ref" href="#21table" title='table' data-ref="21table" data-ref-filename="21table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>;</td></tr>
+<tr><th id="470">470</th><td>  <b>for</b> (<a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a> = <a class="local col1 ref" href="#21table" title='table' data-ref="21table" data-ref-filename="21table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col8 ref" href="#28_index" title='_index' data-ref="28_index" data-ref-filename="28_index">_index</a>];</td></tr>
+<tr><th id="471">471</th><td>       <a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="472">472</th><td>       <a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a> = <a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>)</td></tr>
+<tr><th id="473">473</th><td>    {</td></tr>
+<tr><th id="474">474</th><td>      <b>if</b> (<a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> == <a class="local col5 ref" href="#25hash" title='hash' data-ref="25hash" data-ref-filename="25hash">hash</a></td></tr>
+<tr><th id="475">475</th><td>	  &amp;&amp; <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strcmp" title='strcmp' data-ref="strcmp" data-ref-filename="strcmp">strcmp</a> (<a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::string" title='bfd_hash_entry::string' data-ref="bfd_hash_entry::string" data-ref-filename="bfd_hash_entry..string">string</a>, <a class="local col2 ref" href="#22string" title='string' data-ref="22string" data-ref-filename="22string">string</a>) == <var>0</var>)</td></tr>
+<tr><th id="476">476</th><td>	<b>return</b> <a class="local col6 ref" href="#26hashp" title='hashp' data-ref="26hashp" data-ref-filename="26hashp">hashp</a>;</td></tr>
+<tr><th id="477">477</th><td>    }</td></tr>
+<tr><th id="478">478</th><td></td></tr>
+<tr><th id="479">479</th><td>  <b>if</b> (! <a class="local col3 ref" href="#23create" title='create' data-ref="23create" data-ref-filename="23create">create</a>)</td></tr>
+<tr><th id="480">480</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="481">481</th><td></td></tr>
+<tr><th id="482">482</th><td>  <b>if</b> (<a class="local col4 ref" href="#24copy" title='copy' data-ref="24copy" data-ref-filename="24copy">copy</a>)</td></tr>
+<tr><th id="483">483</th><td>    {</td></tr>
+<tr><th id="484">484</th><td>      <em>char</em> *<dfn class="local col9 decl" id="29new_string" title='new_string' data-type='char *' data-ref="29new_string" data-ref-filename="29new_string">new_string</dfn>;</td></tr>
+<tr><th id="485">485</th><td></td></tr>
+<tr><th id="486">486</th><td>      <a class="local col9 ref" href="#29new_string" title='new_string' data-ref="29new_string" data-ref-filename="29new_string">new_string</a> = (<em>char</em> *) <a class="macro" href="../include/objalloc.h.html#87" title="__extension__ ({ struct objalloc *__o = ((struct objalloc *) table-&gt;memory); unsigned long __len = (len + 1); if (__len == 0) __len = 1; __len = (__len + __builtin_offsetof(struct objalloc_align, d) - 1) &amp;~ (__builtin_offsetof(struct objalloc_align, d) - 1); (__len != 0 &amp;&amp; __len &lt;= __o-&gt;current_space ? (__o-&gt;current_ptr += __len, __o-&gt;current_space -= __len, (void *) (__o-&gt;current_ptr - __len)) : _objalloc_alloc (__o, __len)); })" data-ref="_M/objalloc_alloc">objalloc_alloc</a> ((<b>struct</b> <a class="type" href="../include/objalloc.h.html#objalloc" title='objalloc' data-ref="objalloc" data-ref-filename="objalloc">objalloc</a> *) <a class="local col1 ref" href="#21table" title='table' data-ref="21table" data-ref-filename="21table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a>,</td></tr>
+<tr><th id="487">487</th><td>					    <a class="local col7 ref" href="#27len" title='len' data-ref="27len" data-ref-filename="27len">len</a> + <var>1</var>);</td></tr>
+<tr><th id="488">488</th><td>      <b>if</b> (!<a class="local col9 ref" href="#29new_string" title='new_string' data-ref="29new_string" data-ref-filename="29new_string">new_string</a>)</td></tr>
+<tr><th id="489">489</th><td>	{</td></tr>
+<tr><th id="490">490</th><td>	  <a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_set_error" title='bfd_set_error' data-ref="bfd_set_error" data-ref-filename="bfd_set_error">bfd_set_error</a> (<a class="enum" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_error_no_memory" title='bfd_error_no_memory' data-ref="bfd_error_no_memory" data-ref-filename="bfd_error_no_memory">bfd_error_no_memory</a>);</td></tr>
+<tr><th id="491">491</th><td>	  <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="492">492</th><td>	}</td></tr>
+<tr><th id="493">493</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a> (<a class="local col9 ref" href="#29new_string" title='new_string' data-ref="29new_string" data-ref-filename="29new_string">new_string</a>, <a class="local col2 ref" href="#22string" title='string' data-ref="22string" data-ref-filename="22string">string</a>, <a class="local col7 ref" href="#27len" title='len' data-ref="27len" data-ref-filename="27len">len</a> + <var>1</var>);</td></tr>
+<tr><th id="494">494</th><td>      <a class="local col2 ref" href="#22string" title='string' data-ref="22string" data-ref-filename="22string">string</a> = <a class="local col9 ref" href="#29new_string" title='new_string' data-ref="29new_string" data-ref-filename="29new_string">new_string</a>;</td></tr>
+<tr><th id="495">495</th><td>    }</td></tr>
+<tr><th id="496">496</th><td></td></tr>
+<tr><th id="497">497</th><td>  <b>return</b> <a class="ref fn" href="#bfd_hash_insert" title='bfd_hash_insert' data-ref="bfd_hash_insert" data-ref-filename="bfd_hash_insert">bfd_hash_insert</a> (<a class="local col1 ref" href="#21table" title='table' data-ref="21table" data-ref-filename="21table">table</a>, <a class="local col2 ref" href="#22string" title='string' data-ref="22string" data-ref-filename="22string">string</a>, <a class="local col5 ref" href="#25hash" title='hash' data-ref="25hash" data-ref-filename="25hash">hash</a>);</td></tr>
+<tr><th id="498">498</th><td>}</td></tr>
+<tr><th id="499">499</th><td></td></tr>
+<tr><th id="500">500</th><td><i>/* Insert an entry in a hash table.  */</i></td></tr>
+<tr><th id="501">501</th><td></td></tr>
+<tr><th id="502">502</th><td><b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *</td></tr>
+<tr><th id="503">503</th><td><dfn class="decl def fn" id="bfd_hash_insert" title='bfd_hash_insert' data-ref="bfd_hash_insert" data-ref-filename="bfd_hash_insert">bfd_hash_insert</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col0 decl" id="30table" title='table' data-type='struct bfd_hash_table *' data-ref="30table" data-ref-filename="30table">table</dfn>,</td></tr>
+<tr><th id="504">504</th><td>		 <em>const</em> <em>char</em> *<dfn class="local col1 decl" id="31string" title='string' data-type='const char *' data-ref="31string" data-ref-filename="31string">string</dfn>,</td></tr>
+<tr><th id="505">505</th><td>		 <em>unsigned</em> <em>long</em> <dfn class="local col2 decl" id="32hash" title='hash' data-type='unsigned long' data-ref="32hash" data-ref-filename="32hash">hash</dfn>)</td></tr>
+<tr><th id="506">506</th><td>{</td></tr>
+<tr><th id="507">507</th><td>  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col3 decl" id="33hashp" title='hashp' data-type='struct bfd_hash_entry *' data-ref="33hashp" data-ref-filename="33hashp">hashp</dfn>;</td></tr>
+<tr><th id="508">508</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col4 decl" id="34_index" title='_index' data-type='unsigned int' data-ref="34_index" data-ref-filename="34_index">_index</dfn>;</td></tr>
+<tr><th id="509">509</th><td></td></tr>
+<tr><th id="510">510</th><td>  <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a> = (*<a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::newfunc" title='bfd_hash_table::newfunc' data-ref="bfd_hash_table::newfunc" data-ref-filename="bfd_hash_table..newfunc">newfunc</a>) (<span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>, <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>, <a class="local col1 ref" href="#31string" title='string' data-ref="31string" data-ref-filename="31string">string</a>);</td></tr>
+<tr><th id="511">511</th><td>  <b>if</b> (<a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="512">512</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="513">513</th><td>  <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::string" title='bfd_hash_entry::string' data-ref="bfd_hash_entry::string" data-ref-filename="bfd_hash_entry..string">string</a> = <a class="local col1 ref" href="#31string" title='string' data-ref="31string" data-ref-filename="31string">string</a>;</td></tr>
+<tr><th id="514">514</th><td>  <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> = <a class="local col2 ref" href="#32hash" title='hash' data-ref="32hash" data-ref-filename="32hash">hash</a>;</td></tr>
+<tr><th id="515">515</th><td>  <a class="local col4 ref" href="#34_index" title='_index' data-ref="34_index" data-ref-filename="34_index">_index</a> = <a class="local col2 ref" href="#32hash" title='hash' data-ref="32hash" data-ref-filename="32hash">hash</a> % <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>;</td></tr>
+<tr><th id="516">516</th><td>  <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a> = <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col4 ref" href="#34_index" title='_index' data-ref="34_index" data-ref-filename="34_index">_index</a>];</td></tr>
+<tr><th id="517">517</th><td>  <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col4 ref" href="#34_index" title='_index' data-ref="34_index" data-ref-filename="34_index">_index</a>] = <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>;</td></tr>
+<tr><th id="518">518</th><td>  <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::count" title='bfd_hash_table::count' data-ref="bfd_hash_table::count" data-ref-filename="bfd_hash_table..count">count</a>++;</td></tr>
+<tr><th id="519">519</th><td></td></tr>
+<tr><th id="520">520</th><td>  <b>if</b> (!<a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::frozen" title='bfd_hash_table::frozen' data-ref="bfd_hash_table::frozen" data-ref-filename="bfd_hash_table..frozen">frozen</a> &amp;&amp; <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::count" title='bfd_hash_table::count' data-ref="bfd_hash_table::count" data-ref-filename="bfd_hash_table..count">count</a> &gt; <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a> * <var>3</var> / <var>4</var>)</td></tr>
+<tr><th id="521">521</th><td>    {</td></tr>
+<tr><th id="522">522</th><td>      <em>unsigned</em> <em>long</em> <dfn class="local col5 decl" id="35newsize" title='newsize' data-type='unsigned long' data-ref="35newsize" data-ref-filename="35newsize">newsize</dfn> = <a class="tu ref fn" href="#higher_prime_number" title='higher_prime_number' data-use='c' data-ref="higher_prime_number" data-ref-filename="higher_prime_number">higher_prime_number</a> (<a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>);</td></tr>
+<tr><th id="523">523</th><td>      <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> **<dfn class="local col6 decl" id="36newtable" title='newtable' data-type='struct bfd_hash_entry **' data-ref="36newtable" data-ref-filename="36newtable">newtable</dfn>;</td></tr>
+<tr><th id="524">524</th><td>      <em>unsigned</em> <em>int</em> <dfn class="local col7 decl" id="37hi" title='hi' data-type='unsigned int' data-ref="37hi" data-ref-filename="37hi">hi</dfn>;</td></tr>
+<tr><th id="525">525</th><td>      <em>unsigned</em> <em>long</em> <dfn class="local col8 decl" id="38alloc" title='alloc' data-type='unsigned long' data-ref="38alloc" data-ref-filename="38alloc">alloc</dfn> = <a class="local col5 ref" href="#35newsize" title='newsize' data-ref="35newsize" data-ref-filename="35newsize">newsize</a> * <b>sizeof</b> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *);</td></tr>
+<tr><th id="526">526</th><td></td></tr>
+<tr><th id="527">527</th><td>      <i>/* If we can't find a higher prime, or we can't possibly alloc</i></td></tr>
+<tr><th id="528">528</th><td><i>	 that much memory, don't try to grow the table.  */</i></td></tr>
+<tr><th id="529">529</th><td>      <b>if</b> (<a class="local col5 ref" href="#35newsize" title='newsize' data-ref="35newsize" data-ref-filename="35newsize">newsize</a> == <var>0</var> || <a class="local col8 ref" href="#38alloc" title='alloc' data-ref="38alloc" data-ref-filename="38alloc">alloc</a> / <b>sizeof</b> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *) != <a class="local col5 ref" href="#35newsize" title='newsize' data-ref="35newsize" data-ref-filename="35newsize">newsize</a>)</td></tr>
+<tr><th id="530">530</th><td>	{</td></tr>
+<tr><th id="531">531</th><td>	  <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::frozen" title='bfd_hash_table::frozen' data-ref="bfd_hash_table::frozen" data-ref-filename="bfd_hash_table..frozen">frozen</a> = <var>1</var>;</td></tr>
+<tr><th id="532">532</th><td>	  <b>return</b> <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>;</td></tr>
+<tr><th id="533">533</th><td>	}</td></tr>
+<tr><th id="534">534</th><td></td></tr>
+<tr><th id="535">535</th><td>      <a class="local col6 ref" href="#36newtable" title='newtable' data-ref="36newtable" data-ref-filename="36newtable">newtable</a> = ((<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> **)</td></tr>
+<tr><th id="536">536</th><td>		  <a class="macro" href="../include/objalloc.h.html#87" title="__extension__ ({ struct objalloc *__o = ((struct objalloc *) table-&gt;memory); unsigned long __len = (alloc); if (__len == 0) __len = 1; __len = (__len + __builtin_offsetof(struct objalloc_align, d) - 1) &amp;~ (__builtin_offsetof(struct objalloc_align, d) - 1); (__len != 0 &amp;&amp; __len &lt;= __o-&gt;current_space ? (__o-&gt;current_ptr += __len, __o-&gt;current_space -= __len, (void *) (__o-&gt;current_ptr - __len)) : _objalloc_alloc (__o, __len)); })" data-ref="_M/objalloc_alloc">objalloc_alloc</a> ((<b>struct</b> <a class="type" href="../include/objalloc.h.html#objalloc" title='objalloc' data-ref="objalloc" data-ref-filename="objalloc">objalloc</a> *) <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a>, <a class="local col8 ref" href="#38alloc" title='alloc' data-ref="38alloc" data-ref-filename="38alloc">alloc</a>));</td></tr>
+<tr><th id="537">537</th><td>      <b>if</b> (<a class="local col6 ref" href="#36newtable" title='newtable' data-ref="36newtable" data-ref-filename="36newtable">newtable</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="538">538</th><td>	{</td></tr>
+<tr><th id="539">539</th><td>	  <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::frozen" title='bfd_hash_table::frozen' data-ref="bfd_hash_table::frozen" data-ref-filename="bfd_hash_table..frozen">frozen</a> = <var>1</var>;</td></tr>
+<tr><th id="540">540</th><td>	  <b>return</b> <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>;</td></tr>
+<tr><th id="541">541</th><td>	}</td></tr>
+<tr><th id="542">542</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memset" title='memset' data-ref="memset" data-ref-filename="memset">memset</a> (<a class="local col6 ref" href="#36newtable" title='newtable' data-ref="36newtable" data-ref-filename="36newtable">newtable</a>, <var>0</var>, <a class="local col8 ref" href="#38alloc" title='alloc' data-ref="38alloc" data-ref-filename="38alloc">alloc</a>);</td></tr>
+<tr><th id="543">543</th><td></td></tr>
+<tr><th id="544">544</th><td>      <b>for</b> (<a class="local col7 ref" href="#37hi" title='hi' data-ref="37hi" data-ref-filename="37hi">hi</a> = <var>0</var>; <a class="local col7 ref" href="#37hi" title='hi' data-ref="37hi" data-ref-filename="37hi">hi</a> &lt; <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>; <a class="local col7 ref" href="#37hi" title='hi' data-ref="37hi" data-ref-filename="37hi">hi</a> ++)</td></tr>
+<tr><th id="545">545</th><td>	<b>while</b> (<a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col7 ref" href="#37hi" title='hi' data-ref="37hi" data-ref-filename="37hi">hi</a>])</td></tr>
+<tr><th id="546">546</th><td>	  {</td></tr>
+<tr><th id="547">547</th><td>	    <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col9 decl" id="39chain" title='chain' data-type='struct bfd_hash_entry *' data-ref="39chain" data-ref-filename="39chain">chain</dfn> = <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col7 ref" href="#37hi" title='hi' data-ref="37hi" data-ref-filename="37hi">hi</a>];</td></tr>
+<tr><th id="548">548</th><td>	    <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col0 decl" id="40chain_end" title='chain_end' data-type='struct bfd_hash_entry *' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</dfn> = <a class="local col9 ref" href="#39chain" title='chain' data-ref="39chain" data-ref-filename="39chain">chain</a>;</td></tr>
+<tr><th id="549">549</th><td></td></tr>
+<tr><th id="550">550</th><td>	    <b>while</b> (<a class="local col0 ref" href="#40chain_end" title='chain_end' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a> &amp;&amp; <a class="local col0 ref" href="#40chain_end" title='chain_end' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> == <a class="local col9 ref" href="#39chain" title='chain' data-ref="39chain" data-ref-filename="39chain">chain</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a>)</td></tr>
+<tr><th id="551">551</th><td>	      <a class="local col0 ref" href="#40chain_end" title='chain_end' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</a> = <a class="local col0 ref" href="#40chain_end" title='chain_end' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>;</td></tr>
+<tr><th id="552">552</th><td></td></tr>
+<tr><th id="553">553</th><td>	    <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col7 ref" href="#37hi" title='hi' data-ref="37hi" data-ref-filename="37hi">hi</a>] = <a class="local col0 ref" href="#40chain_end" title='chain_end' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>;</td></tr>
+<tr><th id="554">554</th><td>	    <a class="local col4 ref" href="#34_index" title='_index' data-ref="34_index" data-ref-filename="34_index">_index</a> = <a class="local col9 ref" href="#39chain" title='chain' data-ref="39chain" data-ref-filename="39chain">chain</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> % <a class="local col5 ref" href="#35newsize" title='newsize' data-ref="35newsize" data-ref-filename="35newsize">newsize</a>;</td></tr>
+<tr><th id="555">555</th><td>	    <a class="local col0 ref" href="#40chain_end" title='chain_end' data-ref="40chain_end" data-ref-filename="40chain_end">chain_end</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a> = <a class="local col6 ref" href="#36newtable" title='newtable' data-ref="36newtable" data-ref-filename="36newtable">newtable</a>[<a class="local col4 ref" href="#34_index" title='_index' data-ref="34_index" data-ref-filename="34_index">_index</a>];</td></tr>
+<tr><th id="556">556</th><td>	    <a class="local col6 ref" href="#36newtable" title='newtable' data-ref="36newtable" data-ref-filename="36newtable">newtable</a>[<a class="local col4 ref" href="#34_index" title='_index' data-ref="34_index" data-ref-filename="34_index">_index</a>] = <a class="local col9 ref" href="#39chain" title='chain' data-ref="39chain" data-ref-filename="39chain">chain</a>;</td></tr>
+<tr><th id="557">557</th><td>	  }</td></tr>
+<tr><th id="558">558</th><td>      <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a> = <a class="local col6 ref" href="#36newtable" title='newtable' data-ref="36newtable" data-ref-filename="36newtable">newtable</a>;</td></tr>
+<tr><th id="559">559</th><td>      <a class="local col0 ref" href="#30table" title='table' data-ref="30table" data-ref-filename="30table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a> = <a class="local col5 ref" href="#35newsize" title='newsize' data-ref="35newsize" data-ref-filename="35newsize">newsize</a>;</td></tr>
+<tr><th id="560">560</th><td>    }</td></tr>
+<tr><th id="561">561</th><td></td></tr>
+<tr><th id="562">562</th><td>  <b>return</b> <a class="local col3 ref" href="#33hashp" title='hashp' data-ref="33hashp" data-ref-filename="33hashp">hashp</a>;</td></tr>
+<tr><th id="563">563</th><td>}</td></tr>
+<tr><th id="564">564</th><td></td></tr>
+<tr><th id="565">565</th><td><i>/* Rename an entry in a hash table.  */</i></td></tr>
+<tr><th id="566">566</th><td></td></tr>
+<tr><th id="567">567</th><td><em>void</em></td></tr>
+<tr><th id="568">568</th><td><dfn class="decl def fn" id="bfd_hash_rename" title='bfd_hash_rename' data-ref="bfd_hash_rename" data-ref-filename="bfd_hash_rename">bfd_hash_rename</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col1 decl" id="41table" title='table' data-type='struct bfd_hash_table *' data-ref="41table" data-ref-filename="41table">table</dfn>,</td></tr>
+<tr><th id="569">569</th><td>		 <em>const</em> <em>char</em> *<dfn class="local col2 decl" id="42string" title='string' data-type='const char *' data-ref="42string" data-ref-filename="42string">string</dfn>,</td></tr>
+<tr><th id="570">570</th><td>		 <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col3 decl" id="43ent" title='ent' data-type='struct bfd_hash_entry *' data-ref="43ent" data-ref-filename="43ent">ent</dfn>)</td></tr>
+<tr><th id="571">571</th><td>{</td></tr>
+<tr><th id="572">572</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col4 decl" id="44_index" title='_index' data-type='unsigned int' data-ref="44_index" data-ref-filename="44_index">_index</dfn>;</td></tr>
+<tr><th id="573">573</th><td>  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> **<dfn class="local col5 decl" id="45pph" title='pph' data-type='struct bfd_hash_entry **' data-ref="45pph" data-ref-filename="45pph">pph</dfn>;</td></tr>
+<tr><th id="574">574</th><td></td></tr>
+<tr><th id="575">575</th><td>  <a class="local col4 ref" href="#44_index" title='_index' data-ref="44_index" data-ref-filename="44_index">_index</a> = <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> % <a class="local col1 ref" href="#41table" title='table' data-ref="41table" data-ref-filename="41table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>;</td></tr>
+<tr><th id="576">576</th><td>  <b>for</b> (<a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a> = &amp;<a class="local col1 ref" href="#41table" title='table' data-ref="41table" data-ref-filename="41table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col4 ref" href="#44_index" title='_index' data-ref="44_index" data-ref-filename="44_index">_index</a>]; *<a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>; <a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a> = &amp;(*<a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a>)-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>)</td></tr>
+<tr><th id="577">577</th><td>    <b>if</b> (*<a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a> == <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>)</td></tr>
+<tr><th id="578">578</th><td>      <b>break</b>;</td></tr>
+<tr><th id="579">579</th><td>  <b>if</b> (*<a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="580">580</th><td>    <a class="macro" href="libbfd.h.html#817" title="_bfd_abort (&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/binutils/lib/libbfd/../../../../../../../../../external/gpl3/binutils/dist/bfd/hash.c&quot;, 580, __PRETTY_FUNCTION__)" data-ref="_M/abort">abort</a> ();</td></tr>
+<tr><th id="581">581</th><td></td></tr>
+<tr><th id="582">582</th><td>  *<a class="local col5 ref" href="#45pph" title='pph' data-ref="45pph" data-ref-filename="45pph">pph</a> = <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>;</td></tr>
+<tr><th id="583">583</th><td>  <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::string" title='bfd_hash_entry::string' data-ref="bfd_hash_entry::string" data-ref-filename="bfd_hash_entry..string">string</a> = <a class="local col2 ref" href="#42string" title='string' data-ref="42string" data-ref-filename="42string">string</a>;</td></tr>
+<tr><th id="584">584</th><td>  <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> = <a class="tu ref fn" href="#bfd_hash_hash" title='bfd_hash_hash' data-use='c' data-ref="bfd_hash_hash" data-ref-filename="bfd_hash_hash">bfd_hash_hash</a> (<a class="local col2 ref" href="#42string" title='string' data-ref="42string" data-ref-filename="42string">string</a>, <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>);</td></tr>
+<tr><th id="585">585</th><td>  <a class="local col4 ref" href="#44_index" title='_index' data-ref="44_index" data-ref-filename="44_index">_index</a> = <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> % <a class="local col1 ref" href="#41table" title='table' data-ref="41table" data-ref-filename="41table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>;</td></tr>
+<tr><th id="586">586</th><td>  <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a> = <a class="local col1 ref" href="#41table" title='table' data-ref="41table" data-ref-filename="41table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col4 ref" href="#44_index" title='_index' data-ref="44_index" data-ref-filename="44_index">_index</a>];</td></tr>
+<tr><th id="587">587</th><td>  <a class="local col1 ref" href="#41table" title='table' data-ref="41table" data-ref-filename="41table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col4 ref" href="#44_index" title='_index' data-ref="44_index" data-ref-filename="44_index">_index</a>] = <a class="local col3 ref" href="#43ent" title='ent' data-ref="43ent" data-ref-filename="43ent">ent</a>;</td></tr>
+<tr><th id="588">588</th><td>}</td></tr>
+<tr><th id="589">589</th><td></td></tr>
+<tr><th id="590">590</th><td><i>/* Replace an entry in a hash table.  */</i></td></tr>
+<tr><th id="591">591</th><td></td></tr>
+<tr><th id="592">592</th><td><em>void</em></td></tr>
+<tr><th id="593">593</th><td><dfn class="decl def fn" id="bfd_hash_replace" title='bfd_hash_replace' data-ref="bfd_hash_replace" data-ref-filename="bfd_hash_replace">bfd_hash_replace</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col6 decl" id="46table" title='table' data-type='struct bfd_hash_table *' data-ref="46table" data-ref-filename="46table">table</dfn>,</td></tr>
+<tr><th id="594">594</th><td>		  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col7 decl" id="47old" title='old' data-type='struct bfd_hash_entry *' data-ref="47old" data-ref-filename="47old">old</dfn>,</td></tr>
+<tr><th id="595">595</th><td>		  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col8 decl" id="48nw" title='nw' data-type='struct bfd_hash_entry *' data-ref="48nw" data-ref-filename="48nw">nw</dfn>)</td></tr>
+<tr><th id="596">596</th><td>{</td></tr>
+<tr><th id="597">597</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col9 decl" id="49_index" title='_index' data-type='unsigned int' data-ref="49_index" data-ref-filename="49_index">_index</dfn>;</td></tr>
+<tr><th id="598">598</th><td>  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> **<dfn class="local col0 decl" id="50pph" title='pph' data-type='struct bfd_hash_entry **' data-ref="50pph" data-ref-filename="50pph">pph</dfn>;</td></tr>
+<tr><th id="599">599</th><td></td></tr>
+<tr><th id="600">600</th><td>  <a class="local col9 ref" href="#49_index" title='_index' data-ref="49_index" data-ref-filename="49_index">_index</a> = <a class="local col7 ref" href="#47old" title='old' data-ref="47old" data-ref-filename="47old">old</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::hash" title='bfd_hash_entry::hash' data-ref="bfd_hash_entry::hash" data-ref-filename="bfd_hash_entry..hash">hash</a> % <a class="local col6 ref" href="#46table" title='table' data-ref="46table" data-ref-filename="46table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>;</td></tr>
+<tr><th id="601">601</th><td>  <b>for</b> (<a class="local col0 ref" href="#50pph" title='pph' data-ref="50pph" data-ref-filename="50pph">pph</a> = &amp;<a class="local col6 ref" href="#46table" title='table' data-ref="46table" data-ref-filename="46table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col9 ref" href="#49_index" title='_index' data-ref="49_index" data-ref-filename="49_index">_index</a>];</td></tr>
+<tr><th id="602">602</th><td>       (*<a class="local col0 ref" href="#50pph" title='pph' data-ref="50pph" data-ref-filename="50pph">pph</a>) != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="603">603</th><td>       <a class="local col0 ref" href="#50pph" title='pph' data-ref="50pph" data-ref-filename="50pph">pph</a> = &amp;(*<a class="local col0 ref" href="#50pph" title='pph' data-ref="50pph" data-ref-filename="50pph">pph</a>)-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>)</td></tr>
+<tr><th id="604">604</th><td>    {</td></tr>
+<tr><th id="605">605</th><td>      <b>if</b> (*<a class="local col0 ref" href="#50pph" title='pph' data-ref="50pph" data-ref-filename="50pph">pph</a> == <a class="local col7 ref" href="#47old" title='old' data-ref="47old" data-ref-filename="47old">old</a>)</td></tr>
+<tr><th id="606">606</th><td>	{</td></tr>
+<tr><th id="607">607</th><td>	  *<a class="local col0 ref" href="#50pph" title='pph' data-ref="50pph" data-ref-filename="50pph">pph</a> = <a class="local col8 ref" href="#48nw" title='nw' data-ref="48nw" data-ref-filename="48nw">nw</a>;</td></tr>
+<tr><th id="608">608</th><td>	  <b>return</b>;</td></tr>
+<tr><th id="609">609</th><td>	}</td></tr>
+<tr><th id="610">610</th><td>    }</td></tr>
+<tr><th id="611">611</th><td></td></tr>
+<tr><th id="612">612</th><td>  <a class="macro" href="libbfd.h.html#817" title="_bfd_abort (&quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/external/gpl3/binutils/lib/libbfd/../../../../../../../../../external/gpl3/binutils/dist/bfd/hash.c&quot;, 612, __PRETTY_FUNCTION__)" data-ref="_M/abort">abort</a> ();</td></tr>
+<tr><th id="613">613</th><td>}</td></tr>
+<tr><th id="614">614</th><td></td></tr>
+<tr><th id="615">615</th><td><i>/* Allocate space in a hash table.  */</i></td></tr>
+<tr><th id="616">616</th><td></td></tr>
+<tr><th id="617">617</th><td><em>void</em> *</td></tr>
+<tr><th id="618">618</th><td><dfn class="decl def fn" id="bfd_hash_allocate" title='bfd_hash_allocate' data-ref="bfd_hash_allocate" data-ref-filename="bfd_hash_allocate">bfd_hash_allocate</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col1 decl" id="51table" title='table' data-type='struct bfd_hash_table *' data-ref="51table" data-ref-filename="51table">table</dfn>,</td></tr>
+<tr><th id="619">619</th><td>		   <em>unsigned</em> <em>int</em> <dfn class="local col2 decl" id="52size" title='size' data-type='unsigned int' data-ref="52size" data-ref-filename="52size">size</dfn>)</td></tr>
+<tr><th id="620">620</th><td>{</td></tr>
+<tr><th id="621">621</th><td>  <em>void</em> * <dfn class="local col3 decl" id="53ret" title='ret' data-type='void *' data-ref="53ret" data-ref-filename="53ret">ret</dfn>;</td></tr>
+<tr><th id="622">622</th><td></td></tr>
+<tr><th id="623">623</th><td>  <a class="local col3 ref" href="#53ret" title='ret' data-ref="53ret" data-ref-filename="53ret">ret</a> = <a class="macro" href="../include/objalloc.h.html#87" title="__extension__ ({ struct objalloc *__o = ((struct objalloc *) table-&gt;memory); unsigned long __len = (size); if (__len == 0) __len = 1; __len = (__len + __builtin_offsetof(struct objalloc_align, d) - 1) &amp;~ (__builtin_offsetof(struct objalloc_align, d) - 1); (__len != 0 &amp;&amp; __len &lt;= __o-&gt;current_space ? (__o-&gt;current_ptr += __len, __o-&gt;current_space -= __len, (void *) (__o-&gt;current_ptr - __len)) : _objalloc_alloc (__o, __len)); })" data-ref="_M/objalloc_alloc">objalloc_alloc</a> ((<b>struct</b> <a class="type" href="../include/objalloc.h.html#objalloc" title='objalloc' data-ref="objalloc" data-ref-filename="objalloc">objalloc</a> *) <a class="local col1 ref" href="#51table" title='table' data-ref="51table" data-ref-filename="51table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::memory" title='bfd_hash_table::memory' data-ref="bfd_hash_table::memory" data-ref-filename="bfd_hash_table..memory">memory</a>, <a class="local col2 ref" href="#52size" title='size' data-ref="52size" data-ref-filename="52size">size</a>);</td></tr>
+<tr><th id="624">624</th><td>  <b>if</b> (<a class="local col3 ref" href="#53ret" title='ret' data-ref="53ret" data-ref-filename="53ret">ret</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> &amp;&amp; <a class="local col2 ref" href="#52size" title='size' data-ref="52size" data-ref-filename="52size">size</a> != <var>0</var>)</td></tr>
+<tr><th id="625">625</th><td>    <a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_set_error" title='bfd_set_error' data-ref="bfd_set_error" data-ref-filename="bfd_set_error">bfd_set_error</a> (<a class="enum" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_error_no_memory" title='bfd_error_no_memory' data-ref="bfd_error_no_memory" data-ref-filename="bfd_error_no_memory">bfd_error_no_memory</a>);</td></tr>
+<tr><th id="626">626</th><td>  <b>return</b> <a class="local col3 ref" href="#53ret" title='ret' data-ref="53ret" data-ref-filename="53ret">ret</a>;</td></tr>
+<tr><th id="627">627</th><td>}</td></tr>
+<tr><th id="628">628</th><td></td></tr>
+<tr><th id="629">629</th><td><i>/* Base method for creating a new hash table entry.  */</i></td></tr>
+<tr><th id="630">630</th><td></td></tr>
+<tr><th id="631">631</th><td><b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *</td></tr>
+<tr><th id="632">632</th><td><dfn class="decl def fn" id="bfd_hash_newfunc" title='bfd_hash_newfunc' data-ref="bfd_hash_newfunc" data-ref-filename="bfd_hash_newfunc">bfd_hash_newfunc</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col4 decl" id="54entry" title='entry' data-type='struct bfd_hash_entry *' data-ref="54entry" data-ref-filename="54entry">entry</dfn>,</td></tr>
+<tr><th id="633">633</th><td>		  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col5 decl" id="55table" title='table' data-type='struct bfd_hash_table *' data-ref="55table" data-ref-filename="55table">table</dfn>,</td></tr>
+<tr><th id="634">634</th><td>		  <em>const</em> <em>char</em> *<dfn class="local col6 decl" id="56string" title='string' data-type='const char *' data-ref="56string" data-ref-filename="56string">string</dfn> <a class="macro" href="../include/ansidecl.h.html#148" title="__attribute__ ((__unused__))" data-ref="_M/ATTRIBUTE_UNUSED">ATTRIBUTE_UNUSED</a>)</td></tr>
+<tr><th id="635">635</th><td>{</td></tr>
+<tr><th id="636">636</th><td>  <b>if</b> (<a class="local col4 ref" href="#54entry" title='entry' data-ref="54entry" data-ref-filename="54entry">entry</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="637">637</th><td>    <a class="local col4 ref" href="#54entry" title='entry' data-ref="54entry" data-ref-filename="54entry">entry</a> = (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *) <a class="ref fn" href="#bfd_hash_allocate" title='bfd_hash_allocate' data-ref="bfd_hash_allocate" data-ref-filename="bfd_hash_allocate">bfd_hash_allocate</a> (<a class="local col5 ref" href="#55table" title='table' data-ref="55table" data-ref-filename="55table">table</a>,</td></tr>
+<tr><th id="638">638</th><td>							 <b>sizeof</b> (* <a class="local col4 ref" href="#54entry" title='entry' data-ref="54entry" data-ref-filename="54entry">entry</a>));</td></tr>
+<tr><th id="639">639</th><td>  <b>return</b> <a class="local col4 ref" href="#54entry" title='entry' data-ref="54entry" data-ref-filename="54entry">entry</a>;</td></tr>
+<tr><th id="640">640</th><td>}</td></tr>
+<tr><th id="641">641</th><td></td></tr>
+<tr><th id="642">642</th><td><i>/* Traverse a hash table.  */</i></td></tr>
+<tr><th id="643">643</th><td></td></tr>
+<tr><th id="644">644</th><td><em>void</em></td></tr>
+<tr><th id="645">645</th><td><dfn class="decl def fn" id="bfd_hash_traverse" title='bfd_hash_traverse' data-ref="bfd_hash_traverse" data-ref-filename="bfd_hash_traverse">bfd_hash_traverse</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col7 decl" id="57table" title='table' data-type='struct bfd_hash_table *' data-ref="57table" data-ref-filename="57table">table</dfn>,</td></tr>
+<tr><th id="646">646</th><td>		   <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> (*<dfn class="local col8 decl" id="58func" title='func' data-type='bfd_boolean (*)(struct bfd_hash_entry *, void *)' data-ref="58func" data-ref-filename="58func">func</dfn>) (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *, <em>void</em> *),</td></tr>
+<tr><th id="647">647</th><td>		   <em>void</em> * <dfn class="local col9 decl" id="59info" title='info' data-type='void *' data-ref="59info" data-ref-filename="59info">info</dfn>)</td></tr>
+<tr><th id="648">648</th><td>{</td></tr>
+<tr><th id="649">649</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col0 decl" id="60i" title='i' data-type='unsigned int' data-ref="60i" data-ref-filename="60i">i</dfn>;</td></tr>
+<tr><th id="650">650</th><td></td></tr>
+<tr><th id="651">651</th><td>  <a class="local col7 ref" href="#57table" title='table' data-ref="57table" data-ref-filename="57table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::frozen" title='bfd_hash_table::frozen' data-ref="bfd_hash_table::frozen" data-ref-filename="bfd_hash_table..frozen">frozen</a> = <var>1</var>;</td></tr>
+<tr><th id="652">652</th><td>  <b>for</b> (<a class="local col0 ref" href="#60i" title='i' data-ref="60i" data-ref-filename="60i">i</a> = <var>0</var>; <a class="local col0 ref" href="#60i" title='i' data-ref="60i" data-ref-filename="60i">i</a> &lt; <a class="local col7 ref" href="#57table" title='table' data-ref="57table" data-ref-filename="57table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::size" title='bfd_hash_table::size' data-ref="bfd_hash_table::size" data-ref-filename="bfd_hash_table..size">size</a>; <a class="local col0 ref" href="#60i" title='i' data-ref="60i" data-ref-filename="60i">i</a>++)</td></tr>
+<tr><th id="653">653</th><td>    {</td></tr>
+<tr><th id="654">654</th><td>      <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col1 decl" id="61p" title='p' data-type='struct bfd_hash_entry *' data-ref="61p" data-ref-filename="61p">p</dfn>;</td></tr>
+<tr><th id="655">655</th><td></td></tr>
+<tr><th id="656">656</th><td>      <b>for</b> (<a class="local col1 ref" href="#61p" title='p' data-ref="61p" data-ref-filename="61p">p</a> = <a class="local col7 ref" href="#57table" title='table' data-ref="57table" data-ref-filename="57table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::table" title='bfd_hash_table::table' data-ref="bfd_hash_table::table" data-ref-filename="bfd_hash_table..table">table</a>[<a class="local col0 ref" href="#60i" title='i' data-ref="60i" data-ref-filename="60i">i</a>]; <a class="local col1 ref" href="#61p" title='p' data-ref="61p" data-ref-filename="61p">p</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>; <a class="local col1 ref" href="#61p" title='p' data-ref="61p" data-ref-filename="61p">p</a> = <a class="local col1 ref" href="#61p" title='p' data-ref="61p" data-ref-filename="61p">p</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::next" title='bfd_hash_entry::next' data-ref="bfd_hash_entry::next" data-ref-filename="bfd_hash_entry..next">next</a>)</td></tr>
+<tr><th id="657">657</th><td>	<b>if</b> (! (*<a class="local col8 ref" href="#58func" title='func' data-ref="58func" data-ref-filename="58func">func</a>) (<a class="local col1 ref" href="#61p" title='p' data-ref="61p" data-ref-filename="61p">p</a>, <a class="local col9 ref" href="#59info" title='info' data-ref="59info" data-ref-filename="59info">info</a>))</td></tr>
+<tr><th id="658">658</th><td>	  <b>goto</b> <a class="lbl" href="#62out" data-ref="62out" data-ref-filename="62out">out</a>;</td></tr>
+<tr><th id="659">659</th><td>    }</td></tr>
+<tr><th id="660">660</th><td> <dfn class="lbl" id="62out" data-ref="62out" data-ref-filename="62out">out</dfn>:</td></tr>
+<tr><th id="661">661</th><td>  <a class="local col7 ref" href="#57table" title='table' data-ref="57table" data-ref-filename="57table">table</a>-&gt;<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table::frozen" title='bfd_hash_table::frozen' data-ref="bfd_hash_table::frozen" data-ref-filename="bfd_hash_table..frozen">frozen</a> = <var>0</var>;</td></tr>
+<tr><th id="662">662</th><td>}</td></tr>
+<tr><th id="663">663</th><td></td></tr>
+<tr><th id="664">664</th><td><em>unsigned</em> <em>long</em></td></tr>
+<tr><th id="665">665</th><td><dfn class="decl def fn" id="bfd_hash_set_default_size" title='bfd_hash_set_default_size' data-ref="bfd_hash_set_default_size" data-ref-filename="bfd_hash_set_default_size">bfd_hash_set_default_size</dfn> (<em>unsigned</em> <em>long</em> <dfn class="local col3 decl" id="63hash_size" title='hash_size' data-type='unsigned long' data-ref="63hash_size" data-ref-filename="63hash_size">hash_size</dfn>)</td></tr>
+<tr><th id="666">666</th><td>{</td></tr>
+<tr><th id="667">667</th><td>  <i>/* Extend this prime list if you want more granularity of hash table size.  */</i></td></tr>
+<tr><th id="668">668</th><td>  <em>static</em> <em>const</em> <em>unsigned</em> <em>long</em> <dfn class="local col4 decl" id="64hash_size_primes" title='hash_size_primes' data-type='const unsigned long [12]' data-ref="64hash_size_primes" data-ref-filename="64hash_size_primes">hash_size_primes</dfn>[] =</td></tr>
+<tr><th id="669">669</th><td>    {</td></tr>
+<tr><th id="670">670</th><td>      <var>31</var>, <var>61</var>, <var>127</var>, <var>251</var>, <var>509</var>, <var>1021</var>, <var>2039</var>, <var>4091</var>, <var>8191</var>, <var>16381</var>, <var>32749</var>, <var>65537</var></td></tr>
+<tr><th id="671">671</th><td>    };</td></tr>
+<tr><th id="672">672</th><td>  <em>unsigned</em> <em>int</em> <dfn class="local col5 decl" id="65_index" title='_index' data-type='unsigned int' data-ref="65_index" data-ref-filename="65_index">_index</dfn>;</td></tr>
+<tr><th id="673">673</th><td></td></tr>
+<tr><th id="674">674</th><td>  <i>/* Work out best prime number near the hash_size.  */</i></td></tr>
+<tr><th id="675">675</th><td>  <b>for</b> (<a class="local col5 ref" href="#65_index" title='_index' data-ref="65_index" data-ref-filename="65_index">_index</a> = <var>0</var>; <a class="local col5 ref" href="#65_index" title='_index' data-ref="65_index" data-ref-filename="65_index">_index</a> &lt; <a class="macro" href="../include/libiberty.h.html#711" title="(sizeof (hash_size_primes) / sizeof ((hash_size_primes)[0]))" data-ref="_M/ARRAY_SIZE">ARRAY_SIZE</a> (<a class="local col4 ref" href="#64hash_size_primes" title='hash_size_primes' data-ref="64hash_size_primes" data-ref-filename="64hash_size_primes">hash_size_primes</a>) - <var>1</var>; ++<a class="local col5 ref" href="#65_index" title='_index' data-ref="65_index" data-ref-filename="65_index">_index</a>)</td></tr>
+<tr><th id="676">676</th><td>    <b>if</b> (<a class="local col3 ref" href="#63hash_size" title='hash_size' data-ref="63hash_size" data-ref-filename="63hash_size">hash_size</a> &lt;= <a class="local col4 ref" href="#64hash_size_primes" title='hash_size_primes' data-ref="64hash_size_primes" data-ref-filename="64hash_size_primes">hash_size_primes</a>[<a class="local col5 ref" href="#65_index" title='_index' data-ref="65_index" data-ref-filename="65_index">_index</a>])</td></tr>
+<tr><th id="677">677</th><td>      <b>break</b>;</td></tr>
+<tr><th id="678">678</th><td></td></tr>
+<tr><th id="679">679</th><td>  <a class="tu ref" href="#bfd_default_hash_table_size" title='bfd_default_hash_table_size' data-use='w' data-ref="bfd_default_hash_table_size" data-ref-filename="bfd_default_hash_table_size">bfd_default_hash_table_size</a> = <a class="local col4 ref" href="#64hash_size_primes" title='hash_size_primes' data-ref="64hash_size_primes" data-ref-filename="64hash_size_primes">hash_size_primes</a>[<a class="local col5 ref" href="#65_index" title='_index' data-ref="65_index" data-ref-filename="65_index">_index</a>];</td></tr>
+<tr><th id="680">680</th><td>  <b>return</b> <a class="tu ref" href="#bfd_default_hash_table_size" title='bfd_default_hash_table_size' data-use='r' data-ref="bfd_default_hash_table_size" data-ref-filename="bfd_default_hash_table_size">bfd_default_hash_table_size</a>;</td></tr>
+<tr><th id="681">681</th><td>}</td></tr>
+<tr><th id="682">682</th><td></td></tr>
+<tr><th id="683">683</th><td><i>/* A few different object file formats (a.out, COFF, ELF) use a string</i></td></tr>
+<tr><th id="684">684</th><td><i>   table.  These functions support adding strings to a string table,</i></td></tr>
+<tr><th id="685">685</th><td><i>   returning the byte offset, and writing out the table.</i></td></tr>
+<tr><th id="686">686</th><td><i></i></td></tr>
+<tr><th id="687">687</th><td><i>   Possible improvements:</i></td></tr>
+<tr><th id="688">688</th><td><i>   + look for strings matching trailing substrings of other strings</i></td></tr>
+<tr><th id="689">689</th><td><i>   + better data structures?  balanced trees?</i></td></tr>
+<tr><th id="690">690</th><td><i>   + look at reducing memory use elsewhere -- maybe if we didn't have</i></td></tr>
+<tr><th id="691">691</th><td><i>     to construct the entire symbol table at once, we could get by</i></td></tr>
+<tr><th id="692">692</th><td><i>     with smaller amounts of VM?  (What effect does that have on the</i></td></tr>
+<tr><th id="693">693</th><td><i>     string table reductions?)  */</i></td></tr>
+<tr><th id="694">694</th><td></td></tr>
+<tr><th id="695">695</th><td><i>/* An entry in the strtab hash table.  */</i></td></tr>
+<tr><th id="696">696</th><td></td></tr>
+<tr><th id="697">697</th><td><b>struct</b> <dfn class="type def" id="strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</dfn></td></tr>
+<tr><th id="698">698</th><td>{</td></tr>
+<tr><th id="699">699</th><td>  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> <dfn class="tu decl field" id="strtab_hash_entry::root" title='strtab_hash_entry::root' data-type='struct bfd_hash_entry' data-ref="strtab_hash_entry::root" data-ref-filename="strtab_hash_entry..root">root</dfn>;</td></tr>
+<tr><th id="700">700</th><td>  <i  data-doc="strtab_hash_entry::index">/* Index in string table.  */</i></td></tr>
+<tr><th id="701">701</th><td>  <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a> <dfn class="tu decl field" id="strtab_hash_entry::index" title='strtab_hash_entry::index' data-type='bfd_size_type' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</dfn>;</td></tr>
+<tr><th id="702">702</th><td>  <i  data-doc="strtab_hash_entry::next">/* Next string in strtab.  */</i></td></tr>
+<tr><th id="703">703</th><td>  <b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *<dfn class="tu decl field" id="strtab_hash_entry::next" title='strtab_hash_entry::next' data-type='struct strtab_hash_entry *' data-ref="strtab_hash_entry::next" data-ref-filename="strtab_hash_entry..next">next</dfn>;</td></tr>
+<tr><th id="704">704</th><td>};</td></tr>
+<tr><th id="705">705</th><td></td></tr>
+<tr><th id="706">706</th><td><i>/* The strtab hash table.  */</i></td></tr>
+<tr><th id="707">707</th><td></td></tr>
+<tr><th id="708">708</th><td><b>struct</b> <dfn class="type def" id="bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</dfn></td></tr>
+<tr><th id="709">709</th><td>{</td></tr>
+<tr><th id="710">710</th><td>  <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> <dfn class="decl field" id="bfd_strtab_hash::table" title='bfd_strtab_hash::table' data-ref="bfd_strtab_hash::table" data-ref-filename="bfd_strtab_hash..table">table</dfn>;</td></tr>
+<tr><th id="711">711</th><td>  <i>/* Size of strtab--also next available index.  */</i></td></tr>
+<tr><th id="712">712</th><td>  <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a> <dfn class="decl field" id="bfd_strtab_hash::size" title='bfd_strtab_hash::size' data-ref="bfd_strtab_hash::size" data-ref-filename="bfd_strtab_hash..size">size</dfn>;</td></tr>
+<tr><th id="713">713</th><td>  <i>/* First string in strtab.  */</i></td></tr>
+<tr><th id="714">714</th><td>  <b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *<dfn class="decl field" id="bfd_strtab_hash::first" title='bfd_strtab_hash::first' data-ref="bfd_strtab_hash::first" data-ref-filename="bfd_strtab_hash..first">first</dfn>;</td></tr>
+<tr><th id="715">715</th><td>  <i>/* Last string in strtab.  */</i></td></tr>
+<tr><th id="716">716</th><td>  <b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *<dfn class="decl field" id="bfd_strtab_hash::last" title='bfd_strtab_hash::last' data-ref="bfd_strtab_hash::last" data-ref-filename="bfd_strtab_hash..last">last</dfn>;</td></tr>
+<tr><th id="717">717</th><td>  <i>/* Whether to precede strings with a two byte length, as in the</i></td></tr>
+<tr><th id="718">718</th><td><i>     XCOFF .debug section.  */</i></td></tr>
+<tr><th id="719">719</th><td>  <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> <dfn class="decl field" id="bfd_strtab_hash::xcoff" title='bfd_strtab_hash::xcoff' data-ref="bfd_strtab_hash::xcoff" data-ref-filename="bfd_strtab_hash..xcoff">xcoff</dfn>;</td></tr>
+<tr><th id="720">720</th><td>};</td></tr>
+<tr><th id="721">721</th><td></td></tr>
+<tr><th id="722">722</th><td><i  data-doc="strtab_hash_newfunc">/* Routine to create an entry in a strtab.  */</i></td></tr>
+<tr><th id="723">723</th><td></td></tr>
+<tr><th id="724">724</th><td><em>static</em> <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *</td></tr>
+<tr><th id="725">725</th><td><dfn class="tu decl def fn" id="strtab_hash_newfunc" title='strtab_hash_newfunc' data-type='struct bfd_hash_entry * strtab_hash_newfunc(struct bfd_hash_entry * entry, struct bfd_hash_table * table, const char * string)' data-ref="strtab_hash_newfunc" data-ref-filename="strtab_hash_newfunc">strtab_hash_newfunc</dfn> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *<dfn class="local col6 decl" id="66entry" title='entry' data-type='struct bfd_hash_entry *' data-ref="66entry" data-ref-filename="66entry">entry</dfn>,</td></tr>
+<tr><th id="726">726</th><td>		     <b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_table" title='bfd_hash_table' data-ref="bfd_hash_table" data-ref-filename="bfd_hash_table">bfd_hash_table</a> *<dfn class="local col7 decl" id="67table" title='table' data-type='struct bfd_hash_table *' data-ref="67table" data-ref-filename="67table">table</dfn>,</td></tr>
+<tr><th id="727">727</th><td>		     <em>const</em> <em>char</em> *<dfn class="local col8 decl" id="68string" title='string' data-type='const char *' data-ref="68string" data-ref-filename="68string">string</dfn>)</td></tr>
+<tr><th id="728">728</th><td>{</td></tr>
+<tr><th id="729">729</th><td>  <b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *<dfn class="local col9 decl" id="69ret" title='ret' data-type='struct strtab_hash_entry *' data-ref="69ret" data-ref-filename="69ret">ret</dfn> = (<b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *) <a class="local col6 ref" href="#66entry" title='entry' data-ref="66entry" data-ref-filename="66entry">entry</a>;</td></tr>
+<tr><th id="730">730</th><td></td></tr>
+<tr><th id="731">731</th><td>  <i>/* Allocate the structure if it has not already been allocated by a</i></td></tr>
+<tr><th id="732">732</th><td><i>     subclass.  */</i></td></tr>
+<tr><th id="733">733</th><td>  <b>if</b> (<a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="734">734</th><td>    <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a> = (<b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *) <a class="ref fn" href="#bfd_hash_allocate" title='bfd_hash_allocate' data-ref="bfd_hash_allocate" data-ref-filename="bfd_hash_allocate">bfd_hash_allocate</a> (<a class="local col7 ref" href="#67table" title='table' data-ref="67table" data-ref-filename="67table">table</a>,</td></tr>
+<tr><th id="735">735</th><td>							  <b>sizeof</b> (* <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a>));</td></tr>
+<tr><th id="736">736</th><td>  <b>if</b> (<a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="737">737</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="738">738</th><td></td></tr>
+<tr><th id="739">739</th><td>  <i>/* Call the allocation method of the superclass.  */</i></td></tr>
+<tr><th id="740">740</th><td>  <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a> = (<b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *)</td></tr>
+<tr><th id="741">741</th><td>	 <a class="ref fn" href="#bfd_hash_newfunc" title='bfd_hash_newfunc' data-ref="bfd_hash_newfunc" data-ref-filename="bfd_hash_newfunc">bfd_hash_newfunc</a> ((<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *) <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a>, <a class="local col7 ref" href="#67table" title='table' data-ref="67table" data-ref-filename="67table">table</a>, <a class="local col8 ref" href="#68string" title='string' data-ref="68string" data-ref-filename="68string">string</a>);</td></tr>
+<tr><th id="742">742</th><td></td></tr>
+<tr><th id="743">743</th><td>  <b>if</b> (<a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a>)</td></tr>
+<tr><th id="744">744</th><td>    {</td></tr>
+<tr><th id="745">745</th><td>      <i>/* Initialize the local fields.  */</i></td></tr>
+<tr><th id="746">746</th><td>      <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::index" title='strtab_hash_entry::index' data-use='w' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</a> = (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) -<var>1</var>;</td></tr>
+<tr><th id="747">747</th><td>      <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::next" title='strtab_hash_entry::next' data-use='w' data-ref="strtab_hash_entry::next" data-ref-filename="strtab_hash_entry..next">next</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="748">748</th><td>    }</td></tr>
+<tr><th id="749">749</th><td></td></tr>
+<tr><th id="750">750</th><td>  <b>return</b> (<b>struct</b> <a class="type" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry" title='bfd_hash_entry' data-ref="bfd_hash_entry" data-ref-filename="bfd_hash_entry">bfd_hash_entry</a> *) <a class="local col9 ref" href="#69ret" title='ret' data-ref="69ret" data-ref-filename="69ret">ret</a>;</td></tr>
+<tr><th id="751">751</th><td>}</td></tr>
+<tr><th id="752">752</th><td></td></tr>
+<tr><th id="753">753</th><td><i>/* Look up an entry in an strtab.  */</i></td></tr>
+<tr><th id="754">754</th><td></td></tr>
+<tr><th id="755">755</th><td><u>#define <dfn class="macro" id="_M/strtab_hash_lookup" data-ref="_M/strtab_hash_lookup">strtab_hash_lookup</dfn>(t, string, create, copy) \</u></td></tr>
+<tr><th id="756">756</th><td><u>  ((struct <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *) \</u></td></tr>
+<tr><th id="757">757</th><td><u>   <a class="ref fn" href="#bfd_hash_lookup" title='bfd_hash_lookup' data-ref="bfd_hash_lookup" data-ref-filename="bfd_hash_lookup">bfd_hash_lookup</a> (&amp;(t)-&gt;<a class="ref field" href="#bfd_strtab_hash::table" title='bfd_strtab_hash::table' data-ref="bfd_strtab_hash::table" data-ref-filename="bfd_strtab_hash..table">table</a>, (string), (create), (copy)))</u></td></tr>
+<tr><th id="758">758</th><td></td></tr>
+<tr><th id="759">759</th><td><i>/* Create a new strtab.  */</i></td></tr>
+<tr><th id="760">760</th><td></td></tr>
+<tr><th id="761">761</th><td><b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *</td></tr>
+<tr><th id="762">762</th><td><dfn class="decl def fn" id="_bfd_stringtab_init" title='_bfd_stringtab_init' data-ref="_bfd_stringtab_init" data-ref-filename="_bfd_stringtab_init">_bfd_stringtab_init</dfn> (<em>void</em>)</td></tr>
+<tr><th id="763">763</th><td>{</td></tr>
+<tr><th id="764">764</th><td>  <b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *<dfn class="local col0 decl" id="70table" title='table' data-type='struct bfd_strtab_hash *' data-ref="70table" data-ref-filename="70table">table</dfn>;</td></tr>
+<tr><th id="765">765</th><td>  <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a> <dfn class="local col1 decl" id="71amt" title='amt' data-type='bfd_size_type' data-ref="71amt" data-ref-filename="71amt">amt</dfn> = <b>sizeof</b> (* <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>);</td></tr>
+<tr><th id="766">766</th><td></td></tr>
+<tr><th id="767">767</th><td>  <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a> = (<b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *) <a class="ref fn" href="libbfd.h.html#bfd_malloc" title='bfd_malloc' data-ref="bfd_malloc" data-ref-filename="bfd_malloc">bfd_malloc</a> (<a class="local col1 ref" href="#71amt" title='amt' data-ref="71amt" data-ref-filename="71amt">amt</a>);</td></tr>
+<tr><th id="768">768</th><td>  <b>if</b> (<a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="769">769</th><td>    <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="770">770</th><td></td></tr>
+<tr><th id="771">771</th><td>  <b>if</b> (!<a class="ref fn" href="#bfd_hash_table_init" title='bfd_hash_table_init' data-ref="bfd_hash_table_init" data-ref-filename="bfd_hash_table_init">bfd_hash_table_init</a> (&amp;<a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::table" title='bfd_strtab_hash::table' data-ref="bfd_strtab_hash::table" data-ref-filename="bfd_strtab_hash..table">table</a>, <a class="tu ref fn" href="#strtab_hash_newfunc" title='strtab_hash_newfunc' data-use='r' data-ref="strtab_hash_newfunc" data-ref-filename="strtab_hash_newfunc">strtab_hash_newfunc</a>,</td></tr>
+<tr><th id="772">772</th><td>			    <b>sizeof</b> (<b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a>)))</td></tr>
+<tr><th id="773">773</th><td>    {</td></tr>
+<tr><th id="774">774</th><td>      <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>);</td></tr>
+<tr><th id="775">775</th><td>      <b>return</b> <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="776">776</th><td>    }</td></tr>
+<tr><th id="777">777</th><td></td></tr>
+<tr><th id="778">778</th><td>  <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::size" title='bfd_strtab_hash::size' data-ref="bfd_strtab_hash::size" data-ref-filename="bfd_strtab_hash..size">size</a> = <var>0</var>;</td></tr>
+<tr><th id="779">779</th><td>  <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::first" title='bfd_strtab_hash::first' data-ref="bfd_strtab_hash::first" data-ref-filename="bfd_strtab_hash..first">first</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="780">780</th><td>  <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::last" title='bfd_strtab_hash::last' data-ref="bfd_strtab_hash::last" data-ref-filename="bfd_strtab_hash..last">last</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="781">781</th><td>  <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::xcoff" title='bfd_strtab_hash::xcoff' data-ref="bfd_strtab_hash::xcoff" data-ref-filename="bfd_strtab_hash..xcoff">xcoff</a> = <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#155" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="782">782</th><td></td></tr>
+<tr><th id="783">783</th><td>  <b>return</b> <a class="local col0 ref" href="#70table" title='table' data-ref="70table" data-ref-filename="70table">table</a>;</td></tr>
+<tr><th id="784">784</th><td>}</td></tr>
+<tr><th id="785">785</th><td></td></tr>
+<tr><th id="786">786</th><td><i>/* Create a new strtab in which the strings are output in the format</i></td></tr>
+<tr><th id="787">787</th><td><i>   used in the XCOFF .debug section: a two byte length precedes each</i></td></tr>
+<tr><th id="788">788</th><td><i>   string.  */</i></td></tr>
+<tr><th id="789">789</th><td></td></tr>
+<tr><th id="790">790</th><td><b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *</td></tr>
+<tr><th id="791">791</th><td><dfn class="decl def fn" id="_bfd_xcoff_stringtab_init" title='_bfd_xcoff_stringtab_init' data-ref="_bfd_xcoff_stringtab_init" data-ref-filename="_bfd_xcoff_stringtab_init">_bfd_xcoff_stringtab_init</dfn> (<em>void</em>)</td></tr>
+<tr><th id="792">792</th><td>{</td></tr>
+<tr><th id="793">793</th><td>  <b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *<dfn class="local col2 decl" id="72ret" title='ret' data-type='struct bfd_strtab_hash *' data-ref="72ret" data-ref-filename="72ret">ret</dfn>;</td></tr>
+<tr><th id="794">794</th><td></td></tr>
+<tr><th id="795">795</th><td>  <a class="local col2 ref" href="#72ret" title='ret' data-ref="72ret" data-ref-filename="72ret">ret</a> = <a class="ref fn" href="#_bfd_stringtab_init" title='_bfd_stringtab_init' data-ref="_bfd_stringtab_init" data-ref-filename="_bfd_stringtab_init">_bfd_stringtab_init</a> ();</td></tr>
+<tr><th id="796">796</th><td>  <b>if</b> (<a class="local col2 ref" href="#72ret" title='ret' data-ref="72ret" data-ref-filename="72ret">ret</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="797">797</th><td>    <a class="local col2 ref" href="#72ret" title='ret' data-ref="72ret" data-ref-filename="72ret">ret</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::xcoff" title='bfd_strtab_hash::xcoff' data-ref="bfd_strtab_hash::xcoff" data-ref-filename="bfd_strtab_hash..xcoff">xcoff</a> = <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#156" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="798">798</th><td>  <b>return</b> <a class="local col2 ref" href="#72ret" title='ret' data-ref="72ret" data-ref-filename="72ret">ret</a>;</td></tr>
+<tr><th id="799">799</th><td>}</td></tr>
+<tr><th id="800">800</th><td></td></tr>
+<tr><th id="801">801</th><td><i>/* Free a strtab.  */</i></td></tr>
+<tr><th id="802">802</th><td></td></tr>
+<tr><th id="803">803</th><td><em>void</em></td></tr>
+<tr><th id="804">804</th><td><dfn class="decl def fn" id="_bfd_stringtab_free" title='_bfd_stringtab_free' data-ref="_bfd_stringtab_free" data-ref-filename="_bfd_stringtab_free">_bfd_stringtab_free</dfn> (<b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *<dfn class="local col3 decl" id="73table" title='table' data-type='struct bfd_strtab_hash *' data-ref="73table" data-ref-filename="73table">table</dfn>)</td></tr>
+<tr><th id="805">805</th><td>{</td></tr>
+<tr><th id="806">806</th><td>  <a class="ref fn" href="#bfd_hash_table_free" title='bfd_hash_table_free' data-ref="bfd_hash_table_free" data-ref-filename="bfd_hash_table_free">bfd_hash_table_free</a> (&amp;<a class="local col3 ref" href="#73table" title='table' data-ref="73table" data-ref-filename="73table">table</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::table" title='bfd_strtab_hash::table' data-ref="bfd_strtab_hash::table" data-ref-filename="bfd_strtab_hash..table">table</a>);</td></tr>
+<tr><th id="807">807</th><td>  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a> (<a class="local col3 ref" href="#73table" title='table' data-ref="73table" data-ref-filename="73table">table</a>);</td></tr>
+<tr><th id="808">808</th><td>}</td></tr>
+<tr><th id="809">809</th><td></td></tr>
+<tr><th id="810">810</th><td><i>/* Get the index of a string in a strtab, adding it if it is not</i></td></tr>
+<tr><th id="811">811</th><td><i>   already present.  If HASH is FALSE, we don't really use the hash</i></td></tr>
+<tr><th id="812">812</th><td><i>   table, and we don't eliminate duplicate strings.  If COPY is true</i></td></tr>
+<tr><th id="813">813</th><td><i>   then store a copy of STR if creating a new entry.  */</i></td></tr>
+<tr><th id="814">814</th><td></td></tr>
+<tr><th id="815">815</th><td><a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a></td></tr>
+<tr><th id="816">816</th><td><dfn class="decl def fn" id="_bfd_stringtab_add" title='_bfd_stringtab_add' data-ref="_bfd_stringtab_add" data-ref-filename="_bfd_stringtab_add">_bfd_stringtab_add</dfn> (<b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *<dfn class="local col4 decl" id="74tab" title='tab' data-type='struct bfd_strtab_hash *' data-ref="74tab" data-ref-filename="74tab">tab</dfn>,</td></tr>
+<tr><th id="817">817</th><td>		    <em>const</em> <em>char</em> *<dfn class="local col5 decl" id="75str" title='str' data-type='const char *' data-ref="75str" data-ref-filename="75str">str</dfn>,</td></tr>
+<tr><th id="818">818</th><td>		    <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> <dfn class="local col6 decl" id="76hash" title='hash' data-type='bfd_boolean' data-ref="76hash" data-ref-filename="76hash">hash</dfn>,</td></tr>
+<tr><th id="819">819</th><td>		    <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> <dfn class="local col7 decl" id="77copy" title='copy' data-type='bfd_boolean' data-ref="77copy" data-ref-filename="77copy">copy</dfn>)</td></tr>
+<tr><th id="820">820</th><td>{</td></tr>
+<tr><th id="821">821</th><td>  <b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *<dfn class="local col8 decl" id="78entry" title='entry' data-type='struct strtab_hash_entry *' data-ref="78entry" data-ref-filename="78entry">entry</dfn>;</td></tr>
+<tr><th id="822">822</th><td></td></tr>
+<tr><th id="823">823</th><td>  <b>if</b> (<a class="local col6 ref" href="#76hash" title='hash' data-ref="76hash" data-ref-filename="76hash">hash</a>)</td></tr>
+<tr><th id="824">824</th><td>    {</td></tr>
+<tr><th id="825">825</th><td>      <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a> = <a class="macro" href="#755" title="((struct strtab_hash_entry *) bfd_hash_lookup (&amp;(tab)-&gt;table, (str), (1), (copy)))" data-ref="_M/strtab_hash_lookup">strtab_hash_lookup</a> (<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>, <a class="local col5 ref" href="#75str" title='str' data-ref="75str" data-ref-filename="75str">str</a>, <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#156" title="1" data-ref="_M/TRUE">TRUE</a>, <a class="local col7 ref" href="#77copy" title='copy' data-ref="77copy" data-ref-filename="77copy">copy</a>);</td></tr>
+<tr><th id="826">826</th><td>      <b>if</b> (<a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="827">827</th><td>	<b>return</b> (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) -<var>1</var>;</td></tr>
+<tr><th id="828">828</th><td>    }</td></tr>
+<tr><th id="829">829</th><td>  <b>else</b></td></tr>
+<tr><th id="830">830</th><td>    {</td></tr>
+<tr><th id="831">831</th><td>      <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a> = (<b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *) <a class="ref fn" href="#bfd_hash_allocate" title='bfd_hash_allocate' data-ref="bfd_hash_allocate" data-ref-filename="bfd_hash_allocate">bfd_hash_allocate</a> (&amp;<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::table" title='bfd_strtab_hash::table' data-ref="bfd_strtab_hash::table" data-ref-filename="bfd_strtab_hash..table">table</a>,</td></tr>
+<tr><th id="832">832</th><td>							      <b>sizeof</b> (* <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>));</td></tr>
+<tr><th id="833">833</th><td>      <b>if</b> (<a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="834">834</th><td>	<b>return</b> (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) -<var>1</var>;</td></tr>
+<tr><th id="835">835</th><td>      <b>if</b> (! <a class="local col7 ref" href="#77copy" title='copy' data-ref="77copy" data-ref-filename="77copy">copy</a>)</td></tr>
+<tr><th id="836">836</th><td>	<a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::root" title='strtab_hash_entry::root' data-use='m' data-ref="strtab_hash_entry::root" data-ref-filename="strtab_hash_entry..root">root</a>.<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::string" title='bfd_hash_entry::string' data-ref="bfd_hash_entry::string" data-ref-filename="bfd_hash_entry..string">string</a> = <a class="local col5 ref" href="#75str" title='str' data-ref="75str" data-ref-filename="75str">str</a>;</td></tr>
+<tr><th id="837">837</th><td>      <b>else</b></td></tr>
+<tr><th id="838">838</th><td>	{</td></tr>
+<tr><th id="839">839</th><td>	  <span class='typedef' title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</span> <dfn class="local col9 decl" id="79len" title='len' data-type='size_t' data-ref="79len" data-ref-filename="79len">len</dfn> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a> (<a class="local col5 ref" href="#75str" title='str' data-ref="75str" data-ref-filename="75str">str</a>) + <var>1</var>;</td></tr>
+<tr><th id="840">840</th><td>	  <em>char</em> *<dfn class="local col0 decl" id="80n" title='n' data-type='char *' data-ref="80n" data-ref-filename="80n">n</dfn>;</td></tr>
+<tr><th id="841">841</th><td></td></tr>
+<tr><th id="842">842</th><td>	  <a class="local col0 ref" href="#80n" title='n' data-ref="80n" data-ref-filename="80n">n</a> = (<em>char</em> *) <a class="ref fn" href="#bfd_hash_allocate" title='bfd_hash_allocate' data-ref="bfd_hash_allocate" data-ref-filename="bfd_hash_allocate">bfd_hash_allocate</a> (&amp;<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::table" title='bfd_strtab_hash::table' data-ref="bfd_strtab_hash::table" data-ref-filename="bfd_strtab_hash..table">table</a>, <a class="local col9 ref" href="#79len" title='len' data-ref="79len" data-ref-filename="79len">len</a>);</td></tr>
+<tr><th id="843">843</th><td>	  <b>if</b> (<a class="local col0 ref" href="#80n" title='n' data-ref="80n" data-ref-filename="80n">n</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="844">844</th><td>	    <b>return</b> (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) -<var>1</var>;</td></tr>
+<tr><th id="845">845</th><td>	  <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a> (<a class="local col0 ref" href="#80n" title='n' data-ref="80n" data-ref-filename="80n">n</a>, <a class="local col5 ref" href="#75str" title='str' data-ref="75str" data-ref-filename="75str">str</a>, <a class="local col9 ref" href="#79len" title='len' data-ref="79len" data-ref-filename="79len">len</a>);</td></tr>
+<tr><th id="846">846</th><td>	  <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::root" title='strtab_hash_entry::root' data-use='m' data-ref="strtab_hash_entry::root" data-ref-filename="strtab_hash_entry..root">root</a>.<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::string" title='bfd_hash_entry::string' data-ref="bfd_hash_entry::string" data-ref-filename="bfd_hash_entry..string">string</a> = <a class="local col0 ref" href="#80n" title='n' data-ref="80n" data-ref-filename="80n">n</a>;</td></tr>
+<tr><th id="847">847</th><td>	}</td></tr>
+<tr><th id="848">848</th><td>      <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::index" title='strtab_hash_entry::index' data-use='w' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</a> = (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) -<var>1</var>;</td></tr>
+<tr><th id="849">849</th><td>      <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::next" title='strtab_hash_entry::next' data-use='w' data-ref="strtab_hash_entry::next" data-ref-filename="strtab_hash_entry..next">next</a> = <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>;</td></tr>
+<tr><th id="850">850</th><td>    }</td></tr>
+<tr><th id="851">851</th><td></td></tr>
+<tr><th id="852">852</th><td>  <b>if</b> (<a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::index" title='strtab_hash_entry::index' data-use='r' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</a> == (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) -<var>1</var>)</td></tr>
+<tr><th id="853">853</th><td>    {</td></tr>
+<tr><th id="854">854</th><td>      <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::index" title='strtab_hash_entry::index' data-use='w' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</a> = <a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::size" title='bfd_strtab_hash::size' data-ref="bfd_strtab_hash::size" data-ref-filename="bfd_strtab_hash..size">size</a>;</td></tr>
+<tr><th id="855">855</th><td>      <a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::size" title='bfd_strtab_hash::size' data-ref="bfd_strtab_hash::size" data-ref-filename="bfd_strtab_hash..size">size</a> += <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a> (<a class="local col5 ref" href="#75str" title='str' data-ref="75str" data-ref-filename="75str">str</a>) + <var>1</var>;</td></tr>
+<tr><th id="856">856</th><td>      <b>if</b> (<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::xcoff" title='bfd_strtab_hash::xcoff' data-ref="bfd_strtab_hash::xcoff" data-ref-filename="bfd_strtab_hash..xcoff">xcoff</a>)</td></tr>
+<tr><th id="857">857</th><td>	{</td></tr>
+<tr><th id="858">858</th><td>	  <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::index" title='strtab_hash_entry::index' data-use='w' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</a> += <var>2</var>;</td></tr>
+<tr><th id="859">859</th><td>	  <a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::size" title='bfd_strtab_hash::size' data-ref="bfd_strtab_hash::size" data-ref-filename="bfd_strtab_hash..size">size</a> += <var>2</var>;</td></tr>
+<tr><th id="860">860</th><td>	}</td></tr>
+<tr><th id="861">861</th><td>      <b>if</b> (<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::first" title='bfd_strtab_hash::first' data-ref="bfd_strtab_hash::first" data-ref-filename="bfd_strtab_hash..first">first</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="862">862</th><td>	<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::first" title='bfd_strtab_hash::first' data-ref="bfd_strtab_hash::first" data-ref-filename="bfd_strtab_hash..first">first</a> = <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>;</td></tr>
+<tr><th id="863">863</th><td>      <b>else</b></td></tr>
+<tr><th id="864">864</th><td>	<a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::last" title='bfd_strtab_hash::last' data-ref="bfd_strtab_hash::last" data-ref-filename="bfd_strtab_hash..last">last</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::next" title='strtab_hash_entry::next' data-use='w' data-ref="strtab_hash_entry::next" data-ref-filename="strtab_hash_entry..next">next</a> = <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>;</td></tr>
+<tr><th id="865">865</th><td>      <a class="local col4 ref" href="#74tab" title='tab' data-ref="74tab" data-ref-filename="74tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::last" title='bfd_strtab_hash::last' data-ref="bfd_strtab_hash::last" data-ref-filename="bfd_strtab_hash..last">last</a> = <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>;</td></tr>
+<tr><th id="866">866</th><td>    }</td></tr>
+<tr><th id="867">867</th><td></td></tr>
+<tr><th id="868">868</th><td>  <b>return</b> <a class="local col8 ref" href="#78entry" title='entry' data-ref="78entry" data-ref-filename="78entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::index" title='strtab_hash_entry::index' data-use='r' data-ref="strtab_hash_entry::index" data-ref-filename="strtab_hash_entry..index">index</a>;</td></tr>
+<tr><th id="869">869</th><td>}</td></tr>
+<tr><th id="870">870</th><td></td></tr>
+<tr><th id="871">871</th><td><i>/* Get the number of bytes in a strtab.  */</i></td></tr>
+<tr><th id="872">872</th><td></td></tr>
+<tr><th id="873">873</th><td><a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a></td></tr>
+<tr><th id="874">874</th><td><dfn class="decl def fn" id="_bfd_stringtab_size" title='_bfd_stringtab_size' data-ref="_bfd_stringtab_size" data-ref-filename="_bfd_stringtab_size">_bfd_stringtab_size</dfn> (<b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *<dfn class="local col1 decl" id="81tab" title='tab' data-type='struct bfd_strtab_hash *' data-ref="81tab" data-ref-filename="81tab">tab</dfn>)</td></tr>
+<tr><th id="875">875</th><td>{</td></tr>
+<tr><th id="876">876</th><td>  <b>return</b> <a class="local col1 ref" href="#81tab" title='tab' data-ref="81tab" data-ref-filename="81tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::size" title='bfd_strtab_hash::size' data-ref="bfd_strtab_hash::size" data-ref-filename="bfd_strtab_hash..size">size</a>;</td></tr>
+<tr><th id="877">877</th><td>}</td></tr>
+<tr><th id="878">878</th><td></td></tr>
+<tr><th id="879">879</th><td><i>/* Write out a strtab.  ABFD must already be at the right location in</i></td></tr>
+<tr><th id="880">880</th><td><i>   the file.  */</i></td></tr>
+<tr><th id="881">881</th><td></td></tr>
+<tr><th id="882">882</th><td><a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a></td></tr>
+<tr><th id="883">883</th><td><dfn class="decl def fn" id="_bfd_stringtab_emit" title='_bfd_stringtab_emit' data-ref="_bfd_stringtab_emit" data-ref-filename="_bfd_stringtab_emit">_bfd_stringtab_emit</dfn> (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd" title='bfd' data-type='struct bfd' data-ref="bfd" data-ref-filename="bfd">bfd</a> *<dfn class="local col2 decl" id="82abfd" title='abfd' data-type='bfd *' data-ref="82abfd" data-ref-filename="82abfd">abfd</dfn>, <b>struct</b> <a class="type" href="#bfd_strtab_hash" title='bfd_strtab_hash' data-ref="bfd_strtab_hash" data-ref-filename="bfd_strtab_hash">bfd_strtab_hash</a> *<dfn class="local col3 decl" id="83tab" title='tab' data-type='struct bfd_strtab_hash *' data-ref="83tab" data-ref-filename="83tab">tab</dfn>)</td></tr>
+<tr><th id="884">884</th><td>{</td></tr>
+<tr><th id="885">885</th><td>  <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_boolean" title='bfd_boolean' data-type='int' data-ref="bfd_boolean" data-ref-filename="bfd_boolean">bfd_boolean</a> <dfn class="local col4 decl" id="84xcoff" title='xcoff' data-type='bfd_boolean' data-ref="84xcoff" data-ref-filename="84xcoff">xcoff</dfn>;</td></tr>
+<tr><th id="886">886</th><td>  <b>struct</b> <a class="type" href="#strtab_hash_entry" title='strtab_hash_entry' data-ref="strtab_hash_entry" data-ref-filename="strtab_hash_entry">strtab_hash_entry</a> *<dfn class="local col5 decl" id="85entry" title='entry' data-type='struct strtab_hash_entry *' data-ref="85entry" data-ref-filename="85entry">entry</dfn>;</td></tr>
+<tr><th id="887">887</th><td></td></tr>
+<tr><th id="888">888</th><td>  <a class="local col4 ref" href="#84xcoff" title='xcoff' data-ref="84xcoff" data-ref-filename="84xcoff">xcoff</a> = <a class="local col3 ref" href="#83tab" title='tab' data-ref="83tab" data-ref-filename="83tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::xcoff" title='bfd_strtab_hash::xcoff' data-ref="bfd_strtab_hash::xcoff" data-ref-filename="bfd_strtab_hash..xcoff">xcoff</a>;</td></tr>
+<tr><th id="889">889</th><td></td></tr>
+<tr><th id="890">890</th><td>  <b>for</b> (<a class="local col5 ref" href="#85entry" title='entry' data-ref="85entry" data-ref-filename="85entry">entry</a> = <a class="local col3 ref" href="#83tab" title='tab' data-ref="83tab" data-ref-filename="83tab">tab</a>-&gt;<a class="ref field" href="#bfd_strtab_hash::first" title='bfd_strtab_hash::first' data-ref="bfd_strtab_hash::first" data-ref-filename="bfd_strtab_hash..first">first</a>; <a class="local col5 ref" href="#85entry" title='entry' data-ref="85entry" data-ref-filename="85entry">entry</a> != <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>; <a class="local col5 ref" href="#85entry" title='entry' data-ref="85entry" data-ref-filename="85entry">entry</a> = <a class="local col5 ref" href="#85entry" title='entry' data-ref="85entry" data-ref-filename="85entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::next" title='strtab_hash_entry::next' data-use='r' data-ref="strtab_hash_entry::next" data-ref-filename="strtab_hash_entry..next">next</a>)</td></tr>
+<tr><th id="891">891</th><td>    {</td></tr>
+<tr><th id="892">892</th><td>      <em>const</em> <em>char</em> *<dfn class="local col6 decl" id="86str" title='str' data-type='const char *' data-ref="86str" data-ref-filename="86str">str</dfn>;</td></tr>
+<tr><th id="893">893</th><td>      <span class='typedef' title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</span> <dfn class="local col7 decl" id="87len" title='len' data-type='size_t' data-ref="87len" data-ref-filename="87len">len</dfn>;</td></tr>
+<tr><th id="894">894</th><td></td></tr>
+<tr><th id="895">895</th><td>      <a class="local col6 ref" href="#86str" title='str' data-ref="86str" data-ref-filename="86str">str</a> = <a class="local col5 ref" href="#85entry" title='entry' data-ref="85entry" data-ref-filename="85entry">entry</a>-&gt;<a class="tu ref field" href="#strtab_hash_entry::root" title='strtab_hash_entry::root' data-use='m' data-ref="strtab_hash_entry::root" data-ref-filename="strtab_hash_entry..root">root</a>.<a class="ref field" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_hash_entry::string" title='bfd_hash_entry::string' data-ref="bfd_hash_entry::string" data-ref-filename="bfd_hash_entry..string">string</a>;</td></tr>
+<tr><th id="896">896</th><td>      <a class="local col7 ref" href="#87len" title='len' data-ref="87len" data-ref-filename="87len">len</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#strlen" title='strlen' data-ref="strlen" data-ref-filename="strlen">strlen</a> (<a class="local col6 ref" href="#86str" title='str' data-ref="86str" data-ref-filename="86str">str</a>) + <var>1</var>;</td></tr>
+<tr><th id="897">897</th><td></td></tr>
+<tr><th id="898">898</th><td>      <b>if</b> (<a class="local col4 ref" href="#84xcoff" title='xcoff' data-ref="84xcoff" data-ref-filename="84xcoff">xcoff</a>)</td></tr>
+<tr><th id="899">899</th><td>	{</td></tr>
+<tr><th id="900">900</th><td>	  <a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_byte" title='bfd_byte' data-type='unsigned char' data-ref="bfd_byte" data-ref-filename="bfd_byte">bfd_byte</a> <dfn class="local col8 decl" id="88buf" title='buf' data-type='bfd_byte [2]' data-ref="88buf" data-ref-filename="88buf">buf</dfn>[<var>2</var>];</td></tr>
+<tr><th id="901">901</th><td></td></tr>
+<tr><th id="902">902</th><td>	  <i>/* The output length includes the null byte.  */</i></td></tr>
+<tr><th id="903">903</th><td>	  <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#1158" title="((*((abfd)-&gt;xvec-&gt;bfd_putx16)) (((bfd_vma) len),(buf)))" data-ref="_M/bfd_put_16">bfd_put_16</a> (<a class="local col2 ref" href="#82abfd" title='abfd' data-ref="82abfd" data-ref-filename="82abfd">abfd</a>, (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_vma" title='bfd_vma' data-type='unsigned long' data-ref="bfd_vma" data-ref-filename="bfd_vma">bfd_vma</a>) <a class="local col7 ref" href="#87len" title='len' data-ref="87len" data-ref-filename="87len">len</a>, <a class="local col8 ref" href="#88buf" title='buf' data-ref="88buf" data-ref-filename="88buf">buf</a>);</td></tr>
+<tr><th id="904">904</th><td>	  <b>if</b> (<a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_bwrite" title='bfd_bwrite' data-ref="bfd_bwrite" data-ref-filename="bfd_bwrite">bfd_bwrite</a> ((<em>void</em> *) <a class="local col8 ref" href="#88buf" title='buf' data-ref="88buf" data-ref-filename="88buf">buf</a>, (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) <var>2</var>, <a class="local col2 ref" href="#82abfd" title='abfd' data-ref="82abfd" data-ref-filename="82abfd">abfd</a>) != <var>2</var>)</td></tr>
+<tr><th id="905">905</th><td>	    <b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#155" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="906">906</th><td>	}</td></tr>
+<tr><th id="907">907</th><td></td></tr>
+<tr><th id="908">908</th><td>      <b>if</b> (<a class="ref fn" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_bwrite" title='bfd_bwrite' data-ref="bfd_bwrite" data-ref-filename="bfd_bwrite">bfd_bwrite</a> ((<em>void</em> *) <a class="local col6 ref" href="#86str" title='str' data-ref="86str" data-ref-filename="86str">str</a>, (<a class="typedef" href="../../lib/libbfd/arch/i386/bfd.h.html#bfd_size_type" title='bfd_size_type' data-type='unsigned long' data-ref="bfd_size_type" data-ref-filename="bfd_size_type">bfd_size_type</a>) <a class="local col7 ref" href="#87len" title='len' data-ref="87len" data-ref-filename="87len">len</a>, <a class="local col2 ref" href="#82abfd" title='abfd' data-ref="82abfd" data-ref-filename="82abfd">abfd</a>) != <a class="local col7 ref" href="#87len" title='len' data-ref="87len" data-ref-filename="87len">len</a>)</td></tr>
+<tr><th id="909">909</th><td>	<b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#155" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="910">910</th><td>    }</td></tr>
+<tr><th id="911">911</th><td></td></tr>
+<tr><th id="912">912</th><td>  <b>return</b> <a class="macro" href="../../lib/libbfd/arch/i386/bfd.h.html#156" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="913">913</th><td>}</td></tr>
+<tr><th id="914">914</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

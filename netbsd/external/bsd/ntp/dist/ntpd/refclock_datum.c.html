@@ -1,0 +1,805 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>refclock_datum.c source code [netbsd/external/bsd/ntp/dist/ntpd/refclock_datum.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="datum_pts_unit "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/refclock_datum.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='refclock_datum.c.html'>refclock_datum.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: refclock_datum.c,v 1.7 2017/04/13 20:17:42 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i>** refclock_datum - clock driver for the Datum Programmable Time Server</i></td></tr>
+<tr><th id="5">5</th><td><i>**</i></td></tr>
+<tr><th id="6">6</th><td><i>** Important note: This driver assumes that you have termios. If you have</i></td></tr>
+<tr><th id="7">7</th><td><i>** a system that does not have termios, you will have to modify this driver.</i></td></tr>
+<tr><th id="8">8</th><td><i>**</i></td></tr>
+<tr><th id="9">9</th><td><i>** Sorry, I have only tested this driver on SUN and HP platforms.</i></td></tr>
+<tr><th id="10">10</th><td><i>*/</i></td></tr>
+<tr><th id="11">11</th><td></td></tr>
+<tr><th id="12">12</th><td><u>#<span data-ppcond="12">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="13">13</th><td><u># include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="14">14</th><td><u>#<span data-ppcond="12">endif</span></u></td></tr>
+<tr><th id="15">15</th><td></td></tr>
+<tr><th id="16">16</th><td><u>#include <a href="../include/ntp_types.h.html">"ntp_types.h"</a></u></td></tr>
+<tr><th id="17">17</th><td></td></tr>
+<tr><th id="18">18</th><td><u>#<span data-ppcond="18">if</span> defined(<a class="macro" href="../../include/config.h.html#1519" data-ref="_M/REFCLOCK">REFCLOCK</a>) &amp;&amp; defined(<a class="macro" href="../../include/config.h.html#44" data-ref="_M/CLOCK_DATUM">CLOCK_DATUM</a>)</u></td></tr>
+<tr><th id="19">19</th><td></td></tr>
+<tr><th id="20">20</th><td><i>/*</i></td></tr>
+<tr><th id="21">21</th><td><i>** Include Files</i></td></tr>
+<tr><th id="22">22</th><td><i>*/</i></td></tr>
+<tr><th id="23">23</th><td></td></tr>
+<tr><th id="24">24</th><td><u>#include <a href="../include/ntpd.h.html">"ntpd.h"</a></u></td></tr>
+<tr><th id="25">25</th><td><u>#include <a href="../include/ntp_io.h.html">"ntp_io.h"</a></u></td></tr>
+<tr><th id="26">26</th><td><u>#include <a href="../include/ntp_tty.h.html">"ntp_tty.h"</a></u></td></tr>
+<tr><th id="27">27</th><td><u>#include <a href="../include/ntp_refclock.h.html">"ntp_refclock.h"</a></u></td></tr>
+<tr><th id="28">28</th><td><u>#include <a href="../include/timevalops.h.html">"timevalops.h"</a></u></td></tr>
+<tr><th id="29">29</th><td><u>#include <a href="../include/ntp_stdlib.h.html">"ntp_stdlib.h"</a></u></td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/ctype.h.html">&lt;ctype.h&gt;</a></u></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><u>#<span data-ppcond="34">if</span> defined(<span class="macro" data-ref="_M/STREAM">STREAM</span>)</u></td></tr>
+<tr><th id="35">35</th><td><u>#include &lt;stropts.h&gt;</u></td></tr>
+<tr><th id="36">36</th><td><u>#<span data-ppcond="34">endif</span> /* STREAM */</u></td></tr>
+<tr><th id="37">37</th><td></td></tr>
+<tr><th id="38">38</th><td><u>#include <a href="../include/ntp_stdlib.h.html">"ntp_stdlib.h"</a></u></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><i>/*</i></td></tr>
+<tr><th id="41">41</th><td><i>** This driver supports the Datum Programmable Time System (PTS) clock.</i></td></tr>
+<tr><th id="42">42</th><td><i>** The clock works in very straight forward manner. When it receives a</i></td></tr>
+<tr><th id="43">43</th><td><i>** time code request (e.g., the ascii string "//k/mn"), it responds with</i></td></tr>
+<tr><th id="44">44</th><td><i>** a seven byte BCD time code. This clock only responds with a</i></td></tr>
+<tr><th id="45">45</th><td><i>** time code after it first receives the "//k/mn" message. It does not</i></td></tr>
+<tr><th id="46">46</th><td><i>** periodically send time codes back at some rate once it is started.</i></td></tr>
+<tr><th id="47">47</th><td><i>** the returned time code can be broken down into the following fields.</i></td></tr>
+<tr><th id="48">48</th><td><i>**</i></td></tr>
+<tr><th id="49">49</th><td><i>**            _______________________________</i></td></tr>
+<tr><th id="50">50</th><td><i>** Bit Index | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |</i></td></tr>
+<tr><th id="51">51</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="52">52</th><td><i>** byte 0:   | -   -   -   - |      H D      |</i></td></tr>
+<tr><th id="53">53</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="54">54</th><td><i>** byte 1:   |      T D      |      U D      |</i></td></tr>
+<tr><th id="55">55</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="56">56</th><td><i>** byte 2:   | -   - |  T H  |      U H      |</i></td></tr>
+<tr><th id="57">57</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="58">58</th><td><i>** byte 3:   | - |    T M    |      U M      |</i></td></tr>
+<tr><th id="59">59</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="60">60</th><td><i>** byte 4:   | - |    T S    |      U S      |</i></td></tr>
+<tr><th id="61">61</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="62">62</th><td><i>** byte 5:   |      t S      |      h S      |</i></td></tr>
+<tr><th id="63">63</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="64">64</th><td><i>** byte 6:   |      m S      | -   -   -   - |</i></td></tr>
+<tr><th id="65">65</th><td><i>**            ===============================</i></td></tr>
+<tr><th id="66">66</th><td><i>**</i></td></tr>
+<tr><th id="67">67</th><td><i>** In the table above:</i></td></tr>
+<tr><th id="68">68</th><td><i>**</i></td></tr>
+<tr><th id="69">69</th><td><i>**	"-" means don't care</i></td></tr>
+<tr><th id="70">70</th><td><i>**	"H D", "T D", and "U D" means Hundreds, Tens, and Units of Days</i></td></tr>
+<tr><th id="71">71</th><td><i>**	"T H", and "UH" means Tens and Units of Hours</i></td></tr>
+<tr><th id="72">72</th><td><i>**	"T M", and "U M" means Tens and Units of Minutes</i></td></tr>
+<tr><th id="73">73</th><td><i>**	"T S", and "U S" means Tens and Units of Seconds</i></td></tr>
+<tr><th id="74">74</th><td><i>**	"t S", "h S", and "m S" means tenths, hundredths, and thousandths</i></td></tr>
+<tr><th id="75">75</th><td><i>**				of seconds</i></td></tr>
+<tr><th id="76">76</th><td><i>**</i></td></tr>
+<tr><th id="77">77</th><td><i>** The Datum PTS communicates throught the RS232 port on your machine.</i></td></tr>
+<tr><th id="78">78</th><td><i>** Right now, it assumes that you have termios. This driver has been tested</i></td></tr>
+<tr><th id="79">79</th><td><i>** on SUN and HP workstations. The Datum PTS supports various IRIG and</i></td></tr>
+<tr><th id="80">80</th><td><i>** NASA input codes. This driver assumes that the name of the device is</i></td></tr>
+<tr><th id="81">81</th><td><i>** /dev/datum. You will need to make a soft link to your RS232 device or</i></td></tr>
+<tr><th id="82">82</th><td><i>** create a new driver to use this refclock.</i></td></tr>
+<tr><th id="83">83</th><td><i>*/</i></td></tr>
+<tr><th id="84">84</th><td></td></tr>
+<tr><th id="85">85</th><td><i>/*</i></td></tr>
+<tr><th id="86">86</th><td><i>** Datum PTS defines</i></td></tr>
+<tr><th id="87">87</th><td><i>*/</i></td></tr>
+<tr><th id="88">88</th><td></td></tr>
+<tr><th id="89">89</th><td><i>/*</i></td></tr>
+<tr><th id="90">90</th><td><i>** Note that if GMT is defined, then the Datum PTS must use Greenwich</i></td></tr>
+<tr><th id="91">91</th><td><i>** time. Otherwise, this driver allows the Datum PTS to use the current</i></td></tr>
+<tr><th id="92">92</th><td><i>** wall clock for its time. It determines the time zone offset by minimizing</i></td></tr>
+<tr><th id="93">93</th><td><i>** the error after trying several time zone offsets. If the Datum PTS</i></td></tr>
+<tr><th id="94">94</th><td><i>** time is Greenwich time and GMT is not defined, everything should still</i></td></tr>
+<tr><th id="95">95</th><td><i>** work since the time zone will be found to be 0. What this really means</i></td></tr>
+<tr><th id="96">96</th><td><i>** is that your system time (at least to start with) must be within the</i></td></tr>
+<tr><th id="97">97</th><td><i>** correct time by less than +- 30 minutes. The default is for GMT to not</i></td></tr>
+<tr><th id="98">98</th><td><i>** defined. If you really want to force GMT without the funny +- 30 minute</i></td></tr>
+<tr><th id="99">99</th><td><i>** stuff then you must define (uncomment) GMT below.</i></td></tr>
+<tr><th id="100">100</th><td><i>*/</i></td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td><i>/*</i></td></tr>
+<tr><th id="103">103</th><td><i>#define GMT</i></td></tr>
+<tr><th id="104">104</th><td><i>#define DEBUG_DATUM_PTC</i></td></tr>
+<tr><th id="105">105</th><td><i>#define LOG_TIME_ERRORS</i></td></tr>
+<tr><th id="106">106</th><td><i>*/</i></td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td><u>#define	<dfn class="macro" id="_M/PRECISION" data-ref="_M/PRECISION">PRECISION</dfn>	(-10)		/* precision assumed 1/1024 ms */</u></td></tr>
+<tr><th id="110">110</th><td><u>#define	<dfn class="macro" id="_M/REFID" data-ref="_M/REFID">REFID</dfn> "DATM"			/* reference id */</u></td></tr>
+<tr><th id="111">111</th><td><u>#define <dfn class="macro" id="_M/DATUM_DISPERSION" data-ref="_M/DATUM_DISPERSION">DATUM_DISPERSION</dfn> 0		/* fixed dispersion = 0 ms */</u></td></tr>
+<tr><th id="112">112</th><td><u>#define <dfn class="macro" id="_M/DATUM_MAX_ERROR" data-ref="_M/DATUM_MAX_ERROR">DATUM_MAX_ERROR</dfn> 0.100		/* limits on sigma squared */</u></td></tr>
+<tr><th id="113">113</th><td><u>#define <dfn class="macro" id="_M/DATUM_DEV" data-ref="_M/DATUM_DEV">DATUM_DEV</dfn>	"/dev/datum"	/* device name */</u></td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td><u>#define <dfn class="macro" id="_M/DATUM_MAX_ERROR2" data-ref="_M/DATUM_MAX_ERROR2">DATUM_MAX_ERROR2</dfn> (DATUM_MAX_ERROR*DATUM_MAX_ERROR)</u></td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td><i>/*</i></td></tr>
+<tr><th id="118">118</th><td><i>** The Datum PTS structure</i></td></tr>
+<tr><th id="119">119</th><td><i>*/</i></td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><i>/*</i></td></tr>
+<tr><th id="122">122</th><td><i>** I don't use a fixed array of MAXUNITS like everyone else just because</i></td></tr>
+<tr><th id="123">123</th><td><i>** I don't like to program that way. Sorry if this bothers anyone. I assume</i></td></tr>
+<tr><th id="124">124</th><td><i>** that you can use any id for your unit and I will search for it in a</i></td></tr>
+<tr><th id="125">125</th><td><i>** dynamic array of units until I find it. I was worried that users might</i></td></tr>
+<tr><th id="126">126</th><td><i>** enter a bad id in their configuration file (larger than MAXUNITS) and</i></td></tr>
+<tr><th id="127">127</th><td><i>** besides, it is just cleaner not to have to assume that you have a fixed</i></td></tr>
+<tr><th id="128">128</th><td><i>** number of anything in a program.</i></td></tr>
+<tr><th id="129">129</th><td><i>*/</i></td></tr>
+<tr><th id="130">130</th><td></td></tr>
+<tr><th id="131">131</th><td><b>struct</b> <dfn class="type def" id="datum_pts_unit" title='datum_pts_unit' data-ref="datum_pts_unit" data-ref-filename="datum_pts_unit">datum_pts_unit</dfn> {</td></tr>
+<tr><th id="132">132</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="tu decl field" id="datum_pts_unit::peer" title='datum_pts_unit::peer' data-type='struct peer *' data-ref="datum_pts_unit::peer" data-ref-filename="datum_pts_unit..peer">peer</dfn>;		<i  data-doc="datum_pts_unit::peer">/* peer used by ntp */</i></td></tr>
+<tr><th id="133">133</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-type='int' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</dfn>;			<i  data-doc="datum_pts_unit::PTS_fd">/* file descriptor for PTS */</i></td></tr>
+<tr><th id="134">134</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="tu decl field" id="datum_pts_unit::unit" title='datum_pts_unit::unit' data-type='u_int' data-ref="datum_pts_unit::unit" data-ref-filename="datum_pts_unit..unit">unit</dfn>;			<i  data-doc="datum_pts_unit::unit">/* id for unit */</i></td></tr>
+<tr><th id="135">135</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <dfn class="tu decl field" id="datum_pts_unit::timestarted" title='datum_pts_unit::timestarted' data-type='u_long' data-ref="datum_pts_unit::timestarted" data-ref-filename="datum_pts_unit..timestarted">timestarted</dfn>;		<i  data-doc="datum_pts_unit::timestarted">/* time started */</i></td></tr>
+<tr><th id="136">136</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a> <dfn class="tu decl field" id="datum_pts_unit::lastrec" title='datum_pts_unit::lastrec' data-type='l_fp' data-ref="datum_pts_unit::lastrec" data-ref-filename="datum_pts_unit..lastrec">lastrec</dfn>;			<i  data-doc="datum_pts_unit::lastrec">/* time tag for the receive time (system) */</i></td></tr>
+<tr><th id="137">137</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a> <dfn class="tu decl field" id="datum_pts_unit::lastref" title='datum_pts_unit::lastref' data-type='l_fp' data-ref="datum_pts_unit::lastref" data-ref-filename="datum_pts_unit..lastref">lastref</dfn>;			<i  data-doc="datum_pts_unit::lastref">/* reference time (Datum time) */</i></td></tr>
+<tr><th id="138">138</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <dfn class="tu decl field" id="datum_pts_unit::yearstart" title='datum_pts_unit::yearstart' data-type='u_long' data-ref="datum_pts_unit::yearstart" data-ref-filename="datum_pts_unit..yearstart">yearstart</dfn>;		<i  data-doc="datum_pts_unit::yearstart">/* the year that this clock started */</i></td></tr>
+<tr><th id="139">139</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::coderecv" title='datum_pts_unit::coderecv' data-type='int' data-ref="datum_pts_unit::coderecv" data-ref-filename="datum_pts_unit..coderecv">coderecv</dfn>;			<i  data-doc="datum_pts_unit::coderecv">/* number of time codes received */</i></td></tr>
+<tr><th id="140">140</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::day" title='datum_pts_unit::day' data-type='int' data-ref="datum_pts_unit::day" data-ref-filename="datum_pts_unit..day">day</dfn>;			<i  data-doc="datum_pts_unit::day">/* day */</i></td></tr>
+<tr><th id="141">141</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::hour" title='datum_pts_unit::hour' data-type='int' data-ref="datum_pts_unit::hour" data-ref-filename="datum_pts_unit..hour">hour</dfn>;			<i  data-doc="datum_pts_unit::hour">/* hour */</i></td></tr>
+<tr><th id="142">142</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::minute" title='datum_pts_unit::minute' data-type='int' data-ref="datum_pts_unit::minute" data-ref-filename="datum_pts_unit..minute">minute</dfn>;			<i  data-doc="datum_pts_unit::minute">/* minutes */</i></td></tr>
+<tr><th id="143">143</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::second" title='datum_pts_unit::second' data-type='int' data-ref="datum_pts_unit::second" data-ref-filename="datum_pts_unit..second">second</dfn>;			<i  data-doc="datum_pts_unit::second">/* seconds */</i></td></tr>
+<tr><th id="144">144</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::msec" title='datum_pts_unit::msec' data-type='int' data-ref="datum_pts_unit::msec" data-ref-filename="datum_pts_unit..msec">msec</dfn>;			<i  data-doc="datum_pts_unit::msec">/* miliseconds */</i></td></tr>
+<tr><th id="145">145</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::usec" title='datum_pts_unit::usec' data-type='int' data-ref="datum_pts_unit::usec" data-ref-filename="datum_pts_unit..usec">usec</dfn>;			<i  data-doc="datum_pts_unit::usec">/* miliseconds */</i></td></tr>
+<tr><th id="146">146</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a> <dfn class="tu decl field" id="datum_pts_unit::leap" title='datum_pts_unit::leap' data-type='u_char' data-ref="datum_pts_unit::leap" data-ref-filename="datum_pts_unit..leap">leap</dfn>;			<i  data-doc="datum_pts_unit::leap">/* funny leap character code */</i></td></tr>
+<tr><th id="147">147</th><td>	<em>char</em> <dfn class="tu decl field" id="datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-type='char [8]' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</dfn>[<var>8</var>];		<i  data-doc="datum_pts_unit::retbuf">/* returned time from the datum pts */</i></td></tr>
+<tr><th id="148">148</th><td>	<em>char</em> <dfn class="tu decl field" id="datum_pts_unit::nbytes" title='datum_pts_unit::nbytes' data-type='char' data-ref="datum_pts_unit::nbytes" data-ref-filename="datum_pts_unit..nbytes">nbytes</dfn>;			<i  data-doc="datum_pts_unit::nbytes">/* number of bytes received from datum pts */</i> </td></tr>
+<tr><th id="149">149</th><td>	<em>double</em> <dfn class="tu decl field" id="datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-type='double' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</dfn>;		<i  data-doc="datum_pts_unit::sigma2">/* average squared error (roughly) */</i></td></tr>
+<tr><th id="150">150</th><td>	<em>int</em> <dfn class="tu decl field" id="datum_pts_unit::tzoff" title='datum_pts_unit::tzoff' data-type='int' data-ref="datum_pts_unit::tzoff" data-ref-filename="datum_pts_unit..tzoff">tzoff</dfn>;			<i  data-doc="datum_pts_unit::tzoff">/* time zone offest from GMT */</i></td></tr>
+<tr><th id="151">151</th><td>};</td></tr>
+<tr><th id="152">152</th><td></td></tr>
+<tr><th id="153">153</th><td><i  data-doc="TIME_REQUEST">/*</i></td></tr>
+<tr><th id="154">154</th><td><i  data-doc="TIME_REQUEST">** PTS static constant variables for internal use</i></td></tr>
+<tr><th id="155">155</th><td><i  data-doc="TIME_REQUEST">*/</i></td></tr>
+<tr><th id="156">156</th><td></td></tr>
+<tr><th id="157">157</th><td><em>static</em> <em>char</em> <dfn class="tu decl def" id="TIME_REQUEST" title='TIME_REQUEST' data-type='char [6]' data-ref="TIME_REQUEST" data-ref-filename="TIME_REQUEST">TIME_REQUEST</dfn>[<var>6</var>];	<i  data-doc="TIME_REQUEST">/* request message sent to datum for time */</i></td></tr>
+<tr><th id="158">158</th><td><em>static</em> <em>int</em> <dfn class="tu decl def" id="nunits" title='nunits' data-type='int' data-ref="nunits" data-ref-filename="nunits">nunits</dfn>;		<i  data-doc="nunits">/* number of active units */</i></td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td><i  data-doc="datum_pts_start">/*</i></td></tr>
+<tr><th id="161">161</th><td><i  data-doc="datum_pts_start">** Callback function prototypes that ntpd needs to know about.</i></td></tr>
+<tr><th id="162">162</th><td><i  data-doc="datum_pts_start">*/</i></td></tr>
+<tr><th id="163">163</th><td></td></tr>
+<tr><th id="164">164</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#datum_pts_start" title='datum_pts_start' data-type='int datum_pts_start(int , struct peer * )' data-ref="datum_pts_start" data-ref-filename="datum_pts_start">datum_pts_start</a>		(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="165">165</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#datum_pts_shutdown" title='datum_pts_shutdown' data-type='void datum_pts_shutdown(int , struct peer * )' data-ref="datum_pts_shutdown" data-ref-filename="datum_pts_shutdown">datum_pts_shutdown</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="166">166</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#datum_pts_poll" title='datum_pts_poll' data-type='void datum_pts_poll(int , struct peer * )' data-ref="datum_pts_poll" data-ref-filename="datum_pts_poll">datum_pts_poll</a>		(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="167">167</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#datum_pts_control" title='datum_pts_control' data-type='void datum_pts_control(int , const struct refclockstat * , struct refclockstat * , struct peer * )' data-ref="datum_pts_control" data-ref-filename="datum_pts_control">datum_pts_control</a>	(<em>int</em>, <em>const</em> <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *,</td></tr>
+<tr><th id="168">168</th><td>					 <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="169">169</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#datum_pts_init" title='datum_pts_init' data-type='void datum_pts_init()' data-ref="datum_pts_init" data-ref-filename="datum_pts_init">datum_pts_init</a>		(<em>void</em>);</td></tr>
+<tr><th id="170">170</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#datum_pts_buginfo" title='datum_pts_buginfo' data-type='void datum_pts_buginfo(int , struct refclockbug * , struct peer * )' data-ref="datum_pts_buginfo" data-ref-filename="datum_pts_buginfo">datum_pts_buginfo</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockbug" title='refclockbug' data-ref="refclockbug" data-ref-filename="refclockbug">refclockbug</a> *, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td><i>/*</i></td></tr>
+<tr><th id="173">173</th><td><i>** This is the call back function structure that ntpd actually uses for</i></td></tr>
+<tr><th id="174">174</th><td><i>** this refclock.</i></td></tr>
+<tr><th id="175">175</th><td><i>*/</i></td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td><b>struct</b>	<a class="type" href="../include/ntp_refclock.h.html#refclock" title='refclock' data-ref="refclock" data-ref-filename="refclock">refclock</a> <dfn class="decl def" id="refclock_datum" title='refclock_datum' data-ref="refclock_datum" data-ref-filename="refclock_datum">refclock_datum</dfn> = {</td></tr>
+<tr><th id="178">178</th><td>	<a class="tu ref fn" href="#datum_pts_start" title='datum_pts_start' data-use='r' data-ref="datum_pts_start" data-ref-filename="datum_pts_start">datum_pts_start</a>,		<i>/* start up a new Datum refclock */</i></td></tr>
+<tr><th id="179">179</th><td>	<a class="tu ref fn" href="#datum_pts_shutdown" title='datum_pts_shutdown' data-use='r' data-ref="datum_pts_shutdown" data-ref-filename="datum_pts_shutdown">datum_pts_shutdown</a>,		<i>/* shutdown a Datum refclock */</i></td></tr>
+<tr><th id="180">180</th><td>	<a class="tu ref fn" href="#datum_pts_poll" title='datum_pts_poll' data-use='r' data-ref="datum_pts_poll" data-ref-filename="datum_pts_poll">datum_pts_poll</a>,		<i>/* sends out the time request */</i></td></tr>
+<tr><th id="181">181</th><td>	<a class="tu ref fn" href="#datum_pts_control" title='datum_pts_control' data-use='r' data-ref="datum_pts_control" data-ref-filename="datum_pts_control">datum_pts_control</a>,		<i>/* not used */</i></td></tr>
+<tr><th id="182">182</th><td>	<a class="tu ref fn" href="#datum_pts_init" title='datum_pts_init' data-use='r' data-ref="datum_pts_init" data-ref-filename="datum_pts_init">datum_pts_init</a>,		<i>/* initialization (called first) */</i></td></tr>
+<tr><th id="183">183</th><td>	<a class="tu ref fn" href="#datum_pts_buginfo" title='datum_pts_buginfo' data-use='r' data-ref="datum_pts_buginfo" data-ref-filename="datum_pts_buginfo">datum_pts_buginfo</a>,		<i>/* not used */</i></td></tr>
+<tr><th id="184">184</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#201" title="0" data-ref="_M/NOFLAGS">NOFLAGS</a>			<i>/* we are not setting any special flags */</i></td></tr>
+<tr><th id="185">185</th><td>};</td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td><i  data-doc="datum_pts_receive">/*</i></td></tr>
+<tr><th id="188">188</th><td><i  data-doc="datum_pts_receive">** The datum_pts_receive callback function is handled differently from the</i></td></tr>
+<tr><th id="189">189</th><td><i  data-doc="datum_pts_receive">** rest. It is passed to the ntpd io data structure. Basically, every</i></td></tr>
+<tr><th id="190">190</th><td><i  data-doc="datum_pts_receive">** 64 seconds, the datum_pts_poll() routine is called. It sends out the time</i></td></tr>
+<tr><th id="191">191</th><td><i  data-doc="datum_pts_receive">** request message to the Datum Programmable Time System. Then, ntpd</i></td></tr>
+<tr><th id="192">192</th><td><i  data-doc="datum_pts_receive">** waits on a select() call to receive data back. The datum_pts_receive()</i></td></tr>
+<tr><th id="193">193</th><td><i  data-doc="datum_pts_receive">** function is called as data comes back. We expect a seven byte time</i></td></tr>
+<tr><th id="194">194</th><td><i  data-doc="datum_pts_receive">** code to be returned but the datum_pts_receive() function may only get</i></td></tr>
+<tr><th id="195">195</th><td><i  data-doc="datum_pts_receive">** a few bytes passed to it at a time. In other words, this routine may</i></td></tr>
+<tr><th id="196">196</th><td><i  data-doc="datum_pts_receive">** get called by the io stuff in ntpd a few times before we get all seven</i></td></tr>
+<tr><th id="197">197</th><td><i  data-doc="datum_pts_receive">** bytes. Once the last byte is received, we process it and then pass the</i></td></tr>
+<tr><th id="198">198</th><td><i  data-doc="datum_pts_receive">** new time measurement to ntpd for updating the system time. For now,</i></td></tr>
+<tr><th id="199">199</th><td><i  data-doc="datum_pts_receive">** there is no 3 state filtering done on the time measurements. The</i></td></tr>
+<tr><th id="200">200</th><td><i  data-doc="datum_pts_receive">** jitter may be a little high but at least for its current use, it is not</i></td></tr>
+<tr><th id="201">201</th><td><i  data-doc="datum_pts_receive">** a problem. We have tried to keep things as simple as possible. This</i></td></tr>
+<tr><th id="202">202</th><td><i  data-doc="datum_pts_receive">** clock should not jitter more than 1 or 2 mseconds at the most once</i></td></tr>
+<tr><th id="203">203</th><td><i  data-doc="datum_pts_receive">** things settle down. It is important to get the right drift calibrated</i></td></tr>
+<tr><th id="204">204</th><td><i  data-doc="datum_pts_receive">** in the ntpd.drift file as well as getting the right tick set up right</i></td></tr>
+<tr><th id="205">205</th><td><i  data-doc="datum_pts_receive">** using tickadj for SUNs. Tickadj is not used for the HP but you need to</i></td></tr>
+<tr><th id="206">206</th><td><i  data-doc="datum_pts_receive">** remember to bring up the adjtime daemon because HP does not support</i></td></tr>
+<tr><th id="207">207</th><td><i  data-doc="datum_pts_receive">** the adjtime() call.</i></td></tr>
+<tr><th id="208">208</th><td><i  data-doc="datum_pts_receive">*/</i></td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#datum_pts_receive" title='datum_pts_receive' data-type='void datum_pts_receive(struct recvbuf * )' data-ref="datum_pts_receive" data-ref-filename="datum_pts_receive">datum_pts_receive</a>	(<b>struct</b> <a class="type" href="../include/recvbuff.h.html#recvbuf" title='recvbuf' data-ref="recvbuf" data-ref-filename="recvbuf">recvbuf</a> *);</td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="213">213</th><td><i>/*	datum_pts_start - start up the datum PTS. This means open the	*/</i></td></tr>
+<tr><th id="214">214</th><td><i>/*	RS232 device and set up the data structure for my unit.		*/</i></td></tr>
+<tr><th id="215">215</th><td><i  data-doc="datum_pts_start">/*......................................................................*/</i></td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="218">218</th><td><dfn class="tu decl def fn" id="datum_pts_start" title='datum_pts_start' data-type='int datum_pts_start(int unit, struct peer * peer)' data-ref="datum_pts_start" data-ref-filename="datum_pts_start">datum_pts_start</dfn>(</td></tr>
+<tr><th id="219">219</th><td>	<em>int</em> <dfn class="local col1 decl" id="1unit" title='unit' data-type='int' data-ref="1unit" data-ref-filename="1unit">unit</dfn>,</td></tr>
+<tr><th id="220">220</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col2 decl" id="2peer" title='peer' data-type='struct peer *' data-ref="2peer" data-ref-filename="2peer">peer</dfn></td></tr>
+<tr><th id="221">221</th><td>	)</td></tr>
+<tr><th id="222">222</th><td>{</td></tr>
+<tr><th id="223">223</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col3 decl" id="3pp" title='pp' data-type='struct refclockproc *' data-ref="3pp" data-ref-filename="3pp">pp</dfn>;</td></tr>
+<tr><th id="224">224</th><td>	<b>struct</b> <a class="type" href="#datum_pts_unit" title='datum_pts_unit' data-ref="datum_pts_unit" data-ref-filename="datum_pts_unit">datum_pts_unit</a> *<dfn class="local col4 decl" id="4datum_pts" title='datum_pts' data-type='struct datum_pts_unit *' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</dfn>;</td></tr>
+<tr><th id="225">225</th><td>	<em>int</em> <dfn class="local col5 decl" id="5fd" title='fd' data-type='int' data-ref="5fd" data-ref-filename="5fd">fd</dfn>;</td></tr>
+<tr><th id="226">226</th><td><u>#<span data-ppcond="226">ifdef</span> <a class="macro" href="../include/ntp_tty.h.html#16" data-ref="_M/HAVE_TERMIOS">HAVE_TERMIOS</a></u></td></tr>
+<tr><th id="227">227</th><td>	<em>int</em> <dfn class="local col6 decl" id="6rc" title='rc' data-type='int' data-ref="6rc" data-ref-filename="6rc">rc</dfn>;</td></tr>
+<tr><th id="228">228</th><td>	<b>struct</b> <a class="type" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios" title='termios' data-ref="termios" data-ref-filename="termios">termios</a> <dfn class="local col7 decl" id="7arg" title='arg' data-type='struct termios' data-ref="7arg" data-ref-filename="7arg">arg</dfn>;</td></tr>
+<tr><th id="229">229</th><td><u>#<span data-ppcond="226">endif</span></u></td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td><u>#<span data-ppcond="231">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="232">232</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="233">233</th><td>	    printf(<q>"Starting Datum PTS unit %d\n"</q>, unit);</td></tr>
+<tr><th id="234">234</th><td><u>#<span data-ppcond="231">endif</span></u></td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td>	<i>/*</i></td></tr>
+<tr><th id="237">237</th><td><i>	** Open the Datum PTS device</i></td></tr>
+<tr><th id="238">238</th><td><i>	*/</i></td></tr>
+<tr><th id="239">239</th><td>	<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#open" title='open' data-ref="open" data-ref-filename="open">open</a>(<a class="macro" href="#113" title="&quot;/dev/datum&quot;" data-ref="_M/DATUM_DEV">DATUM_DEV</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#66" title="0x00000002" data-ref="_M/O_RDWR">O_RDWR</a>);</td></tr>
+<tr><th id="240">240</th><td></td></tr>
+<tr><th id="241">241</th><td>	<b>if</b> (<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="242">242</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"Datum_PTS: open(\"%s\", O_RDWR) failed: %m"</q>, <a class="macro" href="#113" title="&quot;/dev/datum&quot;" data-ref="_M/DATUM_DEV">DATUM_DEV</a>);</td></tr>
+<tr><th id="243">243</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="244">244</th><td>	}</td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td>	<i>/*</i></td></tr>
+<tr><th id="247">247</th><td><i>	** Create the memory for the new unit</i></td></tr>
+<tr><th id="248">248</th><td><i>	*/</i></td></tr>
+<tr><th id="249">249</th><td>	<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a> = <a class="macro" href="../include/ntp_stdlib.h.html#115" title="ereallocz(((void*)0), (sizeof(*datum_pts)), 0, 1)" data-ref="_M/emalloc_zero">emalloc_zero</a>(<b>sizeof</b>(*<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>));</td></tr>
+<tr><th id="250">250</th><td>	<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::unit" title='datum_pts_unit::unit' data-use='w' data-ref="datum_pts_unit::unit" data-ref-filename="datum_pts_unit..unit">unit</a> = <a class="local col1 ref" href="#1unit" title='unit' data-ref="1unit" data-ref-filename="1unit">unit</a>;	<i>/* set my unit id */</i></td></tr>
+<tr><th id="251">251</th><td>	<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::yearstart" title='datum_pts_unit::yearstart' data-use='w' data-ref="datum_pts_unit::yearstart" data-ref-filename="datum_pts_unit..yearstart">yearstart</a> = <var>0</var>;	<i>/* initialize the yearstart to 0 */</i></td></tr>
+<tr><th id="252">252</th><td>	<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='w' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> = <var>0.0</var>;	<i>/* initialize the sigma2 to 0 */</i></td></tr>
+<tr><th id="253">253</th><td></td></tr>
+<tr><th id="254">254</th><td>	<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='w' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a> = <a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a>;</td></tr>
+<tr><th id="255">255</th><td></td></tr>
+<tr><th id="256">256</th><td>	<b>if</b> (-<var>1</var> == <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#fcntl" title='fcntl' data-ref="fcntl" data-ref-filename="fcntl">fcntl</a>(<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='r' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/fcntl.h.html#181" title="4" data-ref="_M/F_SETFL">F_SETFL</a>, <var>0</var>)) <i>/* clear the descriptor flags */</i></td></tr>
+<tr><th id="257">257</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"MSF_ARCRON(%d): fcntl(F_SETFL, 0): %m."</q>,</td></tr>
+<tr><th id="258">258</th><td>			<a class="local col1 ref" href="#1unit" title='unit' data-ref="1unit" data-ref-filename="1unit">unit</a>);</td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td><u>#<span data-ppcond="260">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="261">261</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="262">262</th><td>	    printf(<q>"Opening RS232 port with file descriptor %d\n"</q>,</td></tr>
+<tr><th id="263">263</th><td>		   datum_pts-&gt;PTS_fd);</td></tr>
+<tr><th id="264">264</th><td><u>#<span data-ppcond="260">endif</span></u></td></tr>
+<tr><th id="265">265</th><td></td></tr>
+<tr><th id="266">266</th><td>	<i>/*</i></td></tr>
+<tr><th id="267">267</th><td><i>	** Set up the RS232 terminal device information. Note that we assume that</i></td></tr>
+<tr><th id="268">268</th><td><i>	** we have termios. This code has only been tested on SUNs and HPs. If your</i></td></tr>
+<tr><th id="269">269</th><td><i>	** machine does not have termios this driver cannot be initialized. You can change this</i></td></tr>
+<tr><th id="270">270</th><td><i>	** if you want by editing this source. Please give the changes back to the</i></td></tr>
+<tr><th id="271">271</th><td><i>	** ntp folks so that it can become part of their regular distribution.</i></td></tr>
+<tr><th id="272">272</th><td><i>	*/</i></td></tr>
+<tr><th id="273">273</th><td></td></tr>
+<tr><th id="274">274</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memset" title='memset' data-ref="memset" data-ref-filename="memset">memset</a>(&amp;<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>, <var>0</var>, <b>sizeof</b>(<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>));</td></tr>
+<tr><th id="275">275</th><td></td></tr>
+<tr><th id="276">276</th><td>	<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios::c_iflag" title='termios::c_iflag' data-ref="termios::c_iflag" data-ref-filename="termios..c_iflag">c_iflag</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#90" title="0x00000001U" data-ref="_M/IGNBRK">IGNBRK</a>;</td></tr>
+<tr><th id="277">277</th><td>	<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios::c_oflag" title='termios::c_oflag' data-ref="termios::c_oflag" data-ref-filename="termios..c_oflag">c_oflag</a> = <var>0</var>;</td></tr>
+<tr><th id="278">278</th><td>	<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios::c_cflag" title='termios::c_cflag' data-ref="termios::c_cflag" data-ref-filename="termios..c_cflag">c_cflag</a> = <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#228" title="9600U" data-ref="_M/B9600">B9600</a> | <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#135" title="0x00000300U" data-ref="_M/CS8">CS8</a> | <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#137" title="0x00000800U" data-ref="_M/CREAD">CREAD</a> | <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#138" title="0x00001000U" data-ref="_M/PARENB">PARENB</a> | <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#141" title="0x00008000U" data-ref="_M/CLOCAL">CLOCAL</a>;</td></tr>
+<tr><th id="279">279</th><td>	<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios::c_lflag" title='termios::c_lflag' data-ref="termios::c_lflag" data-ref-filename="termios..c_lflag">c_lflag</a> = <var>0</var>;</td></tr>
+<tr><th id="280">280</th><td>	<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios::c_cc" title='termios::c_cc' data-ref="termios::c_cc" data-ref-filename="termios..c_cc">c_cc</a>[<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#73" title="16" data-ref="_M/VMIN">VMIN</a>] = <var>0</var>;		<i>/* start timeout timer right away (not used) */</i></td></tr>
+<tr><th id="281">281</th><td>	<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>.<a class="ref field" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#termios::c_cc" title='termios::c_cc' data-ref="termios::c_cc" data-ref-filename="termios..c_cc">c_cc</a>[<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#74" title="17" data-ref="_M/VTIME">VTIME</a>] = <var>30</var>;		<i>/* 3 second timout on reads (not used) */</i></td></tr>
+<tr><th id="282">282</th><td></td></tr>
+<tr><th id="283">283</th><td>	<a class="local col6 ref" href="#6rc" title='rc' data-ref="6rc" data-ref-filename="6rc">rc</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#tcsetattr" title='tcsetattr' data-ref="tcsetattr" data-ref-filename="tcsetattr">tcsetattr</a>(<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='r' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a>, <a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/termios.h.html#205" title="0" data-ref="_M/TCSANOW">TCSANOW</a>, &amp;<a class="local col7 ref" href="#7arg" title='arg' data-ref="7arg" data-ref-filename="7arg">arg</a>);</td></tr>
+<tr><th id="284">284</th><td>	<b>if</b> (<a class="local col6 ref" href="#6rc" title='rc' data-ref="6rc" data-ref-filename="6rc">rc</a> &lt; <var>0</var>) {</td></tr>
+<tr><th id="285">285</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"Datum_PTS: tcsetattr(\"%s\") failed: %m"</q>, <a class="macro" href="#113" title="&quot;/dev/datum&quot;" data-ref="_M/DATUM_DEV">DATUM_DEV</a>);</td></tr>
+<tr><th id="286">286</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='r' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a>);</td></tr>
+<tr><th id="287">287</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>);</td></tr>
+<tr><th id="288">288</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="289">289</th><td>	}</td></tr>
+<tr><th id="290">290</th><td></td></tr>
+<tr><th id="291">291</th><td>	<i>/*</i></td></tr>
+<tr><th id="292">292</th><td><i>	** Initialize the ntpd IO structure</i></td></tr>
+<tr><th id="293">293</th><td><i>	*/</i></td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td>	<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::peer" title='datum_pts_unit::peer' data-use='w' data-ref="datum_pts_unit::peer" data-ref-filename="datum_pts_unit..peer">peer</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>;</td></tr>
+<tr><th id="296">296</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="297">297</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::clock_recv" title='refclockio::clock_recv' data-ref="refclockio::clock_recv" data-ref-filename="refclockio..clock_recv">clock_recv</a> = <a class="tu ref fn" href="#datum_pts_receive" title='datum_pts_receive' data-use='r' data-ref="datum_pts_receive" data-ref-filename="datum_pts_receive">datum_pts_receive</a>;</td></tr>
+<tr><th id="298">298</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::srcclock" title='refclockio::srcclock' data-ref="refclockio::srcclock" data-ref-filename="refclockio..srcclock">srcclock</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>;</td></tr>
+<tr><th id="299">299</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::datalen" title='refclockio::datalen' data-ref="refclockio::datalen" data-ref-filename="refclockio..datalen">datalen</a> = <var>0</var>;</td></tr>
+<tr><th id="300">300</th><td>	<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a> = <a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='r' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a>;</td></tr>
+<tr><th id="301">301</th><td></td></tr>
+<tr><th id="302">302</th><td>	<b>if</b> (!<a class="ref fn" href="../include/ntp_refclock.h.html#io_addclock" title='io_addclock' data-ref="io_addclock" data-ref-filename="io_addclock">io_addclock</a>(&amp;<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>)) {</td></tr>
+<tr><th id="303">303</th><td>		<a class="local col3 ref" href="#3pp" title='pp' data-ref="3pp" data-ref-filename="3pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a> = -<var>1</var>;</td></tr>
+<tr><th id="304">304</th><td><u>#<span data-ppcond="304">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="305">305</th><td>		<b>if</b> (debug)</td></tr>
+<tr><th id="306">306</th><td>		    printf(<q>"Problem adding clock\n"</q>);</td></tr>
+<tr><th id="307">307</th><td><u>#<span data-ppcond="304">endif</span></u></td></tr>
+<tr><th id="308">308</th><td></td></tr>
+<tr><th id="309">309</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"Datum_PTS: Problem adding clock"</q>);</td></tr>
+<tr><th id="310">310</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='r' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a>);</td></tr>
+<tr><th id="311">311</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>);</td></tr>
+<tr><th id="312">312</th><td></td></tr>
+<tr><th id="313">313</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="314">314</th><td>	}</td></tr>
+<tr><th id="315">315</th><td>	<a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a> = <a class="local col4 ref" href="#4datum_pts" title='datum_pts' data-ref="4datum_pts" data-ref-filename="4datum_pts">datum_pts</a>;</td></tr>
+<tr><th id="316">316</th><td></td></tr>
+<tr><th id="317">317</th><td>	<i>/*</i></td></tr>
+<tr><th id="318">318</th><td><i>	** Now add one to the number of units and return a successful code</i></td></tr>
+<tr><th id="319">319</th><td><i>	*/</i></td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td>	<a class="tu ref" href="#nunits" title='nunits' data-use='w' data-ref="nunits" data-ref-filename="nunits">nunits</a>++;</td></tr>
+<tr><th id="322">322</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="323">323</th><td></td></tr>
+<tr><th id="324">324</th><td>}</td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td></td></tr>
+<tr><th id="327">327</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="328">328</th><td><i>/*	datum_pts_shutdown - this routine shuts doen the device and	*/</i></td></tr>
+<tr><th id="329">329</th><td><i>/*	removes the memory for the unit.				*/</i></td></tr>
+<tr><th id="330">330</th><td><i  data-doc="datum_pts_shutdown">/*......................................................................*/</i></td></tr>
+<tr><th id="331">331</th><td></td></tr>
+<tr><th id="332">332</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="333">333</th><td><dfn class="tu decl def fn" id="datum_pts_shutdown" title='datum_pts_shutdown' data-type='void datum_pts_shutdown(int unit, struct peer * peer)' data-ref="datum_pts_shutdown" data-ref-filename="datum_pts_shutdown">datum_pts_shutdown</dfn>(</td></tr>
+<tr><th id="334">334</th><td>	<em>int</em> <dfn class="local col8 decl" id="8unit" title='unit' data-type='int' data-ref="8unit" data-ref-filename="8unit">unit</dfn>,</td></tr>
+<tr><th id="335">335</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col9 decl" id="9peer" title='peer' data-type='struct peer *' data-ref="9peer" data-ref-filename="9peer">peer</dfn></td></tr>
+<tr><th id="336">336</th><td>	)</td></tr>
+<tr><th id="337">337</th><td>{</td></tr>
+<tr><th id="338">338</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col0 decl" id="10pp" title='pp' data-type='struct refclockproc *' data-ref="10pp" data-ref-filename="10pp">pp</dfn>;</td></tr>
+<tr><th id="339">339</th><td>	<b>struct</b> <a class="type" href="#datum_pts_unit" title='datum_pts_unit' data-ref="datum_pts_unit" data-ref-filename="datum_pts_unit">datum_pts_unit</a> *<dfn class="local col1 decl" id="11datum_pts" title='datum_pts' data-type='struct datum_pts_unit *' data-ref="11datum_pts" data-ref-filename="11datum_pts">datum_pts</dfn>;</td></tr>
+<tr><th id="340">340</th><td></td></tr>
+<tr><th id="341">341</th><td><u>#<span data-ppcond="341">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="342">342</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="343">343</th><td>	    printf(<q>"Shutdown Datum PTS\n"</q>);</td></tr>
+<tr><th id="344">344</th><td><u>#<span data-ppcond="341">endif</span></u></td></tr>
+<tr><th id="345">345</th><td></td></tr>
+<tr><th id="346">346</th><td>	<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"Datum_PTS: Shutdown Datum PTS"</q>);</td></tr>
+<tr><th id="347">347</th><td></td></tr>
+<tr><th id="348">348</th><td>	<i>/*</i></td></tr>
+<tr><th id="349">349</th><td><i>	** We found the unit so close the file descriptor and free up the memory used</i></td></tr>
+<tr><th id="350">350</th><td><i>	** by the structure.</i></td></tr>
+<tr><th id="351">351</th><td><i>	*/</i></td></tr>
+<tr><th id="352">352</th><td>	<a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a> = <a class="local col9 ref" href="#9peer" title='peer' data-ref="9peer" data-ref-filename="9peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="353">353</th><td>	<a class="local col1 ref" href="#11datum_pts" title='datum_pts' data-ref="11datum_pts" data-ref-filename="11datum_pts">datum_pts</a> = <a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="354">354</th><td>	<b>if</b> (<span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> != <a class="local col1 ref" href="#11datum_pts" title='datum_pts' data-ref="11datum_pts" data-ref-filename="11datum_pts">datum_pts</a>) {</td></tr>
+<tr><th id="355">355</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#io_closeclock" title='io_closeclock' data-ref="io_closeclock" data-ref-filename="io_closeclock">io_closeclock</a>(&amp;<a class="local col0 ref" href="#10pp" title='pp' data-ref="10pp" data-ref-filename="10pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>);</td></tr>
+<tr><th id="356">356</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col1 ref" href="#11datum_pts" title='datum_pts' data-ref="11datum_pts" data-ref-filename="11datum_pts">datum_pts</a>);</td></tr>
+<tr><th id="357">357</th><td>	}</td></tr>
+<tr><th id="358">358</th><td>}</td></tr>
+<tr><th id="359">359</th><td></td></tr>
+<tr><th id="360">360</th><td></td></tr>
+<tr><th id="361">361</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="362">362</th><td><i>/*	datum_pts_poll - this routine sends out the time request to the */</i></td></tr>
+<tr><th id="363">363</th><td><i>/*	Datum PTS device. The time will be passed back in the 		*/</i></td></tr>
+<tr><th id="364">364</th><td><i>/*	datum_pts_receive() routine.					*/</i></td></tr>
+<tr><th id="365">365</th><td><i  data-doc="datum_pts_poll">/*......................................................................*/</i></td></tr>
+<tr><th id="366">366</th><td></td></tr>
+<tr><th id="367">367</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="368">368</th><td><dfn class="tu decl def fn" id="datum_pts_poll" title='datum_pts_poll' data-type='void datum_pts_poll(int unit, struct peer * peer)' data-ref="datum_pts_poll" data-ref-filename="datum_pts_poll">datum_pts_poll</dfn>(</td></tr>
+<tr><th id="369">369</th><td>	<em>int</em> <dfn class="local col2 decl" id="12unit" title='unit' data-type='int' data-ref="12unit" data-ref-filename="12unit">unit</dfn>,</td></tr>
+<tr><th id="370">370</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col3 decl" id="13peer" title='peer' data-type='struct peer *' data-ref="13peer" data-ref-filename="13peer">peer</dfn></td></tr>
+<tr><th id="371">371</th><td>	)</td></tr>
+<tr><th id="372">372</th><td>{</td></tr>
+<tr><th id="373">373</th><td>	<em>int</em> <dfn class="local col4 decl" id="14error_code" title='error_code' data-type='int' data-ref="14error_code" data-ref-filename="14error_code">error_code</dfn>;</td></tr>
+<tr><th id="374">374</th><td>	<b>struct</b> <a class="type" href="#datum_pts_unit" title='datum_pts_unit' data-ref="datum_pts_unit" data-ref-filename="datum_pts_unit">datum_pts_unit</a> *<dfn class="local col5 decl" id="15datum_pts" title='datum_pts' data-type='struct datum_pts_unit *' data-ref="15datum_pts" data-ref-filename="15datum_pts">datum_pts</dfn>;</td></tr>
+<tr><th id="375">375</th><td></td></tr>
+<tr><th id="376">376</th><td>	<a class="local col5 ref" href="#15datum_pts" title='datum_pts' data-ref="15datum_pts" data-ref-filename="15datum_pts">datum_pts</a> = <a class="local col3 ref" href="#13peer" title='peer' data-ref="13peer" data-ref-filename="13peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="377">377</th><td></td></tr>
+<tr><th id="378">378</th><td><u>#<span data-ppcond="378">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="379">379</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="380">380</th><td>	    printf(<q>"Poll Datum PTS\n"</q>);</td></tr>
+<tr><th id="381">381</th><td><u>#<span data-ppcond="378">endif</span></u></td></tr>
+<tr><th id="382">382</th><td></td></tr>
+<tr><th id="383">383</th><td>	<i>/*</i></td></tr>
+<tr><th id="384">384</th><td><i>	** Find the right unit and send out a time request once it is found.</i></td></tr>
+<tr><th id="385">385</th><td><i>	*/</i></td></tr>
+<tr><th id="386">386</th><td>	<a class="local col4 ref" href="#14error_code" title='error_code' data-ref="14error_code" data-ref-filename="14error_code">error_code</a> = <a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col5 ref" href="#15datum_pts" title='datum_pts' data-ref="15datum_pts" data-ref-filename="15datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::PTS_fd" title='datum_pts_unit::PTS_fd' data-use='r' data-ref="datum_pts_unit::PTS_fd" data-ref-filename="datum_pts_unit..PTS_fd">PTS_fd</a>, <a class="tu ref" href="#TIME_REQUEST" title='TIME_REQUEST' data-use='r' data-ref="TIME_REQUEST" data-ref-filename="TIME_REQUEST">TIME_REQUEST</a>, <var>6</var>);</td></tr>
+<tr><th id="387">387</th><td>	<b>if</b> (<a class="local col4 ref" href="#14error_code" title='error_code' data-ref="14error_code" data-ref-filename="14error_code">error_code</a> != <var>6</var>)</td></tr>
+<tr><th id="388">388</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#perror" title='perror' data-ref="perror" data-ref-filename="perror">perror</a>(<q>"TIME_REQUEST"</q>);</td></tr>
+<tr><th id="389">389</th><td>	<a class="local col5 ref" href="#15datum_pts" title='datum_pts' data-ref="15datum_pts" data-ref-filename="15datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::nbytes" title='datum_pts_unit::nbytes' data-use='w' data-ref="datum_pts_unit::nbytes" data-ref-filename="datum_pts_unit..nbytes">nbytes</a> = <var>0</var>;</td></tr>
+<tr><th id="390">390</th><td>}</td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="394">394</th><td><i>/*	datum_pts_control - not used					*/</i></td></tr>
+<tr><th id="395">395</th><td><i  data-doc="datum_pts_control">/*......................................................................*/</i></td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="398">398</th><td><dfn class="tu decl def fn" id="datum_pts_control" title='datum_pts_control' data-type='void datum_pts_control(int unit, const struct refclockstat * in, struct refclockstat * out, struct peer * peer)' data-ref="datum_pts_control" data-ref-filename="datum_pts_control">datum_pts_control</dfn>(</td></tr>
+<tr><th id="399">399</th><td>	<em>int</em> <dfn class="local col6 decl" id="16unit" title='unit' data-type='int' data-ref="16unit" data-ref-filename="16unit">unit</dfn>,</td></tr>
+<tr><th id="400">400</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *<dfn class="local col7 decl" id="17in" title='in' data-type='const struct refclockstat *' data-ref="17in" data-ref-filename="17in">in</dfn>,</td></tr>
+<tr><th id="401">401</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *<dfn class="local col8 decl" id="18out" title='out' data-type='struct refclockstat *' data-ref="18out" data-ref-filename="18out">out</dfn>,</td></tr>
+<tr><th id="402">402</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col9 decl" id="19peer" title='peer' data-type='struct peer *' data-ref="19peer" data-ref-filename="19peer">peer</dfn></td></tr>
+<tr><th id="403">403</th><td>	)</td></tr>
+<tr><th id="404">404</th><td>{</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td><u>#<span data-ppcond="406">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="407">407</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="408">408</th><td>	    printf(<q>"Control Datum PTS\n"</q>);</td></tr>
+<tr><th id="409">409</th><td><u>#<span data-ppcond="406">endif</span></u></td></tr>
+<tr><th id="410">410</th><td></td></tr>
+<tr><th id="411">411</th><td>}</td></tr>
+<tr><th id="412">412</th><td></td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="415">415</th><td><i>/*	datum_pts_init - initializes things for all possible Datum	*/</i></td></tr>
+<tr><th id="416">416</th><td><i>/*	time code generators that might be used. In practice, this is	*/</i></td></tr>
+<tr><th id="417">417</th><td><i>/*	only called once at the beginning before anything else is	*/</i></td></tr>
+<tr><th id="418">418</th><td><i>/*	called.								*/</i></td></tr>
+<tr><th id="419">419</th><td><i  data-doc="datum_pts_init">/*......................................................................*/</i></td></tr>
+<tr><th id="420">420</th><td></td></tr>
+<tr><th id="421">421</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="422">422</th><td><dfn class="tu decl def fn" id="datum_pts_init" title='datum_pts_init' data-type='void datum_pts_init()' data-ref="datum_pts_init" data-ref-filename="datum_pts_init">datum_pts_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="423">423</th><td>{</td></tr>
+<tr><th id="424">424</th><td></td></tr>
+<tr><th id="425">425</th><td>	<i>/*									*/</i></td></tr>
+<tr><th id="426">426</th><td>	<i>/*...... open up the log file if we are debugging ......................*/</i></td></tr>
+<tr><th id="427">427</th><td>	<i>/*									*/</i></td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td>	<i>/*</i></td></tr>
+<tr><th id="430">430</th><td><i>	** Open up the log file if we are debugging. For now, send data out to the</i></td></tr>
+<tr><th id="431">431</th><td><i>	** screen (stdout).</i></td></tr>
+<tr><th id="432">432</th><td><i>	*/</i></td></tr>
+<tr><th id="433">433</th><td></td></tr>
+<tr><th id="434">434</th><td><u>#<span data-ppcond="434">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="435">435</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="436">436</th><td>	    printf(<q>"Init Datum PTS\n"</q>);</td></tr>
+<tr><th id="437">437</th><td><u>#<span data-ppcond="434">endif</span></u></td></tr>
+<tr><th id="438">438</th><td></td></tr>
+<tr><th id="439">439</th><td>	<i>/*</i></td></tr>
+<tr><th id="440">440</th><td><i>	** Initialize the time request command string. This is the only message</i></td></tr>
+<tr><th id="441">441</th><td><i>	** that we ever have to send to the Datum PTS (although others are defined).</i></td></tr>
+<tr><th id="442">442</th><td><i>	*/</i></td></tr>
+<tr><th id="443">443</th><td></td></tr>
+<tr><th id="444">444</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(<a class="tu ref" href="#TIME_REQUEST" title='TIME_REQUEST' data-use='r' data-ref="TIME_REQUEST" data-ref-filename="TIME_REQUEST">TIME_REQUEST</a>, <q>"//k/mn"</q>,<var>6</var>);</td></tr>
+<tr><th id="445">445</th><td></td></tr>
+<tr><th id="446">446</th><td>	<i>/*</i></td></tr>
+<tr><th id="447">447</th><td><i>	** Initialize the number of units to 0 and set the dynamic array of units to</i></td></tr>
+<tr><th id="448">448</th><td><i>	** NULL since there are no units defined yet.</i></td></tr>
+<tr><th id="449">449</th><td><i>	*/</i></td></tr>
+<tr><th id="450">450</th><td></td></tr>
+<tr><th id="451">451</th><td>	<a class="tu ref" href="#nunits" title='nunits' data-use='w' data-ref="nunits" data-ref-filename="nunits">nunits</a> = <var>0</var>;</td></tr>
+<tr><th id="452">452</th><td></td></tr>
+<tr><th id="453">453</th><td>}</td></tr>
+<tr><th id="454">454</th><td></td></tr>
+<tr><th id="455">455</th><td></td></tr>
+<tr><th id="456">456</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="457">457</th><td><i>/*	datum_pts_buginfo - not used					*/</i></td></tr>
+<tr><th id="458">458</th><td><i  data-doc="datum_pts_buginfo">/*......................................................................*/</i></td></tr>
+<tr><th id="459">459</th><td></td></tr>
+<tr><th id="460">460</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="461">461</th><td><dfn class="tu decl def fn" id="datum_pts_buginfo" title='datum_pts_buginfo' data-type='void datum_pts_buginfo(int unit, struct refclockbug * bug, struct peer * peer)' data-ref="datum_pts_buginfo" data-ref-filename="datum_pts_buginfo">datum_pts_buginfo</dfn>(</td></tr>
+<tr><th id="462">462</th><td>	<em>int</em> <dfn class="local col0 decl" id="20unit" title='unit' data-type='int' data-ref="20unit" data-ref-filename="20unit">unit</dfn>,</td></tr>
+<tr><th id="463">463</th><td>	<em>register</em> <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockbug" title='refclockbug' data-ref="refclockbug" data-ref-filename="refclockbug">refclockbug</a> *<dfn class="local col1 decl" id="21bug" title='bug' data-type='struct refclockbug *' data-ref="21bug" data-ref-filename="21bug">bug</dfn>,</td></tr>
+<tr><th id="464">464</th><td>	<em>register</em> <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col2 decl" id="22peer" title='peer' data-type='struct peer *' data-ref="22peer" data-ref-filename="22peer">peer</dfn></td></tr>
+<tr><th id="465">465</th><td>	)</td></tr>
+<tr><th id="466">466</th><td>{</td></tr>
+<tr><th id="467">467</th><td></td></tr>
+<tr><th id="468">468</th><td><u>#<span data-ppcond="468">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="469">469</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="470">470</th><td>	    printf(<q>"Buginfo Datum PTS\n"</q>);</td></tr>
+<tr><th id="471">471</th><td><u>#<span data-ppcond="468">endif</span></u></td></tr>
+<tr><th id="472">472</th><td></td></tr>
+<tr><th id="473">473</th><td>}</td></tr>
+<tr><th id="474">474</th><td></td></tr>
+<tr><th id="475">475</th><td></td></tr>
+<tr><th id="476">476</th><td><i>/*......................................................................*/</i></td></tr>
+<tr><th id="477">477</th><td><i>/*	datum_pts_receive - receive the time buffer that was read in	*/</i></td></tr>
+<tr><th id="478">478</th><td><i>/*	by the ntpd io handling routines. When 7 bytes have been	*/</i></td></tr>
+<tr><th id="479">479</th><td><i>/*	received (it may take several tries before all 7 bytes are	*/</i></td></tr>
+<tr><th id="480">480</th><td><i>/*	received), then the time code must be unpacked and sent to	*/</i></td></tr>
+<tr><th id="481">481</th><td><i>/*	the ntpd clock_receive() routine which causes the systems	*/</i></td></tr>
+<tr><th id="482">482</th><td><i>/*	clock to be updated (several layers down).			*/</i></td></tr>
+<tr><th id="483">483</th><td><i  data-doc="datum_pts_receive">/*......................................................................*/</i></td></tr>
+<tr><th id="484">484</th><td></td></tr>
+<tr><th id="485">485</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="486">486</th><td><dfn class="tu decl def fn" id="datum_pts_receive" title='datum_pts_receive' data-type='void datum_pts_receive(struct recvbuf * rbufp)' data-ref="datum_pts_receive" data-ref-filename="datum_pts_receive">datum_pts_receive</dfn>(</td></tr>
+<tr><th id="487">487</th><td>	<b>struct</b> <a class="type" href="../include/recvbuff.h.html#recvbuf" title='recvbuf' data-ref="recvbuf" data-ref-filename="recvbuf">recvbuf</a> *<dfn class="local col3 decl" id="23rbufp" title='rbufp' data-type='struct recvbuf *' data-ref="23rbufp" data-ref-filename="23rbufp">rbufp</dfn></td></tr>
+<tr><th id="488">488</th><td>	)</td></tr>
+<tr><th id="489">489</th><td>{</td></tr>
+<tr><th id="490">490</th><td>	<em>int</em> <dfn class="local col4 decl" id="24i" title='i' data-type='int' data-ref="24i" data-ref-filename="24i">i</dfn>;</td></tr>
+<tr><th id="491">491</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="25nb" title='nb' data-type='size_t' data-ref="25nb" data-ref-filename="25nb">nb</dfn>;</td></tr>
+<tr><th id="492">492</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a> <dfn class="local col6 decl" id="26tstmp" title='tstmp' data-type='l_fp' data-ref="26tstmp" data-ref-filename="26tstmp">tstmp</dfn>;</td></tr>
+<tr><th id="493">493</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col7 decl" id="27p" title='p' data-type='struct peer *' data-ref="27p" data-ref-filename="27p">p</dfn>;</td></tr>
+<tr><th id="494">494</th><td>	<b>struct</b> <a class="type" href="#datum_pts_unit" title='datum_pts_unit' data-ref="datum_pts_unit" data-ref-filename="datum_pts_unit">datum_pts_unit</a> *<dfn class="local col8 decl" id="28datum_pts" title='datum_pts' data-type='struct datum_pts_unit *' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</dfn>;</td></tr>
+<tr><th id="495">495</th><td>	<em>char</em> *<dfn class="local col9 decl" id="29dpt" title='dpt' data-type='char *' data-ref="29dpt" data-ref-filename="29dpt">dpt</dfn>;</td></tr>
+<tr><th id="496">496</th><td>	<em>int</em> <dfn class="local col0 decl" id="30dpend" title='dpend' data-type='int' data-ref="30dpend" data-ref-filename="30dpend">dpend</dfn>;</td></tr>
+<tr><th id="497">497</th><td>	<em>int</em> <dfn class="local col1 decl" id="31tzoff" title='tzoff' data-type='int' data-ref="31tzoff" data-ref-filename="31tzoff">tzoff</dfn>;</td></tr>
+<tr><th id="498">498</th><td>	<em>int</em> <dfn class="local col2 decl" id="32timerr" title='timerr' data-type='int' data-ref="32timerr" data-ref-filename="32timerr">timerr</dfn>;</td></tr>
+<tr><th id="499">499</th><td>	<em>double</em> <dfn class="local col3 decl" id="33ftimerr" title='ftimerr' data-type='double' data-ref="33ftimerr" data-ref-filename="33ftimerr">ftimerr</dfn>, <dfn class="local col4 decl" id="34abserr" title='abserr' data-type='double' data-ref="34abserr" data-ref-filename="34abserr">abserr</dfn>;</td></tr>
+<tr><th id="500">500</th><td><u>#<span data-ppcond="500">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="501">501</th><td>	<em>double</em> dispersion;</td></tr>
+<tr><th id="502">502</th><td><u>#<span data-ppcond="500">endif</span></u></td></tr>
+<tr><th id="503">503</th><td>	<em>int</em> <dfn class="local col5 decl" id="35goodtime" title='goodtime' data-type='int' data-ref="35goodtime" data-ref-filename="35goodtime">goodtime</dfn>;</td></tr>
+<tr><th id="504">504</th><td>      <i>/*double doffset;*/</i></td></tr>
+<tr><th id="505">505</th><td></td></tr>
+<tr><th id="506">506</th><td>	<i>/*</i></td></tr>
+<tr><th id="507">507</th><td><i>	** Get the time code (maybe partial) message out of the rbufp buffer.</i></td></tr>
+<tr><th id="508">508</th><td><i>	*/</i></td></tr>
+<tr><th id="509">509</th><td></td></tr>
+<tr><th id="510">510</th><td>	<a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a> = <a class="local col3 ref" href="#23rbufp" title='rbufp' data-ref="23rbufp" data-ref-filename="23rbufp">rbufp</a>-&gt;<a class="macro" href="../include/recvbuff.h.html#61" title="X_from_where.X_recv_peer" data-ref="_M/recv_peer">recv_peer</a>;</td></tr>
+<tr><th id="511">511</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a> = <a class="local col7 ref" href="#27p" title='p' data-ref="27p" data-ref-filename="27p">p</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="512">512</th><td>	<a class="local col9 ref" href="#29dpt" title='dpt' data-ref="29dpt" data-ref-filename="29dpt">dpt</a> = (<em>char</em> *)&amp;<a class="local col3 ref" href="#23rbufp" title='rbufp' data-ref="23rbufp" data-ref-filename="23rbufp">rbufp</a>-&gt;<a class="ref field" href="../include/recvbuff.h.html#recvbuf::recv_space" title='recvbuf::recv_space' data-ref="recvbuf::recv_space" data-ref-filename="recvbuf..recv_space">recv_space</a>;</td></tr>
+<tr><th id="513">513</th><td>	<a class="local col0 ref" href="#30dpend" title='dpend' data-ref="30dpend" data-ref-filename="30dpend">dpend</a> = <a class="local col3 ref" href="#23rbufp" title='rbufp' data-ref="23rbufp" data-ref-filename="23rbufp">rbufp</a>-&gt;<a class="ref field" href="../include/recvbuff.h.html#recvbuf::recv_length" title='recvbuf::recv_length' data-ref="recvbuf::recv_length" data-ref-filename="recvbuf..recv_length">recv_length</a>;</td></tr>
+<tr><th id="514">514</th><td></td></tr>
+<tr><th id="515">515</th><td><u>#<span data-ppcond="515">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="516">516</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="517">517</th><td>		printf(<q>"Receive Datum PTS: %d bytes\n"</q>, dpend);</td></tr>
+<tr><th id="518">518</th><td><u>#<span data-ppcond="515">endif</span></u></td></tr>
+<tr><th id="519">519</th><td></td></tr>
+<tr><th id="520">520</th><td>	<i>/*									*/</i></td></tr>
+<tr><th id="521">521</th><td>	<i>/*...... save the ntp system time when the first byte is received ......*/</i></td></tr>
+<tr><th id="522">522</th><td>	<i>/*									*/</i></td></tr>
+<tr><th id="523">523</th><td></td></tr>
+<tr><th id="524">524</th><td>	<i>/*</i></td></tr>
+<tr><th id="525">525</th><td><i>	** Save the ntp system time when the first byte is received. Note that</i></td></tr>
+<tr><th id="526">526</th><td><i>	** because it may take several calls to this routine before all seven</i></td></tr>
+<tr><th id="527">527</th><td><i>	** bytes of our return message are finally received by the io handlers in</i></td></tr>
+<tr><th id="528">528</th><td><i>	** ntpd, we really do want to use the time tag when the first byte is</i></td></tr>
+<tr><th id="529">529</th><td><i>	** received to reduce the jitter.</i></td></tr>
+<tr><th id="530">530</th><td><i>	*/</i></td></tr>
+<tr><th id="531">531</th><td></td></tr>
+<tr><th id="532">532</th><td>	<a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a> = <a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::nbytes" title='datum_pts_unit::nbytes' data-use='r' data-ref="datum_pts_unit::nbytes" data-ref-filename="datum_pts_unit..nbytes">nbytes</a>;</td></tr>
+<tr><th id="533">533</th><td>	<b>if</b> (<a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a> == <var>0</var>) {</td></tr>
+<tr><th id="534">534</th><td>		<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastrec" title='datum_pts_unit::lastrec' data-use='w' data-ref="datum_pts_unit::lastrec" data-ref-filename="datum_pts_unit..lastrec">lastrec</a> = <a class="local col3 ref" href="#23rbufp" title='rbufp' data-ref="23rbufp" data-ref-filename="23rbufp">rbufp</a>-&gt;<a class="ref field" href="../include/recvbuff.h.html#recvbuf::recv_time" title='recvbuf::recv_time' data-ref="recvbuf::recv_time" data-ref-filename="recvbuf..recv_time">recv_time</a>;</td></tr>
+<tr><th id="535">535</th><td>	}</td></tr>
+<tr><th id="536">536</th><td></td></tr>
+<tr><th id="537">537</th><td>	<i>/*</i></td></tr>
+<tr><th id="538">538</th><td><i>	** Increment our count to the number of bytes received so far. Return if we</i></td></tr>
+<tr><th id="539">539</th><td><i>	** haven't gotten all seven bytes yet.</i></td></tr>
+<tr><th id="540">540</th><td><i>	** [Sec 3388] make sure we do not overrun the buffer.</i></td></tr>
+<tr><th id="541">541</th><td><i>	** TODO: what to do with excessive bytes, if we ever get them?</i></td></tr>
+<tr><th id="542">542</th><td><i>	*/</i></td></tr>
+<tr><th id="543">543</th><td>	<b>for</b> (<a class="local col4 ref" href="#24i" title='i' data-ref="24i" data-ref-filename="24i">i</a>=<var>0</var>; (<a class="local col4 ref" href="#24i" title='i' data-ref="24i" data-ref-filename="24i">i</a> &lt; <a class="local col0 ref" href="#30dpend" title='dpend' data-ref="30dpend" data-ref-filename="30dpend">dpend</a>) &amp;&amp; (<a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a> &lt; <b>sizeof</b>(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>)); <a class="local col4 ref" href="#24i" title='i' data-ref="24i" data-ref-filename="24i">i</a>++, <a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a>++) {</td></tr>
+<tr><th id="544">544</th><td>		<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='w' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a>] = <a class="local col9 ref" href="#29dpt" title='dpt' data-ref="29dpt" data-ref-filename="29dpt">dpt</a>[<a class="local col4 ref" href="#24i" title='i' data-ref="24i" data-ref-filename="24i">i</a>];</td></tr>
+<tr><th id="545">545</th><td>	}</td></tr>
+<tr><th id="546">546</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::nbytes" title='datum_pts_unit::nbytes' data-use='w' data-ref="datum_pts_unit::nbytes" data-ref-filename="datum_pts_unit..nbytes">nbytes</a> = <a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a>;</td></tr>
+<tr><th id="547">547</th><td>	</td></tr>
+<tr><th id="548">548</th><td>	<b>if</b> (<a class="local col5 ref" href="#25nb" title='nb' data-ref="25nb" data-ref-filename="25nb">nb</a> &lt; <var>7</var>) {</td></tr>
+<tr><th id="549">549</th><td>		<b>return</b>;</td></tr>
+<tr><th id="550">550</th><td>	}</td></tr>
+<tr><th id="551">551</th><td></td></tr>
+<tr><th id="552">552</th><td>	<i>/*</i></td></tr>
+<tr><th id="553">553</th><td><i>	** Convert the seven bytes received in our time buffer to day, hour, minute,</i></td></tr>
+<tr><th id="554">554</th><td><i>	** second, and msecond values. The usec value is not used for anything</i></td></tr>
+<tr><th id="555">555</th><td><i>	** currently. It is just the fractional part of the time stored in units</i></td></tr>
+<tr><th id="556">556</th><td><i>	** of microseconds.</i></td></tr>
+<tr><th id="557">557</th><td><i>	*/</i></td></tr>
+<tr><th id="558">558</th><td></td></tr>
+<tr><th id="559">559</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::day" title='datum_pts_unit::day' data-use='w' data-ref="datum_pts_unit::day" data-ref-filename="datum_pts_unit..day">day</a> =	<var>100</var>*(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>0</var>] &amp; <var>0x0f</var>) +</td></tr>
+<tr><th id="560">560</th><td>		<var>10</var>*((<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>1</var>] &amp; <var>0xf0</var>)&gt;&gt;<var>4</var>) +</td></tr>
+<tr><th id="561">561</th><td>		(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>1</var>] &amp; <var>0x0f</var>);</td></tr>
+<tr><th id="562">562</th><td></td></tr>
+<tr><th id="563">563</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::hour" title='datum_pts_unit::hour' data-use='w' data-ref="datum_pts_unit::hour" data-ref-filename="datum_pts_unit..hour">hour</a> =	<var>10</var>*((<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>2</var>] &amp; <var>0x30</var>)&gt;&gt;<var>4</var>) +</td></tr>
+<tr><th id="564">564</th><td>		(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>2</var>] &amp; <var>0x0f</var>);</td></tr>
+<tr><th id="565">565</th><td></td></tr>
+<tr><th id="566">566</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::minute" title='datum_pts_unit::minute' data-use='w' data-ref="datum_pts_unit::minute" data-ref-filename="datum_pts_unit..minute">minute</a> =	<var>10</var>*((<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>3</var>] &amp; <var>0x70</var>)&gt;&gt;<var>4</var>) +</td></tr>
+<tr><th id="567">567</th><td>		(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>3</var>] &amp; <var>0x0f</var>);</td></tr>
+<tr><th id="568">568</th><td></td></tr>
+<tr><th id="569">569</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::second" title='datum_pts_unit::second' data-use='w' data-ref="datum_pts_unit::second" data-ref-filename="datum_pts_unit..second">second</a> =	<var>10</var>*((<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>4</var>] &amp; <var>0x70</var>)&gt;&gt;<var>4</var>) +</td></tr>
+<tr><th id="570">570</th><td>		(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>4</var>] &amp; <var>0x0f</var>);</td></tr>
+<tr><th id="571">571</th><td></td></tr>
+<tr><th id="572">572</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::msec" title='datum_pts_unit::msec' data-use='w' data-ref="datum_pts_unit::msec" data-ref-filename="datum_pts_unit..msec">msec</a> =	<var>100</var>*((<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>5</var>] &amp; <var>0xf0</var>) &gt;&gt; <var>4</var>) + </td></tr>
+<tr><th id="573">573</th><td>		<var>10</var>*(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>5</var>] &amp; <var>0x0f</var>) +</td></tr>
+<tr><th id="574">574</th><td>		((<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::retbuf" title='datum_pts_unit::retbuf' data-use='r' data-ref="datum_pts_unit::retbuf" data-ref-filename="datum_pts_unit..retbuf">retbuf</a>[<var>6</var>] &amp; <var>0xf0</var>)&gt;&gt;<var>4</var>);</td></tr>
+<tr><th id="575">575</th><td></td></tr>
+<tr><th id="576">576</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::usec" title='datum_pts_unit::usec' data-use='w' data-ref="datum_pts_unit::usec" data-ref-filename="datum_pts_unit..usec">usec</a> =	<var>1000</var>*<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::msec" title='datum_pts_unit::msec' data-use='r' data-ref="datum_pts_unit::msec" data-ref-filename="datum_pts_unit..msec">msec</a>;</td></tr>
+<tr><th id="577">577</th><td></td></tr>
+<tr><th id="578">578</th><td><u>#<span data-ppcond="578">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="579">579</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="580">580</th><td>	    printf(<q>"day %d, hour %d, minute %d, second %d, msec %d\n"</q>,</td></tr>
+<tr><th id="581">581</th><td>		   datum_pts-&gt;day,</td></tr>
+<tr><th id="582">582</th><td>		   datum_pts-&gt;hour,</td></tr>
+<tr><th id="583">583</th><td>		   datum_pts-&gt;minute,</td></tr>
+<tr><th id="584">584</th><td>		   datum_pts-&gt;second,</td></tr>
+<tr><th id="585">585</th><td>		   datum_pts-&gt;msec);</td></tr>
+<tr><th id="586">586</th><td><u>#<span data-ppcond="578">endif</span></u></td></tr>
+<tr><th id="587">587</th><td></td></tr>
+<tr><th id="588">588</th><td>	<i>/*</i></td></tr>
+<tr><th id="589">589</th><td><i>	** Get the GMT time zone offset. Note that GMT should be zero if the Datum</i></td></tr>
+<tr><th id="590">590</th><td><i>	** reference time is using GMT as its time base. Otherwise we have to</i></td></tr>
+<tr><th id="591">591</th><td><i>	** determine the offset if the Datum PTS is using time of day as its time</i></td></tr>
+<tr><th id="592">592</th><td><i>	** base.</i></td></tr>
+<tr><th id="593">593</th><td><i>	*/</i></td></tr>
+<tr><th id="594">594</th><td></td></tr>
+<tr><th id="595">595</th><td>	<a class="local col5 ref" href="#35goodtime" title='goodtime' data-ref="35goodtime" data-ref-filename="35goodtime">goodtime</a> = <var>0</var>;		<i>/* We are not sure about the time and offset yet */</i></td></tr>
+<tr><th id="596">596</th><td></td></tr>
+<tr><th id="597">597</th><td><u>#<span data-ppcond="597">ifdef</span> <a class="macro" href="../include/ntp_refclock.h.html#141" data-ref="_M/GMT">GMT</a></u></td></tr>
+<tr><th id="598">598</th><td></td></tr>
+<tr><th id="599">599</th><td>	<i>/*</i></td></tr>
+<tr><th id="600">600</th><td><i>	** This is the case where the Datum PTS is using GMT so there is no time</i></td></tr>
+<tr><th id="601">601</th><td><i>	** zone offset.</i></td></tr>
+<tr><th id="602">602</th><td><i>	*/</i></td></tr>
+<tr><th id="603">603</th><td></td></tr>
+<tr><th id="604">604</th><td>	<a class="local col1 ref" href="#31tzoff" title='tzoff' data-ref="31tzoff" data-ref-filename="31tzoff">tzoff</a> = <var>0</var>;		<i>/* set time zone offset to 0 */</i></td></tr>
+<tr><th id="605">605</th><td></td></tr>
+<tr><th id="606">606</th><td><u>#<span data-ppcond="597">else</span></u></td></tr>
+<tr><th id="607">607</th><td></td></tr>
+<tr><th id="608">608</th><td>	<i>/*</i></td></tr>
+<tr><th id="609">609</th><td><i>	** This is the case where the Datum PTS is using regular time of day for its</i></td></tr>
+<tr><th id="610">610</th><td><i>	** time so we must compute the time zone offset. The way we do it is kind of</i></td></tr>
+<tr><th id="611">611</th><td><i>	** funny but it works. We loop through different time zones (0 to 24) and</i></td></tr>
+<tr><th id="612">612</th><td><i>	** pick the one that gives the smallest error (+- one half hour). The time</i></td></tr>
+<tr><th id="613">613</th><td><i>	** zone offset is stored in the datum_pts structure for future use. Normally,</i></td></tr>
+<tr><th id="614">614</th><td><i>	** the clocktime() routine is only called once (unless the time zone offset</i></td></tr>
+<tr><th id="615">615</th><td><i>	** changes due to daylight savings) since the goodtime flag is set when a</i></td></tr>
+<tr><th id="616">616</th><td><i>	** good time is found (with a good offset). Note that even if the Datum</i></td></tr>
+<tr><th id="617">617</th><td><i>	** PTS is using GMT, this mechanism will still work since it should come up</i></td></tr>
+<tr><th id="618">618</th><td><i>	** with a value for tzoff = 0 (assuming that your system clock is within</i></td></tr>
+<tr><th id="619">619</th><td><i>	** a half hour of the Datum time (even with time zone differences).</i></td></tr>
+<tr><th id="620">620</th><td><i>	*/</i></td></tr>
+<tr><th id="621">621</th><td></td></tr>
+<tr><th id="622">622</th><td>	<b>for</b> (tzoff=<var>0</var>; tzoff&lt;<var>24</var>; tzoff++) {</td></tr>
+<tr><th id="623">623</th><td>		<b>if</b> (clocktime( datum_pts-&gt;day,</td></tr>
+<tr><th id="624">624</th><td>			       datum_pts-&gt;hour,</td></tr>
+<tr><th id="625">625</th><td>			       datum_pts-&gt;minute,</td></tr>
+<tr><th id="626">626</th><td>			       datum_pts-&gt;second,</td></tr>
+<tr><th id="627">627</th><td>			       (tzoff + datum_pts-&gt;tzoff) % <var>24</var>,</td></tr>
+<tr><th id="628">628</th><td>			       datum_pts-&gt;lastrec.l_ui,</td></tr>
+<tr><th id="629">629</th><td>			       &amp;datum_pts-&gt;yearstart,</td></tr>
+<tr><th id="630">630</th><td>			       &amp;datum_pts-&gt;lastref.l_ui) ) {</td></tr>
+<tr><th id="631">631</th><td></td></tr>
+<tr><th id="632">632</th><td>			datum_pts-&gt;lastref.l_uf = <var>0</var>;</td></tr>
+<tr><th id="633">633</th><td>			error = datum_pts-&gt;lastref.l_ui - datum_pts-&gt;lastrec.l_ui;</td></tr>
+<tr><th id="634">634</th><td></td></tr>
+<tr><th id="635">635</th><td><u>#ifdef DEBUG_DATUM_PTC</u></td></tr>
+<tr><th id="636">636</th><td>			printf(<q>"Time Zone (clocktime method) = %d, error = %d\n"</q>, tzoff, error);</td></tr>
+<tr><th id="637">637</th><td><u>#endif</u></td></tr>
+<tr><th id="638">638</th><td></td></tr>
+<tr><th id="639">639</th><td>			<b>if</b> ((error &lt; <var>1799</var>) &amp;&amp; (error &gt; -<var>1799</var>)) {</td></tr>
+<tr><th id="640">640</th><td>				tzoff = (tzoff + datum_pts-&gt;tzoff) % <var>24</var>;</td></tr>
+<tr><th id="641">641</th><td>				datum_pts-&gt;tzoff = tzoff;</td></tr>
+<tr><th id="642">642</th><td>				goodtime = <var>1</var>;</td></tr>
+<tr><th id="643">643</th><td></td></tr>
+<tr><th id="644">644</th><td><u>#ifdef DEBUG_DATUM_PTC</u></td></tr>
+<tr><th id="645">645</th><td>				printf(<q>"Time Zone found (clocktime method) = %d\n"</q>,tzoff);</td></tr>
+<tr><th id="646">646</th><td><u>#endif</u></td></tr>
+<tr><th id="647">647</th><td></td></tr>
+<tr><th id="648">648</th><td>				<b>break</b>;</td></tr>
+<tr><th id="649">649</th><td>			}</td></tr>
+<tr><th id="650">650</th><td></td></tr>
+<tr><th id="651">651</th><td>		}</td></tr>
+<tr><th id="652">652</th><td>	}</td></tr>
+<tr><th id="653">653</th><td></td></tr>
+<tr><th id="654">654</th><td><u>#<span data-ppcond="597">endif</span></u></td></tr>
+<tr><th id="655">655</th><td></td></tr>
+<tr><th id="656">656</th><td>	<i>/*</i></td></tr>
+<tr><th id="657">657</th><td><i>	** Make sure that we have a good time from the Datum PTS. Clocktime() also</i></td></tr>
+<tr><th id="658">658</th><td><i>	** sets yearstart and lastref.l_ui. We will have to set astref.l_uf (i.e.,</i></td></tr>
+<tr><th id="659">659</th><td><i>	** the fraction of a second) stuff later.</i></td></tr>
+<tr><th id="660">660</th><td><i>	*/</i></td></tr>
+<tr><th id="661">661</th><td></td></tr>
+<tr><th id="662">662</th><td>	<b>if</b> (!<a class="local col5 ref" href="#35goodtime" title='goodtime' data-ref="35goodtime" data-ref-filename="35goodtime">goodtime</a>) {</td></tr>
+<tr><th id="663">663</th><td></td></tr>
+<tr><th id="664">664</th><td>		<b>if</b> (!<a class="ref fn" href="../include/ntp_stdlib.h.html#clocktime" title='clocktime' data-ref="clocktime" data-ref-filename="clocktime">clocktime</a>( <a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::day" title='datum_pts_unit::day' data-use='r' data-ref="datum_pts_unit::day" data-ref-filename="datum_pts_unit..day">day</a>,</td></tr>
+<tr><th id="665">665</th><td>				<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::hour" title='datum_pts_unit::hour' data-use='r' data-ref="datum_pts_unit::hour" data-ref-filename="datum_pts_unit..hour">hour</a>,</td></tr>
+<tr><th id="666">666</th><td>				<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::minute" title='datum_pts_unit::minute' data-use='r' data-ref="datum_pts_unit::minute" data-ref-filename="datum_pts_unit..minute">minute</a>,</td></tr>
+<tr><th id="667">667</th><td>				<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::second" title='datum_pts_unit::second' data-use='r' data-ref="datum_pts_unit::second" data-ref-filename="datum_pts_unit..second">second</a>,</td></tr>
+<tr><th id="668">668</th><td>				<a class="local col1 ref" href="#31tzoff" title='tzoff' data-ref="31tzoff" data-ref-filename="31tzoff">tzoff</a>,</td></tr>
+<tr><th id="669">669</th><td>				<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastrec" title='datum_pts_unit::lastrec' data-use='m' data-ref="datum_pts_unit::lastrec" data-ref-filename="datum_pts_unit..lastrec">lastrec</a>.<a class="macro" href="../include/ntp_fp.h.html#40" title="Ul_i.Xl_ui" data-ref="_M/l_ui">l_ui</a>,</td></tr>
+<tr><th id="670">670</th><td>				&amp;<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::yearstart" title='datum_pts_unit::yearstart' data-use='a' data-ref="datum_pts_unit::yearstart" data-ref-filename="datum_pts_unit..yearstart">yearstart</a>,</td></tr>
+<tr><th id="671">671</th><td>				&amp;<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastref" title='datum_pts_unit::lastref' data-use='m' data-ref="datum_pts_unit::lastref" data-ref-filename="datum_pts_unit..lastref">lastref</a>.<a class="macro" href="../include/ntp_fp.h.html#40" title="Ul_i.Xl_ui" data-ref="_M/l_ui">l_ui</a>) ) {</td></tr>
+<tr><th id="672">672</th><td></td></tr>
+<tr><th id="673">673</th><td><u>#<span data-ppcond="673">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="674">674</th><td>			<b>if</b> (debug)</td></tr>
+<tr><th id="675">675</th><td>			{</td></tr>
+<tr><th id="676">676</th><td>				printf(<q>"Error: bad clocktime\n"</q>);</td></tr>
+<tr><th id="677">677</th><td>				printf(<q>"GMT %d, lastrec %d, yearstart %d, lastref %d\n"</q>,</td></tr>
+<tr><th id="678">678</th><td>				       tzoff,</td></tr>
+<tr><th id="679">679</th><td>				       datum_pts-&gt;lastrec.l_ui,</td></tr>
+<tr><th id="680">680</th><td>				       datum_pts-&gt;yearstart,</td></tr>
+<tr><th id="681">681</th><td>				       datum_pts-&gt;lastref.l_ui);</td></tr>
+<tr><th id="682">682</th><td>			}</td></tr>
+<tr><th id="683">683</th><td><u>#<span data-ppcond="673">endif</span></u></td></tr>
+<tr><th id="684">684</th><td></td></tr>
+<tr><th id="685">685</th><td>			<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"Datum_PTS: Bad clocktime"</q>);</td></tr>
+<tr><th id="686">686</th><td></td></tr>
+<tr><th id="687">687</th><td>			<b>return</b>;</td></tr>
+<tr><th id="688">688</th><td></td></tr>
+<tr><th id="689">689</th><td>		}<b>else</b>{</td></tr>
+<tr><th id="690">690</th><td></td></tr>
+<tr><th id="691">691</th><td><u>#<span data-ppcond="691">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="692">692</th><td>			<b>if</b> (debug)</td></tr>
+<tr><th id="693">693</th><td>			    printf(<q>"Good clocktime\n"</q>);</td></tr>
+<tr><th id="694">694</th><td><u>#<span data-ppcond="691">endif</span></u></td></tr>
+<tr><th id="695">695</th><td></td></tr>
+<tr><th id="696">696</th><td>		}</td></tr>
+<tr><th id="697">697</th><td></td></tr>
+<tr><th id="698">698</th><td>	}</td></tr>
+<tr><th id="699">699</th><td></td></tr>
+<tr><th id="700">700</th><td>	<i>/*</i></td></tr>
+<tr><th id="701">701</th><td><i>	** We have datum_pts-&gt;lastref.l_ui set (which is the integer part of the</i></td></tr>
+<tr><th id="702">702</th><td><i>	** time. Now set the microseconds field.</i></td></tr>
+<tr><th id="703">703</th><td><i>	*/</i></td></tr>
+<tr><th id="704">704</th><td></td></tr>
+<tr><th id="705">705</th><td>	<a class="macro" href="../include/timevalops.h.html#42" title="((datum_pts-&gt;lastref.l_uf) = (u_int32) ((((u_int64)(datum_pts-&gt;usec) &lt;&lt; 32) + 1000000 / 2) / 1000000))" data-ref="_M/TVUTOTSF">TVUTOTSF</a>(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::usec" title='datum_pts_unit::usec' data-use='r' data-ref="datum_pts_unit::usec" data-ref-filename="datum_pts_unit..usec">usec</a>, <a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastref" title='datum_pts_unit::lastref' data-use='m' data-ref="datum_pts_unit::lastref" data-ref-filename="datum_pts_unit..lastref">lastref</a>.<a class="ref field" href="../include/ntp_fp.h.html#(anonymous)::l_uf" title='(anonymous struct)::l_uf' data-ref="(anonymous)::l_uf" data-ref-filename="(anonymous)..l_uf">l_uf</a>);</td></tr>
+<tr><th id="706">706</th><td></td></tr>
+<tr><th id="707">707</th><td>	<i>/*</i></td></tr>
+<tr><th id="708">708</th><td><i>	** Compute the time correction as the difference between the reference</i></td></tr>
+<tr><th id="709">709</th><td><i>	** time (i.e., the Datum time) minus the receive time (system time).</i></td></tr>
+<tr><th id="710">710</th><td><i>	*/</i></td></tr>
+<tr><th id="711">711</th><td></td></tr>
+<tr><th id="712">712</th><td>	<a class="local col6 ref" href="#26tstmp" title='tstmp' data-ref="26tstmp" data-ref-filename="26tstmp">tstmp</a> = <a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastref" title='datum_pts_unit::lastref' data-use='r' data-ref="datum_pts_unit::lastref" data-ref-filename="datum_pts_unit..lastref">lastref</a>;		<i>/* tstmp is the datum ntp time */</i></td></tr>
+<tr><th id="713">713</th><td>	<a class="macro" href="../include/ntp_fp.h.html#231" title="do { u_int32 sub_t = ((&amp;tstmp)-&gt;l_uf); ((&amp;tstmp)-&gt;l_uf) -= ((&amp;datum_pts-&gt;lastrec)-&gt;l_uf); ((&amp;tstmp)-&gt;Ul_i.Xl_ui) -= ((&amp;datum_pts-&gt;lastrec)-&gt;Ul_i.Xl_ui) + ((u_int32)((&amp;tstmp)-&gt;l_uf) &gt; sub_t); } while (0)" data-ref="_M/L_SUB">L_SUB</a>(&amp;<a class="local col6 ref" href="#26tstmp" title='tstmp' data-ref="26tstmp" data-ref-filename="26tstmp">tstmp</a>, &amp;<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastrec" title='datum_pts_unit::lastrec' data-use='a' data-ref="datum_pts_unit::lastrec" data-ref-filename="datum_pts_unit..lastrec">lastrec</a>);	<i>/* tstmp is now the correction */</i></td></tr>
+<tr><th id="714">714</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::coderecv" title='datum_pts_unit::coderecv' data-use='w' data-ref="datum_pts_unit::coderecv" data-ref-filename="datum_pts_unit..coderecv">coderecv</a>++;		<i>/* increment a counter */</i></td></tr>
+<tr><th id="715">715</th><td></td></tr>
+<tr><th id="716">716</th><td><u>#<span data-ppcond="716">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="717">717</th><td>	dispersion = DATUM_DISPERSION;	<i>/* set the dispersion to 0 */</i></td></tr>
+<tr><th id="718">718</th><td>	ftimerr = dispersion;</td></tr>
+<tr><th id="719">719</th><td>	ftimerr /= (<var>1024.0</var> * <var>64.0</var>);</td></tr>
+<tr><th id="720">720</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="721">721</th><td>	    printf(<q>"dispersion = %d, %f\n"</q>, dispersion, ftimerr);</td></tr>
+<tr><th id="722">722</th><td><u>#<span data-ppcond="716">endif</span></u></td></tr>
+<tr><th id="723">723</th><td></td></tr>
+<tr><th id="724">724</th><td>	<i>/*</i></td></tr>
+<tr><th id="725">725</th><td><i>	** Pass the new time to ntpd through the refclock_receive function. Note</i></td></tr>
+<tr><th id="726">726</th><td><i>	** that we are not trying to make any corrections due to the time it takes</i></td></tr>
+<tr><th id="727">727</th><td><i>	** for the Datum PTS to send the message back. I am (erroneously) assuming</i></td></tr>
+<tr><th id="728">728</th><td><i>	** that the time for the Datum PTS to send the time back to us is negligable.</i></td></tr>
+<tr><th id="729">729</th><td><i>	** I suspect that this time delay may be as much as 15 ms or so (but probably</i></td></tr>
+<tr><th id="730">730</th><td><i>	** less). For our needs at JPL, this kind of error is ok so it is not</i></td></tr>
+<tr><th id="731">731</th><td><i>	** necessary to use fudge factors in the ntp.conf file. Maybe later we will.</i></td></tr>
+<tr><th id="732">732</th><td><i>	*/</i></td></tr>
+<tr><th id="733">733</th><td>      <i>/*LFPTOD(&amp;tstmp, doffset);*/</i></td></tr>
+<tr><th id="734">734</th><td>	<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastref" title='datum_pts_unit::lastref' data-use='w' data-ref="datum_pts_unit::lastref" data-ref-filename="datum_pts_unit..lastref">lastref</a> = <a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::lastrec" title='datum_pts_unit::lastrec' data-use='r' data-ref="datum_pts_unit::lastrec" data-ref-filename="datum_pts_unit..lastrec">lastrec</a>;</td></tr>
+<tr><th id="735">735</th><td>	<a class="ref fn" href="../include/ntpd.h.html#refclock_receive" title='refclock_receive' data-ref="refclock_receive" data-ref-filename="refclock_receive">refclock_receive</a>(<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::peer" title='datum_pts_unit::peer' data-use='r' data-ref="datum_pts_unit::peer" data-ref-filename="datum_pts_unit..peer">peer</a>);</td></tr>
+<tr><th id="736">736</th><td></td></tr>
+<tr><th id="737">737</th><td>	<i>/*</i></td></tr>
+<tr><th id="738">738</th><td><i>	** Compute sigma squared (not used currently). Maybe later, this could be</i></td></tr>
+<tr><th id="739">739</th><td><i>	** used for the dispersion estimate. The problem is that ntpd does not link</i></td></tr>
+<tr><th id="740">740</th><td><i>	** in the math library so sqrt() is not available. Anyway, this is useful</i></td></tr>
+<tr><th id="741">741</th><td><i>	** for debugging. Maybe later I will just use absolute values for the time</i></td></tr>
+<tr><th id="742">742</th><td><i>	** error to come up with my dispersion estimate. Anyway, for now my dispersion</i></td></tr>
+<tr><th id="743">743</th><td><i>	** is set to 0.</i></td></tr>
+<tr><th id="744">744</th><td><i>	*/</i></td></tr>
+<tr><th id="745">745</th><td></td></tr>
+<tr><th id="746">746</th><td>	<a class="local col2 ref" href="#32timerr" title='timerr' data-ref="32timerr" data-ref-filename="32timerr">timerr</a> = <a class="local col6 ref" href="#26tstmp" title='tstmp' data-ref="26tstmp" data-ref-filename="26tstmp">tstmp</a>.<a class="macro" href="../include/ntp_fp.h.html#40" title="Ul_i.Xl_ui" data-ref="_M/l_ui">l_ui</a>&lt;&lt;<var>20</var>;</td></tr>
+<tr><th id="747">747</th><td>	<a class="local col2 ref" href="#32timerr" title='timerr' data-ref="32timerr" data-ref-filename="32timerr">timerr</a> |= (<a class="local col6 ref" href="#26tstmp" title='tstmp' data-ref="26tstmp" data-ref-filename="26tstmp">tstmp</a>.<a class="ref field" href="../include/ntp_fp.h.html#(anonymous)::l_uf" title='(anonymous struct)::l_uf' data-ref="(anonymous)::l_uf" data-ref-filename="(anonymous)..l_uf">l_uf</a>&gt;&gt;<var>12</var>) &amp; <var>0x000fffff</var>;</td></tr>
+<tr><th id="748">748</th><td>	<a class="local col3 ref" href="#33ftimerr" title='ftimerr' data-ref="33ftimerr" data-ref-filename="33ftimerr">ftimerr</a> = <a class="local col2 ref" href="#32timerr" title='timerr' data-ref="32timerr" data-ref-filename="32timerr">timerr</a>;</td></tr>
+<tr><th id="749">749</th><td>	<a class="local col3 ref" href="#33ftimerr" title='ftimerr' data-ref="33ftimerr" data-ref-filename="33ftimerr">ftimerr</a> /= <var>1024</var>*<var>1024</var>;</td></tr>
+<tr><th id="750">750</th><td>	<a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a> = <a class="local col3 ref" href="#33ftimerr" title='ftimerr' data-ref="33ftimerr" data-ref-filename="33ftimerr">ftimerr</a>;</td></tr>
+<tr><th id="751">751</th><td>	<b>if</b> (<a class="local col3 ref" href="#33ftimerr" title='ftimerr' data-ref="33ftimerr" data-ref-filename="33ftimerr">ftimerr</a> &lt; <var>0.0</var>) <a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a> = -<a class="local col3 ref" href="#33ftimerr" title='ftimerr' data-ref="33ftimerr" data-ref-filename="33ftimerr">ftimerr</a>;</td></tr>
+<tr><th id="752">752</th><td></td></tr>
+<tr><th id="753">753</th><td>	<b>if</b> (<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='r' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> == <var>0.0</var>) {</td></tr>
+<tr><th id="754">754</th><td>		<b>if</b> (<a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a> &lt; <a class="macro" href="#112" title="0.100" data-ref="_M/DATUM_MAX_ERROR">DATUM_MAX_ERROR</a>) {</td></tr>
+<tr><th id="755">755</th><td>			<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='w' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> = <a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a>*<a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a>;</td></tr>
+<tr><th id="756">756</th><td>		}<b>else</b>{</td></tr>
+<tr><th id="757">757</th><td>			<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='w' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> = <a class="macro" href="#115" title="(0.100*0.100)" data-ref="_M/DATUM_MAX_ERROR2">DATUM_MAX_ERROR2</a>;</td></tr>
+<tr><th id="758">758</th><td>		}</td></tr>
+<tr><th id="759">759</th><td>	}<b>else</b>{</td></tr>
+<tr><th id="760">760</th><td>		<b>if</b> (<a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a> &lt; <a class="macro" href="#112" title="0.100" data-ref="_M/DATUM_MAX_ERROR">DATUM_MAX_ERROR</a>) {</td></tr>
+<tr><th id="761">761</th><td>			<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='w' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> = <var>0.95</var>*<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='r' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> + <var>0.05</var>*<a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a>*<a class="local col4 ref" href="#34abserr" title='abserr' data-ref="34abserr" data-ref-filename="34abserr">abserr</a>;</td></tr>
+<tr><th id="762">762</th><td>		}<b>else</b>{</td></tr>
+<tr><th id="763">763</th><td>			<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='w' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> = <var>0.95</var>*<a class="local col8 ref" href="#28datum_pts" title='datum_pts' data-ref="28datum_pts" data-ref-filename="28datum_pts">datum_pts</a>-&gt;<a class="tu ref field" href="#datum_pts_unit::sigma2" title='datum_pts_unit::sigma2' data-use='r' data-ref="datum_pts_unit::sigma2" data-ref-filename="datum_pts_unit..sigma2">sigma2</a> + <var>0.05</var>*<a class="macro" href="#115" title="(0.100*0.100)" data-ref="_M/DATUM_MAX_ERROR2">DATUM_MAX_ERROR2</a>;</td></tr>
+<tr><th id="764">764</th><td>		}</td></tr>
+<tr><th id="765">765</th><td>	}</td></tr>
+<tr><th id="766">766</th><td></td></tr>
+<tr><th id="767">767</th><td><u>#<span data-ppcond="767">ifdef</span> <span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span></u></td></tr>
+<tr><th id="768">768</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="769">769</th><td>	    printf(<q>"Time error = %f seconds\n"</q>, ftimerr);</td></tr>
+<tr><th id="770">770</th><td><u>#<span data-ppcond="767">endif</span></u></td></tr>
+<tr><th id="771">771</th><td></td></tr>
+<tr><th id="772">772</th><td><u>#<span data-ppcond="772">if</span> defined(<span class="macro" data-ref="_M/DEBUG_DATUM_PTC">DEBUG_DATUM_PTC</span>) || defined(<span class="macro" data-ref="_M/LOG_TIME_ERRORS">LOG_TIME_ERRORS</span>)</u></td></tr>
+<tr><th id="773">773</th><td>	<b>if</b> (debug)</td></tr>
+<tr><th id="774">774</th><td>	    printf(<q>"PTS: day %d, hour %d, minute %d, second %d, msec %d, Time Error %f\n"</q>,</td></tr>
+<tr><th id="775">775</th><td>		   datum_pts-&gt;day,</td></tr>
+<tr><th id="776">776</th><td>		   datum_pts-&gt;hour,</td></tr>
+<tr><th id="777">777</th><td>		   datum_pts-&gt;minute,</td></tr>
+<tr><th id="778">778</th><td>		   datum_pts-&gt;second,</td></tr>
+<tr><th id="779">779</th><td>		   datum_pts-&gt;msec,</td></tr>
+<tr><th id="780">780</th><td>		   ftimerr);</td></tr>
+<tr><th id="781">781</th><td><u>#<span data-ppcond="772">endif</span></u></td></tr>
+<tr><th id="782">782</th><td></td></tr>
+<tr><th id="783">783</th><td>}</td></tr>
+<tr><th id="784">784</th><td><u>#<span data-ppcond="18">else</span></u></td></tr>
+<tr><th id="785">785</th><td>NONEMPTY_TRANSLATION_UNIT</td></tr>
+<tr><th id="786">786</th><td><u>#<span data-ppcond="18">endif</span> /* REFCLOCK */</u></td></tr>
+<tr><th id="787">787</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

@@ -1,0 +1,355 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>drm_memory.c source code [netbsd/sys/external/bsd/drm/dist/bsd-core/drm_memory.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/external/bsd/drm/dist/bsd-core/drm_memory.c'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>sys</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>drm</a>/<a href='..'>dist</a>/<a href='./'>bsd-core</a>/<a href='drm_memory.c.html'>drm_memory.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*-</i></td></tr>
+<tr><th id="2">2</th><td><i> *Copyright 1999 Precision Insight, Inc., Cedar Park, Texas.</i></td></tr>
+<tr><th id="3">3</th><td><i> * Copyright 2000 VA Linux Systems, Inc., Sunnyvale, California.</i></td></tr>
+<tr><th id="4">4</th><td><i> * All Rights Reserved.</i></td></tr>
+<tr><th id="5">5</th><td><i> *</i></td></tr>
+<tr><th id="6">6</th><td><i> * Permission is hereby granted, free of charge, to any person obtaining a</i></td></tr>
+<tr><th id="7">7</th><td><i> * copy of this software and associated documentation files (the "Software"),</i></td></tr>
+<tr><th id="8">8</th><td><i> * to deal in the Software without restriction, including without limitation</i></td></tr>
+<tr><th id="9">9</th><td><i> * the rights to use, copy, modify, merge, publish, distribute, sublicense,</i></td></tr>
+<tr><th id="10">10</th><td><i> * and/or sell copies of the Software, and to permit persons to whom the</i></td></tr>
+<tr><th id="11">11</th><td><i> * Software is furnished to do so, subject to the following conditions:</i></td></tr>
+<tr><th id="12">12</th><td><i> *</i></td></tr>
+<tr><th id="13">13</th><td><i> * The above copyright notice and this permission notice (including the next</i></td></tr>
+<tr><th id="14">14</th><td><i> * paragraph) shall be included in all copies or substantial portions of the</i></td></tr>
+<tr><th id="15">15</th><td><i> * Software.</i></td></tr>
+<tr><th id="16">16</th><td><i> *</i></td></tr>
+<tr><th id="17">17</th><td><i> * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR</i></td></tr>
+<tr><th id="18">18</th><td><i> * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,</i></td></tr>
+<tr><th id="19">19</th><td><i> * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL</i></td></tr>
+<tr><th id="20">20</th><td><i> * VA LINUX SYSTEMS AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR</i></td></tr>
+<tr><th id="21">21</th><td><i> * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,</i></td></tr>
+<tr><th id="22">22</th><td><i> * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR</i></td></tr>
+<tr><th id="23">23</th><td><i> * OTHER DEALINGS IN THE SOFTWARE.</i></td></tr>
+<tr><th id="24">24</th><td><i> *</i></td></tr>
+<tr><th id="25">25</th><td><i> * Authors:</i></td></tr>
+<tr><th id="26">26</th><td><i> *    Rickard E. (Rik) Faith &lt;faith@valinux.com&gt;</i></td></tr>
+<tr><th id="27">27</th><td><i> *    Gareth Hughes &lt;gareth@valinux.com&gt;</i></td></tr>
+<tr><th id="28">28</th><td><i> *</i></td></tr>
+<tr><th id="29">29</th><td><i> */</i></td></tr>
+<tr><th id="30">30</th><td></td></tr>
+<tr><th id="31">31</th><td><i class="doc">/**<span class="command"> @file</span> drm_memory.c</i></td></tr>
+<tr><th id="32">32</th><td><i class="doc"> * Wrappers for kernel memory allocation routines, and MTRR management support.</i></td></tr>
+<tr><th id="33">33</th><td><i class="doc"> *</i></td></tr>
+<tr><th id="34">34</th><td><i class="doc"> * This file previously implemented a memory consumption tracking system using</i></td></tr>
+<tr><th id="35">35</th><td><i class="doc"> * the "area" argument for various different types of allocations, but that</i></td></tr>
+<tr><th id="36">36</th><td><i class="doc"> * has been stripped out for now.</i></td></tr>
+<tr><th id="37">37</th><td><i class="doc"> */</i></td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><u>#include <a href="drmP.h.html">"drmP.h"</a></u></td></tr>
+<tr><th id="40">40</th><td></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td><u>#<span data-ppcond="42">if</span> defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="43">43</th><td><u># ifdef DRM_NO_AGP</u></td></tr>
+<tr><th id="44">44</th><td><u>#  define NAGP_I810 0</u></td></tr>
+<tr><th id="45">45</th><td><u># else</u></td></tr>
+<tr><th id="46">46</th><td><u>#  if defined(_KERNEL_OPT)</u></td></tr>
+<tr><th id="47">47</th><td><u>#    include "agp_i810.h"</u></td></tr>
+<tr><th id="48">48</th><td><u>#    include "genfb.h"</u></td></tr>
+<tr><th id="49">49</th><td><u>#  else</u></td></tr>
+<tr><th id="50">50</th><td><u>#   define NAGP_I810 1</u></td></tr>
+<tr><th id="51">51</th><td><u>#   define NGENFB 0</u></td></tr>
+<tr><th id="52">52</th><td><u>#  endif</u></td></tr>
+<tr><th id="53">53</th><td><u># endif</u></td></tr>
+<tr><th id="54">54</th><td><u># if NAGP_I810 &gt; 0</u></td></tr>
+<tr><th id="55">55</th><td><u>#  include &lt;dev/pci/agpvar.h&gt;</u></td></tr>
+<tr><th id="56">56</th><td><u># endif</u></td></tr>
+<tr><th id="57">57</th><td><u># if NGENFB &gt; 0</u></td></tr>
+<tr><th id="58">58</th><td><u>#  include &lt;dev/wsfb/genfbvar.h&gt;</u></td></tr>
+<tr><th id="59">59</th><td><u># endif</u></td></tr>
+<tr><th id="60">60</th><td><u># if defined(_KERNEL_OPT)</u></td></tr>
+<tr><th id="61">61</th><td><u>#   include "opt_mtrr.h"</u></td></tr>
+<tr><th id="62">62</th><td><u># endif</u></td></tr>
+<tr><th id="63">63</th><td><u>#<span data-ppcond="42">endif</span></u></td></tr>
+<tr><th id="64">64</th><td></td></tr>
+<tr><th id="65">65</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_DMA, <q>"drm_dma"</q>, <q>"DRM DMA Data Structures"</q>);</td></tr>
+<tr><th id="66">66</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_SAREA, <q>"drm_sarea"</q>, <q>"DRM SAREA Data Structures"</q>);</td></tr>
+<tr><th id="67">67</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_DRIVER, <q>"drm_driver"</q>, <q>"DRM DRIVER Data Structures"</q>);</td></tr>
+<tr><th id="68">68</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_MAGIC, <q>"drm_magic"</q>, <q>"DRM MAGIC Data Structures"</q>);</td></tr>
+<tr><th id="69">69</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_IOCTLS, <q>"drm_ioctls"</q>, <q>"DRM IOCTL Data Structures"</q>);</td></tr>
+<tr><th id="70">70</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_MAPS, <q>"drm_maps"</q>, <q>"DRM MAP Data Structures"</q>);</td></tr>
+<tr><th id="71">71</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_BUFS, <q>"drm_bufs"</q>, <q>"DRM BUFFER Data Structures"</q>);</td></tr>
+<tr><th id="72">72</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_SEGS, <q>"drm_segs"</q>, <q>"DRM SEGMENTS Data Structures"</q>);</td></tr>
+<tr><th id="73">73</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_PAGES, <q>"drm_pages"</q>, <q>"DRM PAGES Data Structures"</q>);</td></tr>
+<tr><th id="74">74</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_FILES, <q>"drm_files"</q>, <q>"DRM FILE Data Structures"</q>);</td></tr>
+<tr><th id="75">75</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_QUEUES, <q>"drm_queues"</q>, <q>"DRM QUEUE Data Structures"</q>);</td></tr>
+<tr><th id="76">76</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_CMDS, <q>"drm_cmds"</q>, <q>"DRM COMMAND Data Structures"</q>);</td></tr>
+<tr><th id="77">77</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_MAPPINGS, <q>"drm_mapping"</q>, <q>"DRM MAPPING Data Structures"</q>);</td></tr>
+<tr><th id="78">78</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_BUFLISTS, <q>"drm_buflists"</q>, <q>"DRM BUFLISTS Data Structures"</q>);</td></tr>
+<tr><th id="79">79</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_AGPLISTS, <q>"drm_agplists"</q>, <q>"DRM AGPLISTS Data Structures"</q>);</td></tr>
+<tr><th id="80">80</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_CTXBITMAP, <q>"drm_ctxbitmap"</q>,</td></tr>
+<tr><th id="81">81</th><td>    <q>"DRM CTXBITMAP Data Structures"</q>);</td></tr>
+<tr><th id="82">82</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_SGLISTS, <q>"drm_sglists"</q>, <q>"DRM SGLISTS Data Structures"</q>);</td></tr>
+<tr><th id="83">83</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_DRAWABLE, <q>"drm_drawable"</q>, <q>"DRM DRAWABLE Data Structures"</q>);</td></tr>
+<tr><th id="84">84</th><td><a class="macro" href="../../../../../sys/mallocvar.h.html#47" title="" data-ref="_M/MALLOC_DEFINE">MALLOC_DEFINE</a>(DRM_MEM_MM, <q>"drm_mm"</q>, <q>"DRM MM Data Structures"</q>);</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td><em>void</em> <dfn class="decl def fn" id="drm_mem_init" title='drm_mem_init' data-ref="drm_mem_init" data-ref-filename="drm_mem_init">drm_mem_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="87">87</th><td>{</td></tr>
+<tr><th id="88">88</th><td>}</td></tr>
+<tr><th id="89">89</th><td></td></tr>
+<tr><th id="90">90</th><td><em>void</em> <dfn class="decl def fn" id="drm_mem_uninit" title='drm_mem_uninit' data-ref="drm_mem_uninit" data-ref-filename="drm_mem_uninit">drm_mem_uninit</dfn>(<em>void</em>)</td></tr>
+<tr><th id="91">91</th><td>{</td></tr>
+<tr><th id="92">92</th><td>}</td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><u>#<span data-ppcond="94">if</span> defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="95">95</th><td><em>static</em> <em>void</em> *</td></tr>
+<tr><th id="96">96</th><td>drm_netbsd_ioremap(<b>struct</b> drm_device *dev, drm_local_map_t *map, <em>int</em> wc)</td></tr>
+<tr><th id="97">97</th><td>{</td></tr>
+<tr><th id="98">98</th><td>	bus_space_handle_t h;</td></tr>
+<tr><th id="99">99</th><td>	<em>int</em> i, reason;</td></tr>
+<tr><th id="100">100</th><td>	<b>for</b>(i = <var>0</var>; i&lt;DRM_MAX_PCI_RESOURCE; i++) {</td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td>		<i>/* Does the requested mapping lie within this resource? */</i></td></tr>
+<tr><th id="103">103</th><td>		<b>if</b> ((dev-&gt;pci_map_data[i].maptype == PCI_MAPREG_TYPE_MEM ||</td></tr>
+<tr><th id="104">104</th><td>		     dev-&gt;pci_map_data[i].maptype ==</td></tr>
+<tr><th id="105">105</th><td>                      (PCI_MAPREG_TYPE_MEM | PCI_MAPREG_MEM_TYPE_64BIT)) &amp;&amp;</td></tr>
+<tr><th id="106">106</th><td>		    map-&gt;offset &gt;= dev-&gt;pci_map_data[i].base             &amp;&amp;</td></tr>
+<tr><th id="107">107</th><td>		    map-&gt;offset + map-&gt;size &lt;= dev-&gt;pci_map_data[i].base +</td></tr>
+<tr><th id="108">108</th><td>                                              dev-&gt;pci_map_data[i].size)</td></tr>
+<tr><th id="109">109</th><td>		{</td></tr>
+<tr><th id="110">110</th><td>			map-&gt;bst = dev-&gt;pa.pa_memt;</td></tr>
+<tr><th id="111">111</th><td>			map-&gt;fullmap = &amp;(dev-&gt;pci_map_data[i]);</td></tr>
+<tr><th id="112">112</th><td>			map-&gt;mapsize = map-&gt;size;</td></tr>
+<tr><th id="113">113</th><td>			dev-&gt;pci_map_data[i].mapped++;</td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td>			<i>/* If we've already mapped this resource in, handle</i></td></tr>
+<tr><th id="116">116</th><td><i>			 * submapping if needed, give caller a bus_space handle</i></td></tr>
+<tr><th id="117">117</th><td><i>			 * and pointer for the offest they asked for */</i></td></tr>
+<tr><th id="118">118</th><td>			<b>if</b> (dev-&gt;pci_map_data[i].mapped &gt; <var>1</var>)</td></tr>
+<tr><th id="119">119</th><td>			{</td></tr>
+<tr><th id="120">120</th><td>				<b>if</b> ((reason = bus_space_subregion(</td></tr>
+<tr><th id="121">121</th><td>						dev-&gt;pa.pa_memt,</td></tr>
+<tr><th id="122">122</th><td>						dev-&gt;pci_map_data[i].bsh,</td></tr>
+<tr><th id="123">123</th><td>						map-&gt;offset - dev-&gt;pci_map_data[i].base,</td></tr>
+<tr><th id="124">124</th><td>						map-&gt;size, &amp;h)) != <var>0</var>)  {</td></tr>
+<tr><th id="125">125</th><td>					DRM_DEBUG(<q>"ioremap failed to "</q></td></tr>
+<tr><th id="126">126</th><td>						<q>"bus_space_subregion: %d\n"</q>,</td></tr>
+<tr><th id="127">127</th><td>						reason);</td></tr>
+<tr><th id="128">128</th><td>					<b>return</b> NULL;</td></tr>
+<tr><th id="129">129</th><td>				}</td></tr>
+<tr><th id="130">130</th><td>				map-&gt;bsh = h;</td></tr>
+<tr><th id="131">131</th><td>				map-&gt;handle = bus_space_vaddr(dev-&gt;pa.pa_memt,</td></tr>
+<tr><th id="132">132</th><td>									h);</td></tr>
+<tr><th id="133">133</th><td>				<b>return</b> map-&gt;handle;</td></tr>
+<tr><th id="134">134</th><td>			}</td></tr>
+<tr><th id="135">135</th><td></td></tr>
+<tr><th id="136">136</th><td>			<i>/* Map in entirety of resource - full size and handle</i></td></tr>
+<tr><th id="137">137</th><td><i>			 * go in pci_map_data, specific mapping in callers</i></td></tr>
+<tr><th id="138">138</th><td><i>			 * drm_local_map_t */</i></td></tr>
+<tr><th id="139">139</th><td>			DRM_DEBUG(<q>"ioremap%s: flags %d\n"</q>, wc ? <q>"_wc"</q> : <q>""</q>,</td></tr>
+<tr><th id="140">140</th><td>				  dev-&gt;pci_map_data[i].flags);</td></tr>
+<tr><th id="141">141</th><td>			<b>if</b> ((reason = bus_space_map(map-&gt;bst,</td></tr>
+<tr><th id="142">142</th><td>					dev-&gt;pci_map_data[i].base,</td></tr>
+<tr><th id="143">143</th><td>					dev-&gt;pci_map_data[i].size,</td></tr>
+<tr><th id="144">144</th><td>					dev-&gt;pci_map_data[i].flags,</td></tr>
+<tr><th id="145">145</th><td>					&amp;dev-&gt;pci_map_data[i].bsh)))</td></tr>
+<tr><th id="146">146</th><td>			{</td></tr>
+<tr><th id="147">147</th><td>				dev-&gt;pci_map_data[i].mapped--;</td></tr>
+<tr><th id="148">148</th><td><u>#if NAGP_I810 &gt; 0 /* XXX horrible kludge: agp might have mapped it */</u></td></tr>
+<tr><th id="149">149</th><td>				<b>if</b> (agp_i810_borrow(map-&gt;offset, map-&gt;size,</td></tr>
+<tr><th id="150">150</th><td>					&amp;map-&gt;bsh))</td></tr>
+<tr><th id="151">151</th><td>					<b>return</b> bus_space_vaddr(map-&gt;bst, map-&gt;bsh);</td></tr>
+<tr><th id="152">152</th><td><u>#endif</u></td></tr>
+<tr><th id="153">153</th><td><u>#if NGENFB &gt; 0</u></td></tr>
+<tr><th id="154">154</th><td>				<b>if</b> (genfb_borrow(map-&gt;offset, &amp;map-&gt;bsh))</td></tr>
+<tr><th id="155">155</th><td>					<b>return</b> bus_space_vaddr(map-&gt;bst, map-&gt;bsh);</td></tr>
+<tr><th id="156">156</th><td><u>#endif</u></td></tr>
+<tr><th id="157">157</th><td>				DRM_DEBUG(<q>"ioremap: failed to map (%d)\n"</q>,</td></tr>
+<tr><th id="158">158</th><td>					  reason);</td></tr>
+<tr><th id="159">159</th><td>				<b>return</b> NULL;</td></tr>
+<tr><th id="160">160</th><td>			}</td></tr>
+<tr><th id="161">161</th><td></td></tr>
+<tr><th id="162">162</th><td>			dev-&gt;pci_map_data[i].vaddr = bus_space_vaddr(map-&gt;bst,</td></tr>
+<tr><th id="163">163</th><td>						dev-&gt;pci_map_data[i].bsh);</td></tr>
+<tr><th id="164">164</th><td></td></tr>
+<tr><th id="165">165</th><td>			<i>/* Caller might have requested a submapping of that */</i></td></tr>
+<tr><th id="166">166</th><td>			<b>if</b> ((reason = bus_space_subregion(</td></tr>
+<tr><th id="167">167</th><td>					dev-&gt;pa.pa_memt,</td></tr>
+<tr><th id="168">168</th><td>					dev-&gt;pci_map_data[i].bsh,</td></tr>
+<tr><th id="169">169</th><td>					map-&gt;offset - dev-&gt;pci_map_data[i].base,</td></tr>
+<tr><th id="170">170</th><td>					map-&gt;size, &amp;h)) != <var>0</var>)  {</td></tr>
+<tr><th id="171">171</th><td>				DRM_DEBUG(<q>"ioremap failed to "</q></td></tr>
+<tr><th id="172">172</th><td>					<q>"bus_space_subregion: %d\n"</q>,</td></tr>
+<tr><th id="173">173</th><td>					reason);</td></tr>
+<tr><th id="174">174</th><td>				<b>return</b> NULL;</td></tr>
+<tr><th id="175">175</th><td>			}</td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td>			DRM_DEBUG(<q>"ioremap mem found for %lx, %lx: %p\n"</q>,</td></tr>
+<tr><th id="178">178</th><td>				map-&gt;offset, map-&gt;size,</td></tr>
+<tr><th id="179">179</th><td>				dev-&gt;agp_map_data[i].vaddr);</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td>			map-&gt;bsh = h;</td></tr>
+<tr><th id="182">182</th><td>			map-&gt;handle = bus_space_vaddr(dev-&gt;pa.pa_memt, h);</td></tr>
+<tr><th id="183">183</th><td>			<b>return</b> map-&gt;handle;</td></tr>
+<tr><th id="184">184</th><td>		}</td></tr>
+<tr><th id="185">185</th><td>	}</td></tr>
+<tr><th id="186">186</th><td>	<i>/* failed to find a valid mapping; all hope isn't lost though */</i></td></tr>
+<tr><th id="187">187</th><td>	<b>for</b>(i = <var>0</var>; i&lt;DRM_MAX_PCI_RESOURCE; i++) {</td></tr>
+<tr><th id="188">188</th><td>		<b>if</b> (dev-&gt;agp_map_data[i].mapped &gt; <var>0</var> &amp;&amp;</td></tr>
+<tr><th id="189">189</th><td>		    dev-&gt;agp_map_data[i].base == map-&gt;offset &amp;&amp;</td></tr>
+<tr><th id="190">190</th><td>		    dev-&gt;agp_map_data[i].size &gt;= map-&gt;size) {</td></tr>
+<tr><th id="191">191</th><td>			map-&gt;bst = dev-&gt;pa.pa_memt;</td></tr>
+<tr><th id="192">192</th><td>			map-&gt;fullmap = &amp;(dev-&gt;agp_map_data[i]);</td></tr>
+<tr><th id="193">193</th><td>			map-&gt;mapsize = dev-&gt;agp_map_data[i].size;</td></tr>
+<tr><th id="194">194</th><td>			dev-&gt;agp_map_data[i].mapped++;</td></tr>
+<tr><th id="195">195</th><td>			map-&gt;bsh = dev-&gt;agp_map_data[i].bsh;</td></tr>
+<tr><th id="196">196</th><td>			<b>return</b> dev-&gt;agp_map_data[i].vaddr;</td></tr>
+<tr><th id="197">197</th><td>		}</td></tr>
+<tr><th id="198">198</th><td>		<b>if</b> (dev-&gt;agp_map_data[i].mapped == <var>0</var>) {</td></tr>
+<tr><th id="199">199</th><td>			<em>int</em> rv;</td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td>			map-&gt;bst = dev-&gt;pa.pa_memt;</td></tr>
+<tr><th id="202">202</th><td>			dev-&gt;agp_map_data[i].mapped++;</td></tr>
+<tr><th id="203">203</th><td>			dev-&gt;agp_map_data[i].base = map-&gt;offset;</td></tr>
+<tr><th id="204">204</th><td>			dev-&gt;agp_map_data[i].size = map-&gt;size;</td></tr>
+<tr><th id="205">205</th><td>			dev-&gt;agp_map_data[i].flags = BUS_SPACE_MAP_LINEAR |</td></tr>
+<tr><th id="206">206</th><td>			    BUS_SPACE_MAP_PREFETCHABLE;</td></tr>
+<tr><th id="207">207</th><td>			dev-&gt;agp_map_data[i].maptype = PCI_MAPREG_TYPE_MEM;</td></tr>
+<tr><th id="208">208</th><td>			map-&gt;fullmap = &amp;(dev-&gt;agp_map_data[i]);</td></tr>
+<tr><th id="209">209</th><td>			map-&gt;mapsize = dev-&gt;agp_map_data[i].size;</td></tr>
+<tr><th id="210">210</th><td></td></tr>
+<tr><th id="211">211</th><td>			DRM_DEBUG(<q>"ioremap%s: flags %d\n"</q>, wc ? <q>"_wc"</q> : <q>""</q>,</td></tr>
+<tr><th id="212">212</th><td>				  dev-&gt;agp_map_data[i].flags);</td></tr>
+<tr><th id="213">213</th><td>			rv = bus_space_map(map-&gt;bst, map-&gt;offset,</td></tr>
+<tr><th id="214">214</th><td>				dev-&gt;agp_map_data[i].size,</td></tr>
+<tr><th id="215">215</th><td>				dev-&gt;agp_map_data[i].flags, &amp;map-&gt;bsh);</td></tr>
+<tr><th id="216">216</th><td>			<b>if</b> (rv) {</td></tr>
+<tr><th id="217">217</th><td>				dev-&gt;agp_map_data[i].mapped--;</td></tr>
+<tr><th id="218">218</th><td>				DRM_DEBUG(<q>"ioremap: failed to map (%d)\n"</q>, rv);</td></tr>
+<tr><th id="219">219</th><td>				<b>return</b> NULL;</td></tr>
+<tr><th id="220">220</th><td>			}</td></tr>
+<tr><th id="221">221</th><td>			dev-&gt;agp_map_data[i].bsh = map-&gt;bsh;</td></tr>
+<tr><th id="222">222</th><td>			dev-&gt;agp_map_data[i].vaddr =</td></tr>
+<tr><th id="223">223</th><td>			    bus_space_vaddr(map-&gt;bst, map-&gt;bsh);</td></tr>
+<tr><th id="224">224</th><td>			DRM_DEBUG(<q>"ioremap agp mem found for %lx, %lx: %p\n"</q>,</td></tr>
+<tr><th id="225">225</th><td>				map-&gt;offset, map-&gt;size,</td></tr>
+<tr><th id="226">226</th><td>				dev-&gt;agp_map_data[i].vaddr);</td></tr>
+<tr><th id="227">227</th><td>			<b>return</b> dev-&gt;agp_map_data[i].vaddr;</td></tr>
+<tr><th id="228">228</th><td>		}</td></tr>
+<tr><th id="229">229</th><td>	}</td></tr>
+<tr><th id="230">230</th><td></td></tr>
+<tr><th id="231">231</th><td>	<i>/* now we can give up... */</i></td></tr>
+<tr><th id="232">232</th><td>	DRM_DEBUG(<q>"drm_ioremap failed: offset=%lx size=%lu\n"</q>,</td></tr>
+<tr><th id="233">233</th><td>		  map-&gt;offset, map-&gt;size);</td></tr>
+<tr><th id="234">234</th><td>	<b>return</b> NULL;</td></tr>
+<tr><th id="235">235</th><td>}</td></tr>
+<tr><th id="236">236</th><td><u>#<span data-ppcond="94">endif</span></u></td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td><em>void</em> *<dfn class="decl def fn" id="drm_ioremap_wc" title='drm_ioremap_wc' data-ref="drm_ioremap_wc" data-ref-filename="drm_ioremap_wc">drm_ioremap_wc</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_device" title='drm_device' data-ref="drm_device" data-ref-filename="drm_device">drm_device</a> *<dfn class="local col1 decl" id="1dev" title='dev' data-type='struct drm_device *' data-ref="1dev" data-ref-filename="1dev">dev</dfn>, <a class="typedef" href="drmP.h.html#drm_local_map_t" title='drm_local_map_t' data-type='struct drm_local_map' data-ref="drm_local_map_t" data-ref-filename="drm_local_map_t">drm_local_map_t</a> *<dfn class="local col2 decl" id="2map" title='map' data-type='drm_local_map_t *' data-ref="2map" data-ref-filename="2map">map</dfn>)</td></tr>
+<tr><th id="239">239</th><td>{</td></tr>
+<tr><th id="240">240</th><td><u>#<span data-ppcond="240">if</span> defined(<span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span>)</u></td></tr>
+<tr><th id="241">241</th><td>	<b>return</b> pmap_mapdev_attr(map-&gt;offset, map-&gt;size, PAT_WRITE_COMBINING);</td></tr>
+<tr><th id="242">242</th><td><u>#<span data-ppcond="240">elif</span>   defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="243">243</th><td>	<b>return</b> drm_netbsd_ioremap(dev, map, <var>1</var>);</td></tr>
+<tr><th id="244">244</th><td><u>#<span data-ppcond="240">endif</span></u></td></tr>
+<tr><th id="245">245</th><td>}</td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td><em>void</em> *<dfn class="decl def fn" id="drm_ioremap" title='drm_ioremap' data-ref="drm_ioremap" data-ref-filename="drm_ioremap">drm_ioremap</dfn>(<b>struct</b> <a class="type" href="drmP.h.html#drm_device" title='drm_device' data-ref="drm_device" data-ref-filename="drm_device">drm_device</a> *<dfn class="local col3 decl" id="3dev" title='dev' data-type='struct drm_device *' data-ref="3dev" data-ref-filename="3dev">dev</dfn>, <a class="typedef" href="drmP.h.html#drm_local_map_t" title='drm_local_map_t' data-type='struct drm_local_map' data-ref="drm_local_map_t" data-ref-filename="drm_local_map_t">drm_local_map_t</a> *<dfn class="local col4 decl" id="4map" title='map' data-type='drm_local_map_t *' data-ref="4map" data-ref-filename="4map">map</dfn>)</td></tr>
+<tr><th id="248">248</th><td>{</td></tr>
+<tr><th id="249">249</th><td><u>#<span data-ppcond="249">if</span> defined(<span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span>)</u></td></tr>
+<tr><th id="250">250</th><td>	<b>return</b> pmap_mapdev(map-&gt;offset, map-&gt;size);</td></tr>
+<tr><th id="251">251</th><td><u>#<span data-ppcond="249">elif</span>   defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="252">252</th><td>	<b>return</b> drm_netbsd_ioremap(dev, map, <var>0</var>);</td></tr>
+<tr><th id="253">253</th><td><u>#<span data-ppcond="249">endif</span></u></td></tr>
+<tr><th id="254">254</th><td>}</td></tr>
+<tr><th id="255">255</th><td></td></tr>
+<tr><th id="256">256</th><td><em>void</em> <dfn class="decl def fn" id="drm_ioremapfree" title='drm_ioremapfree' data-ref="drm_ioremapfree" data-ref-filename="drm_ioremapfree">drm_ioremapfree</dfn>(<a class="typedef" href="drmP.h.html#drm_local_map_t" title='drm_local_map_t' data-type='struct drm_local_map' data-ref="drm_local_map_t" data-ref-filename="drm_local_map_t">drm_local_map_t</a> *<dfn class="local col5 decl" id="5map" title='map' data-type='drm_local_map_t *' data-ref="5map" data-ref-filename="5map">map</dfn>)</td></tr>
+<tr><th id="257">257</th><td>{</td></tr>
+<tr><th id="258">258</th><td><u>#<span data-ppcond="258">if</span> defined(<span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span>)</u></td></tr>
+<tr><th id="259">259</th><td>	pmap_unmapdev((vm_offset_t) map-&gt;handle, map-&gt;size);</td></tr>
+<tr><th id="260">260</th><td><u>#<span data-ppcond="258">elif</span>   defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="261">261</th><td>	<b>if</b> (map-&gt;fullmap == NULL) {</td></tr>
+<tr><th id="262">262</th><td>		DRM_INFO(<q>"drm_ioremapfree called for unknown map\n"</q>);</td></tr>
+<tr><th id="263">263</th><td>		<b>return</b>;</td></tr>
+<tr><th id="264">264</th><td>	}</td></tr>
+<tr><th id="265">265</th><td></td></tr>
+<tr><th id="266">266</th><td>	<b>if</b> (map-&gt;fullmap-&gt;mapped &gt; <var>0</var>) {</td></tr>
+<tr><th id="267">267</th><td>		map-&gt;fullmap-&gt;mapped--;</td></tr>
+<tr><th id="268">268</th><td>		<b>if</b>(map-&gt;fullmap-&gt;mapped == <var>0</var>)</td></tr>
+<tr><th id="269">269</th><td>			bus_space_unmap(map-&gt;bst, map-&gt;fullmap-&gt;bsh,</td></tr>
+<tr><th id="270">270</th><td>					map-&gt;fullmap-&gt;size);</td></tr>
+<tr><th id="271">271</th><td>	}</td></tr>
+<tr><th id="272">272</th><td><u>#<span data-ppcond="258">endif</span></u></td></tr>
+<tr><th id="273">273</th><td>}</td></tr>
+<tr><th id="274">274</th><td></td></tr>
+<tr><th id="275">275</th><td><u>#<span data-ppcond="275">if</span> defined(<span class="macro" data-ref="_M/__FreeBSD__">__FreeBSD__</span>)</u></td></tr>
+<tr><th id="276">276</th><td><em>int</em></td></tr>
+<tr><th id="277">277</th><td>drm_mtrr_add(<em>unsigned</em> <em>long</em> offset, size_t size, <em>int</em> flags)</td></tr>
+<tr><th id="278">278</th><td>{</td></tr>
+<tr><th id="279">279</th><td>	<em>int</em> act;</td></tr>
+<tr><th id="280">280</th><td>	<b>struct</b> mem_range_desc mrdesc;</td></tr>
+<tr><th id="281">281</th><td></td></tr>
+<tr><th id="282">282</th><td>	mrdesc.mr_base = offset;</td></tr>
+<tr><th id="283">283</th><td>	mrdesc.mr_len = size;</td></tr>
+<tr><th id="284">284</th><td>	mrdesc.mr_flags = flags;</td></tr>
+<tr><th id="285">285</th><td>	act = MEMRANGE_SET_UPDATE;</td></tr>
+<tr><th id="286">286</th><td>	strlcpy(mrdesc.mr_owner, <q>"drm"</q>, <b>sizeof</b>(mrdesc.mr_owner));</td></tr>
+<tr><th id="287">287</th><td>	<b>return</b> mem_range_attr_set(&amp;mrdesc, &amp;act);</td></tr>
+<tr><th id="288">288</th><td>}</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td><em>int</em></td></tr>
+<tr><th id="291">291</th><td>drm_mtrr_del(<em>int</em> __unused handle, <em>unsigned</em> <em>long</em> offset, size_t size, <em>int</em> flags)</td></tr>
+<tr><th id="292">292</th><td>{</td></tr>
+<tr><th id="293">293</th><td>	<em>int</em> act;</td></tr>
+<tr><th id="294">294</th><td>	<b>struct</b> mem_range_desc mrdesc;</td></tr>
+<tr><th id="295">295</th><td></td></tr>
+<tr><th id="296">296</th><td>	mrdesc.mr_base = offset;</td></tr>
+<tr><th id="297">297</th><td>	mrdesc.mr_len = size;</td></tr>
+<tr><th id="298">298</th><td>	mrdesc.mr_flags = flags;</td></tr>
+<tr><th id="299">299</th><td>	act = MEMRANGE_SET_REMOVE;</td></tr>
+<tr><th id="300">300</th><td>	strlcpy(mrdesc.mr_owner, <q>"drm"</q>, <b>sizeof</b>(mrdesc.mr_owner));</td></tr>
+<tr><th id="301">301</th><td>	<b>return</b> mem_range_attr_set(&amp;mrdesc, &amp;act);</td></tr>
+<tr><th id="302">302</th><td>}</td></tr>
+<tr><th id="303">303</th><td><u>#<span data-ppcond="275">elif</span>   defined(<span class="macro" data-ref="_M/__NetBSD__">__NetBSD__</span>)</u></td></tr>
+<tr><th id="304">304</th><td><em>int</em></td></tr>
+<tr><th id="305">305</th><td>drm_mtrr_add(<em>unsigned</em> <em>long</em> offset, size_t size, <em>int</em> flags)</td></tr>
+<tr><th id="306">306</th><td>{</td></tr>
+<tr><th id="307">307</th><td><u>#if defined(MTRR) &amp;&amp; defined(MTRR_GETSET_KERNEL)</u></td></tr>
+<tr><th id="308">308</th><td>	<b>struct</b> mtrr mtrrmap;</td></tr>
+<tr><th id="309">309</th><td>	<em>int</em> one = <var>1</var>;</td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td>	mtrrmap.base = offset;</td></tr>
+<tr><th id="312">312</th><td>	mtrrmap.len = size;</td></tr>
+<tr><th id="313">313</th><td>	mtrrmap.type = flags;</td></tr>
+<tr><th id="314">314</th><td>	mtrrmap.flags = MTRR_VALID;</td></tr>
+<tr><th id="315">315</th><td>	<b>return</b> mtrr_set(&amp;mtrrmap, &amp;one, NULL, MTRR_GETSET_KERNEL);</td></tr>
+<tr><th id="316">316</th><td><u>#else</u></td></tr>
+<tr><th id="317">317</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="318">318</th><td><u>#endif</u></td></tr>
+<tr><th id="319">319</th><td>}</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td><em>int</em></td></tr>
+<tr><th id="322">322</th><td>drm_mtrr_del(<em>int</em> __unused handle, <em>unsigned</em> <em>long</em> offset, size_t size, <em>int</em> flags)</td></tr>
+<tr><th id="323">323</th><td>{</td></tr>
+<tr><th id="324">324</th><td><u>#if defined(MTRR) &amp;&amp; defined(MTRR_GETSET_KERNEL)</u></td></tr>
+<tr><th id="325">325</th><td>	<b>struct</b> mtrr mtrrmap;</td></tr>
+<tr><th id="326">326</th><td>	<em>int</em> one = <var>1</var>;</td></tr>
+<tr><th id="327">327</th><td></td></tr>
+<tr><th id="328">328</th><td>	mtrrmap.base = offset;</td></tr>
+<tr><th id="329">329</th><td>	mtrrmap.len = size;</td></tr>
+<tr><th id="330">330</th><td>	mtrrmap.type = flags;</td></tr>
+<tr><th id="331">331</th><td>	mtrrmap.flags = <var>0</var>;</td></tr>
+<tr><th id="332">332</th><td>	<b>return</b> mtrr_set(&amp;mtrrmap, &amp;one, NULL, MTRR_GETSET_KERNEL);</td></tr>
+<tr><th id="333">333</th><td><u>#else</u></td></tr>
+<tr><th id="334">334</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="335">335</th><td><u>#endif</u></td></tr>
+<tr><th id="336">336</th><td>}</td></tr>
+<tr><th id="337">337</th><td><u>#<span data-ppcond="275">endif</span></u></td></tr>
+<tr><th id="338">338</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

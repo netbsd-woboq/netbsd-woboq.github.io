@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>bufq_disksort.c source code [netbsd/sys/kern/bufq_disksort.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="bufq_disksort "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/bufq_disksort.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='bufq_disksort.c.html'>bufq_disksort.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: bufq_disksort.c,v 1.14 2017/05/04 11:03:27 kamil Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td><i>/*	NetBSD: subr_disk.c,v 1.61 2004/09/25 03:30:44 thorpej Exp 	*/</i></td></tr>
+<tr><th id="3">3</th><td></td></tr>
+<tr><th id="4">4</th><td><i>/*-</i></td></tr>
+<tr><th id="5">5</th><td><i> * Copyright (c) 1996, 1997, 1999, 2000 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="6">6</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="7">7</th><td><i> *</i></td></tr>
+<tr><th id="8">8</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="9">9</th><td><i> * by Jason R. Thorpe of the Numerical Aerospace Simulation Facility,</i></td></tr>
+<tr><th id="10">10</th><td><i> * NASA Ames Research Center.</i></td></tr>
+<tr><th id="11">11</th><td><i> *</i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="13">13</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="14">14</th><td><i> * are met:</i></td></tr>
+<tr><th id="15">15</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="17">17</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="18">18</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="19">19</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="20">20</th><td><i> *</i></td></tr>
+<tr><th id="21">21</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="22">22</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="23">23</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="24">24</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="25">25</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="26">26</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="27">27</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="28">28</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="29">29</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="30">30</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="31">31</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="32">32</th><td><i> */</i></td></tr>
+<tr><th id="33">33</th><td></td></tr>
+<tr><th id="34">34</th><td><i>/*</i></td></tr>
+<tr><th id="35">35</th><td><i> * Copyright (c) 1982, 1986, 1988, 1993</i></td></tr>
+<tr><th id="36">36</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="37">37</th><td><i> * (c) UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="38">38</th><td><i> * All or some portions of this file are derived from material licensed</i></td></tr>
+<tr><th id="39">39</th><td><i> * to the University of California by American Telephone and Telegraph</i></td></tr>
+<tr><th id="40">40</th><td><i> * Co. or Unix System Laboratories, Inc. and are reproduced herein with</i></td></tr>
+<tr><th id="41">41</th><td><i> * the permission of UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="42">42</th><td><i> *</i></td></tr>
+<tr><th id="43">43</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="44">44</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="45">45</th><td><i> * are met:</i></td></tr>
+<tr><th id="46">46</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="47">47</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="48">48</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="49">49</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="50">50</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="51">51</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="52">52</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="53">53</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="54">54</th><td><i> *</i></td></tr>
+<tr><th id="55">55</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="56">56</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="57">57</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="58">58</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="59">59</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="60">60</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="61">61</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="62">62</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="63">63</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="64">64</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="65">65</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="66">66</th><td><i> *</i></td></tr>
+<tr><th id="67">67</th><td><i> *	@(#)ufs_disksubr.c	8.5 (Berkeley) 1/21/94</i></td></tr>
+<tr><th id="68">68</th><td><i> */</i></td></tr>
+<tr><th id="69">69</th><td></td></tr>
+<tr><th id="70">70</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="71">71</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: bufq_disksort.c,v 1.14 2017/05/04 11:03:27 kamil Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: bufq_disksort.c,v 1.14 2017/05/04 11:03:27 kamil Exp $"</q>);</td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="74">74</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="75">75</th><td><u>#include <a href="../sys/buf.h.html">&lt;sys/buf.h&gt;</a></u></td></tr>
+<tr><th id="76">76</th><td><u>#include <a href="../sys/bufq.h.html">&lt;sys/bufq.h&gt;</a></u></td></tr>
+<tr><th id="77">77</th><td><u>#include <a href="../sys/bufq_impl.h.html">&lt;sys/bufq_impl.h&gt;</a></u></td></tr>
+<tr><th id="78">78</th><td><u>#include <a href="../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="79">79</th><td><u>#include <a href="../sys/module.h.html">&lt;sys/module.h&gt;</a></u></td></tr>
+<tr><th id="80">80</th><td></td></tr>
+<tr><th id="81">81</th><td><i>/*</i></td></tr>
+<tr><th id="82">82</th><td><i> * Seek sort for disks.</i></td></tr>
+<tr><th id="83">83</th><td><i> *</i></td></tr>
+<tr><th id="84">84</th><td><i> * There are actually two queues, sorted in ascendening order.  The first</i></td></tr>
+<tr><th id="85">85</th><td><i> * queue holds those requests which are positioned after the current block;</i></td></tr>
+<tr><th id="86">86</th><td><i> * the second holds requests which came in after their position was passed.</i></td></tr>
+<tr><th id="87">87</th><td><i> * Thus we implement a one-way scan, retracting after reaching the end of</i></td></tr>
+<tr><th id="88">88</th><td><i> * the drive to the first request on the second queue, at which time it</i></td></tr>
+<tr><th id="89">89</th><td><i> * becomes the first queue.</i></td></tr>
+<tr><th id="90">90</th><td><i> *</i></td></tr>
+<tr><th id="91">91</th><td><i> * A one-way scan is natural because of the way UNIX read-ahead blocks are</i></td></tr>
+<tr><th id="92">92</th><td><i> * allocated.</i></td></tr>
+<tr><th id="93">93</th><td><i> */</i></td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><b>struct</b> <dfn class="type def" id="bufq_disksort" title='bufq_disksort' data-ref="bufq_disksort" data-ref-filename="bufq_disksort">bufq_disksort</dfn> {</td></tr>
+<tr><th id="96">96</th><td>	<a class="macro" href="../sys/queue.h.html#413" title="struct { struct buf *tqh_first; struct buf * *tqh_last; }" data-ref="_M/TAILQ_HEAD">TAILQ_HEAD</a>(, <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a>) <dfn class="tu decl field" id="bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-type='struct (anonymous struct at /___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/bufq_disksort.c:96:2)' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</dfn>;	<i>/* actual list of buffers */</i></td></tr>
+<tr><th id="97">97</th><td>};</td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td><em>static</em> <em>void</em> <a class="tu decl fn" href="#bufq_disksort_init" title='bufq_disksort_init' data-type='void bufq_disksort_init(struct bufq_state * )' data-ref="bufq_disksort_init" data-ref-filename="bufq_disksort_init">bufq_disksort_init</a>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *);</td></tr>
+<tr><th id="100">100</th><td><em>static</em> <em>void</em> <a class="tu decl fn" href="#bufq_disksort_put" title='bufq_disksort_put' data-type='void bufq_disksort_put(struct bufq_state * , struct buf * )' data-ref="bufq_disksort_put" data-ref-filename="bufq_disksort_put">bufq_disksort_put</a>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *, <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *);</td></tr>
+<tr><th id="101">101</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<a class="tu decl fn" href="#bufq_disksort_get" title='bufq_disksort_get' data-type='struct buf * bufq_disksort_get(struct bufq_state * , int )' data-ref="bufq_disksort_get" data-ref-filename="bufq_disksort_get">bufq_disksort_get</a>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *, <em>int</em>);</td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><a class="macro" href="../sys/bufq_impl.h.html#135" title="static struct bufq_strat bufq_strat_disksort = { .bs_name = &quot;disksort&quot;, .bs_prio = 20, .bs_initfn = bufq_disksort_init, .bs_refcnt = 0 };" data-ref="_M/BUFQ_DEFINE">BUFQ_DEFINE</a>(disksort, <var>20</var>, <a class="tu ref fn" href="#bufq_disksort_init" title='bufq_disksort_init' data-use='r' data-ref="bufq_disksort_init" data-ref-filename="bufq_disksort_init">bufq_disksort_init</a>);</td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="106">106</th><td><dfn class="tu decl def fn" id="bufq_disksort_put" title='bufq_disksort_put' data-type='void bufq_disksort_put(struct bufq_state * bufq, struct buf * bp)' data-ref="bufq_disksort_put" data-ref-filename="bufq_disksort_put">bufq_disksort_put</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col5 decl" id="5bufq" title='bufq' data-type='struct bufq_state *' data-ref="5bufq" data-ref-filename="5bufq">bufq</dfn>, <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col6 decl" id="6bp" title='bp' data-type='struct buf *' data-ref="6bp" data-ref-filename="6bp">bp</dfn>)</td></tr>
+<tr><th id="107">107</th><td>{</td></tr>
+<tr><th id="108">108</th><td>	<b>struct</b> <a class="type" href="#bufq_disksort" title='bufq_disksort' data-ref="bufq_disksort" data-ref-filename="bufq_disksort">bufq_disksort</a> *<dfn class="local col7 decl" id="7disksort" title='disksort' data-type='struct bufq_disksort *' data-ref="7disksort" data-ref-filename="7disksort">disksort</dfn> = <a class="ref fn" href="../sys/bufq_impl.h.html#bufq_private" title='bufq_private' data-ref="bufq_private" data-ref-filename="bufq_private">bufq_private</a>(<a class="local col5 ref" href="#5bufq" title='bufq' data-ref="5bufq" data-ref-filename="5bufq">bufq</a>);</td></tr>
+<tr><th id="109">109</th><td>	<b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col8 decl" id="8bq" title='bq' data-type='struct buf *' data-ref="8bq" data-ref-filename="8bq">bq</dfn>, *<dfn class="local col9 decl" id="9nbq" title='nbq' data-type='struct buf *' data-ref="9nbq" data-ref-filename="9nbq">nbq</dfn>;</td></tr>
+<tr><th id="110">110</th><td>	<em>int</em> <dfn class="local col0 decl" id="10sortby" title='sortby' data-type='int' data-ref="10sortby" data-ref-filename="10sortby">sortby</dfn>;</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td>	<a class="local col0 ref" href="#10sortby" title='sortby' data-ref="10sortby" data-ref-filename="10sortby">sortby</a> = <a class="local col5 ref" href="#5bufq" title='bufq' data-ref="5bufq" data-ref-filename="5bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_flags" title='bufq_state::bq_flags' data-ref="bufq_state::bq_flags" data-ref-filename="bufq_state..bq_flags">bq_flags</a> &amp; <a class="macro" href="../sys/bufq.h.html#89" title="0x000f" data-ref="_M/BUFQ_SORT_MASK">BUFQ_SORT_MASK</a>;</td></tr>
+<tr><th id="113">113</th><td></td></tr>
+<tr><th id="114">114</th><td>	<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;disksort-&gt;bq_head)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="local col7 ref" href="#7disksort" title='disksort' data-ref="7disksort" data-ref-filename="7disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>);</td></tr>
+<tr><th id="115">115</th><td></td></tr>
+<tr><th id="116">116</th><td>	<i>/*</i></td></tr>
+<tr><th id="117">117</th><td><i>	 * If the queue is empty it's easy; we just go on the end.</i></td></tr>
+<tr><th id="118">118</th><td><i>	 */</i></td></tr>
+<tr><th id="119">119</th><td>	<b>if</b> (<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="120">120</th><td>		<a class="macro" href="../sys/queue.h.html#512" title="do { (bp)-&gt;b_u.u_actq.tqe_next = (((void *)0)); (bp)-&gt;b_u.u_actq.tqe_prev = (&amp;disksort-&gt;bq_head)-&gt;tqh_last; *(&amp;disksort-&gt;bq_head)-&gt;tqh_last = (bp); (&amp;disksort-&gt;bq_head)-&gt;tqh_last = &amp;(bp)-&gt;b_u.u_actq.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_TAIL">TAILQ_INSERT_TAIL</a>(&amp;<a class="local col7 ref" href="#7disksort" title='disksort' data-ref="7disksort" data-ref-filename="7disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>, <a class="local col6 ref" href="#6bp" title='bp' data-ref="6bp" data-ref-filename="6bp">bp</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>);</td></tr>
+<tr><th id="121">121</th><td>		<b>return</b>;</td></tr>
+<tr><th id="122">122</th><td>	}</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td>	<i>/*</i></td></tr>
+<tr><th id="125">125</th><td><i>	 * If we lie before the currently active request, then we</i></td></tr>
+<tr><th id="126">126</th><td><i>	 * must locate the second request list and add ourselves to it.</i></td></tr>
+<tr><th id="127">127</th><td><i>	 */</i></td></tr>
+<tr><th id="128">128</th><td>	<b>if</b> (<a class="ref fn" href="../sys/bufq_impl.h.html#buf_inorder" title='buf_inorder' data-ref="buf_inorder" data-ref-filename="buf_inorder">buf_inorder</a>(<a class="local col6 ref" href="#6bp" title='bp' data-ref="6bp" data-ref-filename="6bp">bp</a>, <a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="local col0 ref" href="#10sortby" title='sortby' data-ref="10sortby" data-ref-filename="10sortby">sortby</a>)) {</td></tr>
+<tr><th id="129">129</th><td>		<b>while</b> ((<a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a> = <a class="macro" href="../sys/queue.h.html#430" title="((bq)-&gt;b_u.u_actq.tqe_next)" data-ref="_M/TAILQ_NEXT">TAILQ_NEXT</a>(<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="130">130</th><td>			<i>/*</i></td></tr>
+<tr><th id="131">131</th><td><i>			 * Check for an ``inversion'' in the normally ascending</i></td></tr>
+<tr><th id="132">132</th><td><i>			 * block numbers, indicating the start of the second</i></td></tr>
+<tr><th id="133">133</th><td><i>			 * request list.</i></td></tr>
+<tr><th id="134">134</th><td><i>			 */</i></td></tr>
+<tr><th id="135">135</th><td>			<b>if</b> (<a class="ref fn" href="../sys/bufq_impl.h.html#buf_inorder" title='buf_inorder' data-ref="buf_inorder" data-ref-filename="buf_inorder">buf_inorder</a>(<a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>, <a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="local col0 ref" href="#10sortby" title='sortby' data-ref="10sortby" data-ref-filename="10sortby">sortby</a>)) {</td></tr>
+<tr><th id="136">136</th><td>				<i>/*</i></td></tr>
+<tr><th id="137">137</th><td><i>				 * Search the second request list for the first</i></td></tr>
+<tr><th id="138">138</th><td><i>				 * request at a larger block number.  We go</i></td></tr>
+<tr><th id="139">139</th><td><i>				 * after that; if there is no such request, we</i></td></tr>
+<tr><th id="140">140</th><td><i>				 * go at the end.</i></td></tr>
+<tr><th id="141">141</th><td><i>				 */</i></td></tr>
+<tr><th id="142">142</th><td>				<b>do</b> {</td></tr>
+<tr><th id="143">143</th><td>					<b>if</b> (<a class="ref fn" href="../sys/bufq_impl.h.html#buf_inorder" title='buf_inorder' data-ref="buf_inorder" data-ref-filename="buf_inorder">buf_inorder</a>(<a class="local col6 ref" href="#6bp" title='bp' data-ref="6bp" data-ref-filename="6bp">bp</a>, <a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>, <a class="local col0 ref" href="#10sortby" title='sortby' data-ref="10sortby" data-ref-filename="10sortby">sortby</a>))</td></tr>
+<tr><th id="144">144</th><td>						<b>goto</b> <a class="lbl" href="#11insert" data-ref="11insert" data-ref-filename="11insert">insert</a>;</td></tr>
+<tr><th id="145">145</th><td>					<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a> = <a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>;</td></tr>
+<tr><th id="146">146</th><td>				} <b>while</b> ((<a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a> =</td></tr>
+<tr><th id="147">147</th><td>				    <a class="macro" href="../sys/queue.h.html#430" title="((bq)-&gt;b_u.u_actq.tqe_next)" data-ref="_M/TAILQ_NEXT">TAILQ_NEXT</a>(<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="148">148</th><td>				<b>goto</b> <a class="lbl" href="#11insert" data-ref="11insert" data-ref-filename="11insert">insert</a>;		<i>/* after last */</i></td></tr>
+<tr><th id="149">149</th><td>			}</td></tr>
+<tr><th id="150">150</th><td>			<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a> = <a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>;</td></tr>
+<tr><th id="151">151</th><td>		}</td></tr>
+<tr><th id="152">152</th><td>		<i>/*</i></td></tr>
+<tr><th id="153">153</th><td><i>		 * No inversions... we will go after the last, and</i></td></tr>
+<tr><th id="154">154</th><td><i>		 * be the first request in the second request list.</i></td></tr>
+<tr><th id="155">155</th><td><i>		 */</i></td></tr>
+<tr><th id="156">156</th><td>		<b>goto</b> <a class="lbl" href="#11insert" data-ref="11insert" data-ref-filename="11insert">insert</a>;</td></tr>
+<tr><th id="157">157</th><td>	}</td></tr>
+<tr><th id="158">158</th><td>	<i>/*</i></td></tr>
+<tr><th id="159">159</th><td><i>	 * Request is at/after the current request...</i></td></tr>
+<tr><th id="160">160</th><td><i>	 * sort in the first request list.</i></td></tr>
+<tr><th id="161">161</th><td><i>	 */</i></td></tr>
+<tr><th id="162">162</th><td>	<b>while</b> ((<a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a> = <a class="macro" href="../sys/queue.h.html#430" title="((bq)-&gt;b_u.u_actq.tqe_next)" data-ref="_M/TAILQ_NEXT">TAILQ_NEXT</a>(<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>)) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="163">163</th><td>		<i>/*</i></td></tr>
+<tr><th id="164">164</th><td><i>		 * We want to go after the current request if there is an</i></td></tr>
+<tr><th id="165">165</th><td><i>		 * inversion after it (i.e. it is the end of the first</i></td></tr>
+<tr><th id="166">166</th><td><i>		 * request list), or if the next request is a larger cylinder</i></td></tr>
+<tr><th id="167">167</th><td><i>		 * than our request.</i></td></tr>
+<tr><th id="168">168</th><td><i>		 */</i></td></tr>
+<tr><th id="169">169</th><td>		<b>if</b> (<a class="ref fn" href="../sys/bufq_impl.h.html#buf_inorder" title='buf_inorder' data-ref="buf_inorder" data-ref-filename="buf_inorder">buf_inorder</a>(<a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>, <a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="local col0 ref" href="#10sortby" title='sortby' data-ref="10sortby" data-ref-filename="10sortby">sortby</a>) ||</td></tr>
+<tr><th id="170">170</th><td>		    <a class="ref fn" href="../sys/bufq_impl.h.html#buf_inorder" title='buf_inorder' data-ref="buf_inorder" data-ref-filename="buf_inorder">buf_inorder</a>(<a class="local col6 ref" href="#6bp" title='bp' data-ref="6bp" data-ref-filename="6bp">bp</a>, <a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>, <a class="local col0 ref" href="#10sortby" title='sortby' data-ref="10sortby" data-ref-filename="10sortby">sortby</a>))</td></tr>
+<tr><th id="171">171</th><td>			<b>goto</b> <a class="lbl" href="#11insert" data-ref="11insert" data-ref-filename="11insert">insert</a>;</td></tr>
+<tr><th id="172">172</th><td>		<a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a> = <a class="local col9 ref" href="#9nbq" title='nbq' data-ref="9nbq" data-ref-filename="9nbq">nbq</a>;</td></tr>
+<tr><th id="173">173</th><td>	}</td></tr>
+<tr><th id="174">174</th><td>	<i>/*</i></td></tr>
+<tr><th id="175">175</th><td><i>	 * Neither a second list nor a larger request... we go at the end of</i></td></tr>
+<tr><th id="176">176</th><td><i>	 * the first list, which is the same as the end of the whole schebang.</i></td></tr>
+<tr><th id="177">177</th><td><i>	 */</i></td></tr>
+<tr><th id="178">178</th><td><dfn class="lbl" id="11insert" data-ref="11insert" data-ref-filename="11insert">insert</dfn>:	<a class="macro" href="../sys/queue.h.html#520" title="do { if (((bp)-&gt;b_u.u_actq.tqe_next = (bq)-&gt;b_u.u_actq.tqe_next) != (((void *)0))) (bp)-&gt;b_u.u_actq.tqe_next-&gt;b_u.u_actq.tqe_prev = &amp;(bp)-&gt;b_u.u_actq.tqe_next; else (&amp;disksort-&gt;bq_head)-&gt;tqh_last = &amp;(bp)-&gt;b_u.u_actq.tqe_next; (bq)-&gt;b_u.u_actq.tqe_next = (bp); (bp)-&gt;b_u.u_actq.tqe_prev = &amp;(bq)-&gt;b_u.u_actq.tqe_next; } while ( 0)" data-ref="_M/TAILQ_INSERT_AFTER">TAILQ_INSERT_AFTER</a>(&amp;<a class="local col7 ref" href="#7disksort" title='disksort' data-ref="7disksort" data-ref-filename="7disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>, <a class="local col8 ref" href="#8bq" title='bq' data-ref="8bq" data-ref-filename="8bq">bq</a>, <a class="local col6 ref" href="#6bp" title='bp' data-ref="6bp" data-ref-filename="6bp">bp</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>);</td></tr>
+<tr><th id="179">179</th><td>}</td></tr>
+<tr><th id="180">180</th><td></td></tr>
+<tr><th id="181">181</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *</td></tr>
+<tr><th id="182">182</th><td><dfn class="tu decl def fn" id="bufq_disksort_get" title='bufq_disksort_get' data-type='struct buf * bufq_disksort_get(struct bufq_state * bufq, int remove)' data-ref="bufq_disksort_get" data-ref-filename="bufq_disksort_get">bufq_disksort_get</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col2 decl" id="12bufq" title='bufq' data-type='struct bufq_state *' data-ref="12bufq" data-ref-filename="12bufq">bufq</dfn>, <em>int</em> <dfn class="local col3 decl" id="13remove" title='remove' data-type='int' data-ref="13remove" data-ref-filename="13remove">remove</dfn>)</td></tr>
+<tr><th id="183">183</th><td>{</td></tr>
+<tr><th id="184">184</th><td>	<b>struct</b> <a class="type" href="#bufq_disksort" title='bufq_disksort' data-ref="bufq_disksort" data-ref-filename="bufq_disksort">bufq_disksort</a> *<dfn class="local col4 decl" id="14disksort" title='disksort' data-type='struct bufq_disksort *' data-ref="14disksort" data-ref-filename="14disksort">disksort</dfn> = <a class="ref fn" href="../sys/bufq_impl.h.html#bufq_private" title='bufq_private' data-ref="bufq_private" data-ref-filename="bufq_private">bufq_private</a>(<a class="local col2 ref" href="#12bufq" title='bufq' data-ref="12bufq" data-ref-filename="12bufq">bufq</a>);</td></tr>
+<tr><th id="185">185</th><td>	<b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col5 decl" id="15bp" title='bp' data-type='struct buf *' data-ref="15bp" data-ref-filename="15bp">bp</dfn>;</td></tr>
+<tr><th id="186">186</th><td></td></tr>
+<tr><th id="187">187</th><td>	<a class="local col5 ref" href="#15bp" title='bp' data-ref="15bp" data-ref-filename="15bp">bp</a> = <a class="macro" href="../sys/queue.h.html#428" title="((&amp;disksort-&gt;bq_head)-&gt;tqh_first)" data-ref="_M/TAILQ_FIRST">TAILQ_FIRST</a>(&amp;<a class="local col4 ref" href="#14disksort" title='disksort' data-ref="14disksort" data-ref-filename="14disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>);</td></tr>
+<tr><th id="188">188</th><td></td></tr>
+<tr><th id="189">189</th><td>	<b>if</b> (<a class="local col5 ref" href="#15bp" title='bp' data-ref="15bp" data-ref-filename="15bp">bp</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a> &amp;&amp; <a class="local col3 ref" href="#13remove" title='remove' data-ref="13remove" data-ref-filename="13remove">remove</a>)</td></tr>
+<tr><th id="190">190</th><td>		<a class="macro" href="../sys/queue.h.html#540" title="do { if (((bp)-&gt;b_u.u_actq.tqe_next) != (((void *)0))) (bp)-&gt;b_u.u_actq.tqe_next-&gt;b_u.u_actq.tqe_prev = (bp)-&gt;b_u.u_actq.tqe_prev; else (&amp;disksort-&gt;bq_head)-&gt;tqh_last = (bp)-&gt;b_u.u_actq.tqe_prev; *(bp)-&gt;b_u.u_actq.tqe_prev = (bp)-&gt;b_u.u_actq.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="local col4 ref" href="#14disksort" title='disksort' data-ref="14disksort" data-ref-filename="14disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>, <a class="local col5 ref" href="#15bp" title='bp' data-ref="15bp" data-ref-filename="15bp">bp</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>);</td></tr>
+<tr><th id="191">191</th><td></td></tr>
+<tr><th id="192">192</th><td>	<b>return</b> (<a class="local col5 ref" href="#15bp" title='bp' data-ref="15bp" data-ref-filename="15bp">bp</a>);</td></tr>
+<tr><th id="193">193</th><td>}</td></tr>
+<tr><th id="194">194</th><td></td></tr>
+<tr><th id="195">195</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *</td></tr>
+<tr><th id="196">196</th><td><dfn class="tu decl def fn" id="bufq_disksort_cancel" title='bufq_disksort_cancel' data-type='struct buf * bufq_disksort_cancel(struct bufq_state * bufq, struct buf * buf)' data-ref="bufq_disksort_cancel" data-ref-filename="bufq_disksort_cancel">bufq_disksort_cancel</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col6 decl" id="16bufq" title='bufq' data-type='struct bufq_state *' data-ref="16bufq" data-ref-filename="16bufq">bufq</dfn>, <b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col7 decl" id="17buf" title='buf' data-type='struct buf *' data-ref="17buf" data-ref-filename="17buf">buf</dfn>)</td></tr>
+<tr><th id="197">197</th><td>{</td></tr>
+<tr><th id="198">198</th><td>	<b>struct</b> <a class="type" href="#bufq_disksort" title='bufq_disksort' data-ref="bufq_disksort" data-ref-filename="bufq_disksort">bufq_disksort</a> *<dfn class="local col8 decl" id="18disksort" title='disksort' data-type='struct bufq_disksort *' data-ref="18disksort" data-ref-filename="18disksort">disksort</dfn> = <a class="ref fn" href="../sys/bufq_impl.h.html#bufq_private" title='bufq_private' data-ref="bufq_private" data-ref-filename="bufq_private">bufq_private</a>(<a class="local col6 ref" href="#16bufq" title='bufq' data-ref="16bufq" data-ref-filename="16bufq">bufq</a>);</td></tr>
+<tr><th id="199">199</th><td>	<b>struct</b> <a class="type" href="../sys/buf.h.html#buf" title='buf' data-ref="buf" data-ref-filename="buf">buf</a> *<dfn class="local col9 decl" id="19bq" title='bq' data-type='struct buf *' data-ref="19bq" data-ref-filename="19bq">bq</dfn>;</td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td>	<a class="macro" href="../sys/queue.h.html#438" title="for ((bq) = ((&amp;disksort-&gt;bq_head)-&gt;tqh_first); (bq) != (((void *)0)); (bq) = ((bq)-&gt;b_u.u_actq.tqe_next))" data-ref="_M/TAILQ_FOREACH">TAILQ_FOREACH</a>(<a class="local col9 ref" href="#19bq" title='bq' data-ref="19bq" data-ref-filename="19bq">bq</a>, &amp;<a class="local col8 ref" href="#18disksort" title='disksort' data-ref="18disksort" data-ref-filename="18disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>) {</td></tr>
+<tr><th id="202">202</th><td>		<b>if</b> (<a class="local col9 ref" href="#19bq" title='bq' data-ref="19bq" data-ref-filename="19bq">bq</a> == <a class="local col7 ref" href="#17buf" title='buf' data-ref="17buf" data-ref-filename="17buf">buf</a>) {</td></tr>
+<tr><th id="203">203</th><td>			<a class="macro" href="../sys/queue.h.html#540" title="do { if (((bq)-&gt;b_u.u_actq.tqe_next) != (((void *)0))) (bq)-&gt;b_u.u_actq.tqe_next-&gt;b_u.u_actq.tqe_prev = (bq)-&gt;b_u.u_actq.tqe_prev; else (&amp;disksort-&gt;bq_head)-&gt;tqh_last = (bq)-&gt;b_u.u_actq.tqe_prev; *(bq)-&gt;b_u.u_actq.tqe_prev = (bq)-&gt;b_u.u_actq.tqe_next; ; } while ( 0)" data-ref="_M/TAILQ_REMOVE">TAILQ_REMOVE</a>(&amp;<a class="local col8 ref" href="#18disksort" title='disksort' data-ref="18disksort" data-ref-filename="18disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>, <a class="local col9 ref" href="#19bq" title='bq' data-ref="19bq" data-ref-filename="19bq">bq</a>, <a class="macro" href="../sys/buf.h.html#123" title="b_u.u_actq" data-ref="_M/b_actq">b_actq</a>);</td></tr>
+<tr><th id="204">204</th><td>			<b>return</b> <a class="local col7 ref" href="#17buf" title='buf' data-ref="17buf" data-ref-filename="17buf">buf</a>;</td></tr>
+<tr><th id="205">205</th><td>		}</td></tr>
+<tr><th id="206">206</th><td>	}</td></tr>
+<tr><th id="207">207</th><td>	<b>return</b> <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="208">208</th><td>}</td></tr>
+<tr><th id="209">209</th><td></td></tr>
+<tr><th id="210">210</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="211">211</th><td><dfn class="tu decl def fn" id="bufq_disksort_fini" title='bufq_disksort_fini' data-type='void bufq_disksort_fini(struct bufq_state * bufq)' data-ref="bufq_disksort_fini" data-ref-filename="bufq_disksort_fini">bufq_disksort_fini</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col0 decl" id="20bufq" title='bufq' data-type='struct bufq_state *' data-ref="20bufq" data-ref-filename="20bufq">bufq</dfn>)</td></tr>
+<tr><th id="212">212</th><td>{</td></tr>
+<tr><th id="213">213</th><td></td></tr>
+<tr><th id="214">214</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((bufq-&gt;bq_private != ((void *)0))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;bufq-&gt;bq_private != NULL&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/compat/amd64/i386/lib/librumpvfs/../../../../../../sys/kern/bufq_disksort.c&quot;, 214))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col0 ref" href="#20bufq" title='bufq' data-ref="20bufq" data-ref-filename="20bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_private" title='bufq_state::bq_private' data-ref="bufq_state::bq_private" data-ref-filename="bufq_state..bq_private">bq_private</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="215">215</th><td>	<a class="ref fn" href="../sys/kmem.h.html#kmem_free" title='kmem_free' data-ref="kmem_free" data-ref-filename="kmem_free">kmem_free</a>(<a class="local col0 ref" href="#20bufq" title='bufq' data-ref="20bufq" data-ref-filename="20bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_private" title='bufq_state::bq_private' data-ref="bufq_state::bq_private" data-ref-filename="bufq_state..bq_private">bq_private</a>, <b>sizeof</b>(<b>struct</b> <a class="type" href="#bufq_disksort" title='bufq_disksort' data-ref="bufq_disksort" data-ref-filename="bufq_disksort">bufq_disksort</a>));</td></tr>
+<tr><th id="216">216</th><td>}</td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="219">219</th><td><dfn class="tu decl def fn" id="bufq_disksort_init" title='bufq_disksort_init' data-type='void bufq_disksort_init(struct bufq_state * bufq)' data-ref="bufq_disksort_init" data-ref-filename="bufq_disksort_init">bufq_disksort_init</dfn>(<b>struct</b> <a class="type" href="../sys/bufq_impl.h.html#bufq_state" title='bufq_state' data-ref="bufq_state" data-ref-filename="bufq_state">bufq_state</a> *<dfn class="local col1 decl" id="21bufq" title='bufq' data-type='struct bufq_state *' data-ref="21bufq" data-ref-filename="21bufq">bufq</dfn>)</td></tr>
+<tr><th id="220">220</th><td>{</td></tr>
+<tr><th id="221">221</th><td>	<b>struct</b> <a class="type" href="#bufq_disksort" title='bufq_disksort' data-ref="bufq_disksort" data-ref-filename="bufq_disksort">bufq_disksort</a> *<dfn class="local col2 decl" id="22disksort" title='disksort' data-type='struct bufq_disksort *' data-ref="22disksort" data-ref-filename="22disksort">disksort</dfn>;</td></tr>
+<tr><th id="222">222</th><td></td></tr>
+<tr><th id="223">223</th><td>	<a class="local col2 ref" href="#22disksort" title='disksort' data-ref="22disksort" data-ref-filename="22disksort">disksort</a> = <a class="ref fn" href="../sys/kmem.h.html#kmem_zalloc" title='kmem_zalloc' data-ref="kmem_zalloc" data-ref-filename="kmem_zalloc">kmem_zalloc</a>(<b>sizeof</b>(*<a class="local col2 ref" href="#22disksort" title='disksort' data-ref="22disksort" data-ref-filename="22disksort">disksort</a>), <a class="macro" href="../sys/kmem.h.html#57" title="0x00000001" data-ref="_M/KM_SLEEP">KM_SLEEP</a>);</td></tr>
+<tr><th id="224">224</th><td>	<a class="local col1 ref" href="#21bufq" title='bufq' data-ref="21bufq" data-ref-filename="21bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_private" title='bufq_state::bq_private' data-ref="bufq_state::bq_private" data-ref-filename="bufq_state..bq_private">bq_private</a> = <a class="local col2 ref" href="#22disksort" title='disksort' data-ref="22disksort" data-ref-filename="22disksort">disksort</a>;</td></tr>
+<tr><th id="225">225</th><td>	<a class="local col1 ref" href="#21bufq" title='bufq' data-ref="21bufq" data-ref-filename="21bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_get" title='bufq_state::bq_get' data-ref="bufq_state::bq_get" data-ref-filename="bufq_state..bq_get">bq_get</a> = <a class="tu ref fn" href="#bufq_disksort_get" title='bufq_disksort_get' data-use='r' data-ref="bufq_disksort_get" data-ref-filename="bufq_disksort_get">bufq_disksort_get</a>;</td></tr>
+<tr><th id="226">226</th><td>	<a class="local col1 ref" href="#21bufq" title='bufq' data-ref="21bufq" data-ref-filename="21bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_put" title='bufq_state::bq_put' data-ref="bufq_state::bq_put" data-ref-filename="bufq_state..bq_put">bq_put</a> = <a class="tu ref fn" href="#bufq_disksort_put" title='bufq_disksort_put' data-use='r' data-ref="bufq_disksort_put" data-ref-filename="bufq_disksort_put">bufq_disksort_put</a>;</td></tr>
+<tr><th id="227">227</th><td>	<a class="local col1 ref" href="#21bufq" title='bufq' data-ref="21bufq" data-ref-filename="21bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_cancel" title='bufq_state::bq_cancel' data-ref="bufq_state::bq_cancel" data-ref-filename="bufq_state..bq_cancel">bq_cancel</a> = <a class="tu ref fn" href="#bufq_disksort_cancel" title='bufq_disksort_cancel' data-use='r' data-ref="bufq_disksort_cancel" data-ref-filename="bufq_disksort_cancel">bufq_disksort_cancel</a>;</td></tr>
+<tr><th id="228">228</th><td>	<a class="local col1 ref" href="#21bufq" title='bufq' data-ref="21bufq" data-ref-filename="21bufq">bufq</a>-&gt;<a class="ref field" href="../sys/bufq_impl.h.html#bufq_state::bq_fini" title='bufq_state::bq_fini' data-ref="bufq_state::bq_fini" data-ref-filename="bufq_state..bq_fini">bq_fini</a> = <a class="tu ref fn" href="#bufq_disksort_fini" title='bufq_disksort_fini' data-use='r' data-ref="bufq_disksort_fini" data-ref-filename="bufq_disksort_fini">bufq_disksort_fini</a>;</td></tr>
+<tr><th id="229">229</th><td>	<a class="macro" href="../sys/queue.h.html#496" title="do { (&amp;disksort-&gt;bq_head)-&gt;tqh_first = (((void *)0)); (&amp;disksort-&gt;bq_head)-&gt;tqh_last = &amp;(&amp;disksort-&gt;bq_head)-&gt;tqh_first; } while ( 0)" data-ref="_M/TAILQ_INIT">TAILQ_INIT</a>(&amp;<a class="local col2 ref" href="#22disksort" title='disksort' data-ref="22disksort" data-ref-filename="22disksort">disksort</a>-&gt;<a class="tu ref field" href="#bufq_disksort::bq_head" title='bufq_disksort::bq_head' data-use='a' data-ref="bufq_disksort::bq_head" data-ref-filename="bufq_disksort..bq_head">bq_head</a>);</td></tr>
+<tr><th id="230">230</th><td>}</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td><a class="macro" href="../sys/module.h.html#154" title="static int bufq_disksort_modcmd(modcmd_t, void *); static const modinfo_t bufq_disksort_modinfo = { .mi_version = 899005100, .mi_class = (MODULE_CLASS_BUFQ), .mi_modcmd = bufq_disksort_modcmd, .mi_name = &quot;bufq_disksort&quot;, .mi_required = (((void *)0)) }; static void const * const __link_set_modules_sym_bufq_disksort_modinfo __attribute__((__section__(&quot;link_set_&quot; &quot;modules&quot;))) __attribute__((__used__)) = (const void *)&amp;bufq_disksort_modinfo;" data-ref="_M/MODULE">MODULE</a>(<a class="enum" href="../sys/module.h.html#MODULE_CLASS_BUFQ" title='MODULE_CLASS_BUFQ' data-ref="MODULE_CLASS_BUFQ" data-ref-filename="MODULE_CLASS_BUFQ">MODULE_CLASS_BUFQ</a>, bufq_disksort, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="233">233</th><td></td></tr>
+<tr><th id="234">234</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="235">235</th><td><dfn class="tu decl def fn" id="bufq_disksort_modcmd" title='bufq_disksort_modcmd' data-type='int bufq_disksort_modcmd(modcmd_t cmd, void * opaque)' data-ref="bufq_disksort_modcmd" data-ref-filename="bufq_disksort_modcmd">bufq_disksort_modcmd</dfn>(<a class="typedef" href="../sys/module.h.html#modcmd_t" title='modcmd_t' data-type='enum modcmd' data-ref="modcmd_t" data-ref-filename="modcmd_t">modcmd_t</a> <dfn class="local col3 decl" id="23cmd" title='cmd' data-type='modcmd_t' data-ref="23cmd" data-ref-filename="23cmd">cmd</dfn>, <em>void</em> *<dfn class="local col4 decl" id="24opaque" title='opaque' data-type='void *' data-ref="24opaque" data-ref-filename="24opaque">opaque</dfn>)</td></tr>
+<tr><th id="236">236</th><td>{</td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td>	<b>switch</b> (<a class="local col3 ref" href="#23cmd" title='cmd' data-ref="23cmd" data-ref-filename="23cmd">cmd</a>) {</td></tr>
+<tr><th id="239">239</th><td>	<b>case</b> <a class="enum" href="../sys/module.h.html#MODULE_CMD_INIT" title='MODULE_CMD_INIT' data-ref="MODULE_CMD_INIT" data-ref-filename="MODULE_CMD_INIT">MODULE_CMD_INIT</a>:</td></tr>
+<tr><th id="240">240</th><td>		<b>return</b> <a class="ref fn" href="../sys/bufq_impl.h.html#bufq_register" title='bufq_register' data-ref="bufq_register" data-ref-filename="bufq_register">bufq_register</a>(&amp;<a class="ref" href="#103" title='bufq_strat_disksort' data-ref="bufq_strat_disksort" data-ref-filename="bufq_strat_disksort">bufq_strat_disksort</a>);</td></tr>
+<tr><th id="241">241</th><td>	<b>case</b> <a class="enum" href="../sys/module.h.html#MODULE_CMD_FINI" title='MODULE_CMD_FINI' data-ref="MODULE_CMD_FINI" data-ref-filename="MODULE_CMD_FINI">MODULE_CMD_FINI</a>:</td></tr>
+<tr><th id="242">242</th><td>		<b>return</b> <a class="ref fn" href="../sys/bufq_impl.h.html#bufq_unregister" title='bufq_unregister' data-ref="bufq_unregister" data-ref-filename="bufq_unregister">bufq_unregister</a>(&amp;<a class="ref" href="#103" title='bufq_strat_disksort' data-ref="bufq_strat_disksort" data-ref-filename="bufq_strat_disksort">bufq_strat_disksort</a>);</td></tr>
+<tr><th id="243">243</th><td>	<b>default</b>:</td></tr>
+<tr><th id="244">244</th><td>		<b>return</b> <a class="macro" href="../sys/errno.h.html#67" title="25" data-ref="_M/ENOTTY">ENOTTY</a>;</td></tr>
+<tr><th id="245">245</th><td>	}</td></tr>
+<tr><th id="246">246</th><td>}</td></tr>
+<tr><th id="247">247</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

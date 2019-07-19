@@ -1,0 +1,516 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>kern_acct.c source code [netbsd/sys/kern/kern_acct.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/kern_acct.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='kern_acct.c.html'>kern_acct.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: kern_acct.c,v 1.96 2019/05/26 19:23:04 dholland Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 1982, 1986, 1989, 1993</i></td></tr>
+<tr><th id="5">5</th><td><i> *	The Regents of the University of California.  All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> * (c) UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="7">7</th><td><i> * All or some portions of this file are derived from material licensed</i></td></tr>
+<tr><th id="8">8</th><td><i> * to the University of California by American Telephone and Telegraph</i></td></tr>
+<tr><th id="9">9</th><td><i> * Co. or Unix System Laboratories, Inc. and are reproduced herein with</i></td></tr>
+<tr><th id="10">10</th><td><i> * the permission of UNIX System Laboratories, Inc.</i></td></tr>
+<tr><th id="11">11</th><td><i> *</i></td></tr>
+<tr><th id="12">12</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="13">13</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="14">14</th><td><i> * are met:</i></td></tr>
+<tr><th id="15">15</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="17">17</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="18">18</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="19">19</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="20">20</th><td><i> * 3. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="21">21</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="22">22</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="23">23</th><td><i> *</i></td></tr>
+<tr><th id="24">24</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="25">25</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="26">26</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="27">27</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="28">28</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="29">29</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="30">30</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="31">31</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="32">32</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="33">33</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="34">34</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="35">35</th><td><i> *</i></td></tr>
+<tr><th id="36">36</th><td><i> *	@(#)kern_acct.c	8.8 (Berkeley) 5/14/95</i></td></tr>
+<tr><th id="37">37</th><td><i> */</i></td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td><i>/*-</i></td></tr>
+<tr><th id="40">40</th><td><i> * Copyright (c) 1994 Christopher G. Demetriou</i></td></tr>
+<tr><th id="41">41</th><td><i> *</i></td></tr>
+<tr><th id="42">42</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="43">43</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="44">44</th><td><i> * are met:</i></td></tr>
+<tr><th id="45">45</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="46">46</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="47">47</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="48">48</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="49">49</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="50">50</th><td><i> * 3. All advertising materials mentioning features or use of this software</i></td></tr>
+<tr><th id="51">51</th><td><i> *    must display the following acknowledgement:</i></td></tr>
+<tr><th id="52">52</th><td><i> *	This product includes software developed by the University of</i></td></tr>
+<tr><th id="53">53</th><td><i> *	California, Berkeley and its contributors.</i></td></tr>
+<tr><th id="54">54</th><td><i> * 4. Neither the name of the University nor the names of its contributors</i></td></tr>
+<tr><th id="55">55</th><td><i> *    may be used to endorse or promote products derived from this software</i></td></tr>
+<tr><th id="56">56</th><td><i> *    without specific prior written permission.</i></td></tr>
+<tr><th id="57">57</th><td><i> *</i></td></tr>
+<tr><th id="58">58</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND</i></td></tr>
+<tr><th id="59">59</th><td><i> * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE</i></td></tr>
+<tr><th id="60">60</th><td><i> * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE</i></td></tr>
+<tr><th id="61">61</th><td><i> * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE</i></td></tr>
+<tr><th id="62">62</th><td><i> * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL</i></td></tr>
+<tr><th id="63">63</th><td><i> * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS</i></td></tr>
+<tr><th id="64">64</th><td><i> * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)</i></td></tr>
+<tr><th id="65">65</th><td><i> * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT</i></td></tr>
+<tr><th id="66">66</th><td><i> * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY</i></td></tr>
+<tr><th id="67">67</th><td><i> * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF</i></td></tr>
+<tr><th id="68">68</th><td><i> * SUCH DAMAGE.</i></td></tr>
+<tr><th id="69">69</th><td><i> *</i></td></tr>
+<tr><th id="70">70</th><td><i> *	@(#)kern_acct.c	8.8 (Berkeley) 5/14/95</i></td></tr>
+<tr><th id="71">71</th><td><i> */</i></td></tr>
+<tr><th id="72">72</th><td></td></tr>
+<tr><th id="73">73</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="74">74</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: kern_acct.c,v 1.96 2019/05/26 19:23:04 dholland Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: kern_acct.c,v 1.96 2019/05/26 19:23:04 dholland Exp $"</q>);</td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="77">77</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="78">78</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="79">79</th><td><u>#include <a href="../sys/mount.h.html">&lt;sys/mount.h&gt;</a></u></td></tr>
+<tr><th id="80">80</th><td><u>#include <a href="../sys/vnode.h.html">&lt;sys/vnode.h&gt;</a></u></td></tr>
+<tr><th id="81">81</th><td><u>#include <a href="../sys/file.h.html">&lt;sys/file.h&gt;</a></u></td></tr>
+<tr><th id="82">82</th><td><u>#include <a href="../sys/syslog.h.html">&lt;sys/syslog.h&gt;</a></u></td></tr>
+<tr><th id="83">83</th><td><u>#include <a href="../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="84">84</th><td><u>#include <a href="../sys/kthread.h.html">&lt;sys/kthread.h&gt;</a></u></td></tr>
+<tr><th id="85">85</th><td><u>#include <a href="../sys/kmem.h.html">&lt;sys/kmem.h&gt;</a></u></td></tr>
+<tr><th id="86">86</th><td><u>#include <a href="../sys/namei.h.html">&lt;sys/namei.h&gt;</a></u></td></tr>
+<tr><th id="87">87</th><td><u>#include <a href="../sys/errno.h.html">&lt;sys/errno.h&gt;</a></u></td></tr>
+<tr><th id="88">88</th><td><u>#include <a href="../sys/acct.h.html">&lt;sys/acct.h&gt;</a></u></td></tr>
+<tr><th id="89">89</th><td><u>#include <a href="../sys/resourcevar.h.html">&lt;sys/resourcevar.h&gt;</a></u></td></tr>
+<tr><th id="90">90</th><td><u>#include <a href="../sys/ioctl.h.html">&lt;sys/ioctl.h&gt;</a></u></td></tr>
+<tr><th id="91">91</th><td><u>#include <a href="../sys/tty.h.html">&lt;sys/tty.h&gt;</a></u></td></tr>
+<tr><th id="92">92</th><td><u>#include <a href="../sys/kauth.h.html">&lt;sys/kauth.h&gt;</a></u></td></tr>
+<tr><th id="93">93</th><td></td></tr>
+<tr><th id="94">94</th><td><u>#include <a href="../sys/syscallargs.h.html">&lt;sys/syscallargs.h&gt;</a></u></td></tr>
+<tr><th id="95">95</th><td></td></tr>
+<tr><th id="96">96</th><td><i>/*</i></td></tr>
+<tr><th id="97">97</th><td><i> * The routines implemented in this file are described in:</i></td></tr>
+<tr><th id="98">98</th><td><i> *      Leffler, et al.: The Design and Implementation of the 4.3BSD</i></td></tr>
+<tr><th id="99">99</th><td><i> *	    UNIX Operating System (Addison Welley, 1989)</i></td></tr>
+<tr><th id="100">100</th><td><i> * on pages 62-63.</i></td></tr>
+<tr><th id="101">101</th><td><i> *</i></td></tr>
+<tr><th id="102">102</th><td><i> * Arguably, to simplify accounting operations, this mechanism should</i></td></tr>
+<tr><th id="103">103</th><td><i> * be replaced by one in which an accounting log file (similar to /dev/klog)</i></td></tr>
+<tr><th id="104">104</th><td><i> * is read by a user process, etc.  However, that has its own problems.</i></td></tr>
+<tr><th id="105">105</th><td><i> */</i></td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><i>/*</i></td></tr>
+<tr><th id="108">108</th><td><i> * Lock to serialize system calls and kernel threads.</i></td></tr>
+<tr><th id="109">109</th><td><i> */</i></td></tr>
+<tr><th id="110">110</th><td><a class="typedef" href="../sys/rwlock.h.html#krwlock_t" title='krwlock_t' data-type='struct krwlock' data-ref="krwlock_t" data-ref-filename="krwlock_t">krwlock_t</a>	<dfn class="decl def" id="acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</dfn>;</td></tr>
+<tr><th id="111">111</th><td></td></tr>
+<tr><th id="112">112</th><td><i  data-doc="acct_state">/*</i></td></tr>
+<tr><th id="113">113</th><td><i  data-doc="acct_state"> * The global accounting state and related data.  Gain the mutex before</i></td></tr>
+<tr><th id="114">114</th><td><i  data-doc="acct_state"> * accessing these variables.</i></td></tr>
+<tr><th id="115">115</th><td><i  data-doc="acct_state"> */</i></td></tr>
+<tr><th id="116">116</th><td><em>static</em> <b>enum</b> {</td></tr>
+<tr><th id="117">117</th><td>	<dfn class="enum" id="ACCT_STOP" title='ACCT_STOP' data-ref="ACCT_STOP" data-ref-filename="ACCT_STOP">ACCT_STOP</dfn>,</td></tr>
+<tr><th id="118">118</th><td>	<dfn class="enum" id="ACCT_ACTIVE" title='ACCT_ACTIVE' data-ref="ACCT_ACTIVE" data-ref-filename="ACCT_ACTIVE">ACCT_ACTIVE</dfn>,</td></tr>
+<tr><th id="119">119</th><td>	<dfn class="enum" id="ACCT_SUSPENDED" title='ACCT_SUSPENDED' data-ref="ACCT_SUSPENDED" data-ref-filename="ACCT_SUSPENDED">ACCT_SUSPENDED</dfn></td></tr>
+<tr><th id="120">120</th><td>} <dfn class="tu decl def" id="acct_state" title='acct_state' data-type='enum (anonymous enum at /___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/kern_acct.c:116:8)' data-ref="acct_state" data-ref-filename="acct_state">acct_state</dfn>;				<i>/* The current accounting state. */</i></td></tr>
+<tr><th id="121">121</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/vnode.h.html#vnode" title='vnode' data-ref="vnode" data-ref-filename="vnode">vnode</a> *<dfn class="tu decl def" id="acct_vp" title='acct_vp' data-type='struct vnode *' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</dfn>;		<i  data-doc="acct_vp">/* Accounting vnode pointer. */</i></td></tr>
+<tr><th id="122">122</th><td><em>static</em> <a class="typedef" href="../sys/types.h.html#kauth_cred_t" title='kauth_cred_t' data-type='struct kauth_cred *' data-ref="kauth_cred_t" data-ref-filename="kauth_cred_t">kauth_cred_t</a> <dfn class="tu decl def" id="acct_cred" title='acct_cred' data-type='kauth_cred_t' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</dfn>;		<i  data-doc="acct_cred">/* Credential of accounting file</i></td></tr>
+<tr><th id="123">123</th><td><i  data-doc="acct_cred">					   owner (i.e root).  Used when</i></td></tr>
+<tr><th id="124">124</th><td><i  data-doc="acct_cred"> 					   accounting file i/o.  */</i></td></tr>
+<tr><th id="125">125</th><td><em>static</em> <b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="tu decl def" id="acct_dkwatcher" title='acct_dkwatcher' data-type='struct lwp *' data-ref="acct_dkwatcher" data-ref-filename="acct_dkwatcher">acct_dkwatcher</dfn>;	<i  data-doc="acct_dkwatcher">/* Free disk space checker. */</i></td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td><i>/*</i></td></tr>
+<tr><th id="128">128</th><td><i> * Values associated with enabling and disabling accounting</i></td></tr>
+<tr><th id="129">129</th><td><i> */</i></td></tr>
+<tr><th id="130">130</th><td><em>int</em>	<dfn class="decl def" id="acctsuspend" title='acctsuspend' data-ref="acctsuspend" data-ref-filename="acctsuspend">acctsuspend</dfn> = <var>2</var>;	<i>/* stop accounting when &lt; 2% free space left */</i></td></tr>
+<tr><th id="131">131</th><td><em>int</em>	<dfn class="decl def" id="acctresume" title='acctresume' data-ref="acctresume" data-ref-filename="acctresume">acctresume</dfn> = <var>4</var>;		<i>/* resume when free space risen to &gt; 4% */</i></td></tr>
+<tr><th id="132">132</th><td><em>int</em>	<dfn class="decl def" id="acctchkfreq" title='acctchkfreq' data-ref="acctchkfreq" data-ref-filename="acctchkfreq">acctchkfreq</dfn> = <var>15</var>;	<i>/* frequency (in seconds) to check space */</i></td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td><i>/*</i></td></tr>
+<tr><th id="135">135</th><td><i> * Encode_comp_t converts from ticks in seconds and microseconds</i></td></tr>
+<tr><th id="136">136</th><td><i> * to ticks in 1/AHZ seconds.  The encoding is described in</i></td></tr>
+<tr><th id="137">137</th><td><i> * Leffler, et al., on page 63.</i></td></tr>
+<tr><th id="138">138</th><td><i> */</i></td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><u>#define	<dfn class="macro" id="_M/MANTSIZE" data-ref="_M/MANTSIZE">MANTSIZE</dfn>	13			/* 13 bit mantissa. */</u></td></tr>
+<tr><th id="141">141</th><td><u>#define	<dfn class="macro" id="_M/EXPSIZE" data-ref="_M/EXPSIZE">EXPSIZE</dfn>		3			/* Base 8 (3 bit) exponent. */</u></td></tr>
+<tr><th id="142">142</th><td><u>#define	<dfn class="macro" id="_M/MAXFRACT" data-ref="_M/MAXFRACT">MAXFRACT</dfn>	((1 &lt;&lt; MANTSIZE) - 1)	/* Maximum fractional value. */</u></td></tr>
+<tr><th id="143">143</th><td></td></tr>
+<tr><th id="144">144</th><td><em>static</em> <a class="typedef" href="../sys/acct.h.html#comp_t" title='comp_t' data-type='uint16_t' data-ref="comp_t" data-ref-filename="comp_t">comp_t</a></td></tr>
+<tr><th id="145">145</th><td><dfn class="tu decl def fn" id="encode_comp_t" title='encode_comp_t' data-type='comp_t encode_comp_t(u_long s, u_long us)' data-ref="encode_comp_t" data-ref-filename="encode_comp_t">encode_comp_t</dfn>(<a class="typedef" href="../sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <dfn class="local col1 decl" id="1s" title='s' data-type='u_long' data-ref="1s" data-ref-filename="1s">s</dfn>, <a class="typedef" href="../sys/types.h.html#u_long" title='u_long' data-type='unsigned long' data-ref="u_long" data-ref-filename="u_long">u_long</a> <dfn class="local col2 decl" id="2us" title='us' data-type='u_long' data-ref="2us" data-ref-filename="2us">us</dfn>)</td></tr>
+<tr><th id="146">146</th><td>{</td></tr>
+<tr><th id="147">147</th><td>	<em>int</em> <dfn class="local col3 decl" id="3exp" title='exp' data-type='int' data-ref="3exp" data-ref-filename="3exp">exp</dfn>, <dfn class="local col4 decl" id="4rnd" title='rnd' data-type='int' data-ref="4rnd" data-ref-filename="4rnd">rnd</dfn>;</td></tr>
+<tr><th id="148">148</th><td></td></tr>
+<tr><th id="149">149</th><td>	<a class="local col3 ref" href="#3exp" title='exp' data-ref="3exp" data-ref-filename="3exp">exp</a> = <var>0</var>;</td></tr>
+<tr><th id="150">150</th><td>	<a class="local col4 ref" href="#4rnd" title='rnd' data-ref="4rnd" data-ref-filename="4rnd">rnd</a> = <var>0</var>;</td></tr>
+<tr><th id="151">151</th><td>	<a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> *= <a class="macro" href="../sys/acct.h.html#73" title="64" data-ref="_M/AHZ">AHZ</a>;</td></tr>
+<tr><th id="152">152</th><td>	<a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> += <a class="local col2 ref" href="#2us" title='us' data-ref="2us" data-ref-filename="2us">us</a> / (<var>1000000</var> / <a class="macro" href="../sys/acct.h.html#73" title="64" data-ref="_M/AHZ">AHZ</a>);	<i>/* Maximize precision. */</i></td></tr>
+<tr><th id="153">153</th><td></td></tr>
+<tr><th id="154">154</th><td>	<b>while</b> (<a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> &gt; <a class="macro" href="#142" title="((1 &lt;&lt; 13) - 1)" data-ref="_M/MAXFRACT">MAXFRACT</a>) {</td></tr>
+<tr><th id="155">155</th><td>		<a class="local col4 ref" href="#4rnd" title='rnd' data-ref="4rnd" data-ref-filename="4rnd">rnd</a> = <a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> &amp; (<var>1</var> &lt;&lt; (<a class="macro" href="#141" title="3" data-ref="_M/EXPSIZE">EXPSIZE</a> - <var>1</var>));	<i>/* Round up? */</i></td></tr>
+<tr><th id="156">156</th><td>		<a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> &gt;&gt;= <a class="macro" href="#141" title="3" data-ref="_M/EXPSIZE">EXPSIZE</a>;		<i>/* Base 8 exponent == 3 bit shift. */</i></td></tr>
+<tr><th id="157">157</th><td>		<a class="local col3 ref" href="#3exp" title='exp' data-ref="3exp" data-ref-filename="3exp">exp</a>++;</td></tr>
+<tr><th id="158">158</th><td>	}</td></tr>
+<tr><th id="159">159</th><td></td></tr>
+<tr><th id="160">160</th><td>	<i>/* If we need to round up, do it (and handle overflow correctly). */</i></td></tr>
+<tr><th id="161">161</th><td>	<b>if</b> (<a class="local col4 ref" href="#4rnd" title='rnd' data-ref="4rnd" data-ref-filename="4rnd">rnd</a> &amp;&amp; (++<a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> &gt; <a class="macro" href="#142" title="((1 &lt;&lt; 13) - 1)" data-ref="_M/MAXFRACT">MAXFRACT</a>)) {</td></tr>
+<tr><th id="162">162</th><td>		<a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a> &gt;&gt;= <a class="macro" href="#141" title="3" data-ref="_M/EXPSIZE">EXPSIZE</a>;</td></tr>
+<tr><th id="163">163</th><td>		<a class="local col3 ref" href="#3exp" title='exp' data-ref="3exp" data-ref-filename="3exp">exp</a>++;</td></tr>
+<tr><th id="164">164</th><td>	}</td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td>	<i>/* Clean it up and polish it off. */</i></td></tr>
+<tr><th id="167">167</th><td>	<a class="local col3 ref" href="#3exp" title='exp' data-ref="3exp" data-ref-filename="3exp">exp</a> &lt;&lt;= <a class="macro" href="#140" title="13" data-ref="_M/MANTSIZE">MANTSIZE</a>;		<i>/* Shift the exponent into place */</i></td></tr>
+<tr><th id="168">168</th><td>	<a class="local col3 ref" href="#3exp" title='exp' data-ref="3exp" data-ref-filename="3exp">exp</a> += <a class="local col1 ref" href="#1s" title='s' data-ref="1s" data-ref-filename="1s">s</a>;			<i>/* and add on the mantissa. */</i></td></tr>
+<tr><th id="169">169</th><td>	<b>return</b> (<a class="local col3 ref" href="#3exp" title='exp' data-ref="3exp" data-ref-filename="3exp">exp</a>);</td></tr>
+<tr><th id="170">170</th><td>}</td></tr>
+<tr><th id="171">171</th><td></td></tr>
+<tr><th id="172">172</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="173">173</th><td><dfn class="tu decl def fn" id="acct_chkfree" title='acct_chkfree' data-type='int acct_chkfree()' data-ref="acct_chkfree" data-ref-filename="acct_chkfree">acct_chkfree</dfn>(<em>void</em>)</td></tr>
+<tr><th id="174">174</th><td>{</td></tr>
+<tr><th id="175">175</th><td>	<em>int</em> <dfn class="local col5 decl" id="5error" title='error' data-type='int' data-ref="5error" data-ref-filename="5error">error</dfn>;</td></tr>
+<tr><th id="176">176</th><td>	<b>struct</b> <a class="type" href="../sys/statvfs.h.html#statvfs" title='statvfs' data-ref="statvfs" data-ref-filename="statvfs">statvfs</a> *<dfn class="local col6 decl" id="6sb" title='sb' data-type='struct statvfs *' data-ref="6sb" data-ref-filename="6sb">sb</dfn>;</td></tr>
+<tr><th id="177">177</th><td>	<a class="macro" href="../sys/types.h.html#134" title="__fsblkcnt_t" data-ref="_M/fsblkcnt_t">fsblkcnt_t</a> <dfn class="local col7 decl" id="7bavail" title='bavail' data-type='__fsblkcnt_t' data-ref="7bavail" data-ref-filename="7bavail">bavail</dfn>;</td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td>	<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a> = <a class="ref fn" href="../sys/kmem.h.html#kmem_alloc" title='kmem_alloc' data-ref="kmem_alloc" data-ref-filename="kmem_alloc">kmem_alloc</a>(<b>sizeof</b>(*<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>), <a class="macro" href="../sys/kmem.h.html#57" title="0x00000001" data-ref="_M/KM_SLEEP">KM_SLEEP</a>);</td></tr>
+<tr><th id="180">180</th><td>	<a class="local col5 ref" href="#5error" title='error' data-ref="5error" data-ref-filename="5error">error</a> = <a class="ref fn" href="../sys/mount.h.html#VFS_STATVFS" title='VFS_STATVFS' data-ref="VFS_STATVFS" data-ref-filename="VFS_STATVFS">VFS_STATVFS</a>(<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='r' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a>-&gt;<a class="ref field" href="../sys/vnode.h.html#vnode::v_mount" title='vnode::v_mount' data-ref="vnode::v_mount" data-ref-filename="vnode..v_mount">v_mount</a>, <a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>);</td></tr>
+<tr><th id="181">181</th><td>	<b>if</b> (<a class="local col5 ref" href="#5error" title='error' data-ref="5error" data-ref-filename="5error">error</a> != <var>0</var>) {</td></tr>
+<tr><th id="182">182</th><td>		<a class="ref fn" href="../sys/kmem.h.html#kmem_free" title='kmem_free' data-ref="kmem_free" data-ref-filename="kmem_free">kmem_free</a>(<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>, <b>sizeof</b>(*<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>));</td></tr>
+<tr><th id="183">183</th><td>		<b>return</b> (<a class="local col5 ref" href="#5error" title='error' data-ref="5error" data-ref-filename="5error">error</a>);</td></tr>
+<tr><th id="184">184</th><td>	}</td></tr>
+<tr><th id="185">185</th><td></td></tr>
+<tr><th id="186">186</th><td>	<b>if</b> (<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>-&gt;<a class="ref field" href="../sys/statvfs.h.html#statvfs::f_bfree" title='statvfs::f_bfree' data-ref="statvfs::f_bfree" data-ref-filename="statvfs..f_bfree">f_bfree</a> &lt; <a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>-&gt;<a class="ref field" href="../sys/statvfs.h.html#statvfs::f_bresvd" title='statvfs::f_bresvd' data-ref="statvfs::f_bresvd" data-ref-filename="statvfs..f_bresvd">f_bresvd</a>) {</td></tr>
+<tr><th id="187">187</th><td>		<a class="local col7 ref" href="#7bavail" title='bavail' data-ref="7bavail" data-ref-filename="7bavail">bavail</a> = <var>0</var>;</td></tr>
+<tr><th id="188">188</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="189">189</th><td>		<a class="local col7 ref" href="#7bavail" title='bavail' data-ref="7bavail" data-ref-filename="7bavail">bavail</a> = <a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>-&gt;<a class="ref field" href="../sys/statvfs.h.html#statvfs::f_bfree" title='statvfs::f_bfree' data-ref="statvfs::f_bfree" data-ref-filename="statvfs..f_bfree">f_bfree</a> - <a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>-&gt;<a class="ref field" href="../sys/statvfs.h.html#statvfs::f_bresvd" title='statvfs::f_bresvd' data-ref="statvfs::f_bresvd" data-ref-filename="statvfs..f_bresvd">f_bresvd</a>;</td></tr>
+<tr><th id="190">190</th><td>	}</td></tr>
+<tr><th id="191">191</th><td></td></tr>
+<tr><th id="192">192</th><td>	<b>switch</b> (<a class="tu ref" href="#acct_state" title='acct_state' data-use='r' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a>) {</td></tr>
+<tr><th id="193">193</th><td>	<b>case</b> <a class="enum" href="#ACCT_SUSPENDED" title='ACCT_SUSPENDED' data-ref="ACCT_SUSPENDED" data-ref-filename="ACCT_SUSPENDED">ACCT_SUSPENDED</a>:</td></tr>
+<tr><th id="194">194</th><td>		<b>if</b> (<a class="local col7 ref" href="#7bavail" title='bavail' data-ref="7bavail" data-ref-filename="7bavail">bavail</a> &gt; <a class="ref" href="#acctresume" title='acctresume' data-ref="acctresume" data-ref-filename="acctresume">acctresume</a> * <a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>-&gt;<a class="ref field" href="../sys/statvfs.h.html#statvfs::f_blocks" title='statvfs::f_blocks' data-ref="statvfs::f_blocks" data-ref-filename="statvfs..f_blocks">f_blocks</a> / <var>100</var>) {</td></tr>
+<tr><th id="195">195</th><td>			<a class="tu ref" href="#acct_state" title='acct_state' data-use='w' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> = <a class="enum" href="#ACCT_ACTIVE" title='ACCT_ACTIVE' data-ref="ACCT_ACTIVE" data-ref-filename="ACCT_ACTIVE">ACCT_ACTIVE</a>;</td></tr>
+<tr><th id="196">196</th><td>			<a class="ref fn" href="../sys/syslog.h.html#log" title='log' data-ref="log" data-ref-filename="log">log</a>(<a class="macro" href="../sys/syslog.h.html#57" title="5" data-ref="_M/LOG_NOTICE">LOG_NOTICE</a>, <q>"Accounting resumed\n"</q>);</td></tr>
+<tr><th id="197">197</th><td>		}</td></tr>
+<tr><th id="198">198</th><td>		<b>break</b>;</td></tr>
+<tr><th id="199">199</th><td>	<b>case</b> <a class="enum" href="#ACCT_ACTIVE" title='ACCT_ACTIVE' data-ref="ACCT_ACTIVE" data-ref-filename="ACCT_ACTIVE">ACCT_ACTIVE</a>:</td></tr>
+<tr><th id="200">200</th><td>		<b>if</b> (<a class="local col7 ref" href="#7bavail" title='bavail' data-ref="7bavail" data-ref-filename="7bavail">bavail</a> &lt;= <a class="ref" href="#acctsuspend" title='acctsuspend' data-ref="acctsuspend" data-ref-filename="acctsuspend">acctsuspend</a> * <a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>-&gt;<a class="ref field" href="../sys/statvfs.h.html#statvfs::f_blocks" title='statvfs::f_blocks' data-ref="statvfs::f_blocks" data-ref-filename="statvfs..f_blocks">f_blocks</a> / <var>100</var>) {</td></tr>
+<tr><th id="201">201</th><td>			<a class="tu ref" href="#acct_state" title='acct_state' data-use='w' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> = <a class="enum" href="#ACCT_SUSPENDED" title='ACCT_SUSPENDED' data-ref="ACCT_SUSPENDED" data-ref-filename="ACCT_SUSPENDED">ACCT_SUSPENDED</a>;</td></tr>
+<tr><th id="202">202</th><td>			<a class="ref fn" href="../sys/syslog.h.html#log" title='log' data-ref="log" data-ref-filename="log">log</a>(<a class="macro" href="../sys/syslog.h.html#57" title="5" data-ref="_M/LOG_NOTICE">LOG_NOTICE</a>, <q>"Accounting suspended\n"</q>);</td></tr>
+<tr><th id="203">203</th><td>		}</td></tr>
+<tr><th id="204">204</th><td>		<b>break</b>;</td></tr>
+<tr><th id="205">205</th><td>	<b>case</b> <a class="enum" href="#ACCT_STOP" title='ACCT_STOP' data-ref="ACCT_STOP" data-ref-filename="ACCT_STOP">ACCT_STOP</a>:</td></tr>
+<tr><th id="206">206</th><td>		<b>break</b>;</td></tr>
+<tr><th id="207">207</th><td>	}</td></tr>
+<tr><th id="208">208</th><td>	<a class="ref fn" href="../sys/kmem.h.html#kmem_free" title='kmem_free' data-ref="kmem_free" data-ref-filename="kmem_free">kmem_free</a>(<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>, <b>sizeof</b>(*<a class="local col6 ref" href="#6sb" title='sb' data-ref="6sb" data-ref-filename="6sb">sb</a>));</td></tr>
+<tr><th id="209">209</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="210">210</th><td>}</td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="213">213</th><td><dfn class="tu decl def fn" id="acct_stop" title='acct_stop' data-type='void acct_stop()' data-ref="acct_stop" data-ref-filename="acct_stop">acct_stop</dfn>(<em>void</em>)</td></tr>
+<tr><th id="214">214</th><td>{</td></tr>
+<tr><th id="215">215</th><td>	<em>int</em> <dfn class="local col8 decl" id="8error" title='error' data-type='int' data-ref="8error" data-ref-filename="8error">error</dfn>;</td></tr>
+<tr><th id="216">216</th><td></td></tr>
+<tr><th id="217">217</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((rw_write_held(&amp;acct_lock))) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;rw_write_held(&amp;acct_lock)&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/kern_acct.c&quot;, 217))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/rwlock.h.html#rw_write_held" title='rw_write_held' data-ref="rw_write_held" data-ref-filename="rw_write_held">rw_write_held</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>));</td></tr>
+<tr><th id="218">218</th><td></td></tr>
+<tr><th id="219">219</th><td>	<b>if</b> (<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='r' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a> != <a class="macro" href="../sys/vnode.h.html#348" title="((struct vnode *)((void *)0))" data-ref="_M/NULLVP">NULLVP</a> &amp;&amp; <a class="tu ref" href="#acct_vp" title='acct_vp' data-use='r' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a>-&gt;<a class="ref field" href="../sys/vnode.h.html#vnode::v_type" title='vnode::v_type' data-ref="vnode::v_type" data-ref-filename="vnode..v_type">v_type</a> != <a class="enum" href="../sys/vnode.h.html#VBAD" title='VBAD' data-ref="VBAD" data-ref-filename="VBAD">VBAD</a>) {</td></tr>
+<tr><th id="220">220</th><td>		<a class="local col8 ref" href="#8error" title='error' data-ref="8error" data-ref-filename="8error">error</a> = <a class="ref fn" href="../sys/vnode.h.html#vn_close" title='vn_close' data-ref="vn_close" data-ref-filename="vn_close">vn_close</a>(<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='r' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a>, <a class="macro" href="../sys/fcntl.h.html#79" title="0x00000002" data-ref="_M/FWRITE">FWRITE</a>, <a class="tu ref" href="#acct_cred" title='acct_cred' data-use='r' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a>);</td></tr>
+<tr><th id="221">221</th><td><u>#<span data-ppcond="221">ifdef</span> <span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span></u></td></tr>
+<tr><th id="222">222</th><td>		<b>if</b> (<a class="local col8 ref" href="#8error" title='error' data-ref="8error" data-ref-filename="8error">error</a> != <var>0</var>)</td></tr>
+<tr><th id="223">223</th><td>			<a class="ref fn" href="../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"acct_stop: failed to close, errno = %d\n"</q>,</td></tr>
+<tr><th id="224">224</th><td>			    <a class="local col8 ref" href="#8error" title='error' data-ref="8error" data-ref-filename="8error">error</a>);</td></tr>
+<tr><th id="225">225</th><td><u>#<span data-ppcond="221">else</span></u></td></tr>
+<tr><th id="226">226</th><td>		__USE(error);</td></tr>
+<tr><th id="227">227</th><td><u>#<span data-ppcond="221">endif</span></u></td></tr>
+<tr><th id="228">228</th><td>		<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='w' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a> = <a class="macro" href="../sys/vnode.h.html#348" title="((struct vnode *)((void *)0))" data-ref="_M/NULLVP">NULLVP</a>;</td></tr>
+<tr><th id="229">229</th><td>	}</td></tr>
+<tr><th id="230">230</th><td>	<b>if</b> (<a class="tu ref" href="#acct_cred" title='acct_cred' data-use='r' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="231">231</th><td>		<a class="ref fn" href="../sys/kauth.h.html#kauth_cred_free" title='kauth_cred_free' data-ref="kauth_cred_free" data-ref-filename="kauth_cred_free">kauth_cred_free</a>(<a class="tu ref" href="#acct_cred" title='acct_cred' data-use='r' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a>);</td></tr>
+<tr><th id="232">232</th><td>		<a class="tu ref" href="#acct_cred" title='acct_cred' data-use='w' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="233">233</th><td>	}</td></tr>
+<tr><th id="234">234</th><td>	<a class="tu ref" href="#acct_state" title='acct_state' data-use='w' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> = <a class="enum" href="#ACCT_STOP" title='ACCT_STOP' data-ref="ACCT_STOP" data-ref-filename="ACCT_STOP">ACCT_STOP</a>;</td></tr>
+<tr><th id="235">235</th><td>}</td></tr>
+<tr><th id="236">236</th><td></td></tr>
+<tr><th id="237">237</th><td><i  data-doc="acctwatch">/*</i></td></tr>
+<tr><th id="238">238</th><td><i  data-doc="acctwatch"> * Periodically check the file system to see if accounting</i></td></tr>
+<tr><th id="239">239</th><td><i  data-doc="acctwatch"> * should be turned on or off.  Beware the case where the vnode</i></td></tr>
+<tr><th id="240">240</th><td><i  data-doc="acctwatch"> * has been vgone()'d out from underneath us, e.g. when the file</i></td></tr>
+<tr><th id="241">241</th><td><i  data-doc="acctwatch"> * system containing the accounting file has been forcibly unmounted.</i></td></tr>
+<tr><th id="242">242</th><td><i  data-doc="acctwatch"> */</i></td></tr>
+<tr><th id="243">243</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="244">244</th><td><dfn class="tu decl def fn" id="acctwatch" title='acctwatch' data-type='void acctwatch(void * arg)' data-ref="acctwatch" data-ref-filename="acctwatch">acctwatch</dfn>(<em>void</em> *<dfn class="local col9 decl" id="9arg" title='arg' data-type='void *' data-ref="9arg" data-ref-filename="9arg">arg</dfn>)</td></tr>
+<tr><th id="245">245</th><td>{</td></tr>
+<tr><th id="246">246</th><td>	<em>int</em> <dfn class="local col0 decl" id="10error" title='error' data-type='int' data-ref="10error" data-ref-filename="10error">error</dfn>;</td></tr>
+<tr><th id="247">247</th><td></td></tr>
+<tr><th id="248">248</th><td>	<a class="ref fn" href="../sys/syslog.h.html#log" title='log' data-ref="log" data-ref-filename="log">log</a>(<a class="macro" href="../sys/syslog.h.html#57" title="5" data-ref="_M/LOG_NOTICE">LOG_NOTICE</a>, <q>"Accounting started\n"</q>);</td></tr>
+<tr><th id="249">249</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_enter" title='rw_enter' data-ref="rw_enter" data-ref-filename="rw_enter">rw_enter</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>, <a class="enum" href="../sys/rwlock.h.html#RW_WRITER" title='RW_WRITER' data-ref="RW_WRITER" data-ref-filename="RW_WRITER">RW_WRITER</a>);</td></tr>
+<tr><th id="250">250</th><td>	<b>while</b> (<a class="tu ref" href="#acct_state" title='acct_state' data-use='r' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> != <a class="enum" href="#ACCT_STOP" title='ACCT_STOP' data-ref="ACCT_STOP" data-ref-filename="ACCT_STOP">ACCT_STOP</a>) {</td></tr>
+<tr><th id="251">251</th><td>		<b>if</b> (<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='r' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a>-&gt;<a class="ref field" href="../sys/vnode.h.html#vnode::v_type" title='vnode::v_type' data-ref="vnode::v_type" data-ref-filename="vnode..v_type">v_type</a> == <a class="enum" href="../sys/vnode.h.html#VBAD" title='VBAD' data-ref="VBAD" data-ref-filename="VBAD">VBAD</a>) {</td></tr>
+<tr><th id="252">252</th><td>			<a class="ref fn" href="../sys/syslog.h.html#log" title='log' data-ref="log" data-ref-filename="log">log</a>(<a class="macro" href="../sys/syslog.h.html#57" title="5" data-ref="_M/LOG_NOTICE">LOG_NOTICE</a>, <q>"Accounting terminated\n"</q>);</td></tr>
+<tr><th id="253">253</th><td>			<a class="tu ref fn" href="#acct_stop" title='acct_stop' data-use='c' data-ref="acct_stop" data-ref-filename="acct_stop">acct_stop</a>();</td></tr>
+<tr><th id="254">254</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="255">255</th><td>		}</td></tr>
+<tr><th id="256">256</th><td></td></tr>
+<tr><th id="257">257</th><td>		<a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a> = <a class="tu ref fn" href="#acct_chkfree" title='acct_chkfree' data-use='c' data-ref="acct_chkfree" data-ref-filename="acct_chkfree">acct_chkfree</a>();</td></tr>
+<tr><th id="258">258</th><td><u>#<span data-ppcond="258">ifdef</span> <span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span></u></td></tr>
+<tr><th id="259">259</th><td>		<b>if</b> (<a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a> != <var>0</var>)</td></tr>
+<tr><th id="260">260</th><td>			<a class="ref fn" href="../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"acctwatch: failed to statvfs, error = %d\n"</q>,</td></tr>
+<tr><th id="261">261</th><td>			    <a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a>);</td></tr>
+<tr><th id="262">262</th><td><u>#<span data-ppcond="258">else</span></u></td></tr>
+<tr><th id="263">263</th><td>		__USE(error);</td></tr>
+<tr><th id="264">264</th><td><u>#<span data-ppcond="258">endif</span></u></td></tr>
+<tr><th id="265">265</th><td>		<a class="ref fn" href="../sys/rwlock.h.html#rw_exit" title='rw_exit' data-ref="rw_exit" data-ref-filename="rw_exit">rw_exit</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>);</td></tr>
+<tr><th id="266">266</th><td>		<a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a> = <a class="ref fn" href="../sys/proc.h.html#kpause" title='kpause' data-ref="kpause" data-ref-filename="kpause">kpause</a>(<q>"actwat"</q>, <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>, <a class="ref" href="#acctchkfreq" title='acctchkfreq' data-ref="acctchkfreq" data-ref-filename="acctchkfreq">acctchkfreq</a> * <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="267">267</th><td>		<a class="ref fn" href="../sys/rwlock.h.html#rw_enter" title='rw_enter' data-ref="rw_enter" data-ref-filename="rw_enter">rw_enter</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>, <a class="enum" href="../sys/rwlock.h.html#RW_WRITER" title='RW_WRITER' data-ref="RW_WRITER" data-ref-filename="RW_WRITER">RW_WRITER</a>);</td></tr>
+<tr><th id="268">268</th><td><u>#<span data-ppcond="268">ifdef</span> <span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span></u></td></tr>
+<tr><th id="269">269</th><td>		<b>if</b> (<a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a> != <var>0</var> &amp;&amp; <a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a> != <a class="macro" href="../sys/errno.h.html#82" title="35" data-ref="_M/EWOULDBLOCK">EWOULDBLOCK</a>)</td></tr>
+<tr><th id="270">270</th><td>			<a class="ref fn" href="../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"acctwatch: sleep error %d\n"</q>, <a class="local col0 ref" href="#10error" title='error' data-ref="10error" data-ref-filename="10error">error</a>);</td></tr>
+<tr><th id="271">271</th><td><u>#<span data-ppcond="268">endif</span></u></td></tr>
+<tr><th id="272">272</th><td>	}</td></tr>
+<tr><th id="273">273</th><td>	<a class="tu ref" href="#acct_dkwatcher" title='acct_dkwatcher' data-use='w' data-ref="acct_dkwatcher" data-ref-filename="acct_dkwatcher">acct_dkwatcher</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="274">274</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_exit" title='rw_exit' data-ref="rw_exit" data-ref-filename="rw_exit">rw_exit</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>);</td></tr>
+<tr><th id="275">275</th><td></td></tr>
+<tr><th id="276">276</th><td>	<a class="ref fn" href="../sys/kthread.h.html#kthread_exit" title='kthread_exit' data-ref="kthread_exit" data-ref-filename="kthread_exit">kthread_exit</a>(<var>0</var>);</td></tr>
+<tr><th id="277">277</th><td>}</td></tr>
+<tr><th id="278">278</th><td></td></tr>
+<tr><th id="279">279</th><td><em>void</em></td></tr>
+<tr><th id="280">280</th><td><dfn class="decl def fn" id="acct_init" title='acct_init' data-ref="acct_init" data-ref-filename="acct_init">acct_init</dfn>(<em>void</em>)</td></tr>
+<tr><th id="281">281</th><td>{</td></tr>
+<tr><th id="282">282</th><td></td></tr>
+<tr><th id="283">283</th><td>	<a class="tu ref" href="#acct_state" title='acct_state' data-use='w' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> = <a class="enum" href="#ACCT_STOP" title='ACCT_STOP' data-ref="ACCT_STOP" data-ref-filename="ACCT_STOP">ACCT_STOP</a>;</td></tr>
+<tr><th id="284">284</th><td>	<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='w' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a> = <a class="macro" href="../sys/vnode.h.html#348" title="((struct vnode *)((void *)0))" data-ref="_M/NULLVP">NULLVP</a>;</td></tr>
+<tr><th id="285">285</th><td>	<a class="tu ref" href="#acct_cred" title='acct_cred' data-use='w' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a> = <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>;</td></tr>
+<tr><th id="286">286</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_init" title='rw_init' data-ref="rw_init" data-ref-filename="rw_init">rw_init</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>);</td></tr>
+<tr><th id="287">287</th><td>}</td></tr>
+<tr><th id="288">288</th><td></td></tr>
+<tr><th id="289">289</th><td><i>/*</i></td></tr>
+<tr><th id="290">290</th><td><i> * Accounting system call.  Written based on the specification and</i></td></tr>
+<tr><th id="291">291</th><td><i> * previous implementation done by Mark Tinguely.</i></td></tr>
+<tr><th id="292">292</th><td><i> */</i></td></tr>
+<tr><th id="293">293</th><td><em>int</em></td></tr>
+<tr><th id="294">294</th><td><dfn class="decl def fn" id="sys_acct" title='sys_acct' data-ref="sys_acct" data-ref-filename="sys_acct">sys_acct</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col1 decl" id="11l" title='l' data-type='struct lwp *' data-ref="11l" data-ref-filename="11l">l</dfn>, <em>const</em> <b>struct</b> <a class="type" href="../sys/syscallargs.h.html#sys_acct_args" title='sys_acct_args' data-ref="sys_acct_args" data-ref-filename="sys_acct_args">sys_acct_args</a> *<dfn class="local col2 decl" id="12uap" title='uap' data-type='const struct sys_acct_args *' data-ref="12uap" data-ref-filename="12uap">uap</dfn>, <a class="typedef" href="../arch/amd64/include/types.h.html#register_t" title='register_t' data-type='long' data-ref="register_t" data-ref-filename="register_t">register_t</a> *<dfn class="local col3 decl" id="13retval" title='retval' data-type='register_t *' data-ref="13retval" data-ref-filename="13retval">retval</dfn>)</td></tr>
+<tr><th id="295">295</th><td>{</td></tr>
+<tr><th id="296">296</th><td>	<i>/* {</i></td></tr>
+<tr><th id="297">297</th><td><i>		syscallarg(const char *) path;</i></td></tr>
+<tr><th id="298">298</th><td><i>	} */</i></td></tr>
+<tr><th id="299">299</th><td>	<b>struct</b> <a class="type" href="../sys/namei.h.html#pathbuf" title='pathbuf' data-ref="pathbuf" data-ref-filename="pathbuf">pathbuf</a> *<dfn class="local col4 decl" id="14pb" title='pb' data-type='struct pathbuf *' data-ref="14pb" data-ref-filename="14pb">pb</dfn>;</td></tr>
+<tr><th id="300">300</th><td>	<b>struct</b> <a class="type" href="../sys/namei.h.html#nameidata" title='nameidata' data-ref="nameidata" data-ref-filename="nameidata">nameidata</a> <dfn class="local col5 decl" id="15nd" title='nd' data-type='struct nameidata' data-ref="15nd" data-ref-filename="15nd">nd</dfn>;</td></tr>
+<tr><th id="301">301</th><td>	<em>int</em> <dfn class="local col6 decl" id="16error" title='error' data-type='int' data-ref="16error" data-ref-filename="16error">error</dfn>;</td></tr>
+<tr><th id="302">302</th><td></td></tr>
+<tr><th id="303">303</th><td>	<i>/* Make sure that the caller is root. */</i></td></tr>
+<tr><th id="304">304</th><td>	<b>if</b> ((<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="ref fn" href="../sys/kauth.h.html#kauth_authorize_system" title='kauth_authorize_system' data-ref="kauth_authorize_system" data-ref-filename="kauth_authorize_system">kauth_authorize_system</a>(<a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>, <a class="enum" href="../sys/kauth.h.html#KAUTH_SYSTEM_ACCOUNTING" title='KAUTH_SYSTEM_ACCOUNTING' data-ref="KAUTH_SYSTEM_ACCOUNTING" data-ref-filename="KAUTH_SYSTEM_ACCOUNTING">KAUTH_SYSTEM_ACCOUNTING</a>,</td></tr>
+<tr><th id="305">305</th><td>	    <var>0</var>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)))</td></tr>
+<tr><th id="306">306</th><td>		<b>return</b> (<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a>);</td></tr>
+<tr><th id="307">307</th><td></td></tr>
+<tr><th id="308">308</th><td>	<i>/*</i></td></tr>
+<tr><th id="309">309</th><td><i>	 * If accounting is to be started to a file, open that file for</i></td></tr>
+<tr><th id="310">310</th><td><i>	 * writing and make sure it's a 'normal'.</i></td></tr>
+<tr><th id="311">311</th><td><i>	 */</i></td></tr>
+<tr><th id="312">312</th><td>	<b>if</b> (<a class="macro" href="../sys/systm.h.html#137" title="((uap)-&gt;path.le.datum)" data-ref="_M/SCARG">SCARG</a>(<a class="local col2 ref" href="#12uap" title='uap' data-ref="12uap" data-ref-filename="12uap">uap</a>, <a class="ref field" href="../sys/syscallargs.h.html#sys_acct_args::path" title='sys_acct_args::path' data-ref="sys_acct_args::path" data-ref-filename="sys_acct_args..path">path</a>) != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="313">313</th><td>		<b>struct</b> <a class="type" href="../sys/vnode.h.html#vattr" title='vattr' data-ref="vattr" data-ref-filename="vattr">vattr</a> <dfn class="local col7 decl" id="17va" title='va' data-type='struct vattr' data-ref="17va" data-ref-filename="17va">va</dfn>;</td></tr>
+<tr><th id="314">314</th><td>		<a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col8 decl" id="18pad" title='pad' data-type='size_t' data-ref="18pad" data-ref-filename="18pad">pad</dfn>;</td></tr>
+<tr><th id="315">315</th><td></td></tr>
+<tr><th id="316">316</th><td>		<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="ref fn" href="../sys/namei.h.html#pathbuf_copyin" title='pathbuf_copyin' data-ref="pathbuf_copyin" data-ref-filename="pathbuf_copyin">pathbuf_copyin</a>(<a class="macro" href="../sys/systm.h.html#137" title="((uap)-&gt;path.le.datum)" data-ref="_M/SCARG">SCARG</a>(<a class="local col2 ref" href="#12uap" title='uap' data-ref="12uap" data-ref-filename="12uap">uap</a>, <a class="ref field" href="../sys/syscallargs.h.html#sys_acct_args::path" title='sys_acct_args::path' data-ref="sys_acct_args::path" data-ref-filename="sys_acct_args..path">path</a>), &amp;<a class="local col4 ref" href="#14pb" title='pb' data-ref="14pb" data-ref-filename="14pb">pb</a>);</td></tr>
+<tr><th id="317">317</th><td>		<b>if</b> (<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a>) {</td></tr>
+<tr><th id="318">318</th><td>			<b>return</b> <a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a>;</td></tr>
+<tr><th id="319">319</th><td>		}</td></tr>
+<tr><th id="320">320</th><td>		<a class="macro" href="../sys/namei.h.html#181" title="{ (&amp;nd)-&gt;ni_cnd.cn_nameiop = 0; (&amp;nd)-&gt;ni_cnd.cn_flags = 0x00000040 | 0x00000010; (&amp;nd)-&gt;ni_atdir = ((void *)0); (&amp;nd)-&gt;ni_pathbuf = pb; (&amp;nd)-&gt;ni_cnd.cn_cred = kauth_cred_get(); }" data-ref="_M/NDINIT">NDINIT</a>(&amp;<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>, <a class="macro" href="../sys/namei.h.html#144" title="0" data-ref="_M/LOOKUP">LOOKUP</a>, <a class="macro" href="../sys/namei.h.html#157" title="0x00000040" data-ref="_M/FOLLOW">FOLLOW</a> | <a class="macro" href="../sys/namei.h.html#154" title="0x00000010" data-ref="_M/TRYEMULROOT">TRYEMULROOT</a>, <a class="local col4 ref" href="#14pb" title='pb' data-ref="14pb" data-ref-filename="14pb">pb</a>);</td></tr>
+<tr><th id="321">321</th><td>		<b>if</b> ((<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="ref fn" href="../sys/vnode.h.html#vn_open" title='vn_open' data-ref="vn_open" data-ref-filename="vn_open">vn_open</a>(&amp;<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>, <a class="macro" href="../sys/fcntl.h.html#79" title="0x00000002" data-ref="_M/FWRITE">FWRITE</a>|<a class="macro" href="../sys/fcntl.h.html#82" title="0x00000008" data-ref="_M/O_APPEND">O_APPEND</a>, <var>0</var>)) != <var>0</var>) {</td></tr>
+<tr><th id="322">322</th><td>			<a class="ref fn" href="../sys/namei.h.html#pathbuf_destroy" title='pathbuf_destroy' data-ref="pathbuf_destroy" data-ref-filename="pathbuf_destroy">pathbuf_destroy</a>(<a class="local col4 ref" href="#14pb" title='pb' data-ref="14pb" data-ref-filename="14pb">pb</a>);</td></tr>
+<tr><th id="323">323</th><td>			<b>return</b> <a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a>;</td></tr>
+<tr><th id="324">324</th><td>		}</td></tr>
+<tr><th id="325">325</th><td>		<b>if</b> (<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>-&gt;<a class="ref field" href="../sys/vnode.h.html#vnode::v_type" title='vnode::v_type' data-ref="vnode::v_type" data-ref-filename="vnode..v_type">v_type</a> != <a class="enum" href="../sys/vnode.h.html#VREG" title='VREG' data-ref="VREG" data-ref-filename="VREG">VREG</a>) {</td></tr>
+<tr><th id="326">326</th><td>			<a class="ref fn" href="../sys/vnode_if.h.html#VOP_UNLOCK" title='VOP_UNLOCK' data-ref="VOP_UNLOCK" data-ref-filename="VOP_UNLOCK">VOP_UNLOCK</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>);</td></tr>
+<tr><th id="327">327</th><td>			<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="macro" href="../sys/errno.h.html#55" title="13" data-ref="_M/EACCES">EACCES</a>;</td></tr>
+<tr><th id="328">328</th><td>			<b>goto</b> <a class="lbl" href="#19bad" data-ref="19bad" data-ref-filename="19bad">bad</a>;</td></tr>
+<tr><th id="329">329</th><td>		}</td></tr>
+<tr><th id="330">330</th><td>		<b>if</b> ((<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="ref fn" href="../sys/vnode_if.h.html#VOP_GETATTR" title='VOP_GETATTR' data-ref="VOP_GETATTR" data-ref-filename="VOP_GETATTR">VOP_GETATTR</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>, &amp;<a class="local col7 ref" href="#17va" title='va' data-ref="17va" data-ref-filename="17va">va</a>, <a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>)) != <var>0</var>) {</td></tr>
+<tr><th id="331">331</th><td>			<a class="ref fn" href="../sys/vnode_if.h.html#VOP_UNLOCK" title='VOP_UNLOCK' data-ref="VOP_UNLOCK" data-ref-filename="VOP_UNLOCK">VOP_UNLOCK</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>);</td></tr>
+<tr><th id="332">332</th><td>			<b>goto</b> <a class="lbl" href="#19bad" data-ref="19bad" data-ref-filename="19bad">bad</a>;</td></tr>
+<tr><th id="333">333</th><td>		}</td></tr>
+<tr><th id="334">334</th><td></td></tr>
+<tr><th id="335">335</th><td>		<b>if</b> ((<a class="local col8 ref" href="#18pad" title='pad' data-ref="18pad" data-ref-filename="18pad">pad</a> = (<a class="local col7 ref" href="#17va" title='va' data-ref="17va" data-ref-filename="17va">va</a>.<a class="ref field" href="../sys/vnode.h.html#vattr::va_size" title='vattr::va_size' data-ref="vattr::va_size" data-ref-filename="vattr..va_size">va_size</a> % <b>sizeof</b>(<b>struct</b> <a class="type" href="../sys/acct.h.html#acct" title='acct' data-ref="acct" data-ref-filename="acct">acct</a>))) != <var>0</var>) {</td></tr>
+<tr><th id="336">336</th><td>			<a class="typedef" href="../sys/types.h.html#u_quad_t" title='u_quad_t' data-type='uint64_t' data-ref="u_quad_t" data-ref-filename="u_quad_t">u_quad_t</a> <dfn class="local col0 decl" id="20size" title='size' data-type='u_quad_t' data-ref="20size" data-ref-filename="20size">size</dfn> = <a class="local col7 ref" href="#17va" title='va' data-ref="17va" data-ref-filename="17va">va</a>.<a class="ref field" href="../sys/vnode.h.html#vattr::va_size" title='vattr::va_size' data-ref="vattr::va_size" data-ref-filename="vattr..va_size">va_size</a> - <a class="local col8 ref" href="#18pad" title='pad' data-ref="18pad" data-ref-filename="18pad">pad</a>;</td></tr>
+<tr><th id="337">337</th><td><u>#<span data-ppcond="337">ifdef</span> <span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span></u></td></tr>
+<tr><th id="338">338</th><td>			<a class="ref fn" href="../sys/systm.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"Size of accounting file not a multiple of "</q></td></tr>
+<tr><th id="339">339</th><td>			    <q>"%lu - incomplete record truncated\n"</q>,</td></tr>
+<tr><th id="340">340</th><td>			    (<em>unsigned</em> <em>long</em>)<b>sizeof</b>(<b>struct</b> <a class="type" href="../sys/acct.h.html#acct" title='acct' data-ref="acct" data-ref-filename="acct">acct</a>));</td></tr>
+<tr><th id="341">341</th><td><u>#<span data-ppcond="337">endif</span></u></td></tr>
+<tr><th id="342">342</th><td>			<a class="ref fn" href="../sys/vnode.h.html#vattr_null" title='vattr_null' data-ref="vattr_null" data-ref-filename="vattr_null">vattr_null</a>(&amp;<a class="local col7 ref" href="#17va" title='va' data-ref="17va" data-ref-filename="17va">va</a>);</td></tr>
+<tr><th id="343">343</th><td>			<a class="local col7 ref" href="#17va" title='va' data-ref="17va" data-ref-filename="17va">va</a>.<a class="ref field" href="../sys/vnode.h.html#vattr::va_size" title='vattr::va_size' data-ref="vattr::va_size" data-ref-filename="vattr..va_size">va_size</a> = <a class="local col0 ref" href="#20size" title='size' data-ref="20size" data-ref-filename="20size">size</a>;</td></tr>
+<tr><th id="344">344</th><td>			<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="ref fn" href="../sys/vnode_if.h.html#VOP_SETATTR" title='VOP_SETATTR' data-ref="VOP_SETATTR" data-ref-filename="VOP_SETATTR">VOP_SETATTR</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>, &amp;<a class="local col7 ref" href="#17va" title='va' data-ref="17va" data-ref-filename="17va">va</a>, <a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>);</td></tr>
+<tr><th id="345">345</th><td>			<b>if</b> (<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> != <var>0</var>) {</td></tr>
+<tr><th id="346">346</th><td>				<a class="ref fn" href="../sys/vnode_if.h.html#VOP_UNLOCK" title='VOP_UNLOCK' data-ref="VOP_UNLOCK" data-ref-filename="VOP_UNLOCK">VOP_UNLOCK</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>);</td></tr>
+<tr><th id="347">347</th><td>				<b>goto</b> <a class="lbl" href="#19bad" data-ref="19bad" data-ref-filename="19bad">bad</a>;</td></tr>
+<tr><th id="348">348</th><td>			}</td></tr>
+<tr><th id="349">349</th><td>		}</td></tr>
+<tr><th id="350">350</th><td>		<a class="ref fn" href="../sys/vnode_if.h.html#VOP_UNLOCK" title='VOP_UNLOCK' data-ref="VOP_UNLOCK" data-ref-filename="VOP_UNLOCK">VOP_UNLOCK</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>);</td></tr>
+<tr><th id="351">351</th><td>	}</td></tr>
+<tr><th id="352">352</th><td></td></tr>
+<tr><th id="353">353</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_enter" title='rw_enter' data-ref="rw_enter" data-ref-filename="rw_enter">rw_enter</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>, <a class="enum" href="../sys/rwlock.h.html#RW_WRITER" title='RW_WRITER' data-ref="RW_WRITER" data-ref-filename="RW_WRITER">RW_WRITER</a>);</td></tr>
+<tr><th id="354">354</th><td></td></tr>
+<tr><th id="355">355</th><td>	<i>/*</i></td></tr>
+<tr><th id="356">356</th><td><i>	 * If accounting was previously enabled, kill the old space-watcher,</i></td></tr>
+<tr><th id="357">357</th><td><i>	 * free credential for accounting file i/o,</i></td></tr>
+<tr><th id="358">358</th><td><i>	 * ... (and, if no new file was specified, leave).</i></td></tr>
+<tr><th id="359">359</th><td><i>	 */</i></td></tr>
+<tr><th id="360">360</th><td>	<a class="tu ref fn" href="#acct_stop" title='acct_stop' data-use='c' data-ref="acct_stop" data-ref-filename="acct_stop">acct_stop</a>();</td></tr>
+<tr><th id="361">361</th><td>	<b>if</b> (<a class="macro" href="../sys/systm.h.html#137" title="((uap)-&gt;path.le.datum)" data-ref="_M/SCARG">SCARG</a>(<a class="local col2 ref" href="#12uap" title='uap' data-ref="12uap" data-ref-filename="12uap">uap</a>, <a class="ref field" href="../sys/syscallargs.h.html#sys_acct_args::path" title='sys_acct_args::path' data-ref="sys_acct_args::path" data-ref-filename="sys_acct_args..path">path</a>) == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="362">362</th><td>		<b>goto</b> <a class="lbl" href="#21out" data-ref="21out" data-ref-filename="21out">out</a>;</td></tr>
+<tr><th id="363">363</th><td></td></tr>
+<tr><th id="364">364</th><td>	<i>/*</i></td></tr>
+<tr><th id="365">365</th><td><i>	 * Save the new accounting file vnode and credential,</i></td></tr>
+<tr><th id="366">366</th><td><i>	 * and schedule the new free space watcher.</i></td></tr>
+<tr><th id="367">367</th><td><i>	 */</i></td></tr>
+<tr><th id="368">368</th><td>	<a class="tu ref" href="#acct_state" title='acct_state' data-use='w' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> = <a class="enum" href="#ACCT_ACTIVE" title='ACCT_ACTIVE' data-ref="ACCT_ACTIVE" data-ref-filename="ACCT_ACTIVE">ACCT_ACTIVE</a>;</td></tr>
+<tr><th id="369">369</th><td>	<a class="tu ref" href="#acct_vp" title='acct_vp' data-use='w' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a> = <a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>;</td></tr>
+<tr><th id="370">370</th><td>	<a class="tu ref" href="#acct_cred" title='acct_cred' data-use='w' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a> = <a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>;</td></tr>
+<tr><th id="371">371</th><td>	<a class="ref fn" href="../sys/kauth.h.html#kauth_cred_hold" title='kauth_cred_hold' data-ref="kauth_cred_hold" data-ref-filename="kauth_cred_hold">kauth_cred_hold</a>(<a class="tu ref" href="#acct_cred" title='acct_cred' data-use='r' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a>);</td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td>	<a class="ref fn" href="../sys/namei.h.html#pathbuf_destroy" title='pathbuf_destroy' data-ref="pathbuf_destroy" data-ref-filename="pathbuf_destroy">pathbuf_destroy</a>(<a class="local col4 ref" href="#14pb" title='pb' data-ref="14pb" data-ref-filename="14pb">pb</a>);</td></tr>
+<tr><th id="374">374</th><td></td></tr>
+<tr><th id="375">375</th><td>	<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="tu ref fn" href="#acct_chkfree" title='acct_chkfree' data-use='c' data-ref="acct_chkfree" data-ref-filename="acct_chkfree">acct_chkfree</a>();		<i>/* Initial guess. */</i></td></tr>
+<tr><th id="376">376</th><td>	<b>if</b> (<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> != <var>0</var>) {</td></tr>
+<tr><th id="377">377</th><td>		<a class="tu ref fn" href="#acct_stop" title='acct_stop' data-use='c' data-ref="acct_stop" data-ref-filename="acct_stop">acct_stop</a>();</td></tr>
+<tr><th id="378">378</th><td>		<b>goto</b> <a class="lbl" href="#21out" data-ref="21out" data-ref-filename="21out">out</a>;</td></tr>
+<tr><th id="379">379</th><td>	}</td></tr>
+<tr><th id="380">380</th><td></td></tr>
+<tr><th id="381">381</th><td>	<b>if</b> (<a class="tu ref" href="#acct_dkwatcher" title='acct_dkwatcher' data-use='r' data-ref="acct_dkwatcher" data-ref-filename="acct_dkwatcher">acct_dkwatcher</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="382">382</th><td>		<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> = <a class="ref fn" href="../sys/kthread.h.html#kthread_create" title='kthread_create' data-ref="kthread_create" data-ref-filename="kthread_create">kthread_create</a>(<a class="macro" href="../sys/param.h.html#293" title="(-1)" data-ref="_M/PRI_NONE">PRI_NONE</a>, <a class="macro" href="../sys/kthread.h.html#47" title="0x02" data-ref="_M/KTHREAD_MPSAFE">KTHREAD_MPSAFE</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>,</td></tr>
+<tr><th id="383">383</th><td>		    <a class="tu ref fn" href="#acctwatch" title='acctwatch' data-use='r' data-ref="acctwatch" data-ref-filename="acctwatch">acctwatch</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, &amp;<a class="tu ref" href="#acct_dkwatcher" title='acct_dkwatcher' data-use='a' data-ref="acct_dkwatcher" data-ref-filename="acct_dkwatcher">acct_dkwatcher</a>, <q>"acctwatch"</q>);</td></tr>
+<tr><th id="384">384</th><td>		<b>if</b> (<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a> != <var>0</var>)</td></tr>
+<tr><th id="385">385</th><td>			<a class="tu ref fn" href="#acct_stop" title='acct_stop' data-use='c' data-ref="acct_stop" data-ref-filename="acct_stop">acct_stop</a>();</td></tr>
+<tr><th id="386">386</th><td>	}</td></tr>
+<tr><th id="387">387</th><td></td></tr>
+<tr><th id="388">388</th><td> <dfn class="lbl" id="21out" data-ref="21out" data-ref-filename="21out">out</dfn>:</td></tr>
+<tr><th id="389">389</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_exit" title='rw_exit' data-ref="rw_exit" data-ref-filename="rw_exit">rw_exit</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>);</td></tr>
+<tr><th id="390">390</th><td>	<b>return</b> (<a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a>);</td></tr>
+<tr><th id="391">391</th><td> <dfn class="lbl" id="19bad" data-ref="19bad" data-ref-filename="19bad">bad</dfn>:</td></tr>
+<tr><th id="392">392</th><td>	<a class="ref fn" href="../sys/vnode.h.html#vn_close" title='vn_close' data-ref="vn_close" data-ref-filename="vn_close">vn_close</a>(<a class="local col5 ref" href="#15nd" title='nd' data-ref="15nd" data-ref-filename="15nd">nd</a>.<a class="ref field" href="../sys/namei.h.html#nameidata::ni_vp" title='nameidata::ni_vp' data-ref="nameidata::ni_vp" data-ref-filename="nameidata..ni_vp">ni_vp</a>, <a class="macro" href="../sys/fcntl.h.html#79" title="0x00000002" data-ref="_M/FWRITE">FWRITE</a>, <a class="local col1 ref" href="#11l" title='l' data-ref="11l" data-ref-filename="11l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>);</td></tr>
+<tr><th id="393">393</th><td>	<a class="ref fn" href="../sys/namei.h.html#pathbuf_destroy" title='pathbuf_destroy' data-ref="pathbuf_destroy" data-ref-filename="pathbuf_destroy">pathbuf_destroy</a>(<a class="local col4 ref" href="#14pb" title='pb' data-ref="14pb" data-ref-filename="14pb">pb</a>);</td></tr>
+<tr><th id="394">394</th><td>	<b>return</b> <a class="local col6 ref" href="#16error" title='error' data-ref="16error" data-ref-filename="16error">error</a>;</td></tr>
+<tr><th id="395">395</th><td>}</td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td><i>/*</i></td></tr>
+<tr><th id="398">398</th><td><i> * Write out process accounting information, on process exit.</i></td></tr>
+<tr><th id="399">399</th><td><i> * Data to be written out is specified in Leffler, et al.</i></td></tr>
+<tr><th id="400">400</th><td><i> * and are enumerated below.  (They're also noted in the system</i></td></tr>
+<tr><th id="401">401</th><td><i> * "acct.h" header file.)</i></td></tr>
+<tr><th id="402">402</th><td><i> */</i></td></tr>
+<tr><th id="403">403</th><td><em>int</em></td></tr>
+<tr><th id="404">404</th><td><dfn class="decl def fn" id="acct_process" title='acct_process' data-ref="acct_process" data-ref-filename="acct_process">acct_process</dfn>(<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *<dfn class="local col2 decl" id="22l" title='l' data-type='struct lwp *' data-ref="22l" data-ref-filename="22l">l</dfn>)</td></tr>
+<tr><th id="405">405</th><td>{</td></tr>
+<tr><th id="406">406</th><td>	<b>struct</b> <a class="type" href="../sys/acct.h.html#acct" title='acct' data-ref="acct" data-ref-filename="acct">acct</a> <dfn class="local col3 decl" id="23acct" title='acct' data-type='struct acct' data-ref="23acct" data-ref-filename="23acct">acct</dfn>;</td></tr>
+<tr><th id="407">407</th><td>	<b>struct</b> <a class="type" href="../sys/time.h.html#timeval" title='timeval' data-ref="timeval" data-ref-filename="timeval">timeval</a> <dfn class="local col4 decl" id="24ut" title='ut' data-type='struct timeval' data-ref="24ut" data-ref-filename="24ut">ut</dfn>, <dfn class="local col5 decl" id="25st" title='st' data-type='struct timeval' data-ref="25st" data-ref-filename="25st">st</dfn>, <dfn class="local col6 decl" id="26tmp" title='tmp' data-type='struct timeval' data-ref="26tmp" data-ref-filename="26tmp">tmp</dfn>;</td></tr>
+<tr><th id="408">408</th><td>	<b>struct</b> <a class="type" href="../sys/resource.h.html#rusage" title='rusage' data-ref="rusage" data-ref-filename="rusage">rusage</a> *<dfn class="local col7 decl" id="27r" title='r' data-type='struct rusage *' data-ref="27r" data-ref-filename="27r">r</dfn>;</td></tr>
+<tr><th id="409">409</th><td>	<em>int</em> <dfn class="local col8 decl" id="28t" title='t' data-type='int' data-ref="28t" data-ref-filename="28t">t</dfn>, <dfn class="local col9 decl" id="29error" title='error' data-type='int' data-ref="29error" data-ref-filename="29error">error</dfn> = <var>0</var>;</td></tr>
+<tr><th id="410">410</th><td>	<b>struct</b> <a class="type" href="../sys/resource.h.html#rlimit" title='rlimit' data-ref="rlimit" data-ref-filename="rlimit">rlimit</a> <dfn class="local col0 decl" id="30orlim" title='orlim' data-type='struct rlimit' data-ref="30orlim" data-ref-filename="30orlim">orlim</dfn>;</td></tr>
+<tr><th id="411">411</th><td>	<b>struct</b> <a class="type" href="../sys/proc.h.html#proc" title='proc' data-ref="proc" data-ref-filename="proc">proc</a> *<dfn class="local col1 decl" id="31p" title='p' data-type='struct proc *' data-ref="31p" data-ref-filename="31p">p</dfn> = <a class="local col2 ref" href="#22l" title='l' data-ref="22l" data-ref-filename="22l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_proc" title='lwp::l_proc' data-ref="lwp::l_proc" data-ref-filename="lwp..l_proc">l_proc</a>;</td></tr>
+<tr><th id="412">412</th><td></td></tr>
+<tr><th id="413">413</th><td>	<b>if</b> (<a class="tu ref" href="#acct_state" title='acct_state' data-use='r' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> != <a class="enum" href="#ACCT_ACTIVE" title='ACCT_ACTIVE' data-ref="ACCT_ACTIVE" data-ref-filename="ACCT_ACTIVE">ACCT_ACTIVE</a>)</td></tr>
+<tr><th id="414">414</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="415">415</th><td></td></tr>
+<tr><th id="416">416</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#382" title="__builtin_memset(&amp;acct, 0, sizeof(acct))" data-ref="_M/memset">memset</a>(&amp;<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>, <var>0</var>, <b>sizeof</b>(<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>));	<i>/* to zerofill padded data */</i></td></tr>
+<tr><th id="417">417</th><td></td></tr>
+<tr><th id="418">418</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_enter" title='rw_enter' data-ref="rw_enter" data-ref-filename="rw_enter">rw_enter</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>, <a class="enum" href="../sys/rwlock.h.html#RW_READER" title='RW_READER' data-ref="RW_READER" data-ref-filename="RW_READER">RW_READER</a>);</td></tr>
+<tr><th id="419">419</th><td></td></tr>
+<tr><th id="420">420</th><td>	<i>/* If accounting isn't enabled, don't bother */</i></td></tr>
+<tr><th id="421">421</th><td>	<b>if</b> (<a class="tu ref" href="#acct_state" title='acct_state' data-use='r' data-ref="acct_state" data-ref-filename="acct_state">acct_state</a> != <a class="enum" href="#ACCT_ACTIVE" title='ACCT_ACTIVE' data-ref="ACCT_ACTIVE" data-ref-filename="ACCT_ACTIVE">ACCT_ACTIVE</a>)</td></tr>
+<tr><th id="422">422</th><td>		<b>goto</b> <a class="lbl" href="#32out" data-ref="32out" data-ref-filename="32out">out</a>;</td></tr>
+<tr><th id="423">423</th><td></td></tr>
+<tr><th id="424">424</th><td>	<i>/*</i></td></tr>
+<tr><th id="425">425</th><td><i>	 * Temporarily raise the file limit so that accounting can't</i></td></tr>
+<tr><th id="426">426</th><td><i>	 * be stopped by the user.</i></td></tr>
+<tr><th id="427">427</th><td><i>	 *</i></td></tr>
+<tr><th id="428">428</th><td><i>	 * XXX We should think about the CPU limit, too.</i></td></tr>
+<tr><th id="429">429</th><td><i>	 */</i></td></tr>
+<tr><th id="430">430</th><td>	<a class="ref fn" href="../sys/resourcevar.h.html#lim_privatise" title='lim_privatise' data-ref="lim_privatise" data-ref-filename="lim_privatise">lim_privatise</a>(<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>);</td></tr>
+<tr><th id="431">431</th><td>	<a class="local col0 ref" href="#30orlim" title='orlim' data-ref="30orlim" data-ref-filename="30orlim">orlim</a> = <a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="macro" href="../sys/proc.h.html#353" title="p_limit-&gt;pl_rlimit" data-ref="_M/p_rlimit">p_rlimit</a>[<a class="macro" href="../sys/resource.h.html#89" title="1" data-ref="_M/RLIMIT_FSIZE">RLIMIT_FSIZE</a>];</td></tr>
+<tr><th id="432">432</th><td>	<i>/* Set current and max to avoid illegal values */</i></td></tr>
+<tr><th id="433">433</th><td>	<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="macro" href="../sys/proc.h.html#353" title="p_limit-&gt;pl_rlimit" data-ref="_M/p_rlimit">p_rlimit</a>[<a class="macro" href="../sys/resource.h.html#89" title="1" data-ref="_M/RLIMIT_FSIZE">RLIMIT_FSIZE</a>].<a class="ref field" href="../sys/resource.h.html#rlimit::rlim_cur" title='rlimit::rlim_cur' data-ref="rlimit::rlim_cur" data-ref-filename="rlimit..rlim_cur">rlim_cur</a> = <a class="macro" href="../sys/resource.h.html#121" title="(~((u_quad_t)1 &lt;&lt; 63))" data-ref="_M/RLIM_INFINITY">RLIM_INFINITY</a>;</td></tr>
+<tr><th id="434">434</th><td>	<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="macro" href="../sys/proc.h.html#353" title="p_limit-&gt;pl_rlimit" data-ref="_M/p_rlimit">p_rlimit</a>[<a class="macro" href="../sys/resource.h.html#89" title="1" data-ref="_M/RLIMIT_FSIZE">RLIMIT_FSIZE</a>].<a class="ref field" href="../sys/resource.h.html#rlimit::rlim_max" title='rlimit::rlim_max' data-ref="rlimit::rlim_max" data-ref-filename="rlimit..rlim_max">rlim_max</a> = <a class="macro" href="../sys/resource.h.html#121" title="(~((u_quad_t)1 &lt;&lt; 63))" data-ref="_M/RLIM_INFINITY">RLIM_INFINITY</a>;</td></tr>
+<tr><th id="435">435</th><td></td></tr>
+<tr><th id="436">436</th><td>	<i>/*</i></td></tr>
+<tr><th id="437">437</th><td><i>	 * Get process accounting information.</i></td></tr>
+<tr><th id="438">438</th><td><i>	 */</i></td></tr>
+<tr><th id="439">439</th><td></td></tr>
+<tr><th id="440">440</th><td>	<i>/* (1) The name of the command that ran */</i></td></tr>
+<tr><th id="441">441</th><td>	<a class="ref fn" href="../lib/libkern/libkern.h.html#strncpy" title='strncpy' data-ref="strncpy" data-ref-filename="strncpy">strncpy</a>(<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_comm" title='acct::ac_comm' data-ref="acct::ac_comm" data-ref-filename="acct..ac_comm">ac_comm</a>, <a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_comm" title='proc::p_comm' data-ref="proc::p_comm" data-ref-filename="proc..p_comm">p_comm</a>, <b>sizeof</b>(<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_comm" title='acct::ac_comm' data-ref="acct::ac_comm" data-ref-filename="acct..ac_comm">ac_comm</a>));</td></tr>
+<tr><th id="442">442</th><td></td></tr>
+<tr><th id="443">443</th><td>	<i>/* (2) The amount of user and system time that was used */</i></td></tr>
+<tr><th id="444">444</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="445">445</th><td>	<a class="ref fn" href="../sys/resourcevar.h.html#calcru" title='calcru' data-ref="calcru" data-ref-filename="calcru">calcru</a>(<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>, &amp;<a class="local col4 ref" href="#24ut" title='ut' data-ref="24ut" data-ref-filename="24ut">ut</a>, &amp;<a class="local col5 ref" href="#25st" title='st' data-ref="25st" data-ref-filename="25st">st</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="446">446</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lock" title='proc::p_lock' data-ref="proc::p_lock" data-ref-filename="proc..p_lock">p_lock</a>);</td></tr>
+<tr><th id="447">447</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_utime" title='acct::ac_utime' data-ref="acct::ac_utime" data-ref-filename="acct..ac_utime">ac_utime</a> = <a class="tu ref fn" href="#encode_comp_t" title='encode_comp_t' data-use='c' data-ref="encode_comp_t" data-ref-filename="encode_comp_t">encode_comp_t</a>(<a class="local col4 ref" href="#24ut" title='ut' data-ref="24ut" data-ref-filename="24ut">ut</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>, <a class="local col4 ref" href="#24ut" title='ut' data-ref="24ut" data-ref-filename="24ut">ut</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a>);</td></tr>
+<tr><th id="448">448</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_stime" title='acct::ac_stime' data-ref="acct::ac_stime" data-ref-filename="acct..ac_stime">ac_stime</a> = <a class="tu ref fn" href="#encode_comp_t" title='encode_comp_t' data-use='c' data-ref="encode_comp_t" data-ref-filename="encode_comp_t">encode_comp_t</a>(<a class="local col5 ref" href="#25st" title='st' data-ref="25st" data-ref-filename="25st">st</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>, <a class="local col5 ref" href="#25st" title='st' data-ref="25st" data-ref-filename="25st">st</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a>);</td></tr>
+<tr><th id="449">449</th><td></td></tr>
+<tr><th id="450">450</th><td>	<i>/* (3) The elapsed time the commmand ran (and its starting time) */</i></td></tr>
+<tr><th id="451">451</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_btime" title='acct::ac_btime' data-ref="acct::ac_btime" data-ref-filename="acct..ac_btime">ac_btime</a> = <a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stats" title='proc::p_stats' data-ref="proc::p_stats" data-ref-filename="proc..p_stats">p_stats</a>-&gt;<a class="ref field" href="../sys/resourcevar.h.html#pstats::p_start" title='pstats::p_start' data-ref="pstats::p_start" data-ref-filename="pstats..p_start">p_start</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>;</td></tr>
+<tr><th id="452">452</th><td>	<a class="ref fn" href="../sys/timevar.h.html#getmicrotime" title='getmicrotime' data-ref="getmicrotime" data-ref-filename="getmicrotime">getmicrotime</a>(&amp;<a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>);</td></tr>
+<tr><th id="453">453</th><td>	<a class="macro" href="../sys/time.h.html#86" title="do { (&amp;tmp)-&gt;tv_sec = (&amp;tmp)-&gt;tv_sec - (&amp;p-&gt;p_stats-&gt;p_start)-&gt;tv_sec; (&amp;tmp)-&gt;tv_usec = (&amp;tmp)-&gt;tv_usec - (&amp;p-&gt;p_stats-&gt;p_start)-&gt;tv_usec; if ((&amp;tmp)-&gt;tv_usec &lt; 0) { (&amp;tmp)-&gt;tv_sec--; (&amp;tmp)-&gt;tv_usec += 1000000; } } while ( 0)" data-ref="_M/timersub">timersub</a>(&amp;<a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>, &amp;<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stats" title='proc::p_stats' data-ref="proc::p_stats" data-ref-filename="proc..p_stats">p_stats</a>-&gt;<a class="ref field" href="../sys/resourcevar.h.html#pstats::p_start" title='pstats::p_start' data-ref="pstats::p_start" data-ref-filename="pstats..p_start">p_start</a>, &amp;<a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>);</td></tr>
+<tr><th id="454">454</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_etime" title='acct::ac_etime' data-ref="acct::ac_etime" data-ref-filename="acct..ac_etime">ac_etime</a> = <a class="tu ref fn" href="#encode_comp_t" title='encode_comp_t' data-use='c' data-ref="encode_comp_t" data-ref-filename="encode_comp_t">encode_comp_t</a>(<a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a>, <a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a>);</td></tr>
+<tr><th id="455">455</th><td></td></tr>
+<tr><th id="456">456</th><td>	<i>/* (4) The average amount of memory used */</i></td></tr>
+<tr><th id="457">457</th><td>	<a class="local col7 ref" href="#27r" title='r' data-ref="27r" data-ref-filename="27r">r</a> = &amp;<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_stats" title='proc::p_stats' data-ref="proc::p_stats" data-ref-filename="proc..p_stats">p_stats</a>-&gt;<a class="ref field" href="../sys/resourcevar.h.html#pstats::p_ru" title='pstats::p_ru' data-ref="pstats::p_ru" data-ref-filename="pstats..p_ru">p_ru</a>;</td></tr>
+<tr><th id="458">458</th><td>	<a class="macro" href="../sys/time.h.html#77" title="do { (&amp;tmp)-&gt;tv_sec = (&amp;ut)-&gt;tv_sec + (&amp;st)-&gt;tv_sec; (&amp;tmp)-&gt;tv_usec = (&amp;ut)-&gt;tv_usec + (&amp;st)-&gt;tv_usec; if ((&amp;tmp)-&gt;tv_usec &gt;= 1000000) { (&amp;tmp)-&gt;tv_sec++; (&amp;tmp)-&gt;tv_usec -= 1000000; } } while ( 0)" data-ref="_M/timeradd">timeradd</a>(&amp;<a class="local col4 ref" href="#24ut" title='ut' data-ref="24ut" data-ref-filename="24ut">ut</a>, &amp;<a class="local col5 ref" href="#25st" title='st' data-ref="25st" data-ref-filename="25st">st</a>, &amp;<a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>);</td></tr>
+<tr><th id="459">459</th><td>	<a class="local col8 ref" href="#28t" title='t' data-ref="28t" data-ref-filename="28t">t</a> = <a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_sec" title='timeval::tv_sec' data-ref="timeval::tv_sec" data-ref-filename="timeval..tv_sec">tv_sec</a> * <a class="ref" href="../sys/kernel.h.html#hz" title='hz' data-ref="hz" data-ref-filename="hz">hz</a> + <a class="local col6 ref" href="#26tmp" title='tmp' data-ref="26tmp" data-ref-filename="26tmp">tmp</a>.<a class="ref field" href="../sys/time.h.html#timeval::tv_usec" title='timeval::tv_usec' data-ref="timeval::tv_usec" data-ref-filename="timeval..tv_usec">tv_usec</a> / <a class="ref" href="../sys/kernel.h.html#tick" title='tick' data-ref="tick" data-ref-filename="tick">tick</a>;</td></tr>
+<tr><th id="460">460</th><td>	<b>if</b> (<a class="local col8 ref" href="#28t" title='t' data-ref="28t" data-ref-filename="28t">t</a>)</td></tr>
+<tr><th id="461">461</th><td>		<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_mem" title='acct::ac_mem' data-ref="acct::ac_mem" data-ref-filename="acct..ac_mem">ac_mem</a> = (<a class="local col7 ref" href="#27r" title='r' data-ref="27r" data-ref-filename="27r">r</a>-&gt;<a class="ref field" href="../sys/resource.h.html#rusage::ru_ixrss" title='rusage::ru_ixrss' data-ref="rusage::ru_ixrss" data-ref-filename="rusage..ru_ixrss">ru_ixrss</a> + <a class="local col7 ref" href="#27r" title='r' data-ref="27r" data-ref-filename="27r">r</a>-&gt;<a class="ref field" href="../sys/resource.h.html#rusage::ru_idrss" title='rusage::ru_idrss' data-ref="rusage::ru_idrss" data-ref-filename="rusage..ru_idrss">ru_idrss</a> + <a class="local col7 ref" href="#27r" title='r' data-ref="27r" data-ref-filename="27r">r</a>-&gt;<a class="ref field" href="../sys/resource.h.html#rusage::ru_isrss" title='rusage::ru_isrss' data-ref="rusage::ru_isrss" data-ref-filename="rusage..ru_isrss">ru_isrss</a>) / <a class="local col8 ref" href="#28t" title='t' data-ref="28t" data-ref-filename="28t">t</a>;</td></tr>
+<tr><th id="462">462</th><td>	<b>else</b></td></tr>
+<tr><th id="463">463</th><td>		<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_mem" title='acct::ac_mem' data-ref="acct::ac_mem" data-ref-filename="acct..ac_mem">ac_mem</a> = <var>0</var>;</td></tr>
+<tr><th id="464">464</th><td></td></tr>
+<tr><th id="465">465</th><td>	<i>/* (5) The number of disk I/O operations done */</i></td></tr>
+<tr><th id="466">466</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_io" title='acct::ac_io' data-ref="acct::ac_io" data-ref-filename="acct..ac_io">ac_io</a> = <a class="tu ref fn" href="#encode_comp_t" title='encode_comp_t' data-use='c' data-ref="encode_comp_t" data-ref-filename="encode_comp_t">encode_comp_t</a>(<a class="local col7 ref" href="#27r" title='r' data-ref="27r" data-ref-filename="27r">r</a>-&gt;<a class="ref field" href="../sys/resource.h.html#rusage::ru_inblock" title='rusage::ru_inblock' data-ref="rusage::ru_inblock" data-ref-filename="rusage..ru_inblock">ru_inblock</a> + <a class="local col7 ref" href="#27r" title='r' data-ref="27r" data-ref-filename="27r">r</a>-&gt;<a class="ref field" href="../sys/resource.h.html#rusage::ru_oublock" title='rusage::ru_oublock' data-ref="rusage::ru_oublock" data-ref-filename="rusage..ru_oublock">ru_oublock</a>, <var>0</var>);</td></tr>
+<tr><th id="467">467</th><td></td></tr>
+<tr><th id="468">468</th><td>	<i>/* (6) The UID and GID of the process */</i></td></tr>
+<tr><th id="469">469</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_uid" title='acct::ac_uid' data-ref="acct::ac_uid" data-ref-filename="acct..ac_uid">ac_uid</a> = <a class="ref fn" href="../sys/kauth.h.html#kauth_cred_getuid" title='kauth_cred_getuid' data-ref="kauth_cred_getuid" data-ref-filename="kauth_cred_getuid">kauth_cred_getuid</a>(<a class="local col2 ref" href="#22l" title='l' data-ref="22l" data-ref-filename="22l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>);</td></tr>
+<tr><th id="470">470</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_gid" title='acct::ac_gid' data-ref="acct::ac_gid" data-ref-filename="acct..ac_gid">ac_gid</a> = <a class="ref fn" href="../sys/kauth.h.html#kauth_cred_getgid" title='kauth_cred_getgid' data-ref="kauth_cred_getgid" data-ref-filename="kauth_cred_getgid">kauth_cred_getgid</a>(<a class="local col2 ref" href="#22l" title='l' data-ref="22l" data-ref-filename="22l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cred" title='lwp::l_cred' data-ref="lwp::l_cred" data-ref-filename="lwp..l_cred">l_cred</a>);</td></tr>
+<tr><th id="471">471</th><td></td></tr>
+<tr><th id="472">472</th><td>	<i>/* (7) The terminal from which the process was started */</i></td></tr>
+<tr><th id="473">473</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_enter" title='mutex_enter' data-ref="mutex_enter" data-ref-filename="mutex_enter">mutex_enter</a>(<a class="ref" href="../sys/proc.h.html#proc_lock" title='proc_lock' data-ref="proc_lock" data-ref-filename="proc_lock">proc_lock</a>);</td></tr>
+<tr><th id="474">474</th><td>	<b>if</b> ((<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_lflag" title='proc::p_lflag' data-ref="proc::p_lflag" data-ref-filename="proc..p_lflag">p_lflag</a> &amp; <a class="macro" href="../sys/proc.h.html#431" title="0x00000002" data-ref="_M/PL_CONTROLT">PL_CONTROLT</a>) &amp;&amp; <a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_pgrp" title='proc::p_pgrp' data-ref="proc::p_pgrp" data-ref-filename="proc..p_pgrp">p_pgrp</a>-&gt;<a class="ref field" href="../sys/proc.h.html#pgrp::pg_session" title='pgrp::pg_session' data-ref="pgrp::pg_session" data-ref-filename="pgrp..pg_session">pg_session</a>-&gt;<a class="ref field" href="../sys/proc.h.html#session::s_ttyp" title='session::s_ttyp' data-ref="session::s_ttyp" data-ref-filename="session..s_ttyp">s_ttyp</a>)</td></tr>
+<tr><th id="475">475</th><td>		<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_tty" title='acct::ac_tty' data-ref="acct::ac_tty" data-ref-filename="acct..ac_tty">ac_tty</a> = <a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_pgrp" title='proc::p_pgrp' data-ref="proc::p_pgrp" data-ref-filename="proc..p_pgrp">p_pgrp</a>-&gt;<a class="ref field" href="../sys/proc.h.html#pgrp::pg_session" title='pgrp::pg_session' data-ref="pgrp::pg_session" data-ref-filename="pgrp..pg_session">pg_session</a>-&gt;<a class="ref field" href="../sys/proc.h.html#session::s_ttyp" title='session::s_ttyp' data-ref="session::s_ttyp" data-ref-filename="session..s_ttyp">s_ttyp</a>-&gt;<a class="ref field" href="../sys/tty.h.html#tty::t_dev" title='tty::t_dev' data-ref="tty::t_dev" data-ref-filename="tty..t_dev">t_dev</a>;</td></tr>
+<tr><th id="476">476</th><td>	<b>else</b></td></tr>
+<tr><th id="477">477</th><td>		<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_tty" title='acct::ac_tty' data-ref="acct::ac_tty" data-ref-filename="acct..ac_tty">ac_tty</a> = <a class="macro" href="../sys/param.h.html#341" title="(dev_t)(-1)" data-ref="_M/NODEV">NODEV</a>;</td></tr>
+<tr><th id="478">478</th><td>	<a class="ref fn" href="../sys/mutex.h.html#mutex_exit" title='mutex_exit' data-ref="mutex_exit" data-ref-filename="mutex_exit">mutex_exit</a>(<a class="ref" href="../sys/proc.h.html#proc_lock" title='proc_lock' data-ref="proc_lock" data-ref-filename="proc_lock">proc_lock</a>);</td></tr>
+<tr><th id="479">479</th><td></td></tr>
+<tr><th id="480">480</th><td>	<i>/* (8) The boolean flags that tell how the process terminated, etc. */</i></td></tr>
+<tr><th id="481">481</th><td>	<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>.<a class="ref field" href="../sys/acct.h.html#acct::ac_flag" title='acct::ac_flag' data-ref="acct::ac_flag" data-ref-filename="acct..ac_flag">ac_flag</a> = <a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="ref field" href="../sys/proc.h.html#proc::p_acflag" title='proc::p_acflag' data-ref="proc::p_acflag" data-ref-filename="proc..p_acflag">p_acflag</a>;</td></tr>
+<tr><th id="482">482</th><td></td></tr>
+<tr><th id="483">483</th><td>	<i>/*</i></td></tr>
+<tr><th id="484">484</th><td><i>	 * Now, just write the accounting information to the file.</i></td></tr>
+<tr><th id="485">485</th><td><i>	 */</i></td></tr>
+<tr><th id="486">486</th><td>	<a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a> = <a class="ref fn" href="../sys/vnode.h.html#vn_rdwr" title='vn_rdwr' data-ref="vn_rdwr" data-ref-filename="vn_rdwr">vn_rdwr</a>(<a class="enum" href="../sys/uio.h.html#UIO_WRITE" title='UIO_WRITE' data-ref="UIO_WRITE" data-ref-filename="UIO_WRITE">UIO_WRITE</a>, <a class="tu ref" href="#acct_vp" title='acct_vp' data-use='r' data-ref="acct_vp" data-ref-filename="acct_vp">acct_vp</a>, (<em>void</em> *)&amp;<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>,</td></tr>
+<tr><th id="487">487</th><td>	    <b>sizeof</b>(<a class="local col3 ref" href="#23acct" title='acct' data-ref="23acct" data-ref-filename="23acct">acct</a>), (<a class="macro" href="../sys/types.h.html#178" title="__off_t" data-ref="_M/off_t">off_t</a>)<var>0</var>, <a class="enum" href="../sys/uio.h.html#UIO_SYSSPACE" title='UIO_SYSSPACE' data-ref="UIO_SYSSPACE" data-ref-filename="UIO_SYSSPACE">UIO_SYSSPACE</a>, <a class="macro" href="../sys/vnode.h.html#253" title="0x00020" data-ref="_M/IO_APPEND">IO_APPEND</a>|<a class="macro" href="../sys/vnode.h.html#252" title="0x00010" data-ref="_M/IO_UNIT">IO_UNIT</a>,</td></tr>
+<tr><th id="488">488</th><td>	    <a class="tu ref" href="#acct_cred" title='acct_cred' data-use='r' data-ref="acct_cred" data-ref-filename="acct_cred">acct_cred</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="489">489</th><td>	<b>if</b> (<a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a> != <var>0</var>)</td></tr>
+<tr><th id="490">490</th><td>		<a class="ref fn" href="../sys/syslog.h.html#log" title='log' data-ref="log" data-ref-filename="log">log</a>(<a class="macro" href="../sys/syslog.h.html#55" title="3" data-ref="_M/LOG_ERR">LOG_ERR</a>, <q>"Accounting: write failed %d\n"</q>, <a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a>);</td></tr>
+<tr><th id="491">491</th><td></td></tr>
+<tr><th id="492">492</th><td>	<i>/* Restore limit - rather pointless since process is about to exit */</i></td></tr>
+<tr><th id="493">493</th><td>	<a class="local col1 ref" href="#31p" title='p' data-ref="31p" data-ref-filename="31p">p</a>-&gt;<a class="macro" href="../sys/proc.h.html#353" title="p_limit-&gt;pl_rlimit" data-ref="_M/p_rlimit">p_rlimit</a>[<a class="macro" href="../sys/resource.h.html#89" title="1" data-ref="_M/RLIMIT_FSIZE">RLIMIT_FSIZE</a>] = <a class="local col0 ref" href="#30orlim" title='orlim' data-ref="30orlim" data-ref-filename="30orlim">orlim</a>;</td></tr>
+<tr><th id="494">494</th><td></td></tr>
+<tr><th id="495">495</th><td> <dfn class="lbl" id="32out" data-ref="32out" data-ref-filename="32out">out</dfn>:</td></tr>
+<tr><th id="496">496</th><td>	<a class="ref fn" href="../sys/rwlock.h.html#rw_exit" title='rw_exit' data-ref="rw_exit" data-ref-filename="rw_exit">rw_exit</a>(&amp;<a class="ref" href="#acct_lock" title='acct_lock' data-ref="acct_lock" data-ref-filename="acct_lock">acct_lock</a>);</td></tr>
+<tr><th id="497">497</th><td>	<b>return</b> (<a class="local col9 ref" href="#29error" title='error' data-ref="29error" data-ref-filename="29error">error</a>);</td></tr>
+<tr><th id="498">498</th><td>}</td></tr>
+<tr><th id="499">499</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

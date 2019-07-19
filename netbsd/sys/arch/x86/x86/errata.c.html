@@ -1,0 +1,476 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>errata.c source code [netbsd/sys/arch/x86/x86/errata.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="cpurev,errata "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/arch/x86/x86/errata.c'; var root_path = '../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../..'>netbsd</a>/<a href='../../..'>sys</a>/<a href='../..'>arch</a>/<a href='..'>x86</a>/<a href='./'>x86</a>/<a href='errata.c.html'>errata.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: errata.c,v 1.26 2019/05/18 07:49:31 maxv Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i> * Detect, report on, and work around known errata with x86 CPUs.</i></td></tr>
+<tr><th id="34">34</th><td><i> *</i></td></tr>
+<tr><th id="35">35</th><td><i> * This currently only handles AMD CPUs, and is generalised because</i></td></tr>
+<tr><th id="36">36</th><td><i> * there are quite a few problems that the BIOS can patch via MSR,</i></td></tr>
+<tr><th id="37">37</th><td><i> * but it is not known if the OS can patch these yet.  The list is</i></td></tr>
+<tr><th id="38">38</th><td><i> * expected to grow over time.</i></td></tr>
+<tr><th id="39">39</th><td><i> *</i></td></tr>
+<tr><th id="40">40</th><td><i> * The data here are from: Revision Guide for AMD Athlon 64 and</i></td></tr>
+<tr><th id="41">41</th><td><i> * AMD Opteron Processors, Publication #25759, Revision: 3.69,</i></td></tr>
+<tr><th id="42">42</th><td><i> * Issue Date: September 2006</i></td></tr>
+<tr><th id="43">43</th><td><i> *</i></td></tr>
+<tr><th id="44">44</th><td><i> * XXX This should perhaps be integrated with the identcpu code.</i></td></tr>
+<tr><th id="45">45</th><td><i> */</i></td></tr>
+<tr><th id="46">46</th><td></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../../../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><a class="macro" href="../../../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: errata.c,v 1.26 2019/05/18 07:49:31 maxv Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: errata.c,v 1.26 2019/05/18 07:49:31 maxv Exp $"</q>);</td></tr>
+<tr><th id="49">49</th><td></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../../../sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../../../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../../amd64/include/cpu.h.html">&lt;machine/cpu.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="../../amd64/include/cpufunc.h.html">&lt;machine/cpufunc.h&gt;</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="../../amd64/include/specialreg.h.html">&lt;machine/specialreg.h&gt;</a></u></td></tr>
+<tr><th id="56">56</th><td></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="../include/cpuvar.h.html">&lt;x86/cpuvar.h&gt;</a></u></td></tr>
+<tr><th id="58">58</th><td><u>#include <a href="../include/cputypes.h.html">&lt;x86/cputypes.h&gt;</a></u></td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td><b>typedef</b> <b>struct</b> <dfn class="type def" id="errata" title='errata' data-ref="errata" data-ref-filename="errata"><a class="type" href="#errata" title='errata' data-ref="errata" data-ref-filename="errata">errata</a></dfn> {</td></tr>
+<tr><th id="61">61</th><td>	<a class="typedef" href="../../../sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>		<dfn class="tu decl field" id="errata::e_num" title='errata::e_num' data-type='u_short' data-ref="errata::e_num" data-ref-filename="errata..e_num">e_num</dfn>;</td></tr>
+<tr><th id="62">62</th><td>	<a class="typedef" href="../../../sys/types.h.html#u_short" title='u_short' data-type='unsigned short' data-ref="u_short" data-ref-filename="u_short">u_short</a>		<dfn class="tu decl field" id="errata::e_reported" title='errata::e_reported' data-type='u_short' data-ref="errata::e_reported" data-ref-filename="errata..e_reported">e_reported</dfn>;</td></tr>
+<tr><th id="63">63</th><td>	<a class="typedef" href="../../../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a>		<dfn class="tu decl field" id="errata::e_data1" title='errata::e_data1' data-type='u_int' data-ref="errata::e_data1" data-ref-filename="errata..e_data1">e_data1</dfn>;</td></tr>
+<tr><th id="64">64</th><td>	<em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a>	*<dfn class="tu decl field" id="errata::e_set" title='errata::e_set' data-type='const uint8_t *' data-ref="errata::e_set" data-ref-filename="errata..e_set">e_set</dfn>;</td></tr>
+<tr><th id="65">65</th><td>	<a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a>		(*<dfn class="tu decl field" id="errata::e_act" title='errata::e_act' data-type='_Bool (*)(struct cpu_info *, struct errata *)' data-ref="errata::e_act" data-ref-filename="errata..e_act">e_act</dfn>)(<b>struct</b> <a class="type" href="../include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *, <b>struct</b> <a class="type" href="#errata" title='errata' data-ref="errata" data-ref-filename="errata">errata</a> *);</td></tr>
+<tr><th id="66">66</th><td>	<a class="typedef" href="../../../sys/types.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a>	<dfn class="tu decl field" id="errata::e_data2" title='errata::e_data2' data-type='uint64_t' data-ref="errata::e_data2" data-ref-filename="errata..e_data2">e_data2</dfn>;</td></tr>
+<tr><th id="67">67</th><td>} <dfn class="typedef" id="errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</dfn>;</td></tr>
+<tr><th id="68">68</th><td></td></tr>
+<tr><th id="69">69</th><td><b>typedef</b> <b>enum</b> <dfn class="type def" id="cpurev" title='cpurev' data-ref="cpurev" data-ref-filename="cpurev"><a class="type" href="#cpurev" title='cpurev' data-ref="cpurev" data-ref-filename="cpurev">cpurev</a></dfn> {</td></tr>
+<tr><th id="70">70</th><td>	<dfn class="enum" id="BH_E4" title='BH_E4' data-ref="BH_E4" data-ref-filename="BH_E4">BH_E4</dfn>, <dfn class="enum" id="CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</dfn>, <dfn class="enum" id="CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</dfn>, <dfn class="enum" id="DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</dfn>, <dfn class="enum" id="DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</dfn>, <dfn class="enum" id="DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</dfn>, <dfn class="enum" id="DH_E6" title='DH_E6' data-ref="DH_E6" data-ref-filename="DH_E6">DH_E6</dfn>, <dfn class="enum" id="JH_E1" title='JH_E1' data-ref="JH_E1" data-ref-filename="JH_E1">JH_E1</dfn>,</td></tr>
+<tr><th id="71">71</th><td>	<dfn class="enum" id="JH_E6" title='JH_E6' data-ref="JH_E6" data-ref-filename="JH_E6">JH_E6</dfn>, <dfn class="enum" id="SH_B0" title='SH_B0' data-ref="SH_B0" data-ref-filename="SH_B0">SH_B0</dfn>, <dfn class="enum" id="SH_B3" title='SH_B3' data-ref="SH_B3" data-ref-filename="SH_B3">SH_B3</dfn>, <dfn class="enum" id="SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</dfn>, <dfn class="enum" id="SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</dfn>, <dfn class="enum" id="SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</dfn>, <dfn class="enum" id="SH_E4" title='SH_E4' data-ref="SH_E4" data-ref-filename="SH_E4">SH_E4</dfn>, <dfn class="enum" id="SH_E5" title='SH_E5' data-ref="SH_E5" data-ref-filename="SH_E5">SH_E5</dfn>,</td></tr>
+<tr><th id="72">72</th><td>	<dfn class="enum" id="DR_BA" title='DR_BA' data-ref="DR_BA" data-ref-filename="DR_BA">DR_BA</dfn>, <dfn class="enum" id="DR_B2" title='DR_B2' data-ref="DR_B2" data-ref-filename="DR_B2">DR_B2</dfn>, <dfn class="enum" id="DR_B3" title='DR_B3' data-ref="DR_B3" data-ref-filename="DR_B3">DR_B3</dfn>, <dfn class="enum" id="RB_C2" title='RB_C2' data-ref="RB_C2" data-ref-filename="RB_C2">RB_C2</dfn>, <dfn class="enum" id="RB_C3" title='RB_C3' data-ref="RB_C3" data-ref-filename="RB_C3">RB_C3</dfn>, <dfn class="enum" id="BL_C2" title='BL_C2' data-ref="BL_C2" data-ref-filename="BL_C2">BL_C2</dfn>, <dfn class="enum" id="BL_C3" title='BL_C3' data-ref="BL_C3" data-ref-filename="BL_C3">BL_C3</dfn>, <dfn class="enum" id="DA_C2" title='DA_C2' data-ref="DA_C2" data-ref-filename="DA_C2">DA_C2</dfn>,</td></tr>
+<tr><th id="73">73</th><td>	<dfn class="enum" id="DA_C3" title='DA_C3' data-ref="DA_C3" data-ref-filename="DA_C3">DA_C3</dfn>, <dfn class="enum" id="HY_D0" title='HY_D0' data-ref="HY_D0" data-ref-filename="HY_D0">HY_D0</dfn>, <dfn class="enum" id="HY_D1" title='HY_D1' data-ref="HY_D1" data-ref-filename="HY_D1">HY_D1</dfn>, <dfn class="enum" id="HY_D1_G34R1" title='HY_D1_G34R1' data-ref="HY_D1_G34R1" data-ref-filename="HY_D1_G34R1">HY_D1_G34R1</dfn>,  <dfn class="enum" id="PH_E0" title='PH_E0' data-ref="PH_E0" data-ref-filename="PH_E0">PH_E0</dfn>, <dfn class="enum" id="LN_B0" title='LN_B0' data-ref="LN_B0" data-ref-filename="LN_B0">LN_B0</dfn>, <dfn class="enum" id="KB_A1" title='KB_A1' data-ref="KB_A1" data-ref-filename="KB_A1">KB_A1</dfn>,</td></tr>
+<tr><th id="74">74</th><td>	<dfn class="enum" id="ML_A1" title='ML_A1' data-ref="ML_A1" data-ref-filename="ML_A1">ML_A1</dfn>, <dfn class="enum" id="ZP_B1" title='ZP_B1' data-ref="ZP_B1" data-ref-filename="ZP_B1">ZP_B1</dfn>, <dfn class="enum" id="ZP_B2" title='ZP_B2' data-ref="ZP_B2" data-ref-filename="ZP_B2">ZP_B2</dfn>, <dfn class="enum" id="PiR_B2" title='PiR_B2' data-ref="PiR_B2" data-ref-filename="PiR_B2">PiR_B2</dfn>, <dfn class="enum" id="OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</dfn></td></tr>
+<tr><th id="75">75</th><td>} <dfn class="typedef" id="cpurev_t" title='cpurev_t' data-type='enum cpurev' data-ref="cpurev_t" data-ref-filename="cpurev_t">cpurev_t</dfn>;</td></tr>
+<tr><th id="76">76</th><td></td></tr>
+<tr><th id="77">77</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="tu decl def" id="cpurevs" title='cpurevs' data-type='const u_int [99]' data-ref="cpurevs" data-ref-filename="cpurevs">cpurevs</dfn>[] = {</td></tr>
+<tr><th id="78">78</th><td>	<a class="enum" href="#BH_E4" title='BH_E4' data-ref="BH_E4" data-ref-filename="BH_E4">BH_E4</a>, <var>0x0020fb1</var>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <var>0x0000f82</var>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <var>0x0000fb2</var>,</td></tr>
+<tr><th id="79">79</th><td>	<a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <var>0x0010f80</var>, <a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <var>0x0010fb0</var>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <var>0x0000fc0</var>,</td></tr>
+<tr><th id="80">80</th><td>	<a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <var>0x0000fe0</var>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <var>0x0000ff0</var>, <a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <var>0x0010fc0</var>,</td></tr>
+<tr><th id="81">81</th><td>	<a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <var>0x0010ff0</var>, <a class="enum" href="#DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</a>, <var>0x0020fc0</var>, <a class="enum" href="#DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</a>, <var>0x0020ff0</var>,</td></tr>
+<tr><th id="82">82</th><td>	<a class="enum" href="#DH_E6" title='DH_E6' data-ref="DH_E6" data-ref-filename="DH_E6">DH_E6</a>, <var>0x0020fc2</var>, <a class="enum" href="#DH_E6" title='DH_E6' data-ref="DH_E6" data-ref-filename="DH_E6">DH_E6</a>, <var>0x0020ff2</var>, <a class="enum" href="#JH_E1" title='JH_E1' data-ref="JH_E1" data-ref-filename="JH_E1">JH_E1</a>, <var>0x0020f10</var>,</td></tr>
+<tr><th id="83">83</th><td>	<a class="enum" href="#JH_E6" title='JH_E6' data-ref="JH_E6" data-ref-filename="JH_E6">JH_E6</a>, <var>0x0020f12</var>, <a class="enum" href="#JH_E6" title='JH_E6' data-ref="JH_E6" data-ref-filename="JH_E6">JH_E6</a>, <var>0x0020f32</var>, <a class="enum" href="#SH_B0" title='SH_B0' data-ref="SH_B0" data-ref-filename="SH_B0">SH_B0</a>, <var>0x0000f40</var>,</td></tr>
+<tr><th id="84">84</th><td>	<a class="enum" href="#SH_B3" title='SH_B3' data-ref="SH_B3" data-ref-filename="SH_B3">SH_B3</a>, <var>0x0000f51</var>, <a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <var>0x0000f48</var>, <a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <var>0x0000f58</var>,</td></tr>
+<tr><th id="85">85</th><td>	<a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <var>0x0000f4a</var>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <var>0x0000f5a</var>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <var>0x0000f7a</var>,</td></tr>
+<tr><th id="86">86</th><td>	<a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <var>0x0010f40</var>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <var>0x0010f50</var>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <var>0x0010f70</var>,</td></tr>
+<tr><th id="87">87</th><td>	<a class="enum" href="#SH_E4" title='SH_E4' data-ref="SH_E4" data-ref-filename="SH_E4">SH_E4</a>, <var>0x0020f51</var>, <a class="enum" href="#SH_E4" title='SH_E4' data-ref="SH_E4" data-ref-filename="SH_E4">SH_E4</a>, <var>0x0020f71</var>, <a class="enum" href="#SH_E5" title='SH_E5' data-ref="SH_E5" data-ref-filename="SH_E5">SH_E5</a>, <var>0x0020f42</var>,</td></tr>
+<tr><th id="88">88</th><td>	<a class="enum" href="#DR_BA" title='DR_BA' data-ref="DR_BA" data-ref-filename="DR_BA">DR_BA</a>, <var>0x0100f2a</var>, <a class="enum" href="#DR_B2" title='DR_B2' data-ref="DR_B2" data-ref-filename="DR_B2">DR_B2</a>, <var>0x0100f22</var>, <a class="enum" href="#DR_B3" title='DR_B3' data-ref="DR_B3" data-ref-filename="DR_B3">DR_B3</a>, <var>0x0100f23</var>,</td></tr>
+<tr><th id="89">89</th><td>	<a class="enum" href="#RB_C2" title='RB_C2' data-ref="RB_C2" data-ref-filename="RB_C2">RB_C2</a>, <var>0x0100f42</var>, <a class="enum" href="#RB_C3" title='RB_C3' data-ref="RB_C3" data-ref-filename="RB_C3">RB_C3</a>, <var>0x0100f43</var>, <a class="enum" href="#BL_C2" title='BL_C2' data-ref="BL_C2" data-ref-filename="BL_C2">BL_C2</a>, <var>0x0100f52</var>,</td></tr>
+<tr><th id="90">90</th><td>	<a class="enum" href="#BL_C3" title='BL_C3' data-ref="BL_C3" data-ref-filename="BL_C3">BL_C3</a>, <var>0x0100f53</var>, <a class="enum" href="#DA_C2" title='DA_C2' data-ref="DA_C2" data-ref-filename="DA_C2">DA_C2</a>, <var>0x0100f62</var>, <a class="enum" href="#DA_C3" title='DA_C3' data-ref="DA_C3" data-ref-filename="DA_C3">DA_C3</a>, <var>0x0100f63</var>,</td></tr>
+<tr><th id="91">91</th><td>	<a class="enum" href="#HY_D0" title='HY_D0' data-ref="HY_D0" data-ref-filename="HY_D0">HY_D0</a>, <var>0x0100f80</var>, <a class="enum" href="#HY_D1" title='HY_D1' data-ref="HY_D1" data-ref-filename="HY_D1">HY_D1</a>, <var>0x0100f81</var>, <a class="enum" href="#HY_D1_G34R1" title='HY_D1_G34R1' data-ref="HY_D1_G34R1" data-ref-filename="HY_D1_G34R1">HY_D1_G34R1</a>, <var>0x0100f91</var>,</td></tr>
+<tr><th id="92">92</th><td>	<a class="enum" href="#PH_E0" title='PH_E0' data-ref="PH_E0" data-ref-filename="PH_E0">PH_E0</a>, <var>0x0100fa0</var>, <a class="enum" href="#LN_B0" title='LN_B0' data-ref="LN_B0" data-ref-filename="LN_B0">LN_B0</a>, <var>0x0300f10</var>, <a class="enum" href="#KB_A1" title='KB_A1' data-ref="KB_A1" data-ref-filename="KB_A1">KB_A1</a>, <var>0x0700F01</var>,</td></tr>
+<tr><th id="93">93</th><td>	<a class="enum" href="#ML_A1" title='ML_A1' data-ref="ML_A1" data-ref-filename="ML_A1">ML_A1</a>, <var>0x0730F01</var>, <a class="enum" href="#ZP_B1" title='ZP_B1' data-ref="ZP_B1" data-ref-filename="ZP_B1">ZP_B1</a>, <var>0x0800F11</var>, <a class="enum" href="#ZP_B2" title='ZP_B2' data-ref="ZP_B2" data-ref-filename="ZP_B2">ZP_B2</a>, <var>0x0800F12</var>,</td></tr>
+<tr><th id="94">94</th><td>	<a class="enum" href="#PiR_B2" title='PiR_B2' data-ref="PiR_B2" data-ref-filename="PiR_B2">PiR_B2</a>, <var>0x0800F82</var>,</td></tr>
+<tr><th id="95">95</th><td>	<a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="96">96</th><td>};</td></tr>
+<tr><th id="97">97</th><td></td></tr>
+<tr><th id="98">98</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set1" title='x86_errata_set1' data-type='const uint8_t [6]' data-ref="x86_errata_set1" data-ref-filename="x86_errata_set1">x86_errata_set1</dfn>[] = {</td></tr>
+<tr><th id="99">99</th><td>	<a class="enum" href="#SH_B3" title='SH_B3' data-ref="SH_B3" data-ref-filename="SH_B3">SH_B3</a>, <a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="100">100</th><td>};</td></tr>
+<tr><th id="101">101</th><td></td></tr>
+<tr><th id="102">102</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set2" title='x86_errata_set2' data-type='const uint8_t [9]' data-ref="x86_errata_set2" data-ref-filename="x86_errata_set2">x86_errata_set2</dfn>[] = {</td></tr>
+<tr><th id="103">103</th><td>	<a class="enum" href="#SH_B3" title='SH_B3' data-ref="SH_B3" data-ref-filename="SH_B3">SH_B3</a>, <a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="104">104</th><td>};</td></tr>
+<tr><th id="105">105</th><td></td></tr>
+<tr><th id="106">106</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set3" title='x86_errata_set3' data-type='const uint8_t [3]' data-ref="x86_errata_set3" data-ref-filename="x86_errata_set3">x86_errata_set3</dfn>[] = {</td></tr>
+<tr><th id="107">107</th><td>	<a class="enum" href="#JH_E1" title='JH_E1' data-ref="JH_E1" data-ref-filename="JH_E1">JH_E1</a>, <a class="enum" href="#DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="108">108</th><td>};</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set4" title='x86_errata_set4' data-type='const uint8_t [15]' data-ref="x86_errata_set4" data-ref-filename="x86_errata_set4">x86_errata_set4</dfn>[] = {</td></tr>
+<tr><th id="111">111</th><td>	<a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <a class="enum" href="#JH_E1" title='JH_E1' data-ref="JH_E1" data-ref-filename="JH_E1">JH_E1</a>,</td></tr>
+<tr><th id="112">112</th><td>	<a class="enum" href="#DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</a>, <a class="enum" href="#SH_E4" title='SH_E4' data-ref="SH_E4" data-ref-filename="SH_E4">SH_E4</a>, <a class="enum" href="#BH_E4" title='BH_E4' data-ref="BH_E4" data-ref-filename="BH_E4">BH_E4</a>, <a class="enum" href="#SH_E5" title='SH_E5' data-ref="SH_E5" data-ref-filename="SH_E5">SH_E5</a>, <a class="enum" href="#DH_E6" title='DH_E6' data-ref="DH_E6" data-ref-filename="DH_E6">DH_E6</a>, <a class="enum" href="#JH_E6" title='JH_E6' data-ref="JH_E6" data-ref-filename="JH_E6">JH_E6</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="113">113</th><td>};</td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set5" title='x86_errata_set5' data-type='const uint8_t [2]' data-ref="x86_errata_set5" data-ref-filename="x86_errata_set5">x86_errata_set5</dfn>[] = {</td></tr>
+<tr><th id="116">116</th><td>	<a class="enum" href="#SH_B3" title='SH_B3' data-ref="SH_B3" data-ref-filename="SH_B3">SH_B3</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="117">117</th><td>};</td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set6" title='x86_errata_set6' data-type='const uint8_t [5]' data-ref="x86_errata_set6" data-ref-filename="x86_errata_set6">x86_errata_set6</dfn>[] = {</td></tr>
+<tr><th id="120">120</th><td>	<a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="121">121</th><td>};</td></tr>
+<tr><th id="122">122</th><td></td></tr>
+<tr><th id="123">123</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set7" title='x86_errata_set7' data-type='const uint8_t [8]' data-ref="x86_errata_set7" data-ref-filename="x86_errata_set7">x86_errata_set7</dfn>[] = {</td></tr>
+<tr><th id="124">124</th><td>	<a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="125">125</th><td>};</td></tr>
+<tr><th id="126">126</th><td></td></tr>
+<tr><th id="127">127</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set8" title='x86_errata_set8' data-type='const uint8_t [31]' data-ref="x86_errata_set8" data-ref-filename="x86_errata_set8">x86_errata_set8</dfn>[] = {</td></tr>
+<tr><th id="128">128</th><td>	<a class="enum" href="#BH_E4" title='BH_E4' data-ref="BH_E4" data-ref-filename="BH_E4">BH_E4</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#CH_CG" title='CH_CG' data-ref="CH_CG" data-ref-filename="CH_CG">CH_CG</a>, <a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <a class="enum" href="#CH_D0" title='CH_D0' data-ref="CH_D0" data-ref-filename="CH_D0">CH_D0</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>, <a class="enum" href="#DH_CG" title='DH_CG' data-ref="DH_CG" data-ref-filename="DH_CG">DH_CG</a>,</td></tr>
+<tr><th id="129">129</th><td>	<a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <a class="enum" href="#DH_D0" title='DH_D0' data-ref="DH_D0" data-ref-filename="DH_D0">DH_D0</a>, <a class="enum" href="#DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</a>, <a class="enum" href="#DH_E3" title='DH_E3' data-ref="DH_E3" data-ref-filename="DH_E3">DH_E3</a>, <a class="enum" href="#DH_E6" title='DH_E6' data-ref="DH_E6" data-ref-filename="DH_E6">DH_E6</a>, <a class="enum" href="#DH_E6" title='DH_E6' data-ref="DH_E6" data-ref-filename="DH_E6">DH_E6</a>, <a class="enum" href="#JH_E1" title='JH_E1' data-ref="JH_E1" data-ref-filename="JH_E1">JH_E1</a>, <a class="enum" href="#JH_E6" title='JH_E6' data-ref="JH_E6" data-ref-filename="JH_E6">JH_E6</a>,</td></tr>
+<tr><th id="130">130</th><td>	<a class="enum" href="#JH_E6" title='JH_E6' data-ref="JH_E6" data-ref-filename="JH_E6">JH_E6</a>, <a class="enum" href="#SH_B0" title='SH_B0' data-ref="SH_B0" data-ref-filename="SH_B0">SH_B0</a>, <a class="enum" href="#SH_B3" title='SH_B3' data-ref="SH_B3" data-ref-filename="SH_B3">SH_B3</a>, <a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_C0" title='SH_C0' data-ref="SH_C0" data-ref-filename="SH_C0">SH_C0</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, <a class="enum" href="#SH_CG" title='SH_CG' data-ref="SH_CG" data-ref-filename="SH_CG">SH_CG</a>, </td></tr>
+<tr><th id="131">131</th><td>	<a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <a class="enum" href="#SH_D0" title='SH_D0' data-ref="SH_D0" data-ref-filename="SH_D0">SH_D0</a>, <a class="enum" href="#SH_E4" title='SH_E4' data-ref="SH_E4" data-ref-filename="SH_E4">SH_E4</a>, <a class="enum" href="#SH_E4" title='SH_E4' data-ref="SH_E4" data-ref-filename="SH_E4">SH_E4</a>, <a class="enum" href="#SH_E5" title='SH_E5' data-ref="SH_E5" data-ref-filename="SH_E5">SH_E5</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="132">132</th><td>};</td></tr>
+<tr><th id="133">133</th><td></td></tr>
+<tr><th id="134">134</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set9" title='x86_errata_set9' data-type='const uint8_t [3]' data-ref="x86_errata_set9" data-ref-filename="x86_errata_set9">x86_errata_set9</dfn>[] = {</td></tr>
+<tr><th id="135">135</th><td>	<a class="enum" href="#DR_BA" title='DR_BA' data-ref="DR_BA" data-ref-filename="DR_BA">DR_BA</a>, <a class="enum" href="#DR_B2" title='DR_B2' data-ref="DR_B2" data-ref-filename="DR_B2">DR_B2</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="136">136</th><td>};</td></tr>
+<tr><th id="137">137</th><td></td></tr>
+<tr><th id="138">138</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set10" title='x86_errata_set10' data-type='const uint8_t [4]' data-ref="x86_errata_set10" data-ref-filename="x86_errata_set10">x86_errata_set10</dfn>[] = {</td></tr>
+<tr><th id="139">139</th><td>	<a class="enum" href="#DR_BA" title='DR_BA' data-ref="DR_BA" data-ref-filename="DR_BA">DR_BA</a>, <a class="enum" href="#DR_B2" title='DR_B2' data-ref="DR_B2" data-ref-filename="DR_B2">DR_B2</a>, <a class="enum" href="#DR_B3" title='DR_B3' data-ref="DR_B3" data-ref-filename="DR_B3">DR_B3</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="140">140</th><td>};</td></tr>
+<tr><th id="141">141</th><td></td></tr>
+<tr><th id="142">142</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set11" title='x86_errata_set11' data-type='const uint8_t [15]' data-ref="x86_errata_set11" data-ref-filename="x86_errata_set11">x86_errata_set11</dfn>[] = {</td></tr>
+<tr><th id="143">143</th><td>	<a class="enum" href="#DR_BA" title='DR_BA' data-ref="DR_BA" data-ref-filename="DR_BA">DR_BA</a>, <a class="enum" href="#DR_B2" title='DR_B2' data-ref="DR_B2" data-ref-filename="DR_B2">DR_B2</a>, <a class="enum" href="#DR_B3" title='DR_B3' data-ref="DR_B3" data-ref-filename="DR_B3">DR_B3</a>, <a class="enum" href="#RB_C2" title='RB_C2' data-ref="RB_C2" data-ref-filename="RB_C2">RB_C2</a>, <a class="enum" href="#RB_C3" title='RB_C3' data-ref="RB_C3" data-ref-filename="RB_C3">RB_C3</a>, <a class="enum" href="#BL_C2" title='BL_C2' data-ref="BL_C2" data-ref-filename="BL_C2">BL_C2</a>, <a class="enum" href="#BL_C3" title='BL_C3' data-ref="BL_C3" data-ref-filename="BL_C3">BL_C3</a>, <a class="enum" href="#DA_C2" title='DA_C2' data-ref="DA_C2" data-ref-filename="DA_C2">DA_C2</a>,</td></tr>
+<tr><th id="144">144</th><td>	<a class="enum" href="#DA_C3" title='DA_C3' data-ref="DA_C3" data-ref-filename="DA_C3">DA_C3</a>, <a class="enum" href="#HY_D0" title='HY_D0' data-ref="HY_D0" data-ref-filename="HY_D0">HY_D0</a>, <a class="enum" href="#HY_D1" title='HY_D1' data-ref="HY_D1" data-ref-filename="HY_D1">HY_D1</a>, <a class="enum" href="#HY_D1_G34R1" title='HY_D1_G34R1' data-ref="HY_D1_G34R1" data-ref-filename="HY_D1_G34R1">HY_D1_G34R1</a>,  <a class="enum" href="#PH_E0" title='PH_E0' data-ref="PH_E0" data-ref-filename="PH_E0">PH_E0</a>, <a class="enum" href="#LN_B0" title='LN_B0' data-ref="LN_B0" data-ref-filename="LN_B0">LN_B0</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="145">145</th><td>};</td></tr>
+<tr><th id="146">146</th><td></td></tr>
+<tr><th id="147">147</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set12" title='x86_errata_set12' data-type='const uint8_t [2]' data-ref="x86_errata_set12" data-ref-filename="x86_errata_set12">x86_errata_set12</dfn>[] = {</td></tr>
+<tr><th id="148">148</th><td>	<a class="enum" href="#KB_A1" title='KB_A1' data-ref="KB_A1" data-ref-filename="KB_A1">KB_A1</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="149">149</th><td>};</td></tr>
+<tr><th id="150">150</th><td></td></tr>
+<tr><th id="151">151</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set13" title='x86_errata_set13' data-type='const uint8_t [4]' data-ref="x86_errata_set13" data-ref-filename="x86_errata_set13">x86_errata_set13</dfn>[] = {</td></tr>
+<tr><th id="152">152</th><td>	<a class="enum" href="#ZP_B1" title='ZP_B1' data-ref="ZP_B1" data-ref-filename="ZP_B1">ZP_B1</a>, <a class="enum" href="#ZP_B2" title='ZP_B2' data-ref="ZP_B2" data-ref-filename="ZP_B2">ZP_B2</a>, <a class="enum" href="#PiR_B2" title='PiR_B2' data-ref="PiR_B2" data-ref-filename="PiR_B2">PiR_B2</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="153">153</th><td>};</td></tr>
+<tr><th id="154">154</th><td></td></tr>
+<tr><th id="155">155</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set14" title='x86_errata_set14' data-type='const uint8_t [2]' data-ref="x86_errata_set14" data-ref-filename="x86_errata_set14">x86_errata_set14</dfn>[] = {</td></tr>
+<tr><th id="156">156</th><td>	<a class="enum" href="#ZP_B1" title='ZP_B1' data-ref="ZP_B1" data-ref-filename="ZP_B1">ZP_B1</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="157">157</th><td>};</td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><em>static</em> <em>const</em> <a class="typedef" href="../../../sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> <dfn class="tu decl def" id="x86_errata_set15" title='x86_errata_set15' data-type='const uint8_t [3]' data-ref="x86_errata_set15" data-ref-filename="x86_errata_set15">x86_errata_set15</dfn>[] = {</td></tr>
+<tr><th id="160">160</th><td>	<a class="enum" href="#KB_A1" title='KB_A1' data-ref="KB_A1" data-ref-filename="KB_A1">KB_A1</a>, <a class="enum" href="#ML_A1" title='ML_A1' data-ref="ML_A1" data-ref-filename="ML_A1">ML_A1</a>, <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a></td></tr>
+<tr><th id="161">161</th><td>};</td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td><em>static</em> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <a class="tu decl fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-type='_Bool x86_errata_setmsr(struct cpu_info * , errata_t * )' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>(<b>struct</b> <a class="type" href="../include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *, <a class="typedef" href="#errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</a> *);</td></tr>
+<tr><th id="164">164</th><td><em>static</em> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <a class="tu decl fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-type='_Bool x86_errata_testmsr(struct cpu_info * , errata_t * )' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>(<b>struct</b> <a class="type" href="../include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *, <a class="typedef" href="#errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</a> *);</td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td><em>static</em> <a class="typedef" href="#errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</a> <dfn class="tu decl def" id="errata" title='errata' data-type='errata_t [24]' data-ref="errata" data-ref-filename="errata">errata</dfn>[] = {</td></tr>
+<tr><th id="167">167</th><td>	<i>/*</i></td></tr>
+<tr><th id="168">168</th><td><i>	 * 81: Cache Coherency Problem with Hardware Prefetching</i></td></tr>
+<tr><th id="169">169</th><td><i>	 * and Streaming Stores</i></td></tr>
+<tr><th id="170">170</th><td><i>	 */</i></td></tr>
+<tr><th id="171">171</th><td>	{</td></tr>
+<tr><th id="172">172</th><td>		<var>81</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1011" title="0xc0011022" data-ref="_M/MSR_DC_CFG">MSR_DC_CFG</a>, <a class="tu ref" href="#x86_errata_set5" title='x86_errata_set5' data-ref="x86_errata_set5" data-ref-filename="x86_errata_set5">x86_errata_set5</a>,</td></tr>
+<tr><th id="173">173</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1013" title="0x00000400" data-ref="_M/DC_CFG_DIS_SMC_CHK_BUF">DC_CFG_DIS_SMC_CHK_BUF</a></td></tr>
+<tr><th id="174">174</th><td>	},</td></tr>
+<tr><th id="175">175</th><td>	<i>/*</i></td></tr>
+<tr><th id="176">176</th><td><i>	 * 86: DRAM Data Masking Feature Can Cause ECC Failures</i></td></tr>
+<tr><th id="177">177</th><td><i>	 */</i></td></tr>
+<tr><th id="178">178</th><td>	{</td></tr>
+<tr><th id="179">179</th><td>		<var>86</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#992" title="0xc001001f" data-ref="_M/MSR_NB_CFG">MSR_NB_CFG</a>, <a class="tu ref" href="#x86_errata_set1" title='x86_errata_set1' data-ref="x86_errata_set1" data-ref-filename="x86_errata_set1">x86_errata_set1</a>,</td></tr>
+<tr><th id="180">180</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#994" title="0x0000001000000000ULL" data-ref="_M/NB_CFG_DISDATMSK">NB_CFG_DISDATMSK</a></td></tr>
+<tr><th id="181">181</th><td>	},</td></tr>
+<tr><th id="182">182</th><td>	<i>/*</i></td></tr>
+<tr><th id="183">183</th><td><i>	 * 89: Potential Deadlock With Locked Transactions</i></td></tr>
+<tr><th id="184">184</th><td><i>	 */</i></td></tr>
+<tr><th id="185">185</th><td>	{</td></tr>
+<tr><th id="186">186</th><td>		<var>89</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#992" title="0xc001001f" data-ref="_M/MSR_NB_CFG">MSR_NB_CFG</a>, <a class="tu ref" href="#x86_errata_set8" title='x86_errata_set8' data-ref="x86_errata_set8" data-ref-filename="x86_errata_set8">x86_errata_set8</a>,</td></tr>
+<tr><th id="187">187</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#993" title="0x0000000000000008ULL" data-ref="_M/NB_CFG_DISIOREQLOCK">NB_CFG_DISIOREQLOCK</a></td></tr>
+<tr><th id="188">188</th><td>	},</td></tr>
+<tr><th id="189">189</th><td>	<i>/*</i></td></tr>
+<tr><th id="190">190</th><td><i>	 * 94: Sequential Prefetch Feature May Cause Incorrect</i></td></tr>
+<tr><th id="191">191</th><td><i>	 * Processor Operation</i></td></tr>
+<tr><th id="192">192</th><td><i>	 */</i></td></tr>
+<tr><th id="193">193</th><td>	{</td></tr>
+<tr><th id="194">194</th><td>		<var>94</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1006" title="0xc0011021" data-ref="_M/MSR_IC_CFG">MSR_IC_CFG</a>, <a class="tu ref" href="#x86_errata_set1" title='x86_errata_set1' data-ref="x86_errata_set1" data-ref-filename="x86_errata_set1">x86_errata_set1</a>,</td></tr>
+<tr><th id="195">195</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1007" title="0x00000800" data-ref="_M/IC_CFG_DIS_SEQ_PREFETCH">IC_CFG_DIS_SEQ_PREFETCH</a></td></tr>
+<tr><th id="196">196</th><td>	},</td></tr>
+<tr><th id="197">197</th><td>	<i>/*</i></td></tr>
+<tr><th id="198">198</th><td><i>	 * 97: 128-Bit Streaming Stores May Cause Coherency</i></td></tr>
+<tr><th id="199">199</th><td><i>	 * Failure</i></td></tr>
+<tr><th id="200">200</th><td><i>	 *</i></td></tr>
+<tr><th id="201">201</th><td><i>	 * XXX "This workaround must not be applied to processors</i></td></tr>
+<tr><th id="202">202</th><td><i>	 * prior to revision C0."  We don't apply it, but if it</i></td></tr>
+<tr><th id="203">203</th><td><i>	 * can't be applied, it shouldn't be reported.</i></td></tr>
+<tr><th id="204">204</th><td><i>	 */</i></td></tr>
+<tr><th id="205">205</th><td>	{</td></tr>
+<tr><th id="206">206</th><td>		<var>97</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1011" title="0xc0011022" data-ref="_M/MSR_DC_CFG">MSR_DC_CFG</a>, <a class="tu ref" href="#x86_errata_set6" title='x86_errata_set6' data-ref="x86_errata_set6" data-ref-filename="x86_errata_set6">x86_errata_set6</a>,</td></tr>
+<tr><th id="207">207</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1012" title="0x00000008" data-ref="_M/DC_CFG_DIS_CNV_WC_SSO">DC_CFG_DIS_CNV_WC_SSO</a></td></tr>
+<tr><th id="208">208</th><td>	},</td></tr>
+<tr><th id="209">209</th><td>	<i>/*</i></td></tr>
+<tr><th id="210">210</th><td><i>	 * 104: DRAM Data Masking Feature Causes ChipKill ECC</i></td></tr>
+<tr><th id="211">211</th><td><i>	 * Failures When Enabled With x8/x16 DRAM Devices</i></td></tr>
+<tr><th id="212">212</th><td><i>	 */</i></td></tr>
+<tr><th id="213">213</th><td>	{</td></tr>
+<tr><th id="214">214</th><td>		<var>104</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#992" title="0xc001001f" data-ref="_M/MSR_NB_CFG">MSR_NB_CFG</a>, <a class="tu ref" href="#x86_errata_set7" title='x86_errata_set7' data-ref="x86_errata_set7" data-ref-filename="x86_errata_set7">x86_errata_set7</a>,</td></tr>
+<tr><th id="215">215</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#994" title="0x0000001000000000ULL" data-ref="_M/NB_CFG_DISDATMSK">NB_CFG_DISDATMSK</a></td></tr>
+<tr><th id="216">216</th><td>	},</td></tr>
+<tr><th id="217">217</th><td>	<i>/*</i></td></tr>
+<tr><th id="218">218</th><td><i>	 * 113: Enhanced Write-Combining Feature Causes System Hang</i></td></tr>
+<tr><th id="219">219</th><td><i>	 */</i></td></tr>
+<tr><th id="220">220</th><td>	{</td></tr>
+<tr><th id="221">221</th><td>		<var>113</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1016" title="0xc0011023" data-ref="_M/MSR_BU_CFG">MSR_BU_CFG</a>, <a class="tu ref" href="#x86_errata_set3" title='x86_errata_set3' data-ref="x86_errata_set3" data-ref-filename="x86_errata_set3">x86_errata_set3</a>,</td></tr>
+<tr><th id="222">222</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1022" title="0x0001000000000000ULL" data-ref="_M/BU_CFG_WBENHWSBDIS">BU_CFG_WBENHWSBDIS</a></td></tr>
+<tr><th id="223">223</th><td>	},</td></tr>
+<tr><th id="224">224</th><td>	<i>/*</i></td></tr>
+<tr><th id="225">225</th><td><i>	 * 69: Multiprocessor Coherency Problem with Hardware</i></td></tr>
+<tr><th id="226">226</th><td><i>	 * Prefetch Mechanism</i></td></tr>
+<tr><th id="227">227</th><td><i>	 */</i></td></tr>
+<tr><th id="228">228</th><td>	{</td></tr>
+<tr><th id="229">229</th><td>		<var>69</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1016" title="0xc0011023" data-ref="_M/MSR_BU_CFG">MSR_BU_CFG</a>, <a class="tu ref" href="#x86_errata_set5" title='x86_errata_set5' data-ref="x86_errata_set5" data-ref-filename="x86_errata_set5">x86_errata_set5</a>,</td></tr>
+<tr><th id="230">230</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1021" title="0x0000200000000000ULL" data-ref="_M/BU_CFG_WBPFSMCCHKDIS">BU_CFG_WBPFSMCCHKDIS</a></td></tr>
+<tr><th id="231">231</th><td>	},</td></tr>
+<tr><th id="232">232</th><td>	<i>/*</i></td></tr>
+<tr><th id="233">233</th><td><i>	 * 101: DRAM Scrubber May Cause Data Corruption When Using</i></td></tr>
+<tr><th id="234">234</th><td><i>	 * Node-Interleaved Memory</i></td></tr>
+<tr><th id="235">235</th><td><i>	 */</i></td></tr>
+<tr><th id="236">236</th><td>	{</td></tr>
+<tr><th id="237">237</th><td>		<var>101</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <var>0</var>, <a class="tu ref" href="#x86_errata_set2" title='x86_errata_set2' data-ref="x86_errata_set2" data-ref-filename="x86_errata_set2">x86_errata_set2</a>,</td></tr>
+<tr><th id="238">238</th><td>		<a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>, <var>0</var></td></tr>
+<tr><th id="239">239</th><td>	},</td></tr>
+<tr><th id="240">240</th><td>	<i>/*</i></td></tr>
+<tr><th id="241">241</th><td><i>	 * 106: Potential Deadlock with Tightly Coupled Semaphores</i></td></tr>
+<tr><th id="242">242</th><td><i>	 * in an MP System</i></td></tr>
+<tr><th id="243">243</th><td><i>	 */</i></td></tr>
+<tr><th id="244">244</th><td>	{</td></tr>
+<tr><th id="245">245</th><td>		<var>106</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#997" title="0xc0011020" data-ref="_M/MSR_LS_CFG">MSR_LS_CFG</a>, <a class="tu ref" href="#x86_errata_set2" title='x86_errata_set2' data-ref="x86_errata_set2" data-ref-filename="x86_errata_set2">x86_errata_set2</a>,</td></tr>
+<tr><th id="246">246</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1001" title="0x02000000" data-ref="_M/LS_CFG_DIS_LS2_SQUISH">LS_CFG_DIS_LS2_SQUISH</a></td></tr>
+<tr><th id="247">247</th><td>	},</td></tr>
+<tr><th id="248">248</th><td>	<i>/*</i></td></tr>
+<tr><th id="249">249</th><td><i>	 * 107: Possible Multiprocessor Coherency Problem with</i></td></tr>
+<tr><th id="250">250</th><td><i>	 * Setting Page Table A/D Bits</i></td></tr>
+<tr><th id="251">251</th><td><i>	 */</i></td></tr>
+<tr><th id="252">252</th><td>	{</td></tr>
+<tr><th id="253">253</th><td>		<var>107</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1016" title="0xc0011023" data-ref="_M/MSR_BU_CFG">MSR_BU_CFG</a>, <a class="tu ref" href="#x86_errata_set2" title='x86_errata_set2' data-ref="x86_errata_set2" data-ref-filename="x86_errata_set2">x86_errata_set2</a>,</td></tr>
+<tr><th id="254">254</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1020" title="0x0000080000000000ULL" data-ref="_M/BU_CFG_THRL2IDXCMPDIS">BU_CFG_THRL2IDXCMPDIS</a></td></tr>
+<tr><th id="255">255</th><td>	},</td></tr>
+<tr><th id="256">256</th><td>	<i>/*</i></td></tr>
+<tr><th id="257">257</th><td><i>	 * 122: TLB Flush Filter May Cause Coherency Problem in</i></td></tr>
+<tr><th id="258">258</th><td><i>	 * Multiprocessor Systems</i></td></tr>
+<tr><th id="259">259</th><td><i>	 */</i></td></tr>
+<tr><th id="260">260</th><td>	{</td></tr>
+<tr><th id="261">261</th><td>		<var>122</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#988" title="0xc0010015" data-ref="_M/MSR_HWCR">MSR_HWCR</a>, <a class="tu ref" href="#x86_errata_set4" title='x86_errata_set4' data-ref="x86_errata_set4" data-ref-filename="x86_errata_set4">x86_errata_set4</a>,</td></tr>
+<tr><th id="262">262</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#990" title="0x00000040" data-ref="_M/HWCR_FFDIS">HWCR_FFDIS</a></td></tr>
+<tr><th id="263">263</th><td>	},</td></tr>
+<tr><th id="264">264</th><td>	<i>/*</i></td></tr>
+<tr><th id="265">265</th><td><i>	 * 254: Internal Resource Livelock Involving Cached TLB Reload</i></td></tr>
+<tr><th id="266">266</th><td><i>	 */</i></td></tr>
+<tr><th id="267">267</th><td>	{</td></tr>
+<tr><th id="268">268</th><td>		<var>254</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1016" title="0xc0011023" data-ref="_M/MSR_BU_CFG">MSR_BU_CFG</a>, <a class="tu ref" href="#x86_errata_set9" title='x86_errata_set9' data-ref="x86_errata_set9" data-ref-filename="x86_errata_set9">x86_errata_set9</a>,</td></tr>
+<tr><th id="269">269</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1018" title="0x0000000000200000ULL" data-ref="_M/BU_CFG_ERRATA_254">BU_CFG_ERRATA_254</a></td></tr>
+<tr><th id="270">270</th><td>	},</td></tr>
+<tr><th id="271">271</th><td>	<i>/*</i></td></tr>
+<tr><th id="272">272</th><td><i>	 * 261: Processor May Stall Entering Stop-Grant Due to Pending Data</i></td></tr>
+<tr><th id="273">273</th><td><i>	 * Cache Scrub</i></td></tr>
+<tr><th id="274">274</th><td><i>	 */</i></td></tr>
+<tr><th id="275">275</th><td>	{</td></tr>
+<tr><th id="276">276</th><td>		<var>261</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1011" title="0xc0011022" data-ref="_M/MSR_DC_CFG">MSR_DC_CFG</a>, <a class="tu ref" href="#x86_errata_set10" title='x86_errata_set10' data-ref="x86_errata_set10" data-ref-filename="x86_errata_set10">x86_errata_set10</a>,</td></tr>
+<tr><th id="277">277</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1014" title="0x01000000" data-ref="_M/DC_CFG_ERRATA_261">DC_CFG_ERRATA_261</a></td></tr>
+<tr><th id="278">278</th><td>	},</td></tr>
+<tr><th id="279">279</th><td>	<i>/*</i></td></tr>
+<tr><th id="280">280</th><td><i>	 * 298: L2 Eviction May Occur During Processor Operation To Set</i></td></tr>
+<tr><th id="281">281</th><td><i>	 * Accessed or Dirty Bit</i></td></tr>
+<tr><th id="282">282</th><td><i>	 */</i></td></tr>
+<tr><th id="283">283</th><td>	{</td></tr>
+<tr><th id="284">284</th><td>		<var>298</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#988" title="0xc0010015" data-ref="_M/MSR_HWCR">MSR_HWCR</a>, <a class="tu ref" href="#x86_errata_set9" title='x86_errata_set9' data-ref="x86_errata_set9" data-ref-filename="x86_errata_set9">x86_errata_set9</a>,</td></tr>
+<tr><th id="285">285</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#989" title="0x00000008" data-ref="_M/HWCR_TLBCACHEDIS">HWCR_TLBCACHEDIS</a></td></tr>
+<tr><th id="286">286</th><td>	},</td></tr>
+<tr><th id="287">287</th><td>	{</td></tr>
+<tr><th id="288">288</th><td>		<var>298</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1016" title="0xc0011023" data-ref="_M/MSR_BU_CFG">MSR_BU_CFG</a>, <a class="tu ref" href="#x86_errata_set9" title='x86_errata_set9' data-ref="x86_errata_set9" data-ref-filename="x86_errata_set9">x86_errata_set9</a>,</td></tr>
+<tr><th id="289">289</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1017" title="0x0000000000000002ULL" data-ref="_M/BU_CFG_ERRATA_298">BU_CFG_ERRATA_298</a></td></tr>
+<tr><th id="290">290</th><td>	},</td></tr>
+<tr><th id="291">291</th><td>	<i>/*</i></td></tr>
+<tr><th id="292">292</th><td><i>	 * 309: Processor Core May Execute Incorrect Instructions on</i></td></tr>
+<tr><th id="293">293</th><td><i>	 * Concurrent L2 and Northbridge Response</i></td></tr>
+<tr><th id="294">294</th><td><i>	 */</i></td></tr>
+<tr><th id="295">295</th><td>	{</td></tr>
+<tr><th id="296">296</th><td>		<var>309</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1016" title="0xc0011023" data-ref="_M/MSR_BU_CFG">MSR_BU_CFG</a>, <a class="tu ref" href="#x86_errata_set9" title='x86_errata_set9' data-ref="x86_errata_set9" data-ref-filename="x86_errata_set9">x86_errata_set9</a>,</td></tr>
+<tr><th id="297">297</th><td>		<a class="tu ref fn" href="#x86_errata_testmsr" title='x86_errata_testmsr' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</a>, <a class="macro" href="../include/specialreg.h.html#1019" title="0x0000000000800000ULL" data-ref="_M/BU_CFG_ERRATA_309">BU_CFG_ERRATA_309</a></td></tr>
+<tr><th id="298">298</th><td>	},</td></tr>
+<tr><th id="299">299</th><td>	<i>/*</i></td></tr>
+<tr><th id="300">300</th><td><i>	 * 721: Processor May Incorrectly Update Stack Pointer</i></td></tr>
+<tr><th id="301">301</th><td><i>	 */</i></td></tr>
+<tr><th id="302">302</th><td>	{</td></tr>
+<tr><th id="303">303</th><td>		<var>721</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1027" title="0xc0011029" data-ref="_M/MSR_DE_CFG">MSR_DE_CFG</a>, <a class="tu ref" href="#x86_errata_set11" title='x86_errata_set11' data-ref="x86_errata_set11" data-ref-filename="x86_errata_set11">x86_errata_set11</a>,</td></tr>
+<tr><th id="304">304</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1028" title="0x00000001" data-ref="_M/DE_CFG_ERRATA_721">DE_CFG_ERRATA_721</a></td></tr>
+<tr><th id="305">305</th><td>	},</td></tr>
+<tr><th id="306">306</th><td>	<i>/*</i></td></tr>
+<tr><th id="307">307</th><td><i>	 * 776: Incorrect Processor Branch Prediction for Two Consecutive</i></td></tr>
+<tr><th id="308">308</th><td><i>	 * Linear Pages</i></td></tr>
+<tr><th id="309">309</th><td><i>	 */</i></td></tr>
+<tr><th id="310">310</th><td>	{</td></tr>
+<tr><th id="311">311</th><td>		<var>776</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1006" title="0xc0011021" data-ref="_M/MSR_IC_CFG">MSR_IC_CFG</a>, <a class="tu ref" href="#x86_errata_set12" title='x86_errata_set12' data-ref="x86_errata_set12" data-ref-filename="x86_errata_set12">x86_errata_set12</a>,</td></tr>
+<tr><th id="312">312</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1009" title="(((uintmax_t)(26) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((26) &amp; (8 * sizeof(uintmax_t) - 1))))" data-ref="_M/IC_CFG_ERRATA_776">IC_CFG_ERRATA_776</a></td></tr>
+<tr><th id="313">313</th><td>	},</td></tr>
+<tr><th id="314">314</th><td>	<i>/*</i></td></tr>
+<tr><th id="315">315</th><td><i>	 * 793: Specific Combination of Writes to Write Combined Memory</i></td></tr>
+<tr><th id="316">316</th><td><i>	 * Types and Locked Instructions May Cause Core Hang</i></td></tr>
+<tr><th id="317">317</th><td><i>	 */</i></td></tr>
+<tr><th id="318">318</th><td>	{</td></tr>
+<tr><th id="319">319</th><td>		<var>793</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#997" title="0xc0011020" data-ref="_M/MSR_LS_CFG">MSR_LS_CFG</a>, <a class="tu ref" href="#x86_errata_set15" title='x86_errata_set15' data-ref="x86_errata_set15" data-ref-filename="x86_errata_set15">x86_errata_set15</a>,</td></tr>
+<tr><th id="320">320</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#999" title="(((uintmax_t)(15) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((15) &amp; (8 * sizeof(uintmax_t) - 1))))" data-ref="_M/LS_CFG_ERRATA_793">LS_CFG_ERRATA_793</a></td></tr>
+<tr><th id="321">321</th><td>	},</td></tr>
+<tr><th id="322">322</th><td>	<i>/*</i></td></tr>
+<tr><th id="323">323</th><td><i>	 * 1021: Load Operation May Receive Stale Data From Older Store</i></td></tr>
+<tr><th id="324">324</th><td><i>	 * Operation</i></td></tr>
+<tr><th id="325">325</th><td><i>	 */</i></td></tr>
+<tr><th id="326">326</th><td>	{</td></tr>
+<tr><th id="327">327</th><td>		<var>1021</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1027" title="0xc0011029" data-ref="_M/MSR_DE_CFG">MSR_DE_CFG</a>, <a class="tu ref" href="#x86_errata_set13" title='x86_errata_set13' data-ref="x86_errata_set13" data-ref-filename="x86_errata_set13">x86_errata_set13</a>,</td></tr>
+<tr><th id="328">328</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1029" title="(((uintmax_t)(13) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((13) &amp; (8 * sizeof(uintmax_t) - 1))))" data-ref="_M/DE_CFG_ERRATA_1021">DE_CFG_ERRATA_1021</a></td></tr>
+<tr><th id="329">329</th><td>	},</td></tr>
+<tr><th id="330">330</th><td>	<i>/*</i></td></tr>
+<tr><th id="331">331</th><td><i>	 * 1033: A Lock Operation May Cause the System to Hang</i></td></tr>
+<tr><th id="332">332</th><td><i>	 */</i></td></tr>
+<tr><th id="333">333</th><td>	{</td></tr>
+<tr><th id="334">334</th><td>		<var>1033</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#997" title="0xc0011020" data-ref="_M/MSR_LS_CFG">MSR_LS_CFG</a>, <a class="tu ref" href="#x86_errata_set14" title='x86_errata_set14' data-ref="x86_errata_set14" data-ref-filename="x86_errata_set14">x86_errata_set14</a>,</td></tr>
+<tr><th id="335">335</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#998" title="(((uintmax_t)(4) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((4) &amp; (8 * sizeof(uintmax_t) - 1))))" data-ref="_M/LS_CFG_ERRATA_1033">LS_CFG_ERRATA_1033</a></td></tr>
+<tr><th id="336">336</th><td>	},</td></tr>
+<tr><th id="337">337</th><td>	<i>/*</i></td></tr>
+<tr><th id="338">338</th><td><i>	 * 1049: FCMOV Instruction May Not Execute Correctly</i></td></tr>
+<tr><th id="339">339</th><td><i>	 */</i></td></tr>
+<tr><th id="340">340</th><td>	{</td></tr>
+<tr><th id="341">341</th><td>		<var>1049</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#1024" title="0xc0011028" data-ref="_M/MSR_FP_CFG">MSR_FP_CFG</a>, <a class="tu ref" href="#x86_errata_set13" title='x86_errata_set13' data-ref="x86_errata_set13" data-ref-filename="x86_errata_set13">x86_errata_set13</a>,</td></tr>
+<tr><th id="342">342</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1025" title="(((uintmax_t)(4) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((4) &amp; (8 * sizeof(uintmax_t) - 1))))" data-ref="_M/FP_CFG_ERRATA_1049">FP_CFG_ERRATA_1049</a></td></tr>
+<tr><th id="343">343</th><td>	},</td></tr>
+<tr><th id="344">344</th><td><u>#<span data-ppcond="344">if</span> 0	/* Should we apply this errata? The other OSes don't. */</u></td></tr>
+<tr><th id="345">345</th><td>	<i>/*</i></td></tr>
+<tr><th id="346">346</th><td><i>	 * 1091: Address Boundary Crossing Load Operation May Receive</i></td></tr>
+<tr><th id="347">347</th><td><i>	 * Stale Data</i></td></tr>
+<tr><th id="348">348</th><td><i>	 */</i></td></tr>
+<tr><th id="349">349</th><td>	{</td></tr>
+<tr><th id="350">350</th><td>		<var>1091</var>, FALSE, MSR_LS_CFG2, x86_errata_set13,</td></tr>
+<tr><th id="351">351</th><td>		x86_errata_setmsr, LS_CFG2_ERRATA_1091</td></tr>
+<tr><th id="352">352</th><td>	},</td></tr>
+<tr><th id="353">353</th><td><u>#<span data-ppcond="344">endif</span></u></td></tr>
+<tr><th id="354">354</th><td>	<i>/*</i></td></tr>
+<tr><th id="355">355</th><td><i>	 * 1095: Potential Violation of Read Ordering In Lock Operation</i></td></tr>
+<tr><th id="356">356</th><td><i>	 * In SMT (Simultaneous Multithreading) Mode</i></td></tr>
+<tr><th id="357">357</th><td><i>	 */</i></td></tr>
+<tr><th id="358">358</th><td>	{</td></tr>
+<tr><th id="359">359</th><td>		<var>1095</var>, <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>, <a class="macro" href="../include/specialreg.h.html#997" title="0xc0011020" data-ref="_M/MSR_LS_CFG">MSR_LS_CFG</a>, <a class="tu ref" href="#x86_errata_set13" title='x86_errata_set13' data-ref="x86_errata_set13" data-ref-filename="x86_errata_set13">x86_errata_set13</a>,</td></tr>
+<tr><th id="360">360</th><td>		<a class="tu ref fn" href="#x86_errata_setmsr" title='x86_errata_setmsr' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</a>, <a class="macro" href="../include/specialreg.h.html#1000" title="(((uintmax_t)(57) &gt;= 8 * sizeof(uintmax_t)) ? 0 : ((uintmax_t)1 &lt;&lt; (uintmax_t)((57) &amp; (8 * sizeof(uintmax_t) - 1))))" data-ref="_M/LS_CFG_ERRATA_1095">LS_CFG_ERRATA_1095</a></td></tr>
+<tr><th id="361">361</th><td>	},</td></tr>
+<tr><th id="362">362</th><td>};</td></tr>
+<tr><th id="363">363</th><td></td></tr>
+<tr><th id="364">364</th><td><em>static</em> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> </td></tr>
+<tr><th id="365">365</th><td><dfn class="tu decl def fn" id="x86_errata_testmsr" title='x86_errata_testmsr' data-type='_Bool x86_errata_testmsr(struct cpu_info * ci, errata_t * e)' data-ref="x86_errata_testmsr" data-ref-filename="x86_errata_testmsr">x86_errata_testmsr</dfn>(<b>struct</b> <a class="type" href="../include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col1 decl" id="1ci" title='ci' data-type='struct cpu_info *' data-ref="1ci" data-ref-filename="1ci">ci</dfn>, <a class="typedef" href="#errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</a> *<dfn class="local col2 decl" id="2e" title='e' data-type='errata_t *' data-ref="2e" data-ref-filename="2e">e</dfn>)</td></tr>
+<tr><th id="366">366</th><td>{</td></tr>
+<tr><th id="367">367</th><td>	<a class="typedef" href="../../../sys/types.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col3 decl" id="3val" title='val' data-type='uint64_t' data-ref="3val" data-ref-filename="3val">val</dfn>;</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td>	(<em>void</em>)<a class="local col1 ref" href="#1ci" title='ci' data-ref="1ci" data-ref-filename="1ci">ci</a>;</td></tr>
+<tr><th id="370">370</th><td></td></tr>
+<tr><th id="371">371</th><td>	<a class="local col3 ref" href="#3val" title='val' data-ref="3val" data-ref-filename="3val">val</a> = <a class="ref fn" href="../include/cpufunc.h.html#rdmsr_locked" title='rdmsr_locked' data-ref="rdmsr_locked" data-ref-filename="rdmsr_locked">rdmsr_locked</a>(<a class="local col2 ref" href="#2e" title='e' data-ref="2e" data-ref-filename="2e">e</a>-&gt;<a class="tu ref field" href="#errata::e_data1" title='errata::e_data1' data-use='r' data-ref="errata::e_data1" data-ref-filename="errata..e_data1">e_data1</a>);</td></tr>
+<tr><th id="372">372</th><td>	<b>if</b> ((<a class="local col3 ref" href="#3val" title='val' data-ref="3val" data-ref-filename="3val">val</a> &amp; <a class="local col2 ref" href="#2e" title='e' data-ref="2e" data-ref-filename="2e">e</a>-&gt;<a class="tu ref field" href="#errata::e_data2" title='errata::e_data2' data-use='r' data-ref="errata::e_data2" data-ref-filename="errata..e_data2">e_data2</a>) != <var>0</var>)</td></tr>
+<tr><th id="373">373</th><td>		<b>return</b> <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="374">374</th><td></td></tr>
+<tr><th id="375">375</th><td>	<a class="local col2 ref" href="#2e" title='e' data-ref="2e" data-ref-filename="2e">e</a>-&gt;<a class="tu ref field" href="#errata::e_reported" title='errata::e_reported' data-use='w' data-ref="errata::e_reported" data-ref-filename="errata..e_reported">e_reported</a> = <a class="macro" href="../../../sys/types.h.html#212" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="376">376</th><td>	<b>return</b> <a class="macro" href="../../../sys/types.h.html#212" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="377">377</th><td>}</td></tr>
+<tr><th id="378">378</th><td></td></tr>
+<tr><th id="379">379</th><td><em>static</em> <a class="macro" href="../../../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> </td></tr>
+<tr><th id="380">380</th><td><dfn class="tu decl def fn" id="x86_errata_setmsr" title='x86_errata_setmsr' data-type='_Bool x86_errata_setmsr(struct cpu_info * ci, errata_t * e)' data-ref="x86_errata_setmsr" data-ref-filename="x86_errata_setmsr">x86_errata_setmsr</dfn>(<b>struct</b> <a class="type" href="../include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col4 decl" id="4ci" title='ci' data-type='struct cpu_info *' data-ref="4ci" data-ref-filename="4ci">ci</dfn>, <a class="typedef" href="#errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</a> *<dfn class="local col5 decl" id="5e" title='e' data-type='errata_t *' data-ref="5e" data-ref-filename="5e">e</dfn>)</td></tr>
+<tr><th id="381">381</th><td>{</td></tr>
+<tr><th id="382">382</th><td>	<a class="typedef" href="../../../sys/types.h.html#uint64_t" title='uint64_t' data-type='__uint64_t' data-ref="uint64_t" data-ref-filename="uint64_t">uint64_t</a> <dfn class="local col6 decl" id="6val" title='val' data-type='uint64_t' data-ref="6val" data-ref-filename="6val">val</dfn>;</td></tr>
+<tr><th id="383">383</th><td></td></tr>
+<tr><th id="384">384</th><td>	(<em>void</em>)<a class="local col4 ref" href="#4ci" title='ci' data-ref="4ci" data-ref-filename="4ci">ci</a>;</td></tr>
+<tr><th id="385">385</th><td></td></tr>
+<tr><th id="386">386</th><td>	<a class="local col6 ref" href="#6val" title='val' data-ref="6val" data-ref-filename="6val">val</a> = <a class="ref fn" href="../include/cpufunc.h.html#rdmsr_locked" title='rdmsr_locked' data-ref="rdmsr_locked" data-ref-filename="rdmsr_locked">rdmsr_locked</a>(<a class="local col5 ref" href="#5e" title='e' data-ref="5e" data-ref-filename="5e">e</a>-&gt;<a class="tu ref field" href="#errata::e_data1" title='errata::e_data1' data-use='r' data-ref="errata::e_data1" data-ref-filename="errata..e_data1">e_data1</a>);</td></tr>
+<tr><th id="387">387</th><td>	<b>if</b> ((<a class="local col6 ref" href="#6val" title='val' data-ref="6val" data-ref-filename="6val">val</a> &amp; <a class="local col5 ref" href="#5e" title='e' data-ref="5e" data-ref-filename="5e">e</a>-&gt;<a class="tu ref field" href="#errata::e_data2" title='errata::e_data2' data-use='r' data-ref="errata::e_data2" data-ref-filename="errata..e_data2">e_data2</a>) != <var>0</var>)</td></tr>
+<tr><th id="388">388</th><td>		<b>return</b> <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="389">389</th><td>	<a class="ref fn" href="../include/cpufunc.h.html#wrmsr_locked" title='wrmsr_locked' data-ref="wrmsr_locked" data-ref-filename="wrmsr_locked">wrmsr_locked</a>(<a class="local col5 ref" href="#5e" title='e' data-ref="5e" data-ref-filename="5e">e</a>-&gt;<a class="tu ref field" href="#errata::e_data1" title='errata::e_data1' data-use='r' data-ref="errata::e_data1" data-ref-filename="errata..e_data1">e_data1</a>, <a class="local col6 ref" href="#6val" title='val' data-ref="6val" data-ref-filename="6val">val</a> | <a class="local col5 ref" href="#5e" title='e' data-ref="5e" data-ref-filename="5e">e</a>-&gt;<a class="tu ref field" href="#errata::e_data2" title='errata::e_data2' data-use='r' data-ref="errata::e_data2" data-ref-filename="errata..e_data2">e_data2</a>);</td></tr>
+<tr><th id="390">390</th><td>	<a class="ref fn" href="../../../sys/systm.h.html#aprint_debug_dev" title='aprint_debug_dev' data-ref="aprint_debug_dev" data-ref-filename="aprint_debug_dev">aprint_debug_dev</a>(<a class="local col4 ref" href="#4ci" title='ci' data-ref="4ci" data-ref-filename="4ci">ci</a>-&gt;<a class="ref field" href="../include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>, <q>"erratum %d patched\n"</q>,</td></tr>
+<tr><th id="391">391</th><td>	    <a class="local col5 ref" href="#5e" title='e' data-ref="5e" data-ref-filename="5e">e</a>-&gt;<a class="tu ref field" href="#errata::e_num" title='errata::e_num' data-use='r' data-ref="errata::e_num" data-ref-filename="errata..e_num">e_num</a>);</td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td>	<b>return</b> <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>;</td></tr>
+<tr><th id="394">394</th><td>}</td></tr>
+<tr><th id="395">395</th><td></td></tr>
+<tr><th id="396">396</th><td><em>void</em></td></tr>
+<tr><th id="397">397</th><td><dfn class="decl def fn" id="x86_errata" title='x86_errata' data-ref="x86_errata" data-ref-filename="x86_errata">x86_errata</dfn>(<em>void</em>)</td></tr>
+<tr><th id="398">398</th><td>{</td></tr>
+<tr><th id="399">399</th><td>	<b>struct</b> <a class="type" href="../include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col7 decl" id="7ci" title='ci' data-type='struct cpu_info *' data-ref="7ci" data-ref-filename="7ci">ci</dfn>;</td></tr>
+<tr><th id="400">400</th><td>	<a class="typedef" href="../../../sys/types.h.html#uint32_t" title='uint32_t' data-type='__uint32_t' data-ref="uint32_t" data-ref-filename="uint32_t">uint32_t</a> <dfn class="local col8 decl" id="8descs" title='descs' data-type='uint32_t [4]' data-ref="8descs" data-ref-filename="8descs">descs</dfn>[<var>4</var>];</td></tr>
+<tr><th id="401">401</th><td>	<a class="typedef" href="#errata_t" title='errata_t' data-type='struct errata' data-ref="errata_t" data-ref-filename="errata_t">errata_t</a> *<dfn class="local col9 decl" id="9e" title='e' data-type='errata_t *' data-ref="9e" data-ref-filename="9e">e</dfn>, *<dfn class="local col0 decl" id="10ex" title='ex' data-type='errata_t *' data-ref="10ex" data-ref-filename="10ex">ex</dfn>;</td></tr>
+<tr><th id="402">402</th><td>	<a class="typedef" href="#cpurev_t" title='cpurev_t' data-type='enum cpurev' data-ref="cpurev_t" data-ref-filename="cpurev_t">cpurev_t</a> <dfn class="local col1 decl" id="11rev" title='rev' data-type='cpurev_t' data-ref="11rev" data-ref-filename="11rev">rev</dfn>;</td></tr>
+<tr><th id="403">403</th><td>	<em>int</em> <dfn class="local col2 decl" id="12i" title='i' data-type='int' data-ref="12i" data-ref-filename="12i">i</dfn>, <dfn class="local col3 decl" id="13j" title='j' data-type='int' data-ref="13j" data-ref-filename="13j">j</dfn>, <dfn class="local col4 decl" id="14upgrade" title='upgrade' data-type='int' data-ref="14upgrade" data-ref-filename="14upgrade">upgrade</dfn>;</td></tr>
+<tr><th id="404">404</th><td>	<em>static</em> <em>int</em> <dfn class="local col5 decl" id="15again" title='again' data-type='int' data-ref="15again" data-ref-filename="15again">again</dfn>;</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td>	<i>/* don't run if we are under a hypervisor */</i></td></tr>
+<tr><th id="407">407</th><td>	<b>if</b> (<a class="ref" href="../include/cpuvar.h.html#cpu_feature" title='cpu_feature' data-ref="cpu_feature" data-ref-filename="cpu_feature">cpu_feature</a>[<var>1</var>] &amp; <a class="macro" href="../include/specialreg.h.html#259" title="0x80000000" data-ref="_M/CPUID2_RAZ">CPUID2_RAZ</a>)</td></tr>
+<tr><th id="408">408</th><td>		<b>return</b>;</td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td>	<i>/* only for AMD */</i></td></tr>
+<tr><th id="411">411</th><td>	<b>if</b> (<a class="ref" href="../include/cpuvar.h.html#cpu_vendor" title='cpu_vendor' data-ref="cpu_vendor" data-ref-filename="cpu_vendor">cpu_vendor</a> != <a class="macro" href="../include/cputypes.h.html#68" title="4" data-ref="_M/CPUVENDOR_AMD">CPUVENDOR_AMD</a>)</td></tr>
+<tr><th id="412">412</th><td>		<b>return</b>;</td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td>	<a class="local col7 ref" href="#7ci" title='ci' data-ref="7ci" data-ref-filename="7ci">ci</a> = <a class="macro" href="../include/cpu.h.html#404" title="x86_curcpu()" data-ref="_M/curcpu">curcpu</a>();</td></tr>
+<tr><th id="415">415</th><td></td></tr>
+<tr><th id="416">416</th><td>	<a class="macro" href="../include/cpufunc.h.html#132" title="x86_cpuid2((0x80000001), 0, (descs))" data-ref="_M/x86_cpuid">x86_cpuid</a>(<var>0x80000001</var>, <a class="local col8 ref" href="#8descs" title='descs' data-ref="8descs" data-ref-filename="8descs">descs</a>);</td></tr>
+<tr><th id="417">417</th><td></td></tr>
+<tr><th id="418">418</th><td>	<b>for</b> (<a class="local col2 ref" href="#12i" title='i' data-ref="12i" data-ref-filename="12i">i</a> = <var>0</var>;; <a class="local col2 ref" href="#12i" title='i' data-ref="12i" data-ref-filename="12i">i</a> += <var>2</var>) {</td></tr>
+<tr><th id="419">419</th><td>		<b>if</b> ((<a class="local col1 ref" href="#11rev" title='rev' data-ref="11rev" data-ref-filename="11rev">rev</a> = <a class="tu ref" href="#cpurevs" title='cpurevs' data-use='r' data-ref="cpurevs" data-ref-filename="cpurevs">cpurevs</a>[<a class="local col2 ref" href="#12i" title='i' data-ref="12i" data-ref-filename="12i">i</a>]) == <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a>)</td></tr>
+<tr><th id="420">420</th><td>			<b>return</b>;</td></tr>
+<tr><th id="421">421</th><td>		<b>if</b> (<a class="tu ref" href="#cpurevs" title='cpurevs' data-use='r' data-ref="cpurevs" data-ref-filename="cpurevs">cpurevs</a>[<a class="local col2 ref" href="#12i" title='i' data-ref="12i" data-ref-filename="12i">i</a> + <var>1</var>] == <a class="local col8 ref" href="#8descs" title='descs' data-ref="8descs" data-ref-filename="8descs">descs</a>[<var>0</var>])</td></tr>
+<tr><th id="422">422</th><td>			<b>break</b>;</td></tr>
+<tr><th id="423">423</th><td>	}</td></tr>
+<tr><th id="424">424</th><td></td></tr>
+<tr><th id="425">425</th><td>	<a class="local col0 ref" href="#10ex" title='ex' data-ref="10ex" data-ref-filename="10ex">ex</a> = <a class="tu ref" href="#errata" title='errata' data-use='r' data-ref="errata" data-ref-filename="errata">errata</a> + <a class="macro" href="../../../sys/cdefs.h.html#580" title="(sizeof(errata) / sizeof(errata[0]))" data-ref="_M/__arraycount">__arraycount</a>(<a class="tu ref" href="#errata" title='errata' data-use='r' data-ref="errata" data-ref-filename="errata">errata</a>);</td></tr>
+<tr><th id="426">426</th><td>	<b>for</b> (<a class="local col4 ref" href="#14upgrade" title='upgrade' data-ref="14upgrade" data-ref-filename="14upgrade">upgrade</a> = <var>0</var>, <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a> = <a class="tu ref" href="#errata" title='errata' data-use='r' data-ref="errata" data-ref-filename="errata">errata</a>; <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a> &lt; <a class="local col0 ref" href="#10ex" title='ex' data-ref="10ex" data-ref-filename="10ex">ex</a>; <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>++) {</td></tr>
+<tr><th id="427">427</th><td>		<b>if</b> (<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_reported" title='errata::e_reported' data-use='r' data-ref="errata::e_reported" data-ref-filename="errata..e_reported">e_reported</a>)</td></tr>
+<tr><th id="428">428</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="429">429</th><td>		<b>if</b> (<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_set" title='errata::e_set' data-use='r' data-ref="errata::e_set" data-ref-filename="errata..e_set">e_set</a> != <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="430">430</th><td>			<b>for</b> (<a class="local col3 ref" href="#13j" title='j' data-ref="13j" data-ref-filename="13j">j</a> = <var>0</var>; <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_set" title='errata::e_set' data-use='r' data-ref="errata::e_set" data-ref-filename="errata..e_set">e_set</a>[<a class="local col3 ref" href="#13j" title='j' data-ref="13j" data-ref-filename="13j">j</a>] != <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a>; <a class="local col3 ref" href="#13j" title='j' data-ref="13j" data-ref-filename="13j">j</a>++)</td></tr>
+<tr><th id="431">431</th><td>				<b>if</b> (<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_set" title='errata::e_set' data-use='r' data-ref="errata::e_set" data-ref-filename="errata..e_set">e_set</a>[<a class="local col3 ref" href="#13j" title='j' data-ref="13j" data-ref-filename="13j">j</a>] == <a class="local col1 ref" href="#11rev" title='rev' data-ref="11rev" data-ref-filename="11rev">rev</a>)</td></tr>
+<tr><th id="432">432</th><td>					<b>break</b>;</td></tr>
+<tr><th id="433">433</th><td>			<b>if</b> (<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_set" title='errata::e_set' data-use='r' data-ref="errata::e_set" data-ref-filename="errata..e_set">e_set</a>[<a class="local col3 ref" href="#13j" title='j' data-ref="13j" data-ref-filename="13j">j</a>] == <a class="enum" href="#OINK" title='OINK' data-ref="OINK" data-ref-filename="OINK">OINK</a>)</td></tr>
+<tr><th id="434">434</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="435">435</th><td>		}</td></tr>
+<tr><th id="436">436</th><td></td></tr>
+<tr><th id="437">437</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#aprint_debug_dev" title='aprint_debug_dev' data-ref="aprint_debug_dev" data-ref-filename="aprint_debug_dev">aprint_debug_dev</a>(<a class="local col7 ref" href="#7ci" title='ci' data-ref="7ci" data-ref-filename="7ci">ci</a>-&gt;<a class="ref field" href="../include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>, <q>"testing for erratum %d\n"</q>,</td></tr>
+<tr><th id="438">438</th><td>		    <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_num" title='errata::e_num' data-use='r' data-ref="errata::e_num" data-ref-filename="errata..e_num">e_num</a>);</td></tr>
+<tr><th id="439">439</th><td></td></tr>
+<tr><th id="440">440</th><td>		<b>if</b> (<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_act" title='errata::e_act' data-use='r' data-ref="errata::e_act" data-ref-filename="errata..e_act">e_act</a> == <a class="macro" href="../../../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="441">441</th><td>			<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_reported" title='errata::e_reported' data-use='w' data-ref="errata::e_reported" data-ref-filename="errata..e_reported">e_reported</a> = <a class="macro" href="../../../sys/types.h.html#212" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="442">442</th><td>		<b>else</b> <b>if</b> ((*<a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_act" title='errata::e_act' data-use='r' data-ref="errata::e_act" data-ref-filename="errata..e_act">e_act</a>)(<a class="local col7 ref" href="#7ci" title='ci' data-ref="7ci" data-ref-filename="7ci">ci</a>, <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>) == <a class="macro" href="../../../sys/types.h.html#215" title="0" data-ref="_M/FALSE">FALSE</a>)</td></tr>
+<tr><th id="443">443</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="444">444</th><td></td></tr>
+<tr><th id="445">445</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#aprint_verbose_dev" title='aprint_verbose_dev' data-ref="aprint_verbose_dev" data-ref-filename="aprint_verbose_dev">aprint_verbose_dev</a>(<a class="local col7 ref" href="#7ci" title='ci' data-ref="7ci" data-ref-filename="7ci">ci</a>-&gt;<a class="ref field" href="../include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>, <q>"erratum %d present\n"</q>,</td></tr>
+<tr><th id="446">446</th><td>		    <a class="local col9 ref" href="#9e" title='e' data-ref="9e" data-ref-filename="9e">e</a>-&gt;<a class="tu ref field" href="#errata::e_num" title='errata::e_num' data-use='r' data-ref="errata::e_num" data-ref-filename="errata..e_num">e_num</a>);</td></tr>
+<tr><th id="447">447</th><td>		<a class="local col4 ref" href="#14upgrade" title='upgrade' data-ref="14upgrade" data-ref-filename="14upgrade">upgrade</a> = <var>1</var>;</td></tr>
+<tr><th id="448">448</th><td>	}</td></tr>
+<tr><th id="449">449</th><td></td></tr>
+<tr><th id="450">450</th><td>	<b>if</b> (<a class="local col4 ref" href="#14upgrade" title='upgrade' data-ref="14upgrade" data-ref-filename="14upgrade">upgrade</a> &amp;&amp; !<a class="local col5 ref" href="#15again" title='again' data-ref="15again" data-ref-filename="15again">again</a>) {</td></tr>
+<tr><th id="451">451</th><td>		<a class="local col5 ref" href="#15again" title='again' data-ref="15again" data-ref-filename="15again">again</a> = <var>1</var>;</td></tr>
+<tr><th id="452">452</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#aprint_normal_dev" title='aprint_normal_dev' data-ref="aprint_normal_dev" data-ref-filename="aprint_normal_dev">aprint_normal_dev</a>(<a class="local col7 ref" href="#7ci" title='ci' data-ref="7ci" data-ref-filename="7ci">ci</a>-&gt;<a class="ref field" href="../include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>, <q>"WARNING: errata present,"</q></td></tr>
+<tr><th id="453">453</th><td>		    <q>" BIOS upgrade may be\n"</q>);</td></tr>
+<tr><th id="454">454</th><td>		<a class="ref fn" href="../../../sys/systm.h.html#aprint_normal_dev" title='aprint_normal_dev' data-ref="aprint_normal_dev" data-ref-filename="aprint_normal_dev">aprint_normal_dev</a>(<a class="local col7 ref" href="#7ci" title='ci' data-ref="7ci" data-ref-filename="7ci">ci</a>-&gt;<a class="ref field" href="../include/cpu.h.html#cpu_info::ci_dev" title='cpu_info::ci_dev' data-ref="cpu_info::ci_dev" data-ref-filename="cpu_info..ci_dev">ci_dev</a>, <q>"WARNING: necessary to ensure"</q></td></tr>
+<tr><th id="455">455</th><td>		    <q>" reliable operation\n"</q>);</td></tr>
+<tr><th id="456">456</th><td>	}</td></tr>
+<tr><th id="457">457</th><td>}</td></tr>
+<tr><th id="458">458</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

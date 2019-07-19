@@ -1,0 +1,428 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>atomic.S source code [netbsd/common/lib/libc/arch/i386/atomic/atomic.S] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/common/lib/libc/arch/i386/atomic/atomic.S'; var root_path = '../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../..'>netbsd</a>/<a href='../../../../..'>common</a>/<a href='../../../..'>lib</a>/<a href='../../..'>libc</a>/<a href='../..'>arch</a>/<a href='..'>i386</a>/<a href='./'>atomic</a>/<a href='atomic.S.html'>atomic.S</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: atomic.S,v 1.23 2018/07/18 13:39:36 bouyer Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2007 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe, and by Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *      </i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><u>#include <a href="../../../../../../sys/sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="33">33</th><td><u>#include <a href="../../../../../../objdir.amd64/destdir.amd64/usr/include/amd64/asm.h.html">&lt;machine/asm.h&gt;</a></u></td></tr>
+<tr><th id="34">34</th><td><i>/*</i></td></tr>
+<tr><th id="35">35</th><td><i> * __HAVE_ constants should not be in &lt;machine/types.h&gt;</i></td></tr>
+<tr><th id="36">36</th><td><i> * because we can't use them from assembly. OTOH we</i></td></tr>
+<tr><th id="37">37</th><td><i> * only need __HAVE_ATOMIC64_OPS here, and we don't.</i></td></tr>
+<tr><th id="38">38</th><td><i> */</i></td></tr>
+<tr><th id="39">39</th><td><u>#<span data-ppcond="39">ifdef</span> <span class="macro" data-ref="_M/_KERNEL">_KERNEL</span></u></td></tr>
+<tr><th id="40">40</th><td><u>#define	ALIAS(f, t)	STRONG_ALIAS(f,t)</u></td></tr>
+<tr><th id="41">41</th><td><u>#<span data-ppcond="39">else</span></u></td></tr>
+<tr><th id="42">42</th><td><u>#define	<dfn class="macro" id="_M/ALIAS" data-ref="_M/ALIAS">ALIAS</dfn>(f, t)	WEAK_ALIAS(f,t)</u></td></tr>
+<tr><th id="43">43</th><td><u>#<span data-ppcond="39">endif</span></u></td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#<span data-ppcond="45">ifdef</span> <span class="macro" data-ref="_M/_HARDKERNEL">_HARDKERNEL</span></u></td></tr>
+<tr><th id="46">46</th><td><u>#include "opt_xen.h"</u></td></tr>
+<tr><th id="47">47</th><td><u>#define	LOCK(n)		.Lpatch ## n:	lock</u></td></tr>
+<tr><th id="48">48</th><td><u>#define	ENDLABEL(a)	_ALIGN_TEXT; LABEL(a)</u></td></tr>
+<tr><th id="49">49</th><td><u>#<span data-ppcond="45">else</span></u></td></tr>
+<tr><th id="50">50</th><td><u>#define	<dfn class="macro" id="_M/LOCK" data-ref="_M/LOCK">LOCK</dfn>(n)		<span class='error' title="unknown type name &apos;lock&apos;">lock</span></u></td></tr>
+<tr><th id="51">51</th><td><u>#define	<dfn class="macro" id="_M/ENDLABEL" data-ref="_M/ENDLABEL">ENDLABEL</dfn>(a)	/* nothing */</u></td></tr>
+<tr><th id="52">52</th><td><u>#<span data-ppcond="45">endif</span></u></td></tr>
+<tr><th id="53">53</th><td></td></tr>
+<tr><th id="54">54</th><td>	<span class='error' title="expected identifier or &apos;(&apos;">.</span>text</td></tr>
+<tr><th id="55">55</th><td></td></tr>
+<tr><th id="56">56</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_add_32; .type _atomic_add_32,@function; _atomic_add_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_32" title='_atomic_add_32' data-ref="_atomic_add_32" data-ref-filename="_atomic_add_32">_atomic_add_32</dfn></span>)</td></tr>
+<tr><th id="57">57</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="58">58</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="59">59</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>1</var>)</td></tr>
+<tr><th id="60">60</th><td>	addl	%eax, (%edx)</td></tr>
+<tr><th id="61">61</th><td>	ret</td></tr>
+<tr><th id="62">62</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_add_32, . - _atomic_add_32" data-ref="_M/END">END</a>(_atomic_add_32)</td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_add_32_nv; .type _atomic_add_32_nv,@function; _atomic_add_32_nv:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_32_nv" title='_atomic_add_32_nv' data-ref="_atomic_add_32_nv" data-ref-filename="_atomic_add_32_nv">_atomic_add_32_nv</dfn></span>)</td></tr>
+<tr><th id="65">65</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="66">66</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="67">67</th><td>	movl	%eax, %ecx</td></tr>
+<tr><th id="68">68</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>2</var>)</td></tr>
+<tr><th id="69">69</th><td>	xaddl	%eax, (%edx)</td></tr>
+<tr><th id="70">70</th><td>	addl	%ecx, %eax</td></tr>
+<tr><th id="71">71</th><td>	ret</td></tr>
+<tr><th id="72">72</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_add_32_nv, . - _atomic_add_32_nv" data-ref="_M/END">END</a>(_atomic_add_32_nv)</td></tr>
+<tr><th id="73">73</th><td></td></tr>
+<tr><th id="74">74</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_and_32; .type _atomic_and_32,@function; _atomic_and_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_32" title='_atomic_and_32' data-ref="_atomic_and_32" data-ref-filename="_atomic_and_32">_atomic_and_32</dfn></span>)</td></tr>
+<tr><th id="75">75</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="76">76</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="77">77</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>3</var>)</td></tr>
+<tr><th id="78">78</th><td>	andl	%eax, (%edx)</td></tr>
+<tr><th id="79">79</th><td>	ret</td></tr>
+<tr><th id="80">80</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_and_32, . - _atomic_and_32" data-ref="_M/END">END</a>(_atomic_and_32)</td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_and_32_nv; .type _atomic_and_32_nv,@function; _atomic_and_32_nv:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_32_nv" title='_atomic_and_32_nv' data-ref="_atomic_and_32_nv" data-ref-filename="_atomic_and_32_nv">_atomic_and_32_nv</dfn></span>)</td></tr>
+<tr><th id="83">83</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="84">84</th><td>	movl	(%edx), %eax</td></tr>
+<tr><th id="85">85</th><td><var>0</var>:</td></tr>
+<tr><th id="86">86</th><td>	movl	%eax, %ecx</td></tr>
+<tr><th id="87">87</th><td>	andl	<var>8</var>(%esp), %ecx</td></tr>
+<tr><th id="88">88</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>4</var>)</td></tr>
+<tr><th id="89">89</th><td>	cmpxchgl %ecx, (%edx)</td></tr>
+<tr><th id="90">90</th><td>	jnz	<var>1f</var></td></tr>
+<tr><th id="91">91</th><td>	movl	%ecx, %eax</td></tr>
+<tr><th id="92">92</th><td>	ret</td></tr>
+<tr><th id="93">93</th><td><var>1</var>:</td></tr>
+<tr><th id="94">94</th><td>	jmp	<var>0b</var></td></tr>
+<tr><th id="95">95</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_and_32_nv, . - _atomic_and_32_nv" data-ref="_M/END">END</a>(_atomic_and_32_nv)</td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_dec_32; .type _atomic_dec_32,@function; _atomic_dec_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_32" title='_atomic_dec_32' data-ref="_atomic_dec_32" data-ref-filename="_atomic_dec_32">_atomic_dec_32</dfn></span>)</td></tr>
+<tr><th id="98">98</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="99">99</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>5</var>)</td></tr>
+<tr><th id="100">100</th><td>	decl	(%edx)</td></tr>
+<tr><th id="101">101</th><td>	ret</td></tr>
+<tr><th id="102">102</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_dec_32, . - _atomic_dec_32" data-ref="_M/END">END</a>(_atomic_dec_32)</td></tr>
+<tr><th id="103">103</th><td></td></tr>
+<tr><th id="104">104</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_dec_32_nv; .type _atomic_dec_32_nv,@function; _atomic_dec_32_nv:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_32_nv" title='_atomic_dec_32_nv' data-ref="_atomic_dec_32_nv" data-ref-filename="_atomic_dec_32_nv">_atomic_dec_32_nv</dfn></span>)</td></tr>
+<tr><th id="105">105</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="106">106</th><td>	movl	$-<var>1</var>, %eax</td></tr>
+<tr><th id="107">107</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>6</var>)</td></tr>
+<tr><th id="108">108</th><td>	xaddl	%eax, (%edx)</td></tr>
+<tr><th id="109">109</th><td>	decl	%eax</td></tr>
+<tr><th id="110">110</th><td>	ret</td></tr>
+<tr><th id="111">111</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_dec_32_nv, . - _atomic_dec_32_nv" data-ref="_M/END">END</a>(_atomic_dec_32_nv)</td></tr>
+<tr><th id="112">112</th><td></td></tr>
+<tr><th id="113">113</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_inc_32; .type _atomic_inc_32,@function; _atomic_inc_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_32" title='_atomic_inc_32' data-ref="_atomic_inc_32" data-ref-filename="_atomic_inc_32">_atomic_inc_32</dfn></span>)</td></tr>
+<tr><th id="114">114</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="115">115</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>7</var>)</td></tr>
+<tr><th id="116">116</th><td>	incl	(%edx)</td></tr>
+<tr><th id="117">117</th><td>	ret</td></tr>
+<tr><th id="118">118</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_inc_32, . - _atomic_inc_32" data-ref="_M/END">END</a>(_atomic_inc_32)</td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_inc_32_nv; .type _atomic_inc_32_nv,@function; _atomic_inc_32_nv:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_32_nv" title='_atomic_inc_32_nv' data-ref="_atomic_inc_32_nv" data-ref-filename="_atomic_inc_32_nv">_atomic_inc_32_nv</dfn></span>)</td></tr>
+<tr><th id="121">121</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="122">122</th><td>	movl	$<var>1</var>, %eax</td></tr>
+<tr><th id="123">123</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>8</var>)</td></tr>
+<tr><th id="124">124</th><td>	xaddl	%eax, (%edx)</td></tr>
+<tr><th id="125">125</th><td>	incl	%eax</td></tr>
+<tr><th id="126">126</th><td>	ret</td></tr>
+<tr><th id="127">127</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_inc_32_nv, . - _atomic_inc_32_nv" data-ref="_M/END">END</a>(_atomic_inc_32_nv)</td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_or_32; .type _atomic_or_32,@function; _atomic_or_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_32" title='_atomic_or_32' data-ref="_atomic_or_32" data-ref-filename="_atomic_or_32">_atomic_or_32</dfn></span>)</td></tr>
+<tr><th id="130">130</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="131">131</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="132">132</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>9</var>)</td></tr>
+<tr><th id="133">133</th><td>	orl	%eax, (%edx)</td></tr>
+<tr><th id="134">134</th><td>	ret</td></tr>
+<tr><th id="135">135</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_or_32, . - _atomic_or_32" data-ref="_M/END">END</a>(_atomic_or_32)</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_or_32_nv; .type _atomic_or_32_nv,@function; _atomic_or_32_nv:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_32_nv" title='_atomic_or_32_nv' data-ref="_atomic_or_32_nv" data-ref-filename="_atomic_or_32_nv">_atomic_or_32_nv</dfn></span>)</td></tr>
+<tr><th id="138">138</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="139">139</th><td>	movl	(%edx), %eax</td></tr>
+<tr><th id="140">140</th><td><var>0</var>:</td></tr>
+<tr><th id="141">141</th><td>	movl	%eax, %ecx</td></tr>
+<tr><th id="142">142</th><td>	orl	<var>8</var>(%esp), %ecx</td></tr>
+<tr><th id="143">143</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>10</var>)</td></tr>
+<tr><th id="144">144</th><td>	cmpxchgl %ecx, (%edx)</td></tr>
+<tr><th id="145">145</th><td>	jnz	<var>1f</var></td></tr>
+<tr><th id="146">146</th><td>	movl	%ecx, %eax</td></tr>
+<tr><th id="147">147</th><td>	ret</td></tr>
+<tr><th id="148">148</th><td><var>1</var>:</td></tr>
+<tr><th id="149">149</th><td>	jmp	<var>0b</var></td></tr>
+<tr><th id="150">150</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_or_32_nv, . - _atomic_or_32_nv" data-ref="_M/END">END</a>(_atomic_or_32_nv)</td></tr>
+<tr><th id="151">151</th><td></td></tr>
+<tr><th id="152">152</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_swap_32; .type _atomic_swap_32,@function; _atomic_swap_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_swap_32" title='_atomic_swap_32' data-ref="_atomic_swap_32" data-ref-filename="_atomic_swap_32">_atomic_swap_32</dfn></span>)</td></tr>
+<tr><th id="153">153</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="154">154</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="155">155</th><td>	xchgl	%eax, (%edx)</td></tr>
+<tr><th id="156">156</th><td>	ret</td></tr>
+<tr><th id="157">157</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_swap_32, . - _atomic_swap_32" data-ref="_M/END">END</a>(_atomic_swap_32)</td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_cas_32; .type _atomic_cas_32,@function; _atomic_cas_32:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_32" title='_atomic_cas_32' data-ref="_atomic_cas_32" data-ref-filename="_atomic_cas_32">_atomic_cas_32</dfn></span>)</td></tr>
+<tr><th id="160">160</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="161">161</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="162">162</th><td>	movl	<var>12</var>(%esp), %ecx</td></tr>
+<tr><th id="163">163</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>12</var>)</td></tr>
+<tr><th id="164">164</th><td>	cmpxchgl %ecx, (%edx)</td></tr>
+<tr><th id="165">165</th><td>	<i>/* %eax now contains the old value */</i></td></tr>
+<tr><th id="166">166</th><td>	ret</td></tr>
+<tr><th id="167">167</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_cas_32, . - _atomic_cas_32" data-ref="_M/END">END</a>(_atomic_cas_32)</td></tr>
+<tr><th id="168">168</th><td></td></tr>
+<tr><th id="169">169</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _atomic_cas_32_ni; .type _atomic_cas_32_ni,@function; _atomic_cas_32_ni:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_32_ni" title='_atomic_cas_32_ni' data-ref="_atomic_cas_32_ni" data-ref-filename="_atomic_cas_32_ni">_atomic_cas_32_ni</dfn></span>)</td></tr>
+<tr><th id="170">170</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;"><var>4</var></span>(%esp), %edx</td></tr>
+<tr><th id="171">171</th><td>	movl	<var>8</var>(%esp), %eax</td></tr>
+<tr><th id="172">172</th><td>	movl	<var>12</var>(%esp), %ecx</td></tr>
+<tr><th id="173">173</th><td>	cmpxchgl %ecx, (%edx)</td></tr>
+<tr><th id="174">174</th><td>	<i>/* %eax now contains the old value */</i></td></tr>
+<tr><th id="175">175</th><td>	ret</td></tr>
+<tr><th id="176">176</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _atomic_cas_32_ni, . - _atomic_cas_32_ni" data-ref="_M/END">END</a>(_atomic_cas_32_ni)</td></tr>
+<tr><th id="177">177</th><td></td></tr>
+<tr><th id="178">178</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _membar_consumer; .type _membar_consumer,@function; _membar_consumer:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_membar_consumer" title='_membar_consumer' data-ref="_membar_consumer" data-ref-filename="_membar_consumer">_membar_consumer</dfn></span>)</td></tr>
+<tr><th id="179">179</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>13</var>)</td></tr>
+<tr><th id="180">180</th><td>	<dfn class="tu decl def" id="addl" title='addl' data-type='int' data-ref="addl" data-ref-filename="addl">addl</dfn><span class='error' title="expected &apos;;&apos; after top level declarator"></span>	$<var>0</var>, -<var>4</var>(%esp)</td></tr>
+<tr><th id="181">181</th><td>	ret</td></tr>
+<tr><th id="182">182</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _membar_consumer, . - _membar_consumer" data-ref="_M/END">END</a>(_membar_consumer)</td></tr>
+<tr><th id="183">183</th><td><a class="macro" href="#51" title="" data-ref="_M/ENDLABEL">ENDLABEL</a>(membar_consumer_end)</td></tr>
+<tr><th id="184">184</th><td></td></tr>
+<tr><th id="185">185</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _membar_producer; .type _membar_producer,@function; _membar_producer:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_membar_producer" title='_membar_producer' data-ref="_membar_producer" data-ref-filename="_membar_producer">_membar_producer</dfn></span>)</td></tr>
+<tr><th id="186">186</th><td>	<i>/* A store is enough */</i></td></tr>
+<tr><th id="187">187</th><td>	<span class='error' title="unknown type name &apos;movl&apos;">movl</span>	<span class='error' title="expected identifier or &apos;(&apos;">$</span><var>0</var>, -<var>4</var>(%esp)</td></tr>
+<tr><th id="188">188</th><td>	ret</td></tr>
+<tr><th id="189">189</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _membar_producer, . - _membar_producer" data-ref="_M/END">END</a>(_membar_producer)</td></tr>
+<tr><th id="190">190</th><td><a class="macro" href="#51" title="" data-ref="_M/ENDLABEL">ENDLABEL</a>(membar_producer_end)</td></tr>
+<tr><th id="191">191</th><td></td></tr>
+<tr><th id="192">192</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#174" title=".text; .align 16; .globl _membar_sync; .type _membar_sync,@function; _membar_sync:;" data-ref="_M/ENTRY">ENTRY</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_membar_sync" title='_membar_sync' data-ref="_membar_sync" data-ref-filename="_membar_sync">_membar_sync</dfn></span>)</td></tr>
+<tr><th id="193">193</th><td>	<a class="macro" href="#50" title="lock" data-ref="_M/LOCK">LOCK</a>(<var>14</var>)</td></tr>
+<tr><th id="194">194</th><td>	<dfn class="tu decl def" id="addl" title='addl' data-type='int' data-ref="addl" data-ref-filename="addl">addl</dfn><span class='error' title="expected &apos;;&apos; after top level declarator"></span>	$<var>0</var>, -<var>4</var>(%esp)</td></tr>
+<tr><th id="195">195</th><td>	ret</td></tr>
+<tr><th id="196">196</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#179" title=".size _membar_sync, . - _membar_sync" data-ref="_M/END">END</a>(_membar_sync)</td></tr>
+<tr><th id="197">197</th><td><a class="macro" href="#51" title="" data-ref="_M/ENDLABEL">ENDLABEL</a>(membar_sync_end)</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td><u>#<span data-ppcond="199">if</span> defined(<span class="macro" data-ref="_M/__HAVE_ATOMIC64_OPS">__HAVE_ATOMIC64_OPS</span>) || defined(<span class="macro" data-ref="_M/_KERNEL">_KERNEL</span>)</u></td></tr>
+<tr><th id="200">200</th><td><u>#ifdef XEN</u></td></tr>
+<tr><th id="201">201</th><td>STRONG_ALIAS(_atomic_cas_64,_atomic_cas_cx8)</td></tr>
+<tr><th id="202">202</th><td><u>#else</u></td></tr>
+<tr><th id="203">203</th><td>ENTRY(_atomic_cas_64)</td></tr>
+<tr><th id="204">204</th><td><u>#ifdef _HARDKERNEL</u></td></tr>
+<tr><th id="205">205</th><td>	pushf</td></tr>
+<tr><th id="206">206</th><td>	cli</td></tr>
+<tr><th id="207">207</th><td><u>#endif /* _HARDKERNEL */</u></td></tr>
+<tr><th id="208">208</th><td>	pushl	%edi</td></tr>
+<tr><th id="209">209</th><td>	pushl	%ebx</td></tr>
+<tr><th id="210">210</th><td>	movl	<var>12</var>(%esp), %edi</td></tr>
+<tr><th id="211">211</th><td>	movl	<var>16</var>(%esp), %eax</td></tr>
+<tr><th id="212">212</th><td>	movl	<var>20</var>(%esp), %edx</td></tr>
+<tr><th id="213">213</th><td>	movl	<var>24</var>(%esp), %ebx</td></tr>
+<tr><th id="214">214</th><td>	movl	<var>28</var>(%esp), %ecx</td></tr>
+<tr><th id="215">215</th><td>	cmpl	<var>0</var>(%edi), %eax</td></tr>
+<tr><th id="216">216</th><td>	jne	<var>2f</var></td></tr>
+<tr><th id="217">217</th><td>	cmpl	<var>4</var>(%edi), %edx</td></tr>
+<tr><th id="218">218</th><td>	jne	<var>2f</var></td></tr>
+<tr><th id="219">219</th><td>	movl	%ebx, <var>0</var>(%edi)</td></tr>
+<tr><th id="220">220</th><td>	movl	%ecx, <var>4</var>(%edi)</td></tr>
+<tr><th id="221">221</th><td><var>1</var>:</td></tr>
+<tr><th id="222">222</th><td>	popl	%ebx</td></tr>
+<tr><th id="223">223</th><td>	popl	%edi</td></tr>
+<tr><th id="224">224</th><td><u>#ifdef _HARDKERNEL</u></td></tr>
+<tr><th id="225">225</th><td>	popf</td></tr>
+<tr><th id="226">226</th><td><u>#endif /* _HARDKERNEL */</u></td></tr>
+<tr><th id="227">227</th><td>	ret</td></tr>
+<tr><th id="228">228</th><td><var>2</var>:</td></tr>
+<tr><th id="229">229</th><td>	movl	<var>0</var>(%edi), %eax</td></tr>
+<tr><th id="230">230</th><td>	movl	<var>4</var>(%edi), %edx</td></tr>
+<tr><th id="231">231</th><td>	jmp	<var>1b</var></td></tr>
+<tr><th id="232">232</th><td>END(_atomic_cas_64)</td></tr>
+<tr><th id="233">233</th><td>ENDLABEL(_atomic_cas_64_end)</td></tr>
+<tr><th id="234">234</th><td><u>#endif /* !XEN */</u></td></tr>
+<tr><th id="235">235</th><td></td></tr>
+<tr><th id="236">236</th><td>ENTRY(_atomic_cas_cx8)</td></tr>
+<tr><th id="237">237</th><td>	pushl	%edi</td></tr>
+<tr><th id="238">238</th><td>	pushl	%ebx</td></tr>
+<tr><th id="239">239</th><td>	movl	<var>12</var>(%esp), %edi</td></tr>
+<tr><th id="240">240</th><td>	movl	<var>16</var>(%esp), %eax</td></tr>
+<tr><th id="241">241</th><td>	movl	<var>20</var>(%esp), %edx</td></tr>
+<tr><th id="242">242</th><td>	movl	<var>24</var>(%esp), %ebx</td></tr>
+<tr><th id="243">243</th><td>	movl	<var>28</var>(%esp), %ecx</td></tr>
+<tr><th id="244">244</th><td>	LOCK(<var>15</var>)</td></tr>
+<tr><th id="245">245</th><td>	cmpxchg8b (%edi)</td></tr>
+<tr><th id="246">246</th><td>	popl	%ebx</td></tr>
+<tr><th id="247">247</th><td>	popl	%edi</td></tr>
+<tr><th id="248">248</th><td>	ret</td></tr>
+<tr><th id="249">249</th><td><u>#ifdef _HARDKERNEL</u></td></tr>
+<tr><th id="250">250</th><td><u>#ifdef GPROF</u></td></tr>
+<tr><th id="251">251</th><td>	.space	<var>16</var>, <var>0x90</var></td></tr>
+<tr><th id="252">252</th><td><u>#else</u></td></tr>
+<tr><th id="253">253</th><td>	.space	<var>32</var>, <var>0x90</var></td></tr>
+<tr><th id="254">254</th><td><u>#endif</u></td></tr>
+<tr><th id="255">255</th><td><u>#endif /* _HARDKERNEL */</u></td></tr>
+<tr><th id="256">256</th><td>END(_atomic_cas_cx8)</td></tr>
+<tr><th id="257">257</th><td>ENDLABEL(_atomic_cas_cx8_end)</td></tr>
+<tr><th id="258">258</th><td><u>#<span data-ppcond="199">endif</span> /* __HAVE_ATOMIC64_OPS || _KERNEL */</u></td></tr>
+<tr><th id="259">259</th><td></td></tr>
+<tr><th id="260">260</th><td><u>#<span data-ppcond="260">ifdef</span> <span class="macro" data-ref="_M/_HARDKERNEL">_HARDKERNEL</span></u></td></tr>
+<tr><th id="261">261</th><td>ENTRY(sse2_lfence)</td></tr>
+<tr><th id="262">262</th><td>	lfence</td></tr>
+<tr><th id="263">263</th><td>	ret</td></tr>
+<tr><th id="264">264</th><td>END(sse2_lfence)</td></tr>
+<tr><th id="265">265</th><td>ENDLABEL(sse2_lfence_end)</td></tr>
+<tr><th id="266">266</th><td></td></tr>
+<tr><th id="267">267</th><td>ENTRY(sse2_mfence)</td></tr>
+<tr><th id="268">268</th><td>	mfence</td></tr>
+<tr><th id="269">269</th><td>	ret</td></tr>
+<tr><th id="270">270</th><td>END(sse2_mfence)</td></tr>
+<tr><th id="271">271</th><td>ENDLABEL(sse2_mfence_end)</td></tr>
+<tr><th id="272">272</th><td></td></tr>
+<tr><th id="273">273</th><td>atomic_lockpatch:</td></tr>
+<tr><th id="274">274</th><td>	.globl	atomic_lockpatch</td></tr>
+<tr><th id="275">275</th><td>	.<em>long</em>	.Lpatch1, .Lpatch2, .Lpatch3, .Lpatch4, .Lpatch5</td></tr>
+<tr><th id="276">276</th><td>	.<em>long</em>	.Lpatch6, .Lpatch7, .Lpatch8, .Lpatch9, .Lpatch10</td></tr>
+<tr><th id="277">277</th><td>	.<em>long</em>	.Lpatch12, .Lpatch13, .Lpatch14, .Lpatch15, <var>0</var></td></tr>
+<tr><th id="278">278</th><td><u>#<span data-ppcond="260">endif</span>	/* _HARDKERNEL */</u></td></tr>
+<tr><th id="279">279</th><td></td></tr>
+<tr><th id="280">280</th><td><a class="macro" href="#42" title=".weak atomic_add_32; atomic_add_32 = _atomic_add_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_32" title='atomic_add_32' data-ref="atomic_add_32" data-ref-filename="atomic_add_32">atomic_add_32</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="281">281</th><td><a class="macro" href="#42" title=".weak atomic_add_int; atomic_add_int = _atomic_add_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_int" title='atomic_add_int' data-ref="atomic_add_int" data-ref-filename="atomic_add_int">atomic_add_int</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="282">282</th><td><a class="macro" href="#42" title=".weak atomic_add_long; atomic_add_long = _atomic_add_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_long" title='atomic_add_long' data-ref="atomic_add_long" data-ref-filename="atomic_add_long">atomic_add_long</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="283">283</th><td><a class="macro" href="#42" title=".weak atomic_add_ptr; atomic_add_ptr = _atomic_add_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_ptr" title='atomic_add_ptr' data-ref="atomic_add_ptr" data-ref-filename="atomic_add_ptr">atomic_add_ptr</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="284">284</th><td></td></tr>
+<tr><th id="285">285</th><td><a class="macro" href="#42" title=".weak atomic_add_32_nv; atomic_add_32_nv = _atomic_add_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_32_nv" title='atomic_add_32_nv' data-ref="atomic_add_32_nv" data-ref-filename="atomic_add_32_nv">atomic_add_32_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="286">286</th><td><a class="macro" href="#42" title=".weak atomic_add_int_nv; atomic_add_int_nv = _atomic_add_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_int_nv" title='atomic_add_int_nv' data-ref="atomic_add_int_nv" data-ref-filename="atomic_add_int_nv">atomic_add_int_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="287">287</th><td><a class="macro" href="#42" title=".weak atomic_add_long_nv; atomic_add_long_nv = _atomic_add_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_long_nv" title='atomic_add_long_nv' data-ref="atomic_add_long_nv" data-ref-filename="atomic_add_long_nv">atomic_add_long_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="288">288</th><td><a class="macro" href="#42" title=".weak atomic_add_ptr_nv; atomic_add_ptr_nv = _atomic_add_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_add_ptr_nv" title='atomic_add_ptr_nv' data-ref="atomic_add_ptr_nv" data-ref-filename="atomic_add_ptr_nv">atomic_add_ptr_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="289">289</th><td></td></tr>
+<tr><th id="290">290</th><td><a class="macro" href="#42" title=".weak atomic_and_32; atomic_and_32 = _atomic_and_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_32" title='atomic_and_32' data-ref="atomic_and_32" data-ref-filename="atomic_and_32">atomic_and_32</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="291">291</th><td><a class="macro" href="#42" title=".weak atomic_and_uint; atomic_and_uint = _atomic_and_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_uint" title='atomic_and_uint' data-ref="atomic_and_uint" data-ref-filename="atomic_and_uint">atomic_and_uint</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="292">292</th><td><a class="macro" href="#42" title=".weak atomic_and_ulong; atomic_and_ulong = _atomic_and_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_ulong" title='atomic_and_ulong' data-ref="atomic_and_ulong" data-ref-filename="atomic_and_ulong">atomic_and_ulong</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="293">293</th><td><a class="macro" href="#42" title=".weak atomic_and_ptr; atomic_and_ptr = _atomic_and_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_ptr" title='atomic_and_ptr' data-ref="atomic_and_ptr" data-ref-filename="atomic_and_ptr">atomic_and_ptr</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="294">294</th><td></td></tr>
+<tr><th id="295">295</th><td><a class="macro" href="#42" title=".weak atomic_and_32_nv; atomic_and_32_nv = _atomic_and_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_32_nv" title='atomic_and_32_nv' data-ref="atomic_and_32_nv" data-ref-filename="atomic_and_32_nv">atomic_and_32_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="296">296</th><td><a class="macro" href="#42" title=".weak atomic_and_uint_nv; atomic_and_uint_nv = _atomic_and_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_uint_nv" title='atomic_and_uint_nv' data-ref="atomic_and_uint_nv" data-ref-filename="atomic_and_uint_nv">atomic_and_uint_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="297">297</th><td><a class="macro" href="#42" title=".weak atomic_and_ulong_nv; atomic_and_ulong_nv = _atomic_and_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_ulong_nv" title='atomic_and_ulong_nv' data-ref="atomic_and_ulong_nv" data-ref-filename="atomic_and_ulong_nv">atomic_and_ulong_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="298">298</th><td><a class="macro" href="#42" title=".weak atomic_and_ptr_nv; atomic_and_ptr_nv = _atomic_and_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_and_ptr_nv" title='atomic_and_ptr_nv' data-ref="atomic_and_ptr_nv" data-ref-filename="atomic_and_ptr_nv">atomic_and_ptr_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="299">299</th><td></td></tr>
+<tr><th id="300">300</th><td><a class="macro" href="#42" title=".weak atomic_dec_32; atomic_dec_32 = _atomic_dec_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_32" title='atomic_dec_32' data-ref="atomic_dec_32" data-ref-filename="atomic_dec_32">atomic_dec_32</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="301">301</th><td><a class="macro" href="#42" title=".weak atomic_dec_uint; atomic_dec_uint = _atomic_dec_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_uint" title='atomic_dec_uint' data-ref="atomic_dec_uint" data-ref-filename="atomic_dec_uint">atomic_dec_uint</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="302">302</th><td><a class="macro" href="#42" title=".weak atomic_dec_ulong; atomic_dec_ulong = _atomic_dec_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_ulong" title='atomic_dec_ulong' data-ref="atomic_dec_ulong" data-ref-filename="atomic_dec_ulong">atomic_dec_ulong</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="303">303</th><td><a class="macro" href="#42" title=".weak atomic_dec_ptr; atomic_dec_ptr = _atomic_dec_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_ptr" title='atomic_dec_ptr' data-ref="atomic_dec_ptr" data-ref-filename="atomic_dec_ptr">atomic_dec_ptr</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td><a class="macro" href="#42" title=".weak atomic_dec_32_nv; atomic_dec_32_nv = _atomic_dec_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_32_nv" title='atomic_dec_32_nv' data-ref="atomic_dec_32_nv" data-ref-filename="atomic_dec_32_nv">atomic_dec_32_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="306">306</th><td><a class="macro" href="#42" title=".weak atomic_dec_uint_nv; atomic_dec_uint_nv = _atomic_dec_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_uint_nv" title='atomic_dec_uint_nv' data-ref="atomic_dec_uint_nv" data-ref-filename="atomic_dec_uint_nv">atomic_dec_uint_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="307">307</th><td><a class="macro" href="#42" title=".weak atomic_dec_ulong_nv; atomic_dec_ulong_nv = _atomic_dec_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_ulong_nv" title='atomic_dec_ulong_nv' data-ref="atomic_dec_ulong_nv" data-ref-filename="atomic_dec_ulong_nv">atomic_dec_ulong_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="308">308</th><td><a class="macro" href="#42" title=".weak atomic_dec_ptr_nv; atomic_dec_ptr_nv = _atomic_dec_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_dec_ptr_nv" title='atomic_dec_ptr_nv' data-ref="atomic_dec_ptr_nv" data-ref-filename="atomic_dec_ptr_nv">atomic_dec_ptr_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="309">309</th><td></td></tr>
+<tr><th id="310">310</th><td><a class="macro" href="#42" title=".weak atomic_inc_32; atomic_inc_32 = _atomic_inc_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_32" title='atomic_inc_32' data-ref="atomic_inc_32" data-ref-filename="atomic_inc_32">atomic_inc_32</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="311">311</th><td><a class="macro" href="#42" title=".weak atomic_inc_uint; atomic_inc_uint = _atomic_inc_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_uint" title='atomic_inc_uint' data-ref="atomic_inc_uint" data-ref-filename="atomic_inc_uint">atomic_inc_uint</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="312">312</th><td><a class="macro" href="#42" title=".weak atomic_inc_ulong; atomic_inc_ulong = _atomic_inc_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_ulong" title='atomic_inc_ulong' data-ref="atomic_inc_ulong" data-ref-filename="atomic_inc_ulong">atomic_inc_ulong</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="313">313</th><td><a class="macro" href="#42" title=".weak atomic_inc_ptr; atomic_inc_ptr = _atomic_inc_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_ptr" title='atomic_inc_ptr' data-ref="atomic_inc_ptr" data-ref-filename="atomic_inc_ptr">atomic_inc_ptr</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="314">314</th><td></td></tr>
+<tr><th id="315">315</th><td><a class="macro" href="#42" title=".weak atomic_inc_32_nv; atomic_inc_32_nv = _atomic_inc_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_32_nv" title='atomic_inc_32_nv' data-ref="atomic_inc_32_nv" data-ref-filename="atomic_inc_32_nv">atomic_inc_32_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="316">316</th><td><a class="macro" href="#42" title=".weak atomic_inc_uint_nv; atomic_inc_uint_nv = _atomic_inc_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_uint_nv" title='atomic_inc_uint_nv' data-ref="atomic_inc_uint_nv" data-ref-filename="atomic_inc_uint_nv">atomic_inc_uint_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="317">317</th><td><a class="macro" href="#42" title=".weak atomic_inc_ulong_nv; atomic_inc_ulong_nv = _atomic_inc_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_ulong_nv" title='atomic_inc_ulong_nv' data-ref="atomic_inc_ulong_nv" data-ref-filename="atomic_inc_ulong_nv">atomic_inc_ulong_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="318">318</th><td><a class="macro" href="#42" title=".weak atomic_inc_ptr_nv; atomic_inc_ptr_nv = _atomic_inc_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_inc_ptr_nv" title='atomic_inc_ptr_nv' data-ref="atomic_inc_ptr_nv" data-ref-filename="atomic_inc_ptr_nv">atomic_inc_ptr_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="319">319</th><td></td></tr>
+<tr><th id="320">320</th><td><a class="macro" href="#42" title=".weak atomic_or_32; atomic_or_32 = _atomic_or_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_32" title='atomic_or_32' data-ref="atomic_or_32" data-ref-filename="atomic_or_32">atomic_or_32</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="321">321</th><td><a class="macro" href="#42" title=".weak atomic_or_uint; atomic_or_uint = _atomic_or_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_uint" title='atomic_or_uint' data-ref="atomic_or_uint" data-ref-filename="atomic_or_uint">atomic_or_uint</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="322">322</th><td><a class="macro" href="#42" title=".weak atomic_or_ulong; atomic_or_ulong = _atomic_or_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_ulong" title='atomic_or_ulong' data-ref="atomic_or_ulong" data-ref-filename="atomic_or_ulong">atomic_or_ulong</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="323">323</th><td><a class="macro" href="#42" title=".weak atomic_or_ptr; atomic_or_ptr = _atomic_or_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_ptr" title='atomic_or_ptr' data-ref="atomic_or_ptr" data-ref-filename="atomic_or_ptr">atomic_or_ptr</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="324">324</th><td></td></tr>
+<tr><th id="325">325</th><td><a class="macro" href="#42" title=".weak atomic_or_32_nv; atomic_or_32_nv = _atomic_or_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_32_nv" title='atomic_or_32_nv' data-ref="atomic_or_32_nv" data-ref-filename="atomic_or_32_nv">atomic_or_32_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="326">326</th><td><a class="macro" href="#42" title=".weak atomic_or_uint_nv; atomic_or_uint_nv = _atomic_or_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_uint_nv" title='atomic_or_uint_nv' data-ref="atomic_or_uint_nv" data-ref-filename="atomic_or_uint_nv">atomic_or_uint_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="327">327</th><td><a class="macro" href="#42" title=".weak atomic_or_ulong_nv; atomic_or_ulong_nv = _atomic_or_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_ulong_nv" title='atomic_or_ulong_nv' data-ref="atomic_or_ulong_nv" data-ref-filename="atomic_or_ulong_nv">atomic_or_ulong_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="328">328</th><td><a class="macro" href="#42" title=".weak atomic_or_ptr_nv; atomic_or_ptr_nv = _atomic_or_32_nv" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_or_ptr_nv" title='atomic_or_ptr_nv' data-ref="atomic_or_ptr_nv" data-ref-filename="atomic_or_ptr_nv">atomic_or_ptr_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td><a class="macro" href="#42" title=".weak atomic_swap_32; atomic_swap_32 = _atomic_swap_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_swap_32" title='atomic_swap_32' data-ref="atomic_swap_32" data-ref-filename="atomic_swap_32">atomic_swap_32</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="331">331</th><td><a class="macro" href="#42" title=".weak atomic_swap_uint; atomic_swap_uint = _atomic_swap_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_swap_uint" title='atomic_swap_uint' data-ref="atomic_swap_uint" data-ref-filename="atomic_swap_uint">atomic_swap_uint</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="332">332</th><td><a class="macro" href="#42" title=".weak atomic_swap_ulong; atomic_swap_ulong = _atomic_swap_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_swap_ulong" title='atomic_swap_ulong' data-ref="atomic_swap_ulong" data-ref-filename="atomic_swap_ulong">atomic_swap_ulong</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="333">333</th><td><a class="macro" href="#42" title=".weak atomic_swap_ptr; atomic_swap_ptr = _atomic_swap_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_swap_ptr" title='atomic_swap_ptr' data-ref="atomic_swap_ptr" data-ref-filename="atomic_swap_ptr">atomic_swap_ptr</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="334">334</th><td></td></tr>
+<tr><th id="335">335</th><td><a class="macro" href="#42" title=".weak atomic_cas_32; atomic_cas_32 = _atomic_cas_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_32" title='atomic_cas_32' data-ref="atomic_cas_32" data-ref-filename="atomic_cas_32">atomic_cas_32</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="336">336</th><td><a class="macro" href="#42" title=".weak atomic_cas_uint; atomic_cas_uint = _atomic_cas_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_uint" title='atomic_cas_uint' data-ref="atomic_cas_uint" data-ref-filename="atomic_cas_uint">atomic_cas_uint</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="337">337</th><td><a class="macro" href="#42" title=".weak atomic_cas_ulong; atomic_cas_ulong = _atomic_cas_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_ulong" title='atomic_cas_ulong' data-ref="atomic_cas_ulong" data-ref-filename="atomic_cas_ulong">atomic_cas_ulong</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="338">338</th><td><a class="macro" href="#42" title=".weak atomic_cas_ptr; atomic_cas_ptr = _atomic_cas_32" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_ptr" title='atomic_cas_ptr' data-ref="atomic_cas_ptr" data-ref-filename="atomic_cas_ptr">atomic_cas_ptr</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="339">339</th><td></td></tr>
+<tr><th id="340">340</th><td><a class="macro" href="#42" title=".weak atomic_cas_32_ni; atomic_cas_32_ni = _atomic_cas_32_ni" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_32_ni" title='atomic_cas_32_ni' data-ref="atomic_cas_32_ni" data-ref-filename="atomic_cas_32_ni">atomic_cas_32_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="341">341</th><td><a class="macro" href="#42" title=".weak atomic_cas_uint_ni; atomic_cas_uint_ni = _atomic_cas_32_ni" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_uint_ni" title='atomic_cas_uint_ni' data-ref="atomic_cas_uint_ni" data-ref-filename="atomic_cas_uint_ni">atomic_cas_uint_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="342">342</th><td><a class="macro" href="#42" title=".weak atomic_cas_ulong_ni; atomic_cas_ulong_ni = _atomic_cas_32_ni" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_ulong_ni" title='atomic_cas_ulong_ni' data-ref="atomic_cas_ulong_ni" data-ref-filename="atomic_cas_ulong_ni">atomic_cas_ulong_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="343">343</th><td><a class="macro" href="#42" title=".weak atomic_cas_ptr_ni; atomic_cas_ptr_ni = _atomic_cas_32_ni" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="atomic_cas_ptr_ni" title='atomic_cas_ptr_ni' data-ref="atomic_cas_ptr_ni" data-ref-filename="atomic_cas_ptr_ni">atomic_cas_ptr_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="344">344</th><td></td></tr>
+<tr><th id="345">345</th><td><u>#<span data-ppcond="345">if</span> defined(<span class="macro" data-ref="_M/__HAVE_ATOMIC64_OPS">__HAVE_ATOMIC64_OPS</span>) || defined(<span class="macro" data-ref="_M/_KERNEL">_KERNEL</span>)</u></td></tr>
+<tr><th id="346">346</th><td>ALIAS(atomic_cas_64,_atomic_cas_64)</td></tr>
+<tr><th id="347">347</th><td>ALIAS(atomic_cas_64_ni,_atomic_cas_64)</td></tr>
+<tr><th id="348">348</th><td>ALIAS(__sync_val_compare_and_swap_8,_atomic_cas_64)</td></tr>
+<tr><th id="349">349</th><td><u>#<span data-ppcond="345">endif</span> /* __HAVE_ATOMIC64_OPS || _KERNEL */</u></td></tr>
+<tr><th id="350">350</th><td></td></tr>
+<tr><th id="351">351</th><td><a class="macro" href="#42" title=".weak membar_consumer; membar_consumer = _membar_consumer" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="membar_consumer" title='membar_consumer' data-ref="membar_consumer" data-ref-filename="membar_consumer">membar_consumer</dfn></span>,_membar_consumer)</td></tr>
+<tr><th id="352">352</th><td><a class="macro" href="#42" title=".weak membar_producer; membar_producer = _membar_producer" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="membar_producer" title='membar_producer' data-ref="membar_producer" data-ref-filename="membar_producer">membar_producer</dfn></span>,_membar_producer)</td></tr>
+<tr><th id="353">353</th><td><a class="macro" href="#42" title=".weak membar_enter; membar_enter = _membar_consumer" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="membar_enter" title='membar_enter' data-ref="membar_enter" data-ref-filename="membar_enter">membar_enter</dfn></span>,_membar_consumer)</td></tr>
+<tr><th id="354">354</th><td><a class="macro" href="#42" title=".weak membar_exit; membar_exit = _membar_producer" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="membar_exit" title='membar_exit' data-ref="membar_exit" data-ref-filename="membar_exit">membar_exit</dfn></span>,_membar_producer)</td></tr>
+<tr><th id="355">355</th><td><a class="macro" href="#42" title=".weak membar_sync; membar_sync = _membar_sync" data-ref="_M/ALIAS">ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="membar_sync" title='membar_sync' data-ref="membar_sync" data-ref-filename="membar_sync">membar_sync</dfn></span>,_membar_sync)</td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_add_int; _atomic_add_int = _atomic_add_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_int" title='_atomic_add_int' data-ref="_atomic_add_int" data-ref-filename="_atomic_add_int">_atomic_add_int</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="358">358</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_add_long; _atomic_add_long = _atomic_add_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_long" title='_atomic_add_long' data-ref="_atomic_add_long" data-ref-filename="_atomic_add_long">_atomic_add_long</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="359">359</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_add_ptr; _atomic_add_ptr = _atomic_add_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_ptr" title='_atomic_add_ptr' data-ref="_atomic_add_ptr" data-ref-filename="_atomic_add_ptr">_atomic_add_ptr</dfn></span>,_atomic_add_32)</td></tr>
+<tr><th id="360">360</th><td></td></tr>
+<tr><th id="361">361</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_add_int_nv; _atomic_add_int_nv = _atomic_add_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_int_nv" title='_atomic_add_int_nv' data-ref="_atomic_add_int_nv" data-ref-filename="_atomic_add_int_nv">_atomic_add_int_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="362">362</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_add_long_nv; _atomic_add_long_nv = _atomic_add_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_long_nv" title='_atomic_add_long_nv' data-ref="_atomic_add_long_nv" data-ref-filename="_atomic_add_long_nv">_atomic_add_long_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="363">363</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_add_ptr_nv; _atomic_add_ptr_nv = _atomic_add_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_add_ptr_nv" title='_atomic_add_ptr_nv' data-ref="_atomic_add_ptr_nv" data-ref-filename="_atomic_add_ptr_nv">_atomic_add_ptr_nv</dfn></span>,_atomic_add_32_nv)</td></tr>
+<tr><th id="364">364</th><td></td></tr>
+<tr><th id="365">365</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_and_uint; _atomic_and_uint = _atomic_and_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_uint" title='_atomic_and_uint' data-ref="_atomic_and_uint" data-ref-filename="_atomic_and_uint">_atomic_and_uint</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="366">366</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_and_ulong; _atomic_and_ulong = _atomic_and_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_ulong" title='_atomic_and_ulong' data-ref="_atomic_and_ulong" data-ref-filename="_atomic_and_ulong">_atomic_and_ulong</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="367">367</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_and_ptr; _atomic_and_ptr = _atomic_and_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_ptr" title='_atomic_and_ptr' data-ref="_atomic_and_ptr" data-ref-filename="_atomic_and_ptr">_atomic_and_ptr</dfn></span>,_atomic_and_32)</td></tr>
+<tr><th id="368">368</th><td></td></tr>
+<tr><th id="369">369</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_and_uint_nv; _atomic_and_uint_nv = _atomic_and_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_uint_nv" title='_atomic_and_uint_nv' data-ref="_atomic_and_uint_nv" data-ref-filename="_atomic_and_uint_nv">_atomic_and_uint_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="370">370</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_and_ulong_nv; _atomic_and_ulong_nv = _atomic_and_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_ulong_nv" title='_atomic_and_ulong_nv' data-ref="_atomic_and_ulong_nv" data-ref-filename="_atomic_and_ulong_nv">_atomic_and_ulong_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="371">371</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_and_ptr_nv; _atomic_and_ptr_nv = _atomic_and_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_and_ptr_nv" title='_atomic_and_ptr_nv' data-ref="_atomic_and_ptr_nv" data-ref-filename="_atomic_and_ptr_nv">_atomic_and_ptr_nv</dfn></span>,_atomic_and_32_nv)</td></tr>
+<tr><th id="372">372</th><td></td></tr>
+<tr><th id="373">373</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_dec_uint; _atomic_dec_uint = _atomic_dec_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_uint" title='_atomic_dec_uint' data-ref="_atomic_dec_uint" data-ref-filename="_atomic_dec_uint">_atomic_dec_uint</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="374">374</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_dec_ulong; _atomic_dec_ulong = _atomic_dec_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_ulong" title='_atomic_dec_ulong' data-ref="_atomic_dec_ulong" data-ref-filename="_atomic_dec_ulong">_atomic_dec_ulong</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="375">375</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_dec_ptr; _atomic_dec_ptr = _atomic_dec_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_ptr" title='_atomic_dec_ptr' data-ref="_atomic_dec_ptr" data-ref-filename="_atomic_dec_ptr">_atomic_dec_ptr</dfn></span>,_atomic_dec_32)</td></tr>
+<tr><th id="376">376</th><td></td></tr>
+<tr><th id="377">377</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_dec_uint_nv; _atomic_dec_uint_nv = _atomic_dec_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_uint_nv" title='_atomic_dec_uint_nv' data-ref="_atomic_dec_uint_nv" data-ref-filename="_atomic_dec_uint_nv">_atomic_dec_uint_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="378">378</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_dec_ulong_nv; _atomic_dec_ulong_nv = _atomic_dec_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_ulong_nv" title='_atomic_dec_ulong_nv' data-ref="_atomic_dec_ulong_nv" data-ref-filename="_atomic_dec_ulong_nv">_atomic_dec_ulong_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="379">379</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_dec_ptr_nv; _atomic_dec_ptr_nv = _atomic_dec_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_dec_ptr_nv" title='_atomic_dec_ptr_nv' data-ref="_atomic_dec_ptr_nv" data-ref-filename="_atomic_dec_ptr_nv">_atomic_dec_ptr_nv</dfn></span>,_atomic_dec_32_nv)</td></tr>
+<tr><th id="380">380</th><td></td></tr>
+<tr><th id="381">381</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_inc_uint; _atomic_inc_uint = _atomic_inc_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_uint" title='_atomic_inc_uint' data-ref="_atomic_inc_uint" data-ref-filename="_atomic_inc_uint">_atomic_inc_uint</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="382">382</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_inc_ulong; _atomic_inc_ulong = _atomic_inc_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_ulong" title='_atomic_inc_ulong' data-ref="_atomic_inc_ulong" data-ref-filename="_atomic_inc_ulong">_atomic_inc_ulong</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="383">383</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_inc_ptr; _atomic_inc_ptr = _atomic_inc_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_ptr" title='_atomic_inc_ptr' data-ref="_atomic_inc_ptr" data-ref-filename="_atomic_inc_ptr">_atomic_inc_ptr</dfn></span>,_atomic_inc_32)</td></tr>
+<tr><th id="384">384</th><td></td></tr>
+<tr><th id="385">385</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_inc_uint_nv; _atomic_inc_uint_nv = _atomic_inc_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_uint_nv" title='_atomic_inc_uint_nv' data-ref="_atomic_inc_uint_nv" data-ref-filename="_atomic_inc_uint_nv">_atomic_inc_uint_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="386">386</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_inc_ulong_nv; _atomic_inc_ulong_nv = _atomic_inc_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_ulong_nv" title='_atomic_inc_ulong_nv' data-ref="_atomic_inc_ulong_nv" data-ref-filename="_atomic_inc_ulong_nv">_atomic_inc_ulong_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="387">387</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_inc_ptr_nv; _atomic_inc_ptr_nv = _atomic_inc_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_inc_ptr_nv" title='_atomic_inc_ptr_nv' data-ref="_atomic_inc_ptr_nv" data-ref-filename="_atomic_inc_ptr_nv">_atomic_inc_ptr_nv</dfn></span>,_atomic_inc_32_nv)</td></tr>
+<tr><th id="388">388</th><td></td></tr>
+<tr><th id="389">389</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_or_uint; _atomic_or_uint = _atomic_or_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_uint" title='_atomic_or_uint' data-ref="_atomic_or_uint" data-ref-filename="_atomic_or_uint">_atomic_or_uint</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="390">390</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_or_ulong; _atomic_or_ulong = _atomic_or_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_ulong" title='_atomic_or_ulong' data-ref="_atomic_or_ulong" data-ref-filename="_atomic_or_ulong">_atomic_or_ulong</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="391">391</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_or_ptr; _atomic_or_ptr = _atomic_or_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_ptr" title='_atomic_or_ptr' data-ref="_atomic_or_ptr" data-ref-filename="_atomic_or_ptr">_atomic_or_ptr</dfn></span>,_atomic_or_32)</td></tr>
+<tr><th id="392">392</th><td></td></tr>
+<tr><th id="393">393</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_or_uint_nv; _atomic_or_uint_nv = _atomic_or_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_uint_nv" title='_atomic_or_uint_nv' data-ref="_atomic_or_uint_nv" data-ref-filename="_atomic_or_uint_nv">_atomic_or_uint_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="394">394</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_or_ulong_nv; _atomic_or_ulong_nv = _atomic_or_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_ulong_nv" title='_atomic_or_ulong_nv' data-ref="_atomic_or_ulong_nv" data-ref-filename="_atomic_or_ulong_nv">_atomic_or_ulong_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="395">395</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_or_ptr_nv; _atomic_or_ptr_nv = _atomic_or_32_nv" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_or_ptr_nv" title='_atomic_or_ptr_nv' data-ref="_atomic_or_ptr_nv" data-ref-filename="_atomic_or_ptr_nv">_atomic_or_ptr_nv</dfn></span>,_atomic_or_32_nv)</td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_swap_uint; _atomic_swap_uint = _atomic_swap_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_swap_uint" title='_atomic_swap_uint' data-ref="_atomic_swap_uint" data-ref-filename="_atomic_swap_uint">_atomic_swap_uint</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="398">398</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_swap_ulong; _atomic_swap_ulong = _atomic_swap_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_swap_ulong" title='_atomic_swap_ulong' data-ref="_atomic_swap_ulong" data-ref-filename="_atomic_swap_ulong">_atomic_swap_ulong</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="399">399</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_swap_ptr; _atomic_swap_ptr = _atomic_swap_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_swap_ptr" title='_atomic_swap_ptr' data-ref="_atomic_swap_ptr" data-ref-filename="_atomic_swap_ptr">_atomic_swap_ptr</dfn></span>,_atomic_swap_32)</td></tr>
+<tr><th id="400">400</th><td></td></tr>
+<tr><th id="401">401</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_cas_uint; _atomic_cas_uint = _atomic_cas_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_uint" title='_atomic_cas_uint' data-ref="_atomic_cas_uint" data-ref-filename="_atomic_cas_uint">_atomic_cas_uint</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="402">402</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_cas_ulong; _atomic_cas_ulong = _atomic_cas_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_ulong" title='_atomic_cas_ulong' data-ref="_atomic_cas_ulong" data-ref-filename="_atomic_cas_ulong">_atomic_cas_ulong</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="403">403</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_cas_ptr; _atomic_cas_ptr = _atomic_cas_32" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_ptr" title='_atomic_cas_ptr' data-ref="_atomic_cas_ptr" data-ref-filename="_atomic_cas_ptr">_atomic_cas_ptr</dfn></span>,_atomic_cas_32)</td></tr>
+<tr><th id="404">404</th><td></td></tr>
+<tr><th id="405">405</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_cas_uint_ni; _atomic_cas_uint_ni = _atomic_cas_32_ni" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_uint_ni" title='_atomic_cas_uint_ni' data-ref="_atomic_cas_uint_ni" data-ref-filename="_atomic_cas_uint_ni">_atomic_cas_uint_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="406">406</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_cas_ulong_ni; _atomic_cas_ulong_ni = _atomic_cas_32_ni" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_ulong_ni" title='_atomic_cas_ulong_ni' data-ref="_atomic_cas_ulong_ni" data-ref-filename="_atomic_cas_ulong_ni">_atomic_cas_ulong_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="407">407</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _atomic_cas_ptr_ni; _atomic_cas_ptr_ni = _atomic_cas_32_ni" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_atomic_cas_ptr_ni" title='_atomic_cas_ptr_ni' data-ref="_atomic_cas_ptr_ni" data-ref-filename="_atomic_cas_ptr_ni">_atomic_cas_ptr_ni</dfn></span>,_atomic_cas_32_ni)</td></tr>
+<tr><th id="408">408</th><td></td></tr>
+<tr><th id="409">409</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _membar_enter; _membar_enter = _membar_consumer" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_membar_enter" title='_membar_enter' data-ref="_membar_enter" data-ref-filename="_membar_enter">_membar_enter</dfn></span>,_membar_consumer)</td></tr>
+<tr><th id="410">410</th><td><a class="macro" href="../../../../../../objdir.amd64/destdir.amd64/usr/include/i386/asm.h.html#203" title=".globl _membar_exit; _membar_exit = _membar_producer" data-ref="_M/STRONG_ALIAS">STRONG_ALIAS</a>(<span class='warning' title="type specifier missing, defaults to &apos;int&apos;"><dfn class="decl def" id="_membar_exit" title='_membar_exit' data-ref="_membar_exit" data-ref-filename="_membar_exit">_membar_exit</dfn></span>,<span class='error' title="initializer element is not a compile-time constant"><a class="ref" href="#185" title='_membar_producer' data-ref="_membar_producer" data-ref-filename="_membar_producer">_membar_producer</a></span>)<span class='error' title="expected &apos;;&apos; after top level declarator"></span></td></tr>
+<tr><th id="411">411</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

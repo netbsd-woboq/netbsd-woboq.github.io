@@ -1,0 +1,988 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>kern_mutex.c source code [netbsd/sys/kern/kern_mutex.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/sys/kern/kern_mutex.c'; var root_path = '../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../..'>netbsd</a>/<a href='..'>sys</a>/<a href='./'>kern</a>/<a href='kern_mutex.c.html'>kern_mutex.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: kern_mutex.c,v 1.79 2019/05/09 05:00:31 ozaki-r Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*-</i></td></tr>
+<tr><th id="4">4</th><td><i> * Copyright (c) 2002, 2006, 2007, 2008 The NetBSD Foundation, Inc.</i></td></tr>
+<tr><th id="5">5</th><td><i> * All rights reserved.</i></td></tr>
+<tr><th id="6">6</th><td><i> *</i></td></tr>
+<tr><th id="7">7</th><td><i> * This code is derived from software contributed to The NetBSD Foundation</i></td></tr>
+<tr><th id="8">8</th><td><i> * by Jason R. Thorpe and Andrew Doran.</i></td></tr>
+<tr><th id="9">9</th><td><i> *</i></td></tr>
+<tr><th id="10">10</th><td><i> * Redistribution and use in source and binary forms, with or without</i></td></tr>
+<tr><th id="11">11</th><td><i> * modification, are permitted provided that the following conditions</i></td></tr>
+<tr><th id="12">12</th><td><i> * are met:</i></td></tr>
+<tr><th id="13">13</th><td><i> * 1. Redistributions of source code must retain the above copyright</i></td></tr>
+<tr><th id="14">14</th><td><i> *    notice, this list of conditions and the following disclaimer.</i></td></tr>
+<tr><th id="15">15</th><td><i> * 2. Redistributions in binary form must reproduce the above copyright</i></td></tr>
+<tr><th id="16">16</th><td><i> *    notice, this list of conditions and the following disclaimer in the</i></td></tr>
+<tr><th id="17">17</th><td><i> *    documentation and/or other materials provided with the distribution.</i></td></tr>
+<tr><th id="18">18</th><td><i> *</i></td></tr>
+<tr><th id="19">19</th><td><i> * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS</i></td></tr>
+<tr><th id="20">20</th><td><i> * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED</i></td></tr>
+<tr><th id="21">21</th><td><i> * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR</i></td></tr>
+<tr><th id="22">22</th><td><i> * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS</i></td></tr>
+<tr><th id="23">23</th><td><i> * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR</i></td></tr>
+<tr><th id="24">24</th><td><i> * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF</i></td></tr>
+<tr><th id="25">25</th><td><i> * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS</i></td></tr>
+<tr><th id="26">26</th><td><i> * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN</i></td></tr>
+<tr><th id="27">27</th><td><i> * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)</i></td></tr>
+<tr><th id="28">28</th><td><i> * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE</i></td></tr>
+<tr><th id="29">29</th><td><i> * POSSIBILITY OF SUCH DAMAGE.</i></td></tr>
+<tr><th id="30">30</th><td><i> */</i></td></tr>
+<tr><th id="31">31</th><td></td></tr>
+<tr><th id="32">32</th><td><i>/*</i></td></tr>
+<tr><th id="33">33</th><td><i> * Kernel mutex implementation, modeled after those found in Solaris,</i></td></tr>
+<tr><th id="34">34</th><td><i> * a description of which can be found in:</i></td></tr>
+<tr><th id="35">35</th><td><i> *</i></td></tr>
+<tr><th id="36">36</th><td><i> *	Solaris Internals: Core Kernel Architecture, Jim Mauro and</i></td></tr>
+<tr><th id="37">37</th><td><i> *	    Richard McDougall.</i></td></tr>
+<tr><th id="38">38</th><td><i> */</i></td></tr>
+<tr><th id="39">39</th><td></td></tr>
+<tr><th id="40">40</th><td><u>#define	<dfn class="macro" id="_M/__MUTEX_PRIVATE" data-ref="_M/__MUTEX_PRIVATE">__MUTEX_PRIVATE</dfn></u></td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td><u>#include <a href="../sys/cdefs.h.html">&lt;sys/cdefs.h&gt;</a></u></td></tr>
+<tr><th id="43">43</th><td><a class="macro" href="../sys/cdefs_elf.h.html#156" title="__asm(&quot;.pushsection &quot; &quot;.ident&quot; &quot;\n&quot; &quot;.asciz \&quot;&quot; &quot;$NetBSD: kern_mutex.c,v 1.79 2019/05/09 05:00:31 ozaki-r Exp $&quot; &quot;\&quot;\n&quot; &quot;.popsection&quot;)" data-ref="_M/__KERNEL_RCSID">__KERNEL_RCSID</a>(<var>0</var>, <q>"$NetBSD: kern_mutex.c,v 1.79 2019/05/09 05:00:31 ozaki-r Exp $"</q>);</td></tr>
+<tr><th id="44">44</th><td></td></tr>
+<tr><th id="45">45</th><td><u>#include <a href="../sys/param.h.html">&lt;sys/param.h&gt;</a></u></td></tr>
+<tr><th id="46">46</th><td><u>#include <a href="../sys/atomic.h.html">&lt;sys/atomic.h&gt;</a></u></td></tr>
+<tr><th id="47">47</th><td><u>#include <a href="../sys/proc.h.html">&lt;sys/proc.h&gt;</a></u></td></tr>
+<tr><th id="48">48</th><td><u>#include <a href="../sys/mutex.h.html">&lt;sys/mutex.h&gt;</a></u></td></tr>
+<tr><th id="49">49</th><td><u>#include <a href="../sys/sched.h.html">&lt;sys/sched.h&gt;</a></u></td></tr>
+<tr><th id="50">50</th><td><u>#include <a href="../sys/sleepq.h.html">&lt;sys/sleepq.h&gt;</a></u></td></tr>
+<tr><th id="51">51</th><td><u>#include <a href="../sys/systm.h.html">&lt;sys/systm.h&gt;</a></u></td></tr>
+<tr><th id="52">52</th><td><u>#include <a href="../sys/lockdebug.h.html">&lt;sys/lockdebug.h&gt;</a></u></td></tr>
+<tr><th id="53">53</th><td><u>#include <a href="../sys/kernel.h.html">&lt;sys/kernel.h&gt;</a></u></td></tr>
+<tr><th id="54">54</th><td><u>#include <a href="../sys/intr.h.html">&lt;sys/intr.h&gt;</a></u></td></tr>
+<tr><th id="55">55</th><td><u>#include <a href="../sys/lock.h.html">&lt;sys/lock.h&gt;</a></u></td></tr>
+<tr><th id="56">56</th><td><u>#include <a href="../sys/types.h.html">&lt;sys/types.h&gt;</a></u></td></tr>
+<tr><th id="57">57</th><td><u>#include <a href="../sys/cpu.h.html">&lt;sys/cpu.h&gt;</a></u></td></tr>
+<tr><th id="58">58</th><td><u>#include <a href="../sys/pserialize.h.html">&lt;sys/pserialize.h&gt;</a></u></td></tr>
+<tr><th id="59">59</th><td></td></tr>
+<tr><th id="60">60</th><td><u>#include <a href="../dev/lockstat.h.html">&lt;dev/lockstat.h&gt;</a></u></td></tr>
+<tr><th id="61">61</th><td></td></tr>
+<tr><th id="62">62</th><td><u>#include <a href="../arch/amd64/include/lock.h.html">&lt;machine/lock.h&gt;</a></u></td></tr>
+<tr><th id="63">63</th><td></td></tr>
+<tr><th id="64">64</th><td><u>#define <dfn class="macro" id="_M/MUTEX_PANIC_SKIP_SPIN" data-ref="_M/MUTEX_PANIC_SKIP_SPIN">MUTEX_PANIC_SKIP_SPIN</dfn> 1</u></td></tr>
+<tr><th id="65">65</th><td><u>#define <dfn class="macro" id="_M/MUTEX_PANIC_SKIP_ADAPTIVE" data-ref="_M/MUTEX_PANIC_SKIP_ADAPTIVE">MUTEX_PANIC_SKIP_ADAPTIVE</dfn> 1</u></td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td><i>/*</i></td></tr>
+<tr><th id="68">68</th><td><i> * When not running a debug kernel, spin mutexes are not much</i></td></tr>
+<tr><th id="69">69</th><td><i> * more than an splraiseipl() and splx() pair.</i></td></tr>
+<tr><th id="70">70</th><td><i> */</i></td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td><u>#<span data-ppcond="72">if</span> defined(<span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span>) || defined(<a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a>) || defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="73">73</th><td><u>#define	<dfn class="macro" id="_M/FULL" data-ref="_M/FULL">FULL</dfn></u></td></tr>
+<tr><th id="74">74</th><td><u>#<span data-ppcond="72">endif</span></u></td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td><i>/*</i></td></tr>
+<tr><th id="77">77</th><td><i> * Debugging support.</i></td></tr>
+<tr><th id="78">78</th><td><i> */</i></td></tr>
+<tr><th id="79">79</th><td></td></tr>
+<tr><th id="80">80</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_WANTLOCK" data-ref="_M/MUTEX_WANTLOCK">MUTEX_WANTLOCK</dfn>(mtx)					\</u></td></tr>
+<tr><th id="81">81</th><td><u>    LOCKDEBUG_WANTLOCK(MUTEX_DEBUG_P(mtx), (mtx),		\</u></td></tr>
+<tr><th id="82">82</th><td><u>        (uintptr_t)__builtin_return_address(0), 0)</u></td></tr>
+<tr><th id="83">83</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_TESTLOCK" data-ref="_M/MUTEX_TESTLOCK">MUTEX_TESTLOCK</dfn>(mtx)					\</u></td></tr>
+<tr><th id="84">84</th><td><u>    LOCKDEBUG_WANTLOCK(MUTEX_DEBUG_P(mtx), (mtx),		\</u></td></tr>
+<tr><th id="85">85</th><td><u>        (uintptr_t)__builtin_return_address(0), -1)</u></td></tr>
+<tr><th id="86">86</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_LOCKED" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</dfn>(mtx)					\</u></td></tr>
+<tr><th id="87">87</th><td><u>    LOCKDEBUG_LOCKED(MUTEX_DEBUG_P(mtx), (mtx), NULL,		\</u></td></tr>
+<tr><th id="88">88</th><td><u>        (uintptr_t)__builtin_return_address(0), 0)</u></td></tr>
+<tr><th id="89">89</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_UNLOCKED" data-ref="_M/MUTEX_UNLOCKED">MUTEX_UNLOCKED</dfn>(mtx)					\</u></td></tr>
+<tr><th id="90">90</th><td><u>    LOCKDEBUG_UNLOCKED(MUTEX_DEBUG_P(mtx), (mtx),		\</u></td></tr>
+<tr><th id="91">91</th><td><u>        (uintptr_t)__builtin_return_address(0), 0)</u></td></tr>
+<tr><th id="92">92</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_ABORT" data-ref="_M/MUTEX_ABORT">MUTEX_ABORT</dfn>(mtx, msg)					\</u></td></tr>
+<tr><th id="93">93</th><td><u>    <a class="tu ref fn" href="#mutex_abort" title='mutex_abort' data-use='c' data-ref="mutex_abort" data-ref-filename="mutex_abort">mutex_abort</a>(__func__, __LINE__, mtx, msg)</u></td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td><u>#<span data-ppcond="95">if</span> defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="96">96</th><td></td></tr>
+<tr><th id="97">97</th><td><u>#define	MUTEX_DASSERT(mtx, cond)				\</u></td></tr>
+<tr><th id="98">98</th><td><u>do {								\</u></td></tr>
+<tr><th id="99">99</th><td><u>	if (__predict_false(!(cond)))				\</u></td></tr>
+<tr><th id="100">100</th><td><u>		MUTEX_ABORT(mtx, "assertion failed: " #cond);	\</u></td></tr>
+<tr><th id="101">101</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="102">102</th><td></td></tr>
+<tr><th id="103">103</th><td><u>#<span data-ppcond="95">else</span>	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="104">104</th><td></td></tr>
+<tr><th id="105">105</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_DASSERT" data-ref="_M/MUTEX_DASSERT">MUTEX_DASSERT</dfn>(mtx, cond)	/* nothing */</u></td></tr>
+<tr><th id="106">106</th><td></td></tr>
+<tr><th id="107">107</th><td><u>#<span data-ppcond="95">endif</span> /* LOCKDEBUG */</u></td></tr>
+<tr><th id="108">108</th><td></td></tr>
+<tr><th id="109">109</th><td><u>#<span data-ppcond="109">if</span> defined(<span class="macro" data-ref="_M/DIAGNOSTIC">DIAGNOSTIC</span>)</u></td></tr>
+<tr><th id="110">110</th><td></td></tr>
+<tr><th id="111">111</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_ASSERT" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</dfn>(mtx, cond)					\</u></td></tr>
+<tr><th id="112">112</th><td><u>do {								\</u></td></tr>
+<tr><th id="113">113</th><td><u>	if (__predict_false(!(cond)))				\</u></td></tr>
+<tr><th id="114">114</th><td><u>		MUTEX_ABORT(mtx, "assertion failed: " #cond);	\</u></td></tr>
+<tr><th id="115">115</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="116">116</th><td></td></tr>
+<tr><th id="117">117</th><td><u>#<span data-ppcond="109">else</span>	/* DIAGNOSTIC */</u></td></tr>
+<tr><th id="118">118</th><td></td></tr>
+<tr><th id="119">119</th><td><u>#define	MUTEX_ASSERT(mtx, cond)	/* nothing */</u></td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td><u>#<span data-ppcond="109">endif</span>	/* DIAGNOSTIC */</u></td></tr>
+<tr><th id="122">122</th><td></td></tr>
+<tr><th id="123">123</th><td><i>/*</i></td></tr>
+<tr><th id="124">124</th><td><i> * Some architectures can't use __cpu_simple_lock as is so allow a way</i></td></tr>
+<tr><th id="125">125</th><td><i> * for them to use an alternate definition.</i></td></tr>
+<tr><th id="126">126</th><td><i> */</i></td></tr>
+<tr><th id="127">127</th><td><u>#<span data-ppcond="127">ifndef</span> <span class="macro" data-ref="_M/MUTEX_SPINBIT_LOCK_INIT">MUTEX_SPINBIT_LOCK_INIT</span></u></td></tr>
+<tr><th id="128">128</th><td><u>#define <dfn class="macro" id="_M/MUTEX_SPINBIT_LOCK_INIT" data-ref="_M/MUTEX_SPINBIT_LOCK_INIT">MUTEX_SPINBIT_LOCK_INIT</dfn>(mtx)	<a class="ref fn" href="../arch/x86/include/lock.h.html#__cpu_simple_lock_init" title='__cpu_simple_lock_init' data-ref="__cpu_simple_lock_init" data-ref-filename="__cpu_simple_lock_init">__cpu_simple_lock_init</a>(&amp;(mtx)-&gt;mtx_lock)</u></td></tr>
+<tr><th id="129">129</th><td><u>#<span data-ppcond="127">endif</span></u></td></tr>
+<tr><th id="130">130</th><td><u>#<span data-ppcond="130">ifndef</span> <span class="macro" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</span></u></td></tr>
+<tr><th id="131">131</th><td><u>#define <dfn class="macro" id="_M/MUTEX_SPINBIT_LOCKED_P" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</dfn>(mtx)	<a class="ref fn" href="../arch/x86/include/lock.h.html#__SIMPLELOCK_LOCKED_P" title='__SIMPLELOCK_LOCKED_P' data-ref="__SIMPLELOCK_LOCKED_P" data-ref-filename="__SIMPLELOCK_LOCKED_P">__SIMPLELOCK_LOCKED_P</a>(&amp;(mtx)-&gt;mtx_lock)</u></td></tr>
+<tr><th id="132">132</th><td><u>#<span data-ppcond="130">endif</span></u></td></tr>
+<tr><th id="133">133</th><td><u>#<span data-ppcond="133">ifndef</span> <span class="macro" data-ref="_M/MUTEX_SPINBIT_LOCK_TRY">MUTEX_SPINBIT_LOCK_TRY</span></u></td></tr>
+<tr><th id="134">134</th><td><u>#define <dfn class="macro" id="_M/MUTEX_SPINBIT_LOCK_TRY" data-ref="_M/MUTEX_SPINBIT_LOCK_TRY">MUTEX_SPINBIT_LOCK_TRY</dfn>(mtx)	<a class="ref fn" href="../arch/x86/include/lock.h.html#__cpu_simple_lock_try" title='__cpu_simple_lock_try' data-ref="__cpu_simple_lock_try" data-ref-filename="__cpu_simple_lock_try">__cpu_simple_lock_try</a>(&amp;(mtx)-&gt;mtx_lock)</u></td></tr>
+<tr><th id="135">135</th><td><u>#<span data-ppcond="133">endif</span></u></td></tr>
+<tr><th id="136">136</th><td><u>#<span data-ppcond="136">ifndef</span> <span class="macro" data-ref="_M/MUTEX_SPINBIT_LOCK_UNLOCK">MUTEX_SPINBIT_LOCK_UNLOCK</span></u></td></tr>
+<tr><th id="137">137</th><td><u>#define <dfn class="macro" id="_M/MUTEX_SPINBIT_LOCK_UNLOCK" data-ref="_M/MUTEX_SPINBIT_LOCK_UNLOCK">MUTEX_SPINBIT_LOCK_UNLOCK</dfn>(mtx)	<a class="ref fn" href="../arch/x86/include/lock.h.html#__cpu_simple_unlock" title='__cpu_simple_unlock' data-ref="__cpu_simple_unlock" data-ref-filename="__cpu_simple_unlock">__cpu_simple_unlock</a>(&amp;(mtx)-&gt;mtx_lock)</u></td></tr>
+<tr><th id="138">138</th><td><u>#<span data-ppcond="136">endif</span></u></td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><u>#<span data-ppcond="140">ifndef</span> <span class="macro" data-ref="_M/MUTEX_INITIALIZE_SPIN_IPL">MUTEX_INITIALIZE_SPIN_IPL</span></u></td></tr>
+<tr><th id="141">141</th><td><u>#define <dfn class="macro" id="_M/MUTEX_INITIALIZE_SPIN_IPL" data-ref="_M/MUTEX_INITIALIZE_SPIN_IPL">MUTEX_INITIALIZE_SPIN_IPL</dfn>(mtx, ipl) \</u></td></tr>
+<tr><th id="142">142</th><td><u>					((mtx)-&gt;mtx_ipl = <a class="ref fn" href="../arch/x86/include/intr.h.html#makeiplcookie" title='makeiplcookie' data-ref="makeiplcookie" data-ref-filename="makeiplcookie">makeiplcookie</a>((ipl)))</u></td></tr>
+<tr><th id="143">143</th><td><u>#<span data-ppcond="140">endif</span></u></td></tr>
+<tr><th id="144">144</th><td></td></tr>
+<tr><th id="145">145</th><td><i>/*</i></td></tr>
+<tr><th id="146">146</th><td><i> * Spin mutex SPL save / restore.</i></td></tr>
+<tr><th id="147">147</th><td><i> */</i></td></tr>
+<tr><th id="148">148</th><td></td></tr>
+<tr><th id="149">149</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_SPIN_SPLRAISE" data-ref="_M/MUTEX_SPIN_SPLRAISE">MUTEX_SPIN_SPLRAISE</dfn>(mtx)					\</u></td></tr>
+<tr><th id="150">150</th><td><u>do {									\</u></td></tr>
+<tr><th id="151">151</th><td><u>	struct <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col0 decl" id="40x__ci" title='x__ci' data-type='struct cpu_info *' data-ref="40x__ci" data-ref-filename="40x__ci"><dfn class="local col3 decl" id="53x__ci" title='x__ci' data-type='struct cpu_info *' data-ref="53x__ci" data-ref-filename="53x__ci">x__ci</dfn></dfn>;						\</u></td></tr>
+<tr><th id="152">152</th><td><u>	int <dfn class="local col1 decl" id="41x__cnt" title='x__cnt' data-type='int' data-ref="41x__cnt" data-ref-filename="41x__cnt"><dfn class="local col4 decl" id="54x__cnt" title='x__cnt' data-type='int' data-ref="54x__cnt" data-ref-filename="54x__cnt">x__cnt</dfn></dfn>, <dfn class="local col2 decl" id="42s" title='s' data-type='int' data-ref="42s" data-ref-filename="42s"><dfn class="local col5 decl" id="55s" title='s' data-type='int' data-ref="55s" data-ref-filename="55s">s</dfn></dfn>;							\</u></td></tr>
+<tr><th id="153">153</th><td><u>	<a class="local col2 ref" href="#476" title='s' data-ref="42s" data-ref-filename="42s"><a class="local col5 ref" href="#891" title='s' data-ref="55s" data-ref-filename="55s">s</a></a> = <a class="ref fn" href="../arch/x86/include/intr.h.html#splraiseipl" title='splraiseipl' data-ref="splraiseipl" data-ref-filename="splraiseipl">splraiseipl</a>(MUTEX_SPIN_IPL(mtx));				\</u></td></tr>
+<tr><th id="154">154</th><td><u>	<a class="local col0 ref" href="#476" title='x__ci' data-ref="40x__ci" data-ref-filename="40x__ci"><a class="local col3 ref" href="#891" title='x__ci' data-ref="53x__ci" data-ref-filename="53x__ci">x__ci</a></a> = curcpu();						\</u></td></tr>
+<tr><th id="155">155</th><td><u>	<a class="local col1 ref" href="#476" title='x__cnt' data-ref="41x__cnt" data-ref-filename="41x__cnt"><a class="local col4 ref" href="#891" title='x__cnt' data-ref="54x__cnt" data-ref-filename="54x__cnt">x__cnt</a></a> = <a class="local col0 ref" href="#476" title='x__ci' data-ref="40x__ci" data-ref-filename="40x__ci"><a class="local col3 ref" href="#891" title='x__ci' data-ref="53x__ci" data-ref-filename="53x__ci">x__ci</a></a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_mtx_count" title='cpu_info::ci_mtx_count' data-ref="cpu_info::ci_mtx_count" data-ref-filename="cpu_info..ci_mtx_count">ci_mtx_count</a>--;					\</u></td></tr>
+<tr><th id="156">156</th><td><u>	__insn_barrier();						\</u></td></tr>
+<tr><th id="157">157</th><td><u>	if (<a class="local col1 ref" href="#476" title='x__cnt' data-ref="41x__cnt" data-ref-filename="41x__cnt"><a class="local col4 ref" href="#891" title='x__cnt' data-ref="54x__cnt" data-ref-filename="54x__cnt">x__cnt</a></a> == 0)						\</u></td></tr>
+<tr><th id="158">158</th><td><u>		<a class="local col0 ref" href="#476" title='x__ci' data-ref="40x__ci" data-ref-filename="40x__ci"><a class="local col3 ref" href="#891" title='x__ci' data-ref="53x__ci" data-ref-filename="53x__ci">x__ci</a></a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_mtx_oldspl" title='cpu_info::ci_mtx_oldspl' data-ref="cpu_info::ci_mtx_oldspl" data-ref-filename="cpu_info..ci_mtx_oldspl">ci_mtx_oldspl</a> = (<a class="local col2 ref" href="#476" title='s' data-ref="42s" data-ref-filename="42s"><a class="local col5 ref" href="#891" title='s' data-ref="55s" data-ref-filename="55s">s</a></a>);				\</u></td></tr>
+<tr><th id="159">159</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="160">160</th><td></td></tr>
+<tr><th id="161">161</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_SPIN_SPLRESTORE" data-ref="_M/MUTEX_SPIN_SPLRESTORE">MUTEX_SPIN_SPLRESTORE</dfn>(mtx)					\</u></td></tr>
+<tr><th id="162">162</th><td><u>do {									\</u></td></tr>
+<tr><th id="163">163</th><td><u>	struct <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col6 decl" id="46x__ci" title='x__ci' data-type='struct cpu_info *' data-ref="46x__ci" data-ref-filename="46x__ci"><dfn class="local col6 decl" id="56x__ci" title='x__ci' data-type='struct cpu_info *' data-ref="56x__ci" data-ref-filename="56x__ci">x__ci</dfn></dfn> = curcpu();				\</u></td></tr>
+<tr><th id="164">164</th><td><u>	int <dfn class="local col7 decl" id="47s" title='s' data-type='int' data-ref="47s" data-ref-filename="47s"><dfn class="local col7 decl" id="57s" title='s' data-type='int' data-ref="57s" data-ref-filename="57s">s</dfn></dfn> = <a class="local col6 ref" href="#747" title='x__ci' data-ref="46x__ci" data-ref-filename="46x__ci"><a class="local col6 ref" href="#898" title='x__ci' data-ref="56x__ci" data-ref-filename="56x__ci">x__ci</a></a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_mtx_oldspl" title='cpu_info::ci_mtx_oldspl' data-ref="cpu_info::ci_mtx_oldspl" data-ref-filename="cpu_info..ci_mtx_oldspl">ci_mtx_oldspl</a>;					\</u></td></tr>
+<tr><th id="165">165</th><td><u>	__insn_barrier();						\</u></td></tr>
+<tr><th id="166">166</th><td><u>	if (++(<a class="local col6 ref" href="#747" title='x__ci' data-ref="46x__ci" data-ref-filename="46x__ci"><a class="local col6 ref" href="#898" title='x__ci' data-ref="56x__ci" data-ref-filename="56x__ci">x__ci</a></a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_mtx_count" title='cpu_info::ci_mtx_count' data-ref="cpu_info::ci_mtx_count" data-ref-filename="cpu_info..ci_mtx_count">ci_mtx_count</a>) == 0)			\</u></td></tr>
+<tr><th id="167">167</th><td><u>		splx(<a class="local col7 ref" href="#747" title='s' data-ref="47s" data-ref-filename="47s"><a class="local col7 ref" href="#898" title='s' data-ref="57s" data-ref-filename="57s">s</a></a>);						\</u></td></tr>
+<tr><th id="168">168</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="169">169</th><td></td></tr>
+<tr><th id="170">170</th><td><i>/*</i></td></tr>
+<tr><th id="171">171</th><td><i> * For architectures that provide 'simple' mutexes: they provide a</i></td></tr>
+<tr><th id="172">172</th><td><i> * CAS function that is either MP-safe, or does not need to be MP</i></td></tr>
+<tr><th id="173">173</th><td><i> * safe.  Adaptive mutexes on these architectures do not require an</i></td></tr>
+<tr><th id="174">174</th><td><i> * additional interlock.</i></td></tr>
+<tr><th id="175">175</th><td><i> */</i></td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td><u>#<span data-ppcond="177">ifdef</span> <a class="macro" href="../arch/x86/include/mutex.h.html#57" data-ref="_M/__HAVE_SIMPLE_MUTEXES">__HAVE_SIMPLE_MUTEXES</a></u></td></tr>
+<tr><th id="178">178</th><td></td></tr>
+<tr><th id="179">179</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_OWNER" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</dfn>(owner)						\</u></td></tr>
+<tr><th id="180">180</th><td><u>	(owner &amp; MUTEX_THREAD)</u></td></tr>
+<tr><th id="181">181</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_HAS_WAITERS" data-ref="_M/MUTEX_HAS_WAITERS">MUTEX_HAS_WAITERS</dfn>(mtx)						\</u></td></tr>
+<tr><th id="182">182</th><td><u>	(((int)(mtx)-&gt;mtx_owner &amp; MUTEX_BIT_WAITERS) != 0)</u></td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_INITIALIZE_ADAPTIVE" data-ref="_M/MUTEX_INITIALIZE_ADAPTIVE">MUTEX_INITIALIZE_ADAPTIVE</dfn>(mtx, dodebug)				\</u></td></tr>
+<tr><th id="185">185</th><td><u>do {									\</u></td></tr>
+<tr><th id="186">186</th><td><u>	if (!dodebug)							\</u></td></tr>
+<tr><th id="187">187</th><td><u>		(mtx)-&gt;mtx_owner |= MUTEX_BIT_NODEBUG;			\</u></td></tr>
+<tr><th id="188">188</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_INITIALIZE_SPIN" data-ref="_M/MUTEX_INITIALIZE_SPIN">MUTEX_INITIALIZE_SPIN</dfn>(mtx, dodebug, ipl)			\</u></td></tr>
+<tr><th id="191">191</th><td><u>do {									\</u></td></tr>
+<tr><th id="192">192</th><td><u>	(mtx)-&gt;mtx_owner = MUTEX_BIT_SPIN;				\</u></td></tr>
+<tr><th id="193">193</th><td><u>	if (!dodebug)							\</u></td></tr>
+<tr><th id="194">194</th><td><u>		(mtx)-&gt;mtx_owner |= MUTEX_BIT_NODEBUG;			\</u></td></tr>
+<tr><th id="195">195</th><td><u>	MUTEX_INITIALIZE_SPIN_IPL((mtx), (ipl));			\</u></td></tr>
+<tr><th id="196">196</th><td><u>	MUTEX_SPINBIT_LOCK_INIT((mtx));					\</u></td></tr>
+<tr><th id="197">197</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_DESTROY" data-ref="_M/MUTEX_DESTROY">MUTEX_DESTROY</dfn>(mtx)						\</u></td></tr>
+<tr><th id="200">200</th><td><u>do {									\</u></td></tr>
+<tr><th id="201">201</th><td><u>	(mtx)-&gt;mtx_owner = MUTEX_THREAD;				\</u></td></tr>
+<tr><th id="202">202</th><td><u>} while (/* CONSTCOND */ 0)</u></td></tr>
+<tr><th id="203">203</th><td></td></tr>
+<tr><th id="204">204</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_SPIN_P" data-ref="_M/MUTEX_SPIN_P">MUTEX_SPIN_P</dfn>(mtx)		\</u></td></tr>
+<tr><th id="205">205</th><td><u>    (((mtx)-&gt;mtx_owner &amp; MUTEX_BIT_SPIN) != 0)</u></td></tr>
+<tr><th id="206">206</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_ADAPTIVE_P" data-ref="_M/MUTEX_ADAPTIVE_P">MUTEX_ADAPTIVE_P</dfn>(mtx)		\</u></td></tr>
+<tr><th id="207">207</th><td><u>    (((mtx)-&gt;mtx_owner &amp; MUTEX_BIT_SPIN) == 0)</u></td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_DEBUG_P" data-ref="_M/MUTEX_DEBUG_P">MUTEX_DEBUG_P</dfn>(mtx)	(((mtx)-&gt;mtx_owner &amp; MUTEX_BIT_NODEBUG) == 0)</u></td></tr>
+<tr><th id="210">210</th><td><u>#<span data-ppcond="210">if</span> defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="211">211</th><td><u>#define	MUTEX_OWNED(owner)		(((owner) &amp; ~MUTEX_BIT_NODEBUG) != 0)</u></td></tr>
+<tr><th id="212">212</th><td><u>#define	MUTEX_INHERITDEBUG(n, o)	(n) |= (o) &amp; MUTEX_BIT_NODEBUG</u></td></tr>
+<tr><th id="213">213</th><td><u>#<span data-ppcond="210">else</span> /* defined(LOCKDEBUG) */</u></td></tr>
+<tr><th id="214">214</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_OWNED" data-ref="_M/MUTEX_OWNED">MUTEX_OWNED</dfn>(owner)		((owner) != 0)</u></td></tr>
+<tr><th id="215">215</th><td><u>#define	<dfn class="macro" id="_M/MUTEX_INHERITDEBUG" data-ref="_M/MUTEX_INHERITDEBUG">MUTEX_INHERITDEBUG</dfn>(n, o)	/* nothing */</u></td></tr>
+<tr><th id="216">216</th><td><u>#<span data-ppcond="210">endif</span> /* defined(LOCKDEBUG) */</u></td></tr>
+<tr><th id="217">217</th><td></td></tr>
+<tr><th id="218">218</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="219">219</th><td><dfn class="tu decl def fn" id="MUTEX_ACQUIRE" title='MUTEX_ACQUIRE' data-type='int MUTEX_ACQUIRE(kmutex_t * mtx, uintptr_t curthread)' data-ref="MUTEX_ACQUIRE" data-ref-filename="MUTEX_ACQUIRE">MUTEX_ACQUIRE</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col1 decl" id="1mtx" title='mtx' data-type='kmutex_t *' data-ref="1mtx" data-ref-filename="1mtx">mtx</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col2 decl" id="2curthread" title='curthread' data-type='uintptr_t' data-ref="2curthread" data-ref-filename="2curthread">curthread</dfn>)</td></tr>
+<tr><th id="220">220</th><td>{</td></tr>
+<tr><th id="221">221</th><td>	<em>int</em> <dfn class="local col3 decl" id="3rv" title='rv' data-type='int' data-ref="3rv" data-ref-filename="3rv">rv</dfn>;</td></tr>
+<tr><th id="222">222</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col4 decl" id="4oldown" title='oldown' data-type='uintptr_t' data-ref="4oldown" data-ref-filename="4oldown">oldown</dfn> = <var>0</var>;</td></tr>
+<tr><th id="223">223</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col5 decl" id="5newown" title='newown' data-type='uintptr_t' data-ref="5newown" data-ref-filename="5newown">newown</dfn> = <a class="local col2 ref" href="#2curthread" title='curthread' data-ref="2curthread" data-ref-filename="2curthread">curthread</a>;</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td>	<a class="macro" href="#215" title="" data-ref="_M/MUTEX_INHERITDEBUG">MUTEX_INHERITDEBUG</a>(oldown, mtx-&gt;mtx_owner);</td></tr>
+<tr><th id="226">226</th><td>	<a class="macro" href="#215" title="" data-ref="_M/MUTEX_INHERITDEBUG">MUTEX_INHERITDEBUG</a>(newown, oldown);</td></tr>
+<tr><th id="227">227</th><td>	<a class="local col3 ref" href="#3rv" title='rv' data-ref="3rv" data-ref-filename="3rv">rv</a> = <a class="macro" href="../arch/x86/include/mutex.h.html#72" title="(_atomic_cas_ulong((volatile unsigned long *)(&amp;mtx-&gt;u.mtxa_owner), (oldown), (newown)) == (oldown))" data-ref="_M/MUTEX_CAS">MUTEX_CAS</a>(&amp;<a class="local col1 ref" href="#1mtx" title='mtx' data-ref="1mtx" data-ref-filename="1mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>, <a class="local col4 ref" href="#4oldown" title='oldown' data-ref="4oldown" data-ref-filename="4oldown">oldown</a>, <a class="local col5 ref" href="#5newown" title='newown' data-ref="5newown" data-ref-filename="5newown">newown</a>);</td></tr>
+<tr><th id="228">228</th><td>	<a class="macro" href="../arch/x86/include/mutex.h.html#65" title="membar_consumer()" data-ref="_M/MUTEX_RECEIVE">MUTEX_RECEIVE</a>(mtx);</td></tr>
+<tr><th id="229">229</th><td>	<b>return</b> <a class="local col3 ref" href="#3rv" title='rv' data-ref="3rv" data-ref-filename="3rv">rv</a>;</td></tr>
+<tr><th id="230">230</th><td>}</td></tr>
+<tr><th id="231">231</th><td></td></tr>
+<tr><th id="232">232</th><td><em>static</em> <b>inline</b> <em>int</em></td></tr>
+<tr><th id="233">233</th><td><dfn class="tu decl def fn" id="MUTEX_SET_WAITERS" title='MUTEX_SET_WAITERS' data-type='int MUTEX_SET_WAITERS(kmutex_t * mtx, uintptr_t owner)' data-ref="MUTEX_SET_WAITERS" data-ref-filename="MUTEX_SET_WAITERS">MUTEX_SET_WAITERS</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col6 decl" id="6mtx" title='mtx' data-type='kmutex_t *' data-ref="6mtx" data-ref-filename="6mtx">mtx</dfn>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col7 decl" id="7owner" title='owner' data-type='uintptr_t' data-ref="7owner" data-ref-filename="7owner">owner</dfn>)</td></tr>
+<tr><th id="234">234</th><td>{</td></tr>
+<tr><th id="235">235</th><td>	<em>int</em> <dfn class="local col8 decl" id="8rv" title='rv' data-type='int' data-ref="8rv" data-ref-filename="8rv">rv</dfn>;</td></tr>
+<tr><th id="236">236</th><td>	<a class="local col8 ref" href="#8rv" title='rv' data-ref="8rv" data-ref-filename="8rv">rv</a> = <a class="macro" href="../arch/x86/include/mutex.h.html#72" title="(_atomic_cas_ulong((volatile unsigned long *)(&amp;mtx-&gt;u.mtxa_owner), (owner), (owner | 0x02)) == (owner))" data-ref="_M/MUTEX_CAS">MUTEX_CAS</a>(&amp;<a class="local col6 ref" href="#6mtx" title='mtx' data-ref="6mtx" data-ref-filename="6mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>, <a class="local col7 ref" href="#7owner" title='owner' data-ref="7owner" data-ref-filename="7owner">owner</a>, <a class="local col7 ref" href="#7owner" title='owner' data-ref="7owner" data-ref-filename="7owner">owner</a> | <a class="macro" href="../sys/mutex.h.html#162" title="0x02" data-ref="_M/MUTEX_BIT_WAITERS">MUTEX_BIT_WAITERS</a>);</td></tr>
+<tr><th id="237">237</th><td>	<a class="macro" href="../arch/x86/include/mutex.h.html#65" title="membar_consumer()" data-ref="_M/MUTEX_RECEIVE">MUTEX_RECEIVE</a>(mtx);</td></tr>
+<tr><th id="238">238</th><td>	<b>return</b> <a class="local col8 ref" href="#8rv" title='rv' data-ref="8rv" data-ref-filename="8rv">rv</a>;</td></tr>
+<tr><th id="239">239</th><td>}</td></tr>
+<tr><th id="240">240</th><td></td></tr>
+<tr><th id="241">241</th><td><em>static</em> <b>inline</b> <em>void</em></td></tr>
+<tr><th id="242">242</th><td><dfn class="tu decl def fn" id="MUTEX_RELEASE" title='MUTEX_RELEASE' data-type='void MUTEX_RELEASE(kmutex_t * mtx)' data-ref="MUTEX_RELEASE" data-ref-filename="MUTEX_RELEASE">MUTEX_RELEASE</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col9 decl" id="9mtx" title='mtx' data-type='kmutex_t *' data-ref="9mtx" data-ref-filename="9mtx">mtx</dfn>)</td></tr>
+<tr><th id="243">243</th><td>{</td></tr>
+<tr><th id="244">244</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col0 decl" id="10newown" title='newown' data-type='uintptr_t' data-ref="10newown" data-ref-filename="10newown">newown</dfn>;</td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td>	<a class="macro" href="../arch/x86/include/mutex.h.html#70" title="" data-ref="_M/MUTEX_GIVE">MUTEX_GIVE</a>(mtx);</td></tr>
+<tr><th id="247">247</th><td>	<a class="local col0 ref" href="#10newown" title='newown' data-ref="10newown" data-ref-filename="10newown">newown</a> = <var>0</var>;</td></tr>
+<tr><th id="248">248</th><td>	<a class="macro" href="#215" title="" data-ref="_M/MUTEX_INHERITDEBUG">MUTEX_INHERITDEBUG</a>(newown, mtx-&gt;mtx_owner);</td></tr>
+<tr><th id="249">249</th><td>	<a class="local col9 ref" href="#9mtx" title='mtx' data-ref="9mtx" data-ref-filename="9mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a> = <a class="local col0 ref" href="#10newown" title='newown' data-ref="10newown" data-ref-filename="10newown">newown</a>;</td></tr>
+<tr><th id="250">250</th><td>}</td></tr>
+<tr><th id="251">251</th><td><u>#<span data-ppcond="177">endif</span>	/* __HAVE_SIMPLE_MUTEXES */</u></td></tr>
+<tr><th id="252">252</th><td></td></tr>
+<tr><th id="253">253</th><td><i>/*</i></td></tr>
+<tr><th id="254">254</th><td><i> * Patch in stubs via strong alias where they are not available.</i></td></tr>
+<tr><th id="255">255</th><td><i> */</i></td></tr>
+<tr><th id="256">256</th><td></td></tr>
+<tr><th id="257">257</th><td><u>#<span data-ppcond="257">if</span> defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="258">258</th><td><u>#undef	__HAVE_MUTEX_STUBS</u></td></tr>
+<tr><th id="259">259</th><td><u>#undef	__HAVE_SPIN_MUTEX_STUBS</u></td></tr>
+<tr><th id="260">260</th><td><u>#<span data-ppcond="257">endif</span></u></td></tr>
+<tr><th id="261">261</th><td></td></tr>
+<tr><th id="262">262</th><td><u>#<span data-ppcond="262">ifndef</span> <a class="macro" href="../arch/x86/include/mutex.h.html#55" data-ref="_M/__HAVE_MUTEX_STUBS">__HAVE_MUTEX_STUBS</a></u></td></tr>
+<tr><th id="263">263</th><td>__strong_alias(mutex_enter,mutex_vector_enter);</td></tr>
+<tr><th id="264">264</th><td>__strong_alias(mutex_exit,mutex_vector_exit);</td></tr>
+<tr><th id="265">265</th><td><u>#<span data-ppcond="262">endif</span></u></td></tr>
+<tr><th id="266">266</th><td></td></tr>
+<tr><th id="267">267</th><td><u>#<span data-ppcond="267">ifndef</span> <a class="macro" href="../arch/x86/include/mutex.h.html#56" data-ref="_M/__HAVE_SPIN_MUTEX_STUBS">__HAVE_SPIN_MUTEX_STUBS</a></u></td></tr>
+<tr><th id="268">268</th><td>__strong_alias(mutex_spin_enter,mutex_vector_enter);</td></tr>
+<tr><th id="269">269</th><td>__strong_alias(mutex_spin_exit,mutex_vector_exit);</td></tr>
+<tr><th id="270">270</th><td><u>#<span data-ppcond="267">endif</span></u></td></tr>
+<tr><th id="271">271</th><td></td></tr>
+<tr><th id="272">272</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#mutex_abort" title='mutex_abort' data-type='void mutex_abort(const char * , size_t , const kmutex_t * , const char * )' data-ref="mutex_abort" data-ref-filename="mutex_abort">mutex_abort</a>(<em>const</em> <em>char</em> *, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a>, <em>const</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *,</td></tr>
+<tr><th id="273">273</th><td>    <em>const</em> <em>char</em> *);</td></tr>
+<tr><th id="274">274</th><td><em>static</em> <em>void</em>	<a class="tu decl fn" href="#mutex_dump" title='mutex_dump' data-type='void mutex_dump(const volatile void * , lockop_printer_t )' data-ref="mutex_dump" data-ref-filename="mutex_dump">mutex_dump</a>(<em>const</em> <em>volatile</em> <em>void</em> *, <a class="typedef" href="../sys/lockdebug.h.html#lockop_printer_t" title='lockop_printer_t' data-type='void (*)(const char *, ...)' data-ref="lockop_printer_t" data-ref-filename="lockop_printer_t">lockop_printer_t</a>);</td></tr>
+<tr><th id="275">275</th><td></td></tr>
+<tr><th id="276">276</th><td><a class="typedef" href="../sys/lockdebug.h.html#lockops_t" title='lockops_t' data-type='struct lockops' data-ref="lockops_t" data-ref-filename="lockops_t">lockops_t</a> <dfn class="decl def" id="mutex_spin_lockops" title='mutex_spin_lockops' data-ref="mutex_spin_lockops" data-ref-filename="mutex_spin_lockops">mutex_spin_lockops</dfn> = {</td></tr>
+<tr><th id="277">277</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_name" title='lockops::lo_name' data-ref="lockops::lo_name" data-ref-filename="lockops..lo_name">lo_name</a> = <q>"Mutex"</q>,</td></tr>
+<tr><th id="278">278</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_type" title='lockops::lo_type' data-ref="lockops::lo_type" data-ref-filename="lockops..lo_type">lo_type</a> = <a class="macro" href="../sys/lockdebug.h.html#44" title="1" data-ref="_M/LOCKOPS_SPIN">LOCKOPS_SPIN</a>,</td></tr>
+<tr><th id="279">279</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_dump" title='lockops::lo_dump' data-ref="lockops::lo_dump" data-ref-filename="lockops..lo_dump">lo_dump</a> = <a class="tu ref fn" href="#mutex_dump" title='mutex_dump' data-use='r' data-ref="mutex_dump" data-ref-filename="mutex_dump">mutex_dump</a>,</td></tr>
+<tr><th id="280">280</th><td>};</td></tr>
+<tr><th id="281">281</th><td></td></tr>
+<tr><th id="282">282</th><td><a class="typedef" href="../sys/lockdebug.h.html#lockops_t" title='lockops_t' data-type='struct lockops' data-ref="lockops_t" data-ref-filename="lockops_t">lockops_t</a> <dfn class="decl def" id="mutex_adaptive_lockops" title='mutex_adaptive_lockops' data-ref="mutex_adaptive_lockops" data-ref-filename="mutex_adaptive_lockops">mutex_adaptive_lockops</dfn> = {</td></tr>
+<tr><th id="283">283</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_name" title='lockops::lo_name' data-ref="lockops::lo_name" data-ref-filename="lockops..lo_name">lo_name</a> = <q>"Mutex"</q>,</td></tr>
+<tr><th id="284">284</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_type" title='lockops::lo_type' data-ref="lockops::lo_type" data-ref-filename="lockops..lo_type">lo_type</a> = <a class="macro" href="../sys/lockdebug.h.html#43" title="0" data-ref="_M/LOCKOPS_SLEEP">LOCKOPS_SLEEP</a>,</td></tr>
+<tr><th id="285">285</th><td>	.<a class="ref field" href="../sys/lockdebug.h.html#lockops::lo_dump" title='lockops::lo_dump' data-ref="lockops::lo_dump" data-ref-filename="lockops..lo_dump">lo_dump</a> = <a class="tu ref fn" href="#mutex_dump" title='mutex_dump' data-ref="mutex_dump" data-ref-filename="mutex_dump">mutex_dump</a>,</td></tr>
+<tr><th id="286">286</th><td>};</td></tr>
+<tr><th id="287">287</th><td></td></tr>
+<tr><th id="288">288</th><td><a class="typedef" href="../sys/syncobj.h.html#syncobj_t" title='syncobj_t' data-type='struct syncobj' data-ref="syncobj_t" data-ref-filename="syncobj_t">syncobj_t</a> <dfn class="decl def" id="mutex_syncobj" title='mutex_syncobj' data-ref="mutex_syncobj" data-ref-filename="mutex_syncobj">mutex_syncobj</dfn> = {</td></tr>
+<tr><th id="289">289</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_flag" title='syncobj::sobj_flag' data-ref="syncobj::sobj_flag" data-ref-filename="syncobj..sobj_flag">sobj_flag</a>	= <a class="macro" href="../sys/syncobj.h.html#54" title="0x01" data-ref="_M/SOBJ_SLEEPQ_SORTED">SOBJ_SLEEPQ_SORTED</a>,</td></tr>
+<tr><th id="290">290</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_unsleep" title='syncobj::sobj_unsleep' data-ref="syncobj::sobj_unsleep" data-ref-filename="syncobj..sobj_unsleep">sobj_unsleep</a>	= <a class="ref fn" href="../sys/sleepq.h.html#turnstile_unsleep" title='turnstile_unsleep' data-ref="turnstile_unsleep" data-ref-filename="turnstile_unsleep">turnstile_unsleep</a>,</td></tr>
+<tr><th id="291">291</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_changepri" title='syncobj::sobj_changepri' data-ref="syncobj::sobj_changepri" data-ref-filename="syncobj..sobj_changepri">sobj_changepri</a>	= <a class="ref fn" href="../sys/sleepq.h.html#turnstile_changepri" title='turnstile_changepri' data-ref="turnstile_changepri" data-ref-filename="turnstile_changepri">turnstile_changepri</a>,</td></tr>
+<tr><th id="292">292</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_lendpri" title='syncobj::sobj_lendpri' data-ref="syncobj::sobj_lendpri" data-ref-filename="syncobj..sobj_lendpri">sobj_lendpri</a>	= <a class="ref fn" href="../sys/sleepq.h.html#sleepq_lendpri" title='sleepq_lendpri' data-ref="sleepq_lendpri" data-ref-filename="sleepq_lendpri">sleepq_lendpri</a>,</td></tr>
+<tr><th id="293">293</th><td>	.<a class="ref field" href="../sys/syncobj.h.html#syncobj::sobj_owner" title='syncobj::sobj_owner' data-ref="syncobj::sobj_owner" data-ref-filename="syncobj..sobj_owner">sobj_owner</a>	= (<em>void</em> *)<a class="ref fn" href="#mutex_owner" title='mutex_owner' data-ref="mutex_owner" data-ref-filename="mutex_owner">mutex_owner</a>,</td></tr>
+<tr><th id="294">294</th><td>};</td></tr>
+<tr><th id="295">295</th><td></td></tr>
+<tr><th id="296">296</th><td><i  data-doc="mutex_dump">/*</i></td></tr>
+<tr><th id="297">297</th><td><i  data-doc="mutex_dump"> * mutex_dump:</i></td></tr>
+<tr><th id="298">298</th><td><i  data-doc="mutex_dump"> *</i></td></tr>
+<tr><th id="299">299</th><td><i  data-doc="mutex_dump"> *	Dump the contents of a mutex structure.</i></td></tr>
+<tr><th id="300">300</th><td><i  data-doc="mutex_dump"> */</i></td></tr>
+<tr><th id="301">301</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="302">302</th><td><dfn class="tu decl def fn" id="mutex_dump" title='mutex_dump' data-type='void mutex_dump(const volatile void * cookie, lockop_printer_t pr)' data-ref="mutex_dump" data-ref-filename="mutex_dump">mutex_dump</dfn>(<em>const</em> <em>volatile</em> <em>void</em> *<dfn class="local col1 decl" id="11cookie" title='cookie' data-type='const volatile void *' data-ref="11cookie" data-ref-filename="11cookie">cookie</dfn>, <a class="typedef" href="../sys/lockdebug.h.html#lockop_printer_t" title='lockop_printer_t' data-type='void (*)(const char *, ...)' data-ref="lockop_printer_t" data-ref-filename="lockop_printer_t">lockop_printer_t</a> <dfn class="local col2 decl" id="12pr" title='pr' data-type='lockop_printer_t' data-ref="12pr" data-ref-filename="12pr">pr</dfn>)</td></tr>
+<tr><th id="303">303</th><td>{</td></tr>
+<tr><th id="304">304</th><td>	<em>const</em> <em>volatile</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="13mtx" title='mtx' data-type='const volatile kmutex_t *' data-ref="13mtx" data-ref-filename="13mtx">mtx</dfn> = <a class="local col1 ref" href="#11cookie" title='cookie' data-ref="11cookie" data-ref-filename="11cookie">cookie</a>;</td></tr>
+<tr><th id="305">305</th><td></td></tr>
+<tr><th id="306">306</th><td>	<a class="local col2 ref" href="#12pr" title='pr' data-ref="12pr" data-ref-filename="12pr">pr</a>(<q>"owner field  : %#018lx wait/spin: %16d/%d\n"</q>,</td></tr>
+<tr><th id="307">307</th><td>	    (<em>long</em>)<a class="macro" href="#179" title="(mtx-&gt;u.mtxa_owner &amp; ((uintptr_t)-16L))" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</a>(<a class="local col3 ref" href="#13mtx" title='mtx' data-ref="13mtx" data-ref-filename="13mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>), <a class="macro" href="#181" title="(((int)(mtx)-&gt;u.mtxa_owner &amp; 0x02) != 0)" data-ref="_M/MUTEX_HAS_WAITERS">MUTEX_HAS_WAITERS</a>(<a class="local col3 ref" href="#13mtx" title='mtx' data-ref="13mtx" data-ref-filename="13mtx">mtx</a>),</td></tr>
+<tr><th id="308">308</th><td>	    <a class="macro" href="#204" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) != 0)" data-ref="_M/MUTEX_SPIN_P">MUTEX_SPIN_P</a>(<a class="local col3 ref" href="#13mtx" title='mtx' data-ref="13mtx" data-ref-filename="13mtx">mtx</a>));</td></tr>
+<tr><th id="309">309</th><td>}</td></tr>
+<tr><th id="310">310</th><td></td></tr>
+<tr><th id="311">311</th><td><i  data-doc="mutex_abort">/*</i></td></tr>
+<tr><th id="312">312</th><td><i  data-doc="mutex_abort"> * mutex_abort:</i></td></tr>
+<tr><th id="313">313</th><td><i  data-doc="mutex_abort"> *</i></td></tr>
+<tr><th id="314">314</th><td><i  data-doc="mutex_abort"> *	Dump information about an error and panic the system.  This</i></td></tr>
+<tr><th id="315">315</th><td><i  data-doc="mutex_abort"> *	generates a lot of machine code in the DIAGNOSTIC case, so</i></td></tr>
+<tr><th id="316">316</th><td><i  data-doc="mutex_abort"> *	we ask the compiler to not inline it.</i></td></tr>
+<tr><th id="317">317</th><td><i  data-doc="mutex_abort"> */</i></td></tr>
+<tr><th id="318">318</th><td><em>static</em> <em>void</em> <a class="macro" href="../sys/cdefs.h.html#236" title="__attribute__((__noinline__))" data-ref="_M/__noinline">__noinline</a></td></tr>
+<tr><th id="319">319</th><td><dfn class="tu decl def fn" id="mutex_abort" title='mutex_abort' data-type='void mutex_abort(const char * func, size_t line, const kmutex_t * mtx, const char * msg)' data-ref="mutex_abort" data-ref-filename="mutex_abort">mutex_abort</dfn>(<em>const</em> <em>char</em> *<dfn class="local col4 decl" id="14func" title='func' data-type='const char *' data-ref="14func" data-ref-filename="14func">func</dfn>, <a class="typedef" href="../sys/types.h.html#size_t" title='size_t' data-type='unsigned long' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col5 decl" id="15line" title='line' data-type='size_t' data-ref="15line" data-ref-filename="15line">line</dfn>, <em>const</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col6 decl" id="16mtx" title='mtx' data-type='const kmutex_t *' data-ref="16mtx" data-ref-filename="16mtx">mtx</dfn>, <em>const</em> <em>char</em> *<dfn class="local col7 decl" id="17msg" title='msg' data-type='const char *' data-ref="17msg" data-ref-filename="17msg">msg</dfn>)</td></tr>
+<tr><th id="320">320</th><td>{</td></tr>
+<tr><th id="321">321</th><td></td></tr>
+<tr><th id="322">322</th><td>	<a class="macro" href="../sys/lockdebug.h.html#55" title="lockdebug_abort(func, line, mtx, ((((mtx)-&gt;u.mtxa_owner &amp; 0x01) != 0) ? &amp;mutex_spin_lockops : &amp;mutex_adaptive_lockops), msg)" data-ref="_M/LOCKDEBUG_ABORT">LOCKDEBUG_ABORT</a>(<a class="local col4 ref" href="#14func" title='func' data-ref="14func" data-ref-filename="14func">func</a>, <a class="local col5 ref" href="#15line" title='line' data-ref="15line" data-ref-filename="15line">line</a>, <a class="local col6 ref" href="#16mtx" title='mtx' data-ref="16mtx" data-ref-filename="16mtx">mtx</a>, (<a class="macro" href="#204" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) != 0)" data-ref="_M/MUTEX_SPIN_P">MUTEX_SPIN_P</a>(<a class="local col6 ref" href="#16mtx" title='mtx' data-ref="16mtx" data-ref-filename="16mtx">mtx</a>) ?</td></tr>
+<tr><th id="323">323</th><td>	    &amp;<a class="ref" href="#mutex_spin_lockops" title='mutex_spin_lockops' data-ref="mutex_spin_lockops" data-ref-filename="mutex_spin_lockops">mutex_spin_lockops</a> : &amp;<a class="ref" href="#mutex_adaptive_lockops" title='mutex_adaptive_lockops' data-ref="mutex_adaptive_lockops" data-ref-filename="mutex_adaptive_lockops">mutex_adaptive_lockops</a>), <a class="local col7 ref" href="#17msg" title='msg' data-ref="17msg" data-ref-filename="17msg">msg</a>);</td></tr>
+<tr><th id="324">324</th><td>}</td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td><i>/*</i></td></tr>
+<tr><th id="327">327</th><td><i> * mutex_init:</i></td></tr>
+<tr><th id="328">328</th><td><i> *</i></td></tr>
+<tr><th id="329">329</th><td><i> *	Initialize a mutex for use.  Note that adaptive mutexes are in</i></td></tr>
+<tr><th id="330">330</th><td><i> *	essence spin mutexes that can sleep to avoid deadlock and wasting</i></td></tr>
+<tr><th id="331">331</th><td><i> *	CPU time.  We can't easily provide a type of mutex that always</i></td></tr>
+<tr><th id="332">332</th><td><i> *	sleeps - see comments in mutex_vector_enter() about releasing</i></td></tr>
+<tr><th id="333">333</th><td><i> *	mutexes unlocked.</i></td></tr>
+<tr><th id="334">334</th><td><i> */</i></td></tr>
+<tr><th id="335">335</th><td><em>void</em> <a class="decl fn" href="#_mutex_init" title='_mutex_init' data-ref="_mutex_init" data-ref-filename="_mutex_init">_mutex_init</a>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *, <a class="typedef" href="../sys/mutex.h.html#kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a>, <em>int</em>, <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>);</td></tr>
+<tr><th id="336">336</th><td><em>void</em></td></tr>
+<tr><th id="337">337</th><td><dfn class="decl def fn" id="_mutex_init" title='_mutex_init' data-ref="_mutex_init" data-ref-filename="_mutex_init">_mutex_init</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col8 decl" id="18mtx" title='mtx' data-type='kmutex_t *' data-ref="18mtx" data-ref-filename="18mtx">mtx</dfn>, <a class="typedef" href="../sys/mutex.h.html#kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a> <dfn class="local col9 decl" id="19type" title='type' data-type='kmutex_type_t' data-ref="19type" data-ref-filename="19type">type</dfn>, <em>int</em> <dfn class="local col0 decl" id="20ipl" title='ipl' data-type='int' data-ref="20ipl" data-ref-filename="20ipl">ipl</dfn>,</td></tr>
+<tr><th id="338">338</th><td>    <a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col1 decl" id="21return_address" title='return_address' data-type='uintptr_t' data-ref="21return_address" data-ref-filename="21return_address">return_address</dfn>)</td></tr>
+<tr><th id="339">339</th><td>{</td></tr>
+<tr><th id="340">340</th><td>	<a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a> <dfn class="local col2 decl" id="22dodebug" title='dodebug' data-type='_Bool' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</dfn>;</td></tr>
+<tr><th id="341">341</th><td></td></tr>
+<tr><th id="342">342</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#382" title="__builtin_memset(mtx, 0, sizeof(*mtx))" data-ref="_M/memset">memset</a>(<a class="local col8 ref" href="#18mtx" title='mtx' data-ref="18mtx" data-ref-filename="18mtx">mtx</a>, <var>0</var>, <b>sizeof</b>(*<a class="local col8 ref" href="#18mtx" title='mtx' data-ref="18mtx" data-ref-filename="18mtx">mtx</a>));</td></tr>
+<tr><th id="343">343</th><td></td></tr>
+<tr><th id="344">344</th><td>	<b>switch</b> (<a class="local col9 ref" href="#19type" title='type' data-ref="19type" data-ref-filename="19type">type</a>) {</td></tr>
+<tr><th id="345">345</th><td>	<b>case</b> <a class="enum" href="../sys/mutex.h.html#MUTEX_ADAPTIVE" title='MUTEX_ADAPTIVE' data-ref="MUTEX_ADAPTIVE" data-ref-filename="MUTEX_ADAPTIVE">MUTEX_ADAPTIVE</a>:</td></tr>
+<tr><th id="346">346</th><td>		<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((ipl == 0x0)) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;ipl == IPL_NONE&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/kern_mutex.c&quot;, 346))" data-ref="_M/KASSERT">KASSERT</a>(<a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a> == <a class="macro" href="../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a>);</td></tr>
+<tr><th id="347">347</th><td>		<b>break</b>;</td></tr>
+<tr><th id="348">348</th><td>	<b>case</b> <a class="enum" href="../sys/mutex.h.html#MUTEX_DEFAULT" title='MUTEX_DEFAULT' data-ref="MUTEX_DEFAULT" data-ref-filename="MUTEX_DEFAULT">MUTEX_DEFAULT</a>:</td></tr>
+<tr><th id="349">349</th><td>	<b>case</b> <a class="enum" href="../sys/mutex.h.html#MUTEX_DRIVER" title='MUTEX_DRIVER' data-ref="MUTEX_DRIVER" data-ref-filename="MUTEX_DRIVER">MUTEX_DRIVER</a>:</td></tr>
+<tr><th id="350">350</th><td>		<b>if</b> (<a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a> == <a class="macro" href="../arch/x86/include/intrdefs.h.html#7" title="0x0" data-ref="_M/IPL_NONE">IPL_NONE</a> || <a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a> == <a class="macro" href="../arch/x86/include/intrdefs.h.html#9" title="0x2" data-ref="_M/IPL_SOFTCLOCK">IPL_SOFTCLOCK</a> ||</td></tr>
+<tr><th id="351">351</th><td>		    <a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a> == <a class="macro" href="../arch/x86/include/intrdefs.h.html#10" title="0x3" data-ref="_M/IPL_SOFTBIO">IPL_SOFTBIO</a> || <a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a> == <a class="macro" href="../arch/x86/include/intrdefs.h.html#11" title="0x4" data-ref="_M/IPL_SOFTNET">IPL_SOFTNET</a> ||</td></tr>
+<tr><th id="352">352</th><td>		    <a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a> == <a class="macro" href="../arch/x86/include/intrdefs.h.html#12" title="0x5" data-ref="_M/IPL_SOFTSERIAL">IPL_SOFTSERIAL</a>) {</td></tr>
+<tr><th id="353">353</th><td>			<a class="local col9 ref" href="#19type" title='type' data-ref="19type" data-ref-filename="19type">type</a> = <a class="enum" href="../sys/mutex.h.html#MUTEX_ADAPTIVE" title='MUTEX_ADAPTIVE' data-ref="MUTEX_ADAPTIVE" data-ref-filename="MUTEX_ADAPTIVE">MUTEX_ADAPTIVE</a>;</td></tr>
+<tr><th id="354">354</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="355">355</th><td>			<a class="local col9 ref" href="#19type" title='type' data-ref="19type" data-ref-filename="19type">type</a> = <a class="enum" href="../sys/mutex.h.html#MUTEX_SPIN" title='MUTEX_SPIN' data-ref="MUTEX_SPIN" data-ref-filename="MUTEX_SPIN">MUTEX_SPIN</a>;</td></tr>
+<tr><th id="356">356</th><td>		}</td></tr>
+<tr><th id="357">357</th><td>		<b>break</b>;</td></tr>
+<tr><th id="358">358</th><td>	<b>default</b>:</td></tr>
+<tr><th id="359">359</th><td>		<b>break</b>;</td></tr>
+<tr><th id="360">360</th><td>	}</td></tr>
+<tr><th id="361">361</th><td></td></tr>
+<tr><th id="362">362</th><td>	<b>switch</b> (<a class="local col9 ref" href="#19type" title='type' data-ref="19type" data-ref-filename="19type">type</a>) {</td></tr>
+<tr><th id="363">363</th><td>	<b>case</b> <a class="enum" href="../sys/mutex.h.html#MUTEX_NODEBUG" title='MUTEX_NODEBUG' data-ref="MUTEX_NODEBUG" data-ref-filename="MUTEX_NODEBUG">MUTEX_NODEBUG</a>:</td></tr>
+<tr><th id="364">364</th><td>		<a class="local col2 ref" href="#22dodebug" title='dodebug' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</a> = <a class="macro" href="../sys/lockdebug.h.html#102" title="0" data-ref="_M/LOCKDEBUG_ALLOC">LOCKDEBUG_ALLOC</a>(mtx, NULL, return_address);</td></tr>
+<tr><th id="365">365</th><td>		<a class="macro" href="#190" title="do { (mtx)-&gt;u.mtxa_owner = 0x01; if (!dodebug) (mtx)-&gt;u.mtxa_owner |= 0x00; (((mtx))-&gt;u.s.mtxs_ipl = makeiplcookie(((ipl)))); __cpu_simple_lock_init(&amp;((mtx))-&gt;u.s.mtxs_lock); } while ( 0)" data-ref="_M/MUTEX_INITIALIZE_SPIN">MUTEX_INITIALIZE_SPIN</a>(<a class="local col8 ref" href="#18mtx" title='mtx' data-ref="18mtx" data-ref-filename="18mtx">mtx</a>, <a class="local col2 ref" href="#22dodebug" title='dodebug' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</a>, <a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a>);</td></tr>
+<tr><th id="366">366</th><td>		<b>break</b>;</td></tr>
+<tr><th id="367">367</th><td>	<b>case</b> <a class="enum" href="../sys/mutex.h.html#MUTEX_ADAPTIVE" title='MUTEX_ADAPTIVE' data-ref="MUTEX_ADAPTIVE" data-ref-filename="MUTEX_ADAPTIVE">MUTEX_ADAPTIVE</a>:</td></tr>
+<tr><th id="368">368</th><td>		<a class="local col2 ref" href="#22dodebug" title='dodebug' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</a> = <a class="macro" href="../sys/lockdebug.h.html#102" title="0" data-ref="_M/LOCKDEBUG_ALLOC">LOCKDEBUG_ALLOC</a>(mtx, &amp;mutex_adaptive_lockops,</td></tr>
+<tr><th id="369">369</th><td>		    return_address);</td></tr>
+<tr><th id="370">370</th><td>		<a class="macro" href="#184" title="do { if (!dodebug) (mtx)-&gt;u.mtxa_owner |= 0x00; } while ( 0)" data-ref="_M/MUTEX_INITIALIZE_ADAPTIVE">MUTEX_INITIALIZE_ADAPTIVE</a>(<a class="local col8 ref" href="#18mtx" title='mtx' data-ref="18mtx" data-ref-filename="18mtx">mtx</a>, <a class="local col2 ref" href="#22dodebug" title='dodebug' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</a>);</td></tr>
+<tr><th id="371">371</th><td>		<b>break</b>;</td></tr>
+<tr><th id="372">372</th><td>	<b>case</b> <a class="enum" href="../sys/mutex.h.html#MUTEX_SPIN" title='MUTEX_SPIN' data-ref="MUTEX_SPIN" data-ref-filename="MUTEX_SPIN">MUTEX_SPIN</a>:</td></tr>
+<tr><th id="373">373</th><td>		<a class="local col2 ref" href="#22dodebug" title='dodebug' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</a> = <a class="macro" href="../sys/lockdebug.h.html#102" title="0" data-ref="_M/LOCKDEBUG_ALLOC">LOCKDEBUG_ALLOC</a>(mtx, &amp;mutex_spin_lockops,</td></tr>
+<tr><th id="374">374</th><td>		    return_address);</td></tr>
+<tr><th id="375">375</th><td>		<a class="macro" href="#190" title="do { (mtx)-&gt;u.mtxa_owner = 0x01; if (!dodebug) (mtx)-&gt;u.mtxa_owner |= 0x00; (((mtx))-&gt;u.s.mtxs_ipl = makeiplcookie(((ipl)))); __cpu_simple_lock_init(&amp;((mtx))-&gt;u.s.mtxs_lock); } while ( 0)" data-ref="_M/MUTEX_INITIALIZE_SPIN">MUTEX_INITIALIZE_SPIN</a>(<a class="local col8 ref" href="#18mtx" title='mtx' data-ref="18mtx" data-ref-filename="18mtx">mtx</a>, <a class="local col2 ref" href="#22dodebug" title='dodebug' data-ref="22dodebug" data-ref-filename="22dodebug">dodebug</a>, <a class="local col0 ref" href="#20ipl" title='ipl' data-ref="20ipl" data-ref-filename="20ipl">ipl</a>);</td></tr>
+<tr><th id="376">376</th><td>		<b>break</b>;</td></tr>
+<tr><th id="377">377</th><td>	<b>default</b>:</td></tr>
+<tr><th id="378">378</th><td>		<a class="ref fn" href="../sys/systm.h.html#panic" title='panic' data-ref="panic" data-ref-filename="panic">panic</a>(<q>"mutex_init: impossible type"</q>);</td></tr>
+<tr><th id="379">379</th><td>		<b>break</b>;</td></tr>
+<tr><th id="380">380</th><td>	}</td></tr>
+<tr><th id="381">381</th><td>}</td></tr>
+<tr><th id="382">382</th><td></td></tr>
+<tr><th id="383">383</th><td><em>void</em></td></tr>
+<tr><th id="384">384</th><td><dfn class="decl def fn" id="mutex_init" title='mutex_init' data-ref="mutex_init" data-ref-filename="mutex_init">mutex_init</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="23mtx" title='mtx' data-type='kmutex_t *' data-ref="23mtx" data-ref-filename="23mtx">mtx</dfn>, <a class="typedef" href="../sys/mutex.h.html#kmutex_type_t" title='kmutex_type_t' data-type='enum kmutex_type_t' data-ref="kmutex_type_t" data-ref-filename="kmutex_type_t">kmutex_type_t</a> <dfn class="local col4 decl" id="24type" title='type' data-type='kmutex_type_t' data-ref="24type" data-ref-filename="24type">type</dfn>, <em>int</em> <dfn class="local col5 decl" id="25ipl" title='ipl' data-type='int' data-ref="25ipl" data-ref-filename="25ipl">ipl</dfn>)</td></tr>
+<tr><th id="385">385</th><td>{</td></tr>
+<tr><th id="386">386</th><td></td></tr>
+<tr><th id="387">387</th><td>	<a class="ref fn" href="#_mutex_init" title='_mutex_init' data-ref="_mutex_init" data-ref-filename="_mutex_init">_mutex_init</a>(<a class="local col3 ref" href="#23mtx" title='mtx' data-ref="23mtx" data-ref-filename="23mtx">mtx</a>, <a class="local col4 ref" href="#24type" title='type' data-ref="24type" data-ref-filename="24type">type</a>, <a class="local col5 ref" href="#25ipl" title='ipl' data-ref="25ipl" data-ref-filename="25ipl">ipl</a>, (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref fn" href="#387" title='__builtin_return_address' data-ref="__builtin_return_address" data-ref-filename="__builtin_return_address">__builtin_return_address</a>(<var>0</var>));</td></tr>
+<tr><th id="388">388</th><td>}</td></tr>
+<tr><th id="389">389</th><td></td></tr>
+<tr><th id="390">390</th><td><i>/*</i></td></tr>
+<tr><th id="391">391</th><td><i> * mutex_destroy:</i></td></tr>
+<tr><th id="392">392</th><td><i> *</i></td></tr>
+<tr><th id="393">393</th><td><i> *	Tear down a mutex.</i></td></tr>
+<tr><th id="394">394</th><td><i> */</i></td></tr>
+<tr><th id="395">395</th><td><em>void</em></td></tr>
+<tr><th id="396">396</th><td><dfn class="decl def fn" id="mutex_destroy" title='mutex_destroy' data-ref="mutex_destroy" data-ref-filename="mutex_destroy">mutex_destroy</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col6 decl" id="26mtx" title='mtx' data-type='kmutex_t *' data-ref="26mtx" data-ref-filename="26mtx">mtx</dfn>)</td></tr>
+<tr><th id="397">397</th><td>{</td></tr>
+<tr><th id="398">398</th><td></td></tr>
+<tr><th id="399">399</th><td>	<b>if</b> (<a class="macro" href="#206" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) == 0)" data-ref="_M/MUTEX_ADAPTIVE_P">MUTEX_ADAPTIVE_P</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>)) {</td></tr>
+<tr><th id="400">400</th><td>		<a class="macro" href="#111" title="do { if (__builtin_expect((!(!((mtx-&gt;u.mtxa_owner) != 0) &amp;&amp; !(((int)(mtx)-&gt;u.mtxa_owner &amp; 0x02) != 0))) != 0, 0)) mutex_abort(__func__, 401, mtx, &quot;assertion failed: &quot; &quot;!MUTEX_OWNED(mtx-&gt;mtx_owner) &amp;&amp; !MUTEX_HAS_WAITERS(mtx)&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>, !<a class="macro" href="#214" title="((mtx-&gt;u.mtxa_owner) != 0)" data-ref="_M/MUTEX_OWNED">MUTEX_OWNED</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>) &amp;&amp;</td></tr>
+<tr><th id="401">401</th><td>		    !<a class="macro" href="#181" title="(((int)(mtx)-&gt;u.mtxa_owner &amp; 0x02) != 0)" data-ref="_M/MUTEX_HAS_WAITERS">MUTEX_HAS_WAITERS</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>));</td></tr>
+<tr><th id="402">402</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="403">403</th><td>		<a class="macro" href="#111" title="do { if (__builtin_expect((!(!__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock))) != 0, 0)) mutex_abort(__func__, 403, mtx, &quot;assertion failed: &quot; &quot;!MUTEX_SPINBIT_LOCKED_P(mtx)&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>, !<a class="macro" href="#131" title="__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>));</td></tr>
+<tr><th id="404">404</th><td>	}</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td>	<a class="macro" href="../sys/lockdebug.h.html#103" title="" data-ref="_M/LOCKDEBUG_FREE">LOCKDEBUG_FREE</a>(MUTEX_DEBUG_P(mtx), mtx);</td></tr>
+<tr><th id="407">407</th><td>	<a class="macro" href="#199" title="do { (mtx)-&gt;u.mtxa_owner = ((uintptr_t)-16L); } while ( 0)" data-ref="_M/MUTEX_DESTROY">MUTEX_DESTROY</a>(<a class="local col6 ref" href="#26mtx" title='mtx' data-ref="26mtx" data-ref-filename="26mtx">mtx</a>);</td></tr>
+<tr><th id="408">408</th><td>}</td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td><u>#<span data-ppcond="410">ifdef</span> <a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a></u></td></tr>
+<tr><th id="411">411</th><td><i  data-doc="mutex_oncpu">/*</i></td></tr>
+<tr><th id="412">412</th><td><i  data-doc="mutex_oncpu"> * mutex_oncpu:</i></td></tr>
+<tr><th id="413">413</th><td><i  data-doc="mutex_oncpu"> *</i></td></tr>
+<tr><th id="414">414</th><td><i  data-doc="mutex_oncpu"> *	Return true if an adaptive mutex owner is running on a CPU in the</i></td></tr>
+<tr><th id="415">415</th><td><i  data-doc="mutex_oncpu"> *	system.  If the target is waiting on the kernel big lock, then we</i></td></tr>
+<tr><th id="416">416</th><td><i  data-doc="mutex_oncpu"> *	must release it.  This is necessary to avoid deadlock.</i></td></tr>
+<tr><th id="417">417</th><td><i  data-doc="mutex_oncpu"> */</i></td></tr>
+<tr><th id="418">418</th><td><em>static</em> <a class="macro" href="../sys/stdbool.h.html#37" title="_Bool" data-ref="_M/bool">bool</a></td></tr>
+<tr><th id="419">419</th><td><dfn class="tu decl def fn" id="mutex_oncpu" title='mutex_oncpu' data-type='_Bool mutex_oncpu(uintptr_t owner)' data-ref="mutex_oncpu" data-ref-filename="mutex_oncpu">mutex_oncpu</dfn>(<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col7 decl" id="27owner" title='owner' data-type='uintptr_t' data-ref="27owner" data-ref-filename="27owner">owner</dfn>)</td></tr>
+<tr><th id="420">420</th><td>{</td></tr>
+<tr><th id="421">421</th><td>	<b>struct</b> <a class="type" href="../arch/x86/include/cpu.h.html#cpu_info" title='cpu_info' data-ref="cpu_info" data-ref-filename="cpu_info">cpu_info</a> *<dfn class="local col8 decl" id="28ci" title='ci' data-type='struct cpu_info *' data-ref="28ci" data-ref-filename="28ci">ci</dfn>;</td></tr>
+<tr><th id="422">422</th><td>	<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *<dfn class="local col9 decl" id="29l" title='l' data-type='lwp_t *' data-ref="29l" data-ref-filename="29l">l</dfn>;</td></tr>
+<tr><th id="423">423</th><td></td></tr>
+<tr><th id="424">424</th><td>	<a class="macro" href="../lib/libkern/libkern.h.html#279" title="(__builtin_expect(((kpreempt_disabled())) != 0, 1) ? (void)0 : kern_assert(&quot;kernel %sassertion \&quot;%s\&quot; failed: file \&quot;%s\&quot;, line %d &quot;, &quot;diagnostic &quot;, &quot;kpreempt_disabled()&quot;, &quot;/___NETBSD_SRC___/objdir.amd64/sys/arch/amd64/compile/GENERIC/../../../../../../sys/kern/kern_mutex.c&quot;, 424))" data-ref="_M/KASSERT">KASSERT</a>(<a class="ref fn" href="../sys/systm.h.html#kpreempt_disabled" title='kpreempt_disabled' data-ref="kpreempt_disabled" data-ref-filename="kpreempt_disabled">kpreempt_disabled</a>());</td></tr>
+<tr><th id="425">425</th><td></td></tr>
+<tr><th id="426">426</th><td>	<b>if</b> (!<a class="macro" href="#214" title="((owner) != 0)" data-ref="_M/MUTEX_OWNED">MUTEX_OWNED</a>(<a class="local col7 ref" href="#27owner" title='owner' data-ref="27owner" data-ref-filename="27owner">owner</a>)) {</td></tr>
+<tr><th id="427">427</th><td>		<b>return</b> <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="428">428</th><td>	}</td></tr>
+<tr><th id="429">429</th><td></td></tr>
+<tr><th id="430">430</th><td>	<i>/*</i></td></tr>
+<tr><th id="431">431</th><td><i>	 * See lwp_dtor() why dereference of the LWP pointer is safe.</i></td></tr>
+<tr><th id="432">432</th><td><i>	 * We must have kernel preemption disabled for that.</i></td></tr>
+<tr><th id="433">433</th><td><i>	 */</i></td></tr>
+<tr><th id="434">434</th><td>	<a class="local col9 ref" href="#29l" title='l' data-ref="29l" data-ref-filename="29l">l</a> = (<a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *)<a class="macro" href="#179" title="(owner &amp; ((uintptr_t)-16L))" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</a>(<a class="local col7 ref" href="#27owner" title='owner' data-ref="27owner" data-ref-filename="27owner">owner</a>);</td></tr>
+<tr><th id="435">435</th><td>	<a class="local col8 ref" href="#28ci" title='ci' data-ref="28ci" data-ref-filename="28ci">ci</a> = <a class="local col9 ref" href="#29l" title='l' data-ref="29l" data-ref-filename="29l">l</a>-&gt;<a class="ref field" href="../sys/lwp.h.html#lwp::l_cpu" title='lwp::l_cpu' data-ref="lwp::l_cpu" data-ref-filename="lwp..l_cpu">l_cpu</a>;</td></tr>
+<tr><th id="436">436</th><td></td></tr>
+<tr><th id="437">437</th><td>	<b>if</b> (<a class="local col8 ref" href="#28ci" title='ci' data-ref="28ci" data-ref-filename="28ci">ci</a> &amp;&amp; <a class="local col8 ref" href="#28ci" title='ci' data-ref="28ci" data-ref-filename="28ci">ci</a>-&gt;<a class="ref field" href="../arch/x86/include/cpu.h.html#cpu_info::ci_curlwp" title='cpu_info::ci_curlwp' data-ref="cpu_info::ci_curlwp" data-ref-filename="cpu_info..ci_curlwp">ci_curlwp</a> == <a class="local col9 ref" href="#29l" title='l' data-ref="29l" data-ref-filename="29l">l</a>) {</td></tr>
+<tr><th id="438">438</th><td>		<i>/* Target is running; do we need to block? */</i></td></tr>
+<tr><th id="439">439</th><td>		<b>return</b> (<a class="local col8 ref" href="#28ci" title='ci' data-ref="28ci" data-ref-filename="28ci">ci</a>-&gt;<a class="macro" href="../sys/cpu_data.h.html#118" title="ci_data.cpu_biglock_wanted" data-ref="_M/ci_biglock_wanted">ci_biglock_wanted</a> != <a class="local col9 ref" href="#29l" title='l' data-ref="29l" data-ref-filename="29l">l</a>);</td></tr>
+<tr><th id="440">440</th><td>	}</td></tr>
+<tr><th id="441">441</th><td></td></tr>
+<tr><th id="442">442</th><td>	<i>/* Not running.  It may be safe to block now. */</i></td></tr>
+<tr><th id="443">443</th><td>	<b>return</b> <a class="macro" href="../sys/stdbool.h.html#40" title="0" data-ref="_M/false">false</a>;</td></tr>
+<tr><th id="444">444</th><td>}</td></tr>
+<tr><th id="445">445</th><td><u>#<span data-ppcond="410">endif</span>	/* MULTIPROCESSOR */</u></td></tr>
+<tr><th id="446">446</th><td></td></tr>
+<tr><th id="447">447</th><td><i>/*</i></td></tr>
+<tr><th id="448">448</th><td><i> * mutex_vector_enter:</i></td></tr>
+<tr><th id="449">449</th><td><i> *</i></td></tr>
+<tr><th id="450">450</th><td><i> *	Support routine for mutex_enter() that must handle all cases.  In</i></td></tr>
+<tr><th id="451">451</th><td><i> *	the LOCKDEBUG case, mutex_enter() is always aliased here, even if</i></td></tr>
+<tr><th id="452">452</th><td><i> *	fast-path stubs are available.  If a mutex_spin_enter() stub is</i></td></tr>
+<tr><th id="453">453</th><td><i> *	not available, then it is also aliased directly here.</i></td></tr>
+<tr><th id="454">454</th><td><i> */</i></td></tr>
+<tr><th id="455">455</th><td><em>void</em></td></tr>
+<tr><th id="456">456</th><td><dfn class="decl def fn" id="mutex_vector_enter" title='mutex_vector_enter' data-ref="mutex_vector_enter" data-ref-filename="mutex_vector_enter">mutex_vector_enter</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col0 decl" id="30mtx" title='mtx' data-type='kmutex_t *' data-ref="30mtx" data-ref-filename="30mtx">mtx</dfn>)</td></tr>
+<tr><th id="457">457</th><td>{</td></tr>
+<tr><th id="458">458</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col1 decl" id="31owner" title='owner' data-type='uintptr_t' data-ref="31owner" data-ref-filename="31owner">owner</dfn>, <dfn class="local col2 decl" id="32curthread" title='curthread' data-type='uintptr_t' data-ref="32curthread" data-ref-filename="32curthread">curthread</dfn>;</td></tr>
+<tr><th id="459">459</th><td>	<a class="typedef" href="../sys/sleepq.h.html#turnstile_t" title='turnstile_t' data-type='struct turnstile' data-ref="turnstile_t" data-ref-filename="turnstile_t">turnstile_t</a> *<dfn class="local col3 decl" id="33ts" title='ts' data-type='turnstile_t *' data-ref="33ts" data-ref-filename="33ts">ts</dfn>;</td></tr>
+<tr><th id="460">460</th><td><u>#<span data-ppcond="460">ifdef</span> <a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a></u></td></tr>
+<tr><th id="461">461</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col4 decl" id="34count" title='count' data-type='u_int' data-ref="34count" data-ref-filename="34count">count</dfn>;</td></tr>
+<tr><th id="462">462</th><td><u>#<span data-ppcond="460">endif</span></u></td></tr>
+<tr><th id="463">463</th><td>	<a class="macro" href="../dev/lockstat.h.html#160" title="uint64_t spincnt = 0" data-ref="_M/LOCKSTAT_COUNTER">LOCKSTAT_COUNTER</a>(<dfn class="local col5 decl" id="35spincnt" title='spincnt' data-type='uint64_t' data-ref="35spincnt" data-ref-filename="35spincnt">spincnt</dfn>);</td></tr>
+<tr><th id="464">464</th><td>	<a class="macro" href="../dev/lockstat.h.html#160" title="uint64_t slpcnt = 0" data-ref="_M/LOCKSTAT_COUNTER">LOCKSTAT_COUNTER</a>(<dfn class="local col6 decl" id="36slpcnt" title='slpcnt' data-type='uint64_t' data-ref="36slpcnt" data-ref-filename="36slpcnt">slpcnt</dfn>);</td></tr>
+<tr><th id="465">465</th><td>	<a class="macro" href="../dev/lockstat.h.html#159" title="uint64_t spintime = 0" data-ref="_M/LOCKSTAT_TIMER">LOCKSTAT_TIMER</a>(<dfn class="local col7 decl" id="37spintime" title='spintime' data-type='uint64_t' data-ref="37spintime" data-ref-filename="37spintime">spintime</dfn>);</td></tr>
+<tr><th id="466">466</th><td>	<a class="macro" href="../dev/lockstat.h.html#159" title="uint64_t slptime = 0" data-ref="_M/LOCKSTAT_TIMER">LOCKSTAT_TIMER</a>(<dfn class="local col8 decl" id="38slptime" title='slptime' data-type='uint64_t' data-ref="38slptime" data-ref-filename="38slptime">slptime</dfn>);</td></tr>
+<tr><th id="467">467</th><td>	<a class="macro" href="../dev/lockstat.h.html#161" title="int lsflag" data-ref="_M/LOCKSTAT_FLAG">LOCKSTAT_FLAG</a>(<dfn class="local col9 decl" id="39lsflag" title='lsflag' data-type='int' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</dfn>);</td></tr>
+<tr><th id="468">468</th><td></td></tr>
+<tr><th id="469">469</th><td>	<i>/*</i></td></tr>
+<tr><th id="470">470</th><td><i>	 * Handle spin mutexes.</i></td></tr>
+<tr><th id="471">471</th><td><i>	 */</i></td></tr>
+<tr><th id="472">472</th><td>	<b>if</b> (<a class="macro" href="#204" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) != 0)" data-ref="_M/MUTEX_SPIN_P">MUTEX_SPIN_P</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>)) {</td></tr>
+<tr><th id="473">473</th><td><u>#<span data-ppcond="473">if</span> defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>) &amp;&amp; defined(<a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a>)</u></td></tr>
+<tr><th id="474">474</th><td>		u_int spins = <var>0</var>;</td></tr>
+<tr><th id="475">475</th><td><u>#<span data-ppcond="473">endif</span></u></td></tr>
+<tr><th id="476">476</th><td>		<a class="macro" href="#149" title="do { struct cpu_info *x__ci; int x__cnt, s; s = splraiseipl(((mtx)-&gt;u.s.mtxs_ipl)); x__ci = x86_curcpu(); x__cnt = x__ci-&gt;ci_mtx_count--; __asm volatile(&quot;&quot;:::&quot;memory&quot;); if (x__cnt == 0) x__ci-&gt;ci_mtx_oldspl = (s); } while ( 0)" data-ref="_M/MUTEX_SPIN_SPLRAISE">MUTEX_SPIN_SPLRAISE</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>);</td></tr>
+<tr><th id="477">477</th><td>		<a class="macro" href="#80" title="" data-ref="_M/MUTEX_WANTLOCK">MUTEX_WANTLOCK</a>(mtx);</td></tr>
+<tr><th id="478">478</th><td><u>#<span data-ppcond="478">ifdef</span> <a class="macro" href="#73" data-ref="_M/FULL">FULL</a></u></td></tr>
+<tr><th id="479">479</th><td>		<b>if</b> (<a class="macro" href="#134" title="__cpu_simple_lock_try(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCK_TRY">MUTEX_SPINBIT_LOCK_TRY</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>)) {</td></tr>
+<tr><th id="480">480</th><td>			<a class="macro" href="#86" title="" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</a>(mtx);</td></tr>
+<tr><th id="481">481</th><td>			<b>return</b>;</td></tr>
+<tr><th id="482">482</th><td>		}</td></tr>
+<tr><th id="483">483</th><td><u>#<span data-ppcond="483">if</span> !defined(<a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a>)</u></td></tr>
+<tr><th id="484">484</th><td>		MUTEX_ABORT(mtx, <q>"locking against myself"</q>);</td></tr>
+<tr><th id="485">485</th><td><u>#<span data-ppcond="483">else</span> /* !MULTIPROCESSOR */</u></td></tr>
+<tr><th id="486">486</th><td></td></tr>
+<tr><th id="487">487</th><td>		<a class="macro" href="../dev/lockstat.h.html#162" title="lsflag = lockstat_enabled" data-ref="_M/LOCKSTAT_ENTER">LOCKSTAT_ENTER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>);</td></tr>
+<tr><th id="488">488</th><td>		<a class="macro" href="../dev/lockstat.h.html#165" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) -= cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_START_TIMER">LOCKSTAT_START_TIMER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col7 ref" href="#465" title='spintime' data-ref="37spintime" data-ref-filename="37spintime">spintime</a>);</td></tr>
+<tr><th id="489">489</th><td>		<a class="local col4 ref" href="#34count" title='count' data-ref="34count" data-ref-filename="34count">count</a> = <a class="macro" href="../sys/lock.h.html#88" title="4" data-ref="_M/SPINLOCK_BACKOFF_MIN">SPINLOCK_BACKOFF_MIN</a>;</td></tr>
+<tr><th id="490">490</th><td></td></tr>
+<tr><th id="491">491</th><td>		<i>/*</i></td></tr>
+<tr><th id="492">492</th><td><i>		 * Spin testing the lock word and do exponential backoff</i></td></tr>
+<tr><th id="493">493</th><td><i>		 * to reduce cache line ping-ponging between CPUs.</i></td></tr>
+<tr><th id="494">494</th><td><i>		 */</i></td></tr>
+<tr><th id="495">495</th><td>		<b>do</b> {</td></tr>
+<tr><th id="496">496</th><td><u>#<span data-ppcond="496">if</span> <a class="macro" href="#64" title="1" data-ref="_M/MUTEX_PANIC_SKIP_SPIN">MUTEX_PANIC_SKIP_SPIN</a></u></td></tr>
+<tr><th id="497">497</th><td>			<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="498">498</th><td>				<b>break</b>;</td></tr>
+<tr><th id="499">499</th><td><u>#<span data-ppcond="496">endif</span></u></td></tr>
+<tr><th id="500">500</th><td>			<b>while</b> (<a class="macro" href="#131" title="__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>)) {</td></tr>
+<tr><th id="501">501</th><td>				<a class="macro" href="../sys/lock.h.html#94" title="do { int __i; for (__i = (count); __i != 0; __i--) { x86_pause(); } if ((count) &lt; 128) (count) += (count); } while ( 0);" data-ref="_M/SPINLOCK_BACKOFF">SPINLOCK_BACKOFF</a>(<a class="local col4 ref" href="#34count" title='count' data-ref="34count" data-ref-filename="34count">count</a>);</td></tr>
+<tr><th id="502">502</th><td><u>#<span data-ppcond="502">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="503">503</th><td>				<b>if</b> (SPINLOCK_SPINOUT(spins))</td></tr>
+<tr><th id="504">504</th><td>					MUTEX_ABORT(mtx, <q>"spinout"</q>);</td></tr>
+<tr><th id="505">505</th><td><u>#<span data-ppcond="502">endif</span>	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="506">506</th><td>			}</td></tr>
+<tr><th id="507">507</th><td>		} <b>while</b> (!<a class="macro" href="#134" title="__cpu_simple_lock_try(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCK_TRY">MUTEX_SPINBIT_LOCK_TRY</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>));</td></tr>
+<tr><th id="508">508</th><td></td></tr>
+<tr><th id="509">509</th><td>		<b>if</b> (<a class="local col4 ref" href="#34count" title='count' data-ref="34count" data-ref-filename="34count">count</a> != <a class="macro" href="../sys/lock.h.html#88" title="4" data-ref="_M/SPINLOCK_BACKOFF_MIN">SPINLOCK_BACKOFF_MIN</a>) {</td></tr>
+<tr><th id="510">510</th><td>			<a class="macro" href="../dev/lockstat.h.html#171" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) += cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_STOP_TIMER">LOCKSTAT_STOP_TIMER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col7 ref" href="#465" title='spintime' data-ref="37spintime" data-ref-filename="37spintime">spintime</a>);</td></tr>
+<tr><th id="511">511</th><td>			<a class="macro" href="../dev/lockstat.h.html#144" title="do { if (__builtin_expect((lsflag) != 0, 0)) lockstat_event((uintptr_t)(mtx), (uintptr_t)__builtin_return_address(0), (0x00000200 | 0x00000001), (1), (spintime)); } while ( 0);" data-ref="_M/LOCKSTAT_EVENT">LOCKSTAT_EVENT</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>,</td></tr>
+<tr><th id="512">512</th><td>			    <a class="macro" href="../dev/lockstat.h.html#113" title="0x00000200" data-ref="_M/LB_SPIN_MUTEX">LB_SPIN_MUTEX</a> | <a class="macro" href="../dev/lockstat.h.html#102" title="0x00000001" data-ref="_M/LB_SPIN">LB_SPIN</a>, <var>1</var>, <a class="local col7 ref" href="#465" title='spintime' data-ref="37spintime" data-ref-filename="37spintime">spintime</a>);</td></tr>
+<tr><th id="513">513</th><td>		}</td></tr>
+<tr><th id="514">514</th><td>		<a class="macro" href="../dev/lockstat.h.html#163" title="" data-ref="_M/LOCKSTAT_EXIT">LOCKSTAT_EXIT</a>(lsflag);</td></tr>
+<tr><th id="515">515</th><td><u>#<span data-ppcond="483">endif</span>	/* !MULTIPROCESSOR */</u></td></tr>
+<tr><th id="516">516</th><td><u>#<span data-ppcond="478">endif</span>	/* FULL */</u></td></tr>
+<tr><th id="517">517</th><td>		<a class="macro" href="#86" title="" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</a>(mtx);</td></tr>
+<tr><th id="518">518</th><td>		<b>return</b>;</td></tr>
+<tr><th id="519">519</th><td>	}</td></tr>
+<tr><th id="520">520</th><td></td></tr>
+<tr><th id="521">521</th><td>	<a class="local col2 ref" href="#32curthread" title='curthread' data-ref="32curthread" data-ref-filename="32curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="522">522</th><td></td></tr>
+<tr><th id="523">523</th><td>	<a class="macro" href="#105" title="" data-ref="_M/MUTEX_DASSERT">MUTEX_DASSERT</a>(mtx, MUTEX_ADAPTIVE_P(mtx));</td></tr>
+<tr><th id="524">524</th><td>	<a class="macro" href="#111" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) mutex_abort(__func__, 524, mtx, &quot;assertion failed: &quot; &quot;curthread != 0&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, <a class="local col2 ref" href="#32curthread" title='curthread' data-ref="32curthread" data-ref-filename="32curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="525">525</th><td>	<a class="macro" href="#111" title="do { if (__builtin_expect((!(!cpu_intr_p())) != 0, 0)) mutex_abort(__func__, 525, mtx, &quot;assertion failed: &quot; &quot;!cpu_intr_p()&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, !<a class="ref fn" href="../sys/cpu.h.html#cpu_intr_p" title='cpu_intr_p' data-ref="cpu_intr_p" data-ref-filename="cpu_intr_p">cpu_intr_p</a>());</td></tr>
+<tr><th id="526">526</th><td>	<a class="macro" href="#80" title="" data-ref="_M/MUTEX_WANTLOCK">MUTEX_WANTLOCK</a>(mtx);</td></tr>
+<tr><th id="527">527</th><td></td></tr>
+<tr><th id="528">528</th><td>	<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="529">529</th><td>		<a class="macro" href="../lib/libkern/libkern.h.html#290" title="((void)0)" data-ref="_M/KDASSERT">KDASSERT</a>(pserialize_not_in_read_section());</td></tr>
+<tr><th id="530">530</th><td>		<a class="macro" href="../sys/lockdebug.h.html#107" title="" data-ref="_M/LOCKDEBUG_BARRIER">LOCKDEBUG_BARRIER</a>(&amp;kernel_lock, <var>1</var>);</td></tr>
+<tr><th id="531">531</th><td>	}</td></tr>
+<tr><th id="532">532</th><td></td></tr>
+<tr><th id="533">533</th><td>	<a class="macro" href="../dev/lockstat.h.html#162" title="lsflag = lockstat_enabled" data-ref="_M/LOCKSTAT_ENTER">LOCKSTAT_ENTER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>);</td></tr>
+<tr><th id="534">534</th><td></td></tr>
+<tr><th id="535">535</th><td>	<i>/*</i></td></tr>
+<tr><th id="536">536</th><td><i>	 * Adaptive mutex; spin trying to acquire the mutex.  If we</i></td></tr>
+<tr><th id="537">537</th><td><i>	 * determine that the owner is not running on a processor,</i></td></tr>
+<tr><th id="538">538</th><td><i>	 * then we stop spinning, and sleep instead.</i></td></tr>
+<tr><th id="539">539</th><td><i>	 */</i></td></tr>
+<tr><th id="540">540</th><td>	<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_DISABLE" title='KPREEMPT_DISABLE' data-ref="KPREEMPT_DISABLE" data-ref-filename="KPREEMPT_DISABLE">KPREEMPT_DISABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="541">541</th><td>	<b>for</b> (<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a> = <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>;;) {</td></tr>
+<tr><th id="542">542</th><td>		<b>if</b> (!<a class="macro" href="#214" title="((owner) != 0)" data-ref="_M/MUTEX_OWNED">MUTEX_OWNED</a>(<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>)) {</td></tr>
+<tr><th id="543">543</th><td>			<i>/*</i></td></tr>
+<tr><th id="544">544</th><td><i>			 * Mutex owner clear could mean two things:</i></td></tr>
+<tr><th id="545">545</th><td><i>			 *</i></td></tr>
+<tr><th id="546">546</th><td><i>			 *	* The mutex has been released.</i></td></tr>
+<tr><th id="547">547</th><td><i>			 *	* The owner field hasn't been set yet.</i></td></tr>
+<tr><th id="548">548</th><td><i>			 *</i></td></tr>
+<tr><th id="549">549</th><td><i>			 * Try to acquire it again.  If that fails,</i></td></tr>
+<tr><th id="550">550</th><td><i>			 * we'll just loop again.</i></td></tr>
+<tr><th id="551">551</th><td><i>			 */</i></td></tr>
+<tr><th id="552">552</th><td>			<b>if</b> (<a class="tu ref fn" href="#MUTEX_ACQUIRE" title='MUTEX_ACQUIRE' data-use='c' data-ref="MUTEX_ACQUIRE" data-ref-filename="MUTEX_ACQUIRE">MUTEX_ACQUIRE</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, <a class="local col2 ref" href="#32curthread" title='curthread' data-ref="32curthread" data-ref-filename="32curthread">curthread</a>))</td></tr>
+<tr><th id="553">553</th><td>				<b>break</b>;</td></tr>
+<tr><th id="554">554</th><td>			<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a> = <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>;</td></tr>
+<tr><th id="555">555</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="556">556</th><td>		}</td></tr>
+<tr><th id="557">557</th><td><u>#<span data-ppcond="557">if</span> <a class="macro" href="#65" title="1" data-ref="_M/MUTEX_PANIC_SKIP_ADAPTIVE">MUTEX_PANIC_SKIP_ADAPTIVE</a></u></td></tr>
+<tr><th id="558">558</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((panicstr != ((void *)0)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)) {</td></tr>
+<tr><th id="559">559</th><td>			<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="560">560</th><td>			<b>return</b>;</td></tr>
+<tr><th id="561">561</th><td>		}</td></tr>
+<tr><th id="562">562</th><td><u>#<span data-ppcond="557">endif</span></u></td></tr>
+<tr><th id="563">563</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect(((owner &amp; ((uintptr_t)-16L)) == curthread) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(<a class="macro" href="#179" title="(owner &amp; ((uintptr_t)-16L))" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</a>(<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>) == <a class="local col2 ref" href="#32curthread" title='curthread' data-ref="32curthread" data-ref-filename="32curthread">curthread</a>)) {</td></tr>
+<tr><th id="564">564</th><td>			<a class="macro" href="#92" title="mutex_abort(__func__, 564, mtx, &quot;locking against myself&quot;)" data-ref="_M/MUTEX_ABORT">MUTEX_ABORT</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, <q>"locking against myself"</q>);</td></tr>
+<tr><th id="565">565</th><td>		}</td></tr>
+<tr><th id="566">566</th><td><u>#<span data-ppcond="566">ifdef</span> <a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a></u></td></tr>
+<tr><th id="567">567</th><td>		<i>/*</i></td></tr>
+<tr><th id="568">568</th><td><i>		 * Check to see if the owner is running on a processor.</i></td></tr>
+<tr><th id="569">569</th><td><i>		 * If so, then we should just spin, as the owner will</i></td></tr>
+<tr><th id="570">570</th><td><i>		 * likely release the lock very soon.</i></td></tr>
+<tr><th id="571">571</th><td><i>		 */</i></td></tr>
+<tr><th id="572">572</th><td>		<b>if</b> (<a class="tu ref fn" href="#mutex_oncpu" title='mutex_oncpu' data-use='c' data-ref="mutex_oncpu" data-ref-filename="mutex_oncpu">mutex_oncpu</a>(<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>)) {</td></tr>
+<tr><th id="573">573</th><td>			<a class="macro" href="../dev/lockstat.h.html#165" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) -= cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_START_TIMER">LOCKSTAT_START_TIMER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col7 ref" href="#465" title='spintime' data-ref="37spintime" data-ref-filename="37spintime">spintime</a>);</td></tr>
+<tr><th id="574">574</th><td>			<a class="local col4 ref" href="#34count" title='count' data-ref="34count" data-ref-filename="34count">count</a> = <a class="macro" href="../sys/lock.h.html#88" title="4" data-ref="_M/SPINLOCK_BACKOFF_MIN">SPINLOCK_BACKOFF_MIN</a>;</td></tr>
+<tr><th id="575">575</th><td>			<b>do</b> {</td></tr>
+<tr><th id="576">576</th><td>				<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="577">577</th><td>				<a class="macro" href="../sys/lock.h.html#94" title="do { int __i; for (__i = (count); __i != 0; __i--) { x86_pause(); } if ((count) &lt; 128) (count) += (count); } while ( 0);" data-ref="_M/SPINLOCK_BACKOFF">SPINLOCK_BACKOFF</a>(<a class="local col4 ref" href="#34count" title='count' data-ref="34count" data-ref-filename="34count">count</a>);</td></tr>
+<tr><th id="578">578</th><td>				<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_DISABLE" title='KPREEMPT_DISABLE' data-ref="KPREEMPT_DISABLE" data-ref-filename="KPREEMPT_DISABLE">KPREEMPT_DISABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="579">579</th><td>				<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a> = <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>;</td></tr>
+<tr><th id="580">580</th><td>			} <b>while</b> (<a class="tu ref fn" href="#mutex_oncpu" title='mutex_oncpu' data-use='c' data-ref="mutex_oncpu" data-ref-filename="mutex_oncpu">mutex_oncpu</a>(<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>));</td></tr>
+<tr><th id="581">581</th><td>			<a class="macro" href="../dev/lockstat.h.html#171" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) += cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_STOP_TIMER">LOCKSTAT_STOP_TIMER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col7 ref" href="#465" title='spintime' data-ref="37spintime" data-ref-filename="37spintime">spintime</a>);</td></tr>
+<tr><th id="582">582</th><td>			<a class="macro" href="../dev/lockstat.h.html#177" title="do { (spincnt) += (1); } while ( 0)" data-ref="_M/LOCKSTAT_COUNT">LOCKSTAT_COUNT</a>(<a class="local col5 ref" href="#463" title='spincnt' data-ref="35spincnt" data-ref-filename="35spincnt">spincnt</a>, <var>1</var>);</td></tr>
+<tr><th id="583">583</th><td>			<b>if</b> (!<a class="macro" href="#214" title="((owner) != 0)" data-ref="_M/MUTEX_OWNED">MUTEX_OWNED</a>(<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>))</td></tr>
+<tr><th id="584">584</th><td>				<b>continue</b>;</td></tr>
+<tr><th id="585">585</th><td>		}</td></tr>
+<tr><th id="586">586</th><td><u>#<span data-ppcond="566">endif</span></u></td></tr>
+<tr><th id="587">587</th><td></td></tr>
+<tr><th id="588">588</th><td>		<a class="local col3 ref" href="#33ts" title='ts' data-ref="33ts" data-ref-filename="33ts">ts</a> = <a class="ref fn" href="../sys/sleepq.h.html#turnstile_lookup" title='turnstile_lookup' data-ref="turnstile_lookup" data-ref-filename="turnstile_lookup">turnstile_lookup</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>);</td></tr>
+<tr><th id="589">589</th><td></td></tr>
+<tr><th id="590">590</th><td>		<i>/*</i></td></tr>
+<tr><th id="591">591</th><td><i>		 * Once we have the turnstile chain interlock, mark the</i></td></tr>
+<tr><th id="592">592</th><td><i>		 * mutex as having waiters.  If that fails, spin again:</i></td></tr>
+<tr><th id="593">593</th><td><i>		 * chances are that the mutex has been released.</i></td></tr>
+<tr><th id="594">594</th><td><i>		 */</i></td></tr>
+<tr><th id="595">595</th><td>		<b>if</b> (!<a class="tu ref fn" href="#MUTEX_SET_WAITERS" title='MUTEX_SET_WAITERS' data-use='c' data-ref="MUTEX_SET_WAITERS" data-ref-filename="MUTEX_SET_WAITERS">MUTEX_SET_WAITERS</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, <a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>)) {</td></tr>
+<tr><th id="596">596</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>);</td></tr>
+<tr><th id="597">597</th><td>			<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a> = <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>;</td></tr>
+<tr><th id="598">598</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="599">599</th><td>		}</td></tr>
+<tr><th id="600">600</th><td></td></tr>
+<tr><th id="601">601</th><td><u>#<span data-ppcond="601">ifdef</span> <a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a></u></td></tr>
+<tr><th id="602">602</th><td>		<i>/*</i></td></tr>
+<tr><th id="603">603</th><td><i>		 * mutex_exit() is permitted to release the mutex without</i></td></tr>
+<tr><th id="604">604</th><td><i>		 * any interlocking instructions, and the following can</i></td></tr>
+<tr><th id="605">605</th><td><i>		 * occur as a result:</i></td></tr>
+<tr><th id="606">606</th><td><i>		 *</i></td></tr>
+<tr><th id="607">607</th><td><i>		 *  CPU 1: MUTEX_SET_WAITERS()      CPU2: mutex_exit()</i></td></tr>
+<tr><th id="608">608</th><td><i>		 * ---------------------------- ----------------------------</i></td></tr>
+<tr><th id="609">609</th><td><i>		 *		..		    acquire cache line</i></td></tr>
+<tr><th id="610">610</th><td><i>		 *		..                   test for waiters</i></td></tr>
+<tr><th id="611">611</th><td><i>		 *	acquire cache line    &lt;-      lose cache line</i></td></tr>
+<tr><th id="612">612</th><td><i>		 *	 lock cache line	           ..</i></td></tr>
+<tr><th id="613">613</th><td><i>		 *     verify mutex is held                ..</i></td></tr>
+<tr><th id="614">614</th><td><i>		 *	    set waiters  	           ..</i></td></tr>
+<tr><th id="615">615</th><td><i>		 *	 unlock cache line		   ..</i></td></tr>
+<tr><th id="616">616</th><td><i>		 *	  lose cache line     -&gt;    acquire cache line</i></td></tr>
+<tr><th id="617">617</th><td><i>		 *		..	          clear lock word, waiters </i></td></tr>
+<tr><th id="618">618</th><td><i>		 *	  return success</i></td></tr>
+<tr><th id="619">619</th><td><i>		 *</i></td></tr>
+<tr><th id="620">620</th><td><i>		 * There is another race that can occur: a third CPU could</i></td></tr>
+<tr><th id="621">621</th><td><i>		 * acquire the mutex as soon as it is released.  Since</i></td></tr>
+<tr><th id="622">622</th><td><i>		 * adaptive mutexes are primarily spin mutexes, this is not</i></td></tr>
+<tr><th id="623">623</th><td><i>		 * something that we need to worry about too much.  What we</i></td></tr>
+<tr><th id="624">624</th><td><i>		 * do need to ensure is that the waiters bit gets set.</i></td></tr>
+<tr><th id="625">625</th><td><i>		 *</i></td></tr>
+<tr><th id="626">626</th><td><i>		 * To allow the unlocked release, we need to make some</i></td></tr>
+<tr><th id="627">627</th><td><i>		 * assumptions here:</i></td></tr>
+<tr><th id="628">628</th><td><i>		 *</i></td></tr>
+<tr><th id="629">629</th><td><i>		 * o Release is the only non-atomic/unlocked operation</i></td></tr>
+<tr><th id="630">630</th><td><i>		 *   that can be performed on the mutex.  (It must still</i></td></tr>
+<tr><th id="631">631</th><td><i>		 *   be atomic on the local CPU, e.g. in case interrupted</i></td></tr>
+<tr><th id="632">632</th><td><i>		 *   or preempted).</i></td></tr>
+<tr><th id="633">633</th><td><i>		 *</i></td></tr>
+<tr><th id="634">634</th><td><i>		 * o At any given time, MUTEX_SET_WAITERS() can only ever</i></td></tr>
+<tr><th id="635">635</th><td><i>		 *   be in progress on one CPU in the system - guaranteed</i></td></tr>
+<tr><th id="636">636</th><td><i>		 *   by the turnstile chain lock.</i></td></tr>
+<tr><th id="637">637</th><td><i>		 *</i></td></tr>
+<tr><th id="638">638</th><td><i>		 * o No other operations other than MUTEX_SET_WAITERS()</i></td></tr>
+<tr><th id="639">639</th><td><i>		 *   and release can modify a mutex with a non-zero</i></td></tr>
+<tr><th id="640">640</th><td><i>		 *   owner field.</i></td></tr>
+<tr><th id="641">641</th><td><i>		 *</i></td></tr>
+<tr><th id="642">642</th><td><i>		 * o The result of a successful MUTEX_SET_WAITERS() call</i></td></tr>
+<tr><th id="643">643</th><td><i>		 *   is an unbuffered write that is immediately visible</i></td></tr>
+<tr><th id="644">644</th><td><i>		 *   to all other processors in the system.</i></td></tr>
+<tr><th id="645">645</th><td><i>		 *</i></td></tr>
+<tr><th id="646">646</th><td><i>		 * o If the holding LWP switches away, it posts a store</i></td></tr>
+<tr><th id="647">647</th><td><i>		 *   fence before changing curlwp, ensuring that any</i></td></tr>
+<tr><th id="648">648</th><td><i>		 *   overwrite of the mutex waiters flag by mutex_exit()</i></td></tr>
+<tr><th id="649">649</th><td><i>		 *   completes before the modification of curlwp becomes</i></td></tr>
+<tr><th id="650">650</th><td><i>		 *   visible to this CPU.</i></td></tr>
+<tr><th id="651">651</th><td><i>		 *</i></td></tr>
+<tr><th id="652">652</th><td><i>		 * o mi_switch() posts a store fence before setting curlwp</i></td></tr>
+<tr><th id="653">653</th><td><i>		 *   and before resuming execution of an LWP.</i></td></tr>
+<tr><th id="654">654</th><td><i>		 * </i></td></tr>
+<tr><th id="655">655</th><td><i>		 * o _kernel_lock() posts a store fence before setting</i></td></tr>
+<tr><th id="656">656</th><td><i>		 *   curcpu()-&gt;ci_biglock_wanted, and after clearing it. </i></td></tr>
+<tr><th id="657">657</th><td><i>		 *   This ensures that any overwrite of the mutex waiters</i></td></tr>
+<tr><th id="658">658</th><td><i>		 *   flag by mutex_exit() completes before the modification</i></td></tr>
+<tr><th id="659">659</th><td><i>		 *   of ci_biglock_wanted becomes visible.</i></td></tr>
+<tr><th id="660">660</th><td><i>		 *</i></td></tr>
+<tr><th id="661">661</th><td><i>		 * We now post a read memory barrier (after setting the</i></td></tr>
+<tr><th id="662">662</th><td><i>		 * waiters field) and check the lock holder's status again.</i></td></tr>
+<tr><th id="663">663</th><td><i>		 * Some of the possible outcomes (not an exhaustive list):</i></td></tr>
+<tr><th id="664">664</th><td><i>		 *</i></td></tr>
+<tr><th id="665">665</th><td><i>		 * 1. The on-CPU check returns true: the holding LWP is</i></td></tr>
+<tr><th id="666">666</th><td><i>		 *    running again.  The lock may be released soon and</i></td></tr>
+<tr><th id="667">667</th><td><i>		 *    we should spin.  Importantly, we can't trust the</i></td></tr>
+<tr><th id="668">668</th><td><i>		 *    value of the waiters flag.</i></td></tr>
+<tr><th id="669">669</th><td><i>		 *</i></td></tr>
+<tr><th id="670">670</th><td><i>		 * 2. The on-CPU check returns false: the holding LWP is</i></td></tr>
+<tr><th id="671">671</th><td><i>		 *    not running.  We now have the opportunity to check</i></td></tr>
+<tr><th id="672">672</th><td><i>		 *    if mutex_exit() has blatted the modifications made</i></td></tr>
+<tr><th id="673">673</th><td><i>		 *    by MUTEX_SET_WAITERS().</i></td></tr>
+<tr><th id="674">674</th><td><i>		 *</i></td></tr>
+<tr><th id="675">675</th><td><i>		 * 3. The on-CPU check returns false: the holding LWP may</i></td></tr>
+<tr><th id="676">676</th><td><i>		 *    or may not be running.  It has context switched at</i></td></tr>
+<tr><th id="677">677</th><td><i>		 *    some point during our check.  Again, we have the</i></td></tr>
+<tr><th id="678">678</th><td><i>		 *    chance to see if the waiters bit is still set or</i></td></tr>
+<tr><th id="679">679</th><td><i>		 *    has been overwritten.</i></td></tr>
+<tr><th id="680">680</th><td><i>		 *</i></td></tr>
+<tr><th id="681">681</th><td><i>		 * 4. The on-CPU check returns false: the holding LWP is</i></td></tr>
+<tr><th id="682">682</th><td><i>		 *    running on a CPU, but wants the big lock.  It's OK</i></td></tr>
+<tr><th id="683">683</th><td><i>		 *    to check the waiters field in this case.</i></td></tr>
+<tr><th id="684">684</th><td><i>		 *</i></td></tr>
+<tr><th id="685">685</th><td><i>		 * 5. The has-waiters check fails: the mutex has been</i></td></tr>
+<tr><th id="686">686</th><td><i>		 *    released, the waiters flag cleared and another LWP</i></td></tr>
+<tr><th id="687">687</th><td><i>		 *    now owns the mutex.</i></td></tr>
+<tr><th id="688">688</th><td><i>		 *</i></td></tr>
+<tr><th id="689">689</th><td><i>		 * 6. The has-waiters check fails: the mutex has been</i></td></tr>
+<tr><th id="690">690</th><td><i>		 *    released.</i></td></tr>
+<tr><th id="691">691</th><td><i>		 *</i></td></tr>
+<tr><th id="692">692</th><td><i>		 * If the waiters bit is not set it's unsafe to go asleep,</i></td></tr>
+<tr><th id="693">693</th><td><i>		 * as we might never be awoken.</i></td></tr>
+<tr><th id="694">694</th><td><i>		 */</i></td></tr>
+<tr><th id="695">695</th><td>		<b>if</b> ((<a class="ref fn" href="../sys/atomic.h.html#membar_consumer" title='membar_consumer' data-ref="membar_consumer" data-ref-filename="membar_consumer">membar_consumer</a>(), <a class="tu ref fn" href="#mutex_oncpu" title='mutex_oncpu' data-use='c' data-ref="mutex_oncpu" data-ref-filename="mutex_oncpu">mutex_oncpu</a>(<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a>)) ||</td></tr>
+<tr><th id="696">696</th><td>		    (<a class="ref fn" href="../sys/atomic.h.html#membar_consumer" title='membar_consumer' data-ref="membar_consumer" data-ref-filename="membar_consumer">membar_consumer</a>(), !<a class="macro" href="#181" title="(((int)(mtx)-&gt;u.mtxa_owner &amp; 0x02) != 0)" data-ref="_M/MUTEX_HAS_WAITERS">MUTEX_HAS_WAITERS</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>))) {</td></tr>
+<tr><th id="697">697</th><td>			<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>);</td></tr>
+<tr><th id="698">698</th><td>			<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a> = <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>;</td></tr>
+<tr><th id="699">699</th><td>			<b>continue</b>;</td></tr>
+<tr><th id="700">700</th><td>		}</td></tr>
+<tr><th id="701">701</th><td><u>#<span data-ppcond="601">endif</span>	/* MULTIPROCESSOR */</u></td></tr>
+<tr><th id="702">702</th><td></td></tr>
+<tr><th id="703">703</th><td>		<a class="macro" href="../dev/lockstat.h.html#165" title="do { if (__builtin_expect((lsflag) != 0, 0)) (slptime) -= cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_START_TIMER">LOCKSTAT_START_TIMER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col8 ref" href="#466" title='slptime' data-ref="38slptime" data-ref-filename="38slptime">slptime</a>);</td></tr>
+<tr><th id="704">704</th><td></td></tr>
+<tr><th id="705">705</th><td>		<a class="ref fn" href="../sys/sleepq.h.html#turnstile_block" title='turnstile_block' data-ref="turnstile_block" data-ref-filename="turnstile_block">turnstile_block</a>(<a class="local col3 ref" href="#33ts" title='ts' data-ref="33ts" data-ref-filename="33ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>, <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, &amp;<a class="ref" href="../sys/syncobj.h.html#mutex_syncobj" title='mutex_syncobj' data-ref="mutex_syncobj" data-ref-filename="mutex_syncobj">mutex_syncobj</a>);</td></tr>
+<tr><th id="706">706</th><td></td></tr>
+<tr><th id="707">707</th><td>		<a class="macro" href="../dev/lockstat.h.html#171" title="do { if (__builtin_expect((lsflag) != 0, 0)) (slptime) += cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_STOP_TIMER">LOCKSTAT_STOP_TIMER</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col8 ref" href="#466" title='slptime' data-ref="38slptime" data-ref-filename="38slptime">slptime</a>);</td></tr>
+<tr><th id="708">708</th><td>		<a class="macro" href="../dev/lockstat.h.html#177" title="do { (slpcnt) += (1); } while ( 0)" data-ref="_M/LOCKSTAT_COUNT">LOCKSTAT_COUNT</a>(<a class="local col6 ref" href="#464" title='slpcnt' data-ref="36slpcnt" data-ref-filename="36slpcnt">slpcnt</a>, <var>1</var>);</td></tr>
+<tr><th id="709">709</th><td></td></tr>
+<tr><th id="710">710</th><td>		<a class="local col1 ref" href="#31owner" title='owner' data-ref="31owner" data-ref-filename="31owner">owner</a> = <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>;</td></tr>
+<tr><th id="711">711</th><td>	}</td></tr>
+<tr><th id="712">712</th><td>	<a class="ref fn" href="../sys/lwp.h.html#KPREEMPT_ENABLE" title='KPREEMPT_ENABLE' data-ref="KPREEMPT_ENABLE" data-ref-filename="KPREEMPT_ENABLE">KPREEMPT_ENABLE</a>(<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>);</td></tr>
+<tr><th id="713">713</th><td></td></tr>
+<tr><th id="714">714</th><td>	<a class="macro" href="../dev/lockstat.h.html#144" title="do { if (__builtin_expect((lsflag) != 0, 0)) lockstat_event((uintptr_t)(mtx), (uintptr_t)__builtin_return_address(0), (0x00000100 | 0x00000002), (slpcnt), (slptime)); } while ( 0);" data-ref="_M/LOCKSTAT_EVENT">LOCKSTAT_EVENT</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, <a class="macro" href="../dev/lockstat.h.html#112" title="0x00000100" data-ref="_M/LB_ADAPTIVE_MUTEX">LB_ADAPTIVE_MUTEX</a> | <a class="macro" href="../dev/lockstat.h.html#103" title="0x00000002" data-ref="_M/LB_SLEEP1">LB_SLEEP1</a>,</td></tr>
+<tr><th id="715">715</th><td>	    <a class="local col6 ref" href="#464" title='slpcnt' data-ref="36slpcnt" data-ref-filename="36slpcnt">slpcnt</a>, <a class="local col8 ref" href="#466" title='slptime' data-ref="38slptime" data-ref-filename="38slptime">slptime</a>);</td></tr>
+<tr><th id="716">716</th><td>	<a class="macro" href="../dev/lockstat.h.html#144" title="do { if (__builtin_expect((lsflag) != 0, 0)) lockstat_event((uintptr_t)(mtx), (uintptr_t)__builtin_return_address(0), (0x00000100 | 0x00000001), (spincnt), (spintime)); } while ( 0);" data-ref="_M/LOCKSTAT_EVENT">LOCKSTAT_EVENT</a>(<a class="local col9 ref" href="#467" title='lsflag' data-ref="39lsflag" data-ref-filename="39lsflag">lsflag</a>, <a class="local col0 ref" href="#30mtx" title='mtx' data-ref="30mtx" data-ref-filename="30mtx">mtx</a>, <a class="macro" href="../dev/lockstat.h.html#112" title="0x00000100" data-ref="_M/LB_ADAPTIVE_MUTEX">LB_ADAPTIVE_MUTEX</a> | <a class="macro" href="../dev/lockstat.h.html#102" title="0x00000001" data-ref="_M/LB_SPIN">LB_SPIN</a>,</td></tr>
+<tr><th id="717">717</th><td>	    <a class="local col5 ref" href="#463" title='spincnt' data-ref="35spincnt" data-ref-filename="35spincnt">spincnt</a>, <a class="local col7 ref" href="#465" title='spintime' data-ref="37spintime" data-ref-filename="37spintime">spintime</a>);</td></tr>
+<tr><th id="718">718</th><td>	<a class="macro" href="../dev/lockstat.h.html#163" title="" data-ref="_M/LOCKSTAT_EXIT">LOCKSTAT_EXIT</a>(lsflag);</td></tr>
+<tr><th id="719">719</th><td></td></tr>
+<tr><th id="720">720</th><td>	<a class="macro" href="#105" title="" data-ref="_M/MUTEX_DASSERT">MUTEX_DASSERT</a>(mtx, MUTEX_OWNER(mtx-&gt;mtx_owner) == curthread);</td></tr>
+<tr><th id="721">721</th><td>	<a class="macro" href="#86" title="" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</a>(mtx);</td></tr>
+<tr><th id="722">722</th><td>}</td></tr>
+<tr><th id="723">723</th><td></td></tr>
+<tr><th id="724">724</th><td><i>/*</i></td></tr>
+<tr><th id="725">725</th><td><i> * mutex_vector_exit:</i></td></tr>
+<tr><th id="726">726</th><td><i> *</i></td></tr>
+<tr><th id="727">727</th><td><i> *	Support routine for mutex_exit() that handles all cases.</i></td></tr>
+<tr><th id="728">728</th><td><i> */</i></td></tr>
+<tr><th id="729">729</th><td><em>void</em></td></tr>
+<tr><th id="730">730</th><td><dfn class="decl def fn" id="mutex_vector_exit" title='mutex_vector_exit' data-ref="mutex_vector_exit" data-ref-filename="mutex_vector_exit">mutex_vector_exit</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col3 decl" id="43mtx" title='mtx' data-type='kmutex_t *' data-ref="43mtx" data-ref-filename="43mtx">mtx</dfn>)</td></tr>
+<tr><th id="731">731</th><td>{</td></tr>
+<tr><th id="732">732</th><td>	<a class="typedef" href="../sys/sleepq.h.html#turnstile_t" title='turnstile_t' data-type='struct turnstile' data-ref="turnstile_t" data-ref-filename="turnstile_t">turnstile_t</a> *<dfn class="local col4 decl" id="44ts" title='ts' data-type='turnstile_t *' data-ref="44ts" data-ref-filename="44ts">ts</dfn>;</td></tr>
+<tr><th id="733">733</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col5 decl" id="45curthread" title='curthread' data-type='uintptr_t' data-ref="45curthread" data-ref-filename="45curthread">curthread</dfn>;</td></tr>
+<tr><th id="734">734</th><td></td></tr>
+<tr><th id="735">735</th><td>	<b>if</b> (<a class="macro" href="#204" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) != 0)" data-ref="_M/MUTEX_SPIN_P">MUTEX_SPIN_P</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>)) {</td></tr>
+<tr><th id="736">736</th><td><u>#<span data-ppcond="736">ifdef</span> <a class="macro" href="#73" data-ref="_M/FULL">FULL</a></u></td></tr>
+<tr><th id="737">737</th><td>		<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect((!__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock)) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>(!<a class="macro" href="#131" title="__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>))) {</td></tr>
+<tr><th id="738">738</th><td><u>#<span data-ppcond="738">if</span> <a class="macro" href="#64" title="1" data-ref="_M/MUTEX_PANIC_SKIP_SPIN">MUTEX_PANIC_SKIP_SPIN</a></u></td></tr>
+<tr><th id="739">739</th><td>			<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="740">740</th><td>				<b>return</b>;</td></tr>
+<tr><th id="741">741</th><td><u>#<span data-ppcond="738">endif</span></u></td></tr>
+<tr><th id="742">742</th><td>			<a class="macro" href="#92" title="mutex_abort(__func__, 742, mtx, &quot;exiting unheld spin mutex&quot;)" data-ref="_M/MUTEX_ABORT">MUTEX_ABORT</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>, <q>"exiting unheld spin mutex"</q>);</td></tr>
+<tr><th id="743">743</th><td>		}</td></tr>
+<tr><th id="744">744</th><td>		<a class="macro" href="#89" title="" data-ref="_M/MUTEX_UNLOCKED">MUTEX_UNLOCKED</a>(mtx);</td></tr>
+<tr><th id="745">745</th><td>		<a class="macro" href="#137" title="__cpu_simple_unlock(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCK_UNLOCK">MUTEX_SPINBIT_LOCK_UNLOCK</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="746">746</th><td><u>#<span data-ppcond="736">endif</span></u></td></tr>
+<tr><th id="747">747</th><td>		<a class="macro" href="#161" title="do { struct cpu_info *x__ci = x86_curcpu(); int s = x__ci-&gt;ci_mtx_oldspl; __asm volatile(&quot;&quot;:::&quot;memory&quot;); if (++(x__ci-&gt;ci_mtx_count) == 0) spllower(s); } while ( 0)" data-ref="_M/MUTEX_SPIN_SPLRESTORE">MUTEX_SPIN_SPLRESTORE</a>(mtx);</td></tr>
+<tr><th id="748">748</th><td>		<b>return</b>;</td></tr>
+<tr><th id="749">749</th><td>	}</td></tr>
+<tr><th id="750">750</th><td></td></tr>
+<tr><th id="751">751</th><td><u>#<span data-ppcond="751">ifdef</span> <a class="macro" href="#65" data-ref="_M/MUTEX_PANIC_SKIP_ADAPTIVE">MUTEX_PANIC_SKIP_ADAPTIVE</a></u></td></tr>
+<tr><th id="752">752</th><td>	<b>if</b> (<a class="macro" href="../sys/cdefs.h.html#488" title="__builtin_expect(((uintptr_t)panicstr | cold) != 0, 0)" data-ref="_M/__predict_false">__predict_false</a>((<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> | <a class="ref" href="../sys/kernel.h.html#cold" title='cold' data-ref="cold" data-ref-filename="cold">cold</a>)) {</td></tr>
+<tr><th id="753">753</th><td>		<a class="macro" href="#89" title="" data-ref="_M/MUTEX_UNLOCKED">MUTEX_UNLOCKED</a>(mtx);</td></tr>
+<tr><th id="754">754</th><td>		<a class="tu ref fn" href="#MUTEX_RELEASE" title='MUTEX_RELEASE' data-use='c' data-ref="MUTEX_RELEASE" data-ref-filename="MUTEX_RELEASE">MUTEX_RELEASE</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="755">755</th><td>		<b>return</b>;</td></tr>
+<tr><th id="756">756</th><td>	}</td></tr>
+<tr><th id="757">757</th><td><u>#<span data-ppcond="751">endif</span></u></td></tr>
+<tr><th id="758">758</th><td></td></tr>
+<tr><th id="759">759</th><td>	<a class="local col5 ref" href="#45curthread" title='curthread' data-ref="45curthread" data-ref-filename="45curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="760">760</th><td>	<a class="macro" href="#105" title="" data-ref="_M/MUTEX_DASSERT">MUTEX_DASSERT</a>(mtx, curthread != <var>0</var>);</td></tr>
+<tr><th id="761">761</th><td>	<a class="macro" href="#111" title="do { if (__builtin_expect((!((mtx-&gt;u.mtxa_owner &amp; ((uintptr_t)-16L)) == curthread)) != 0, 0)) mutex_abort(__func__, 761, mtx, &quot;assertion failed: &quot; &quot;MUTEX_OWNER(mtx-&gt;mtx_owner) == curthread&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>, <a class="macro" href="#179" title="(mtx-&gt;u.mtxa_owner &amp; ((uintptr_t)-16L))" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>) == <a class="local col5 ref" href="#45curthread" title='curthread' data-ref="45curthread" data-ref-filename="45curthread">curthread</a>);</td></tr>
+<tr><th id="762">762</th><td>	<a class="macro" href="#89" title="" data-ref="_M/MUTEX_UNLOCKED">MUTEX_UNLOCKED</a>(mtx);</td></tr>
+<tr><th id="763">763</th><td><u>#<span data-ppcond="763">if</span> !defined(<span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span>)</u></td></tr>
+<tr><th id="764">764</th><td>	<a class="macro" href="../sys/cdefs.h.html#623" title="( (void)(curthread))" data-ref="_M/__USE">__USE</a>(<a class="local col5 ref" href="#45curthread" title='curthread' data-ref="45curthread" data-ref-filename="45curthread">curthread</a>);</td></tr>
+<tr><th id="765">765</th><td><u>#<span data-ppcond="763">endif</span></u></td></tr>
+<tr><th id="766">766</th><td></td></tr>
+<tr><th id="767">767</th><td><u>#<span data-ppcond="767">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="768">768</th><td>	<i>/*</i></td></tr>
+<tr><th id="769">769</th><td><i>	 * Avoid having to take the turnstile chain lock every time</i></td></tr>
+<tr><th id="770">770</th><td><i>	 * around.  Raise the priority level to splhigh() in order</i></td></tr>
+<tr><th id="771">771</th><td><i>	 * to disable preemption and so make the following atomic.</i></td></tr>
+<tr><th id="772">772</th><td><i>	 */</i></td></tr>
+<tr><th id="773">773</th><td>	{</td></tr>
+<tr><th id="774">774</th><td>		<em>int</em> s = splhigh();</td></tr>
+<tr><th id="775">775</th><td>		<b>if</b> (!MUTEX_HAS_WAITERS(mtx)) {</td></tr>
+<tr><th id="776">776</th><td>			MUTEX_RELEASE(mtx);</td></tr>
+<tr><th id="777">777</th><td>			splx(s);</td></tr>
+<tr><th id="778">778</th><td>			<b>return</b>;</td></tr>
+<tr><th id="779">779</th><td>		}</td></tr>
+<tr><th id="780">780</th><td>		splx(s);</td></tr>
+<tr><th id="781">781</th><td>	}</td></tr>
+<tr><th id="782">782</th><td><u>#<span data-ppcond="767">endif</span></u></td></tr>
+<tr><th id="783">783</th><td></td></tr>
+<tr><th id="784">784</th><td>	<i>/*</i></td></tr>
+<tr><th id="785">785</th><td><i>	 * Get this lock's turnstile.  This gets the interlock on</i></td></tr>
+<tr><th id="786">786</th><td><i>	 * the sleep queue.  Once we have that, we can clear the</i></td></tr>
+<tr><th id="787">787</th><td><i>	 * lock.  If there was no turnstile for the lock, there</i></td></tr>
+<tr><th id="788">788</th><td><i>	 * were no waiters remaining.</i></td></tr>
+<tr><th id="789">789</th><td><i>	 */</i></td></tr>
+<tr><th id="790">790</th><td>	<a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a> = <a class="ref fn" href="../sys/sleepq.h.html#turnstile_lookup" title='turnstile_lookup' data-ref="turnstile_lookup" data-ref-filename="turnstile_lookup">turnstile_lookup</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="791">791</th><td></td></tr>
+<tr><th id="792">792</th><td>	<b>if</b> (<a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>) {</td></tr>
+<tr><th id="793">793</th><td>		<a class="tu ref fn" href="#MUTEX_RELEASE" title='MUTEX_RELEASE' data-use='c' data-ref="MUTEX_RELEASE" data-ref-filename="MUTEX_RELEASE">MUTEX_RELEASE</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="794">794</th><td>		<a class="ref fn" href="../sys/sleepq.h.html#turnstile_exit" title='turnstile_exit' data-ref="turnstile_exit" data-ref-filename="turnstile_exit">turnstile_exit</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="795">795</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="796">796</th><td>		<a class="tu ref fn" href="#MUTEX_RELEASE" title='MUTEX_RELEASE' data-use='c' data-ref="MUTEX_RELEASE" data-ref-filename="MUTEX_RELEASE">MUTEX_RELEASE</a>(<a class="local col3 ref" href="#43mtx" title='mtx' data-ref="43mtx" data-ref-filename="43mtx">mtx</a>);</td></tr>
+<tr><th id="797">797</th><td>		<a class="ref fn" href="../sys/sleepq.h.html#turnstile_wakeup" title='turnstile_wakeup' data-ref="turnstile_wakeup" data-ref-filename="turnstile_wakeup">turnstile_wakeup</a>(<a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>,</td></tr>
+<tr><th id="798">798</th><td>		    <a class="macro" href="../sys/sleepq.h.html#159" title="(ts)-&gt;ts_waiters[(1)]" data-ref="_M/TS_WAITERS">TS_WAITERS</a>(<a class="local col4 ref" href="#44ts" title='ts' data-ref="44ts" data-ref-filename="44ts">ts</a>, <a class="macro" href="../sys/sleepq.h.html#157" title="1" data-ref="_M/TS_WRITER_Q">TS_WRITER_Q</a>), <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>);</td></tr>
+<tr><th id="799">799</th><td>	}</td></tr>
+<tr><th id="800">800</th><td>}</td></tr>
+<tr><th id="801">801</th><td></td></tr>
+<tr><th id="802">802</th><td><u>#<span data-ppcond="802">ifndef</span> <a class="macro" href="../arch/x86/include/mutex.h.html#57" data-ref="_M/__HAVE_SIMPLE_MUTEXES">__HAVE_SIMPLE_MUTEXES</a></u></td></tr>
+<tr><th id="803">803</th><td><i>/*</i></td></tr>
+<tr><th id="804">804</th><td><i> * mutex_wakeup:</i></td></tr>
+<tr><th id="805">805</th><td><i> *</i></td></tr>
+<tr><th id="806">806</th><td><i> *	Support routine for mutex_exit() that wakes up all waiters.</i></td></tr>
+<tr><th id="807">807</th><td><i> *	We assume that the mutex has been released, but it need not</i></td></tr>
+<tr><th id="808">808</th><td><i> *	be.</i></td></tr>
+<tr><th id="809">809</th><td><i> */</i></td></tr>
+<tr><th id="810">810</th><td><em>void</em></td></tr>
+<tr><th id="811">811</th><td>mutex_wakeup(kmutex_t *mtx)</td></tr>
+<tr><th id="812">812</th><td>{</td></tr>
+<tr><th id="813">813</th><td>	turnstile_t *ts;</td></tr>
+<tr><th id="814">814</th><td></td></tr>
+<tr><th id="815">815</th><td>	ts = turnstile_lookup(mtx);</td></tr>
+<tr><th id="816">816</th><td>	<b>if</b> (ts == NULL) {</td></tr>
+<tr><th id="817">817</th><td>		turnstile_exit(mtx);</td></tr>
+<tr><th id="818">818</th><td>		<b>return</b>;</td></tr>
+<tr><th id="819">819</th><td>	}</td></tr>
+<tr><th id="820">820</th><td>	MUTEX_CLEAR_WAITERS(mtx);</td></tr>
+<tr><th id="821">821</th><td>	turnstile_wakeup(ts, TS_WRITER_Q, TS_WAITERS(ts, TS_WRITER_Q), NULL);</td></tr>
+<tr><th id="822">822</th><td>}</td></tr>
+<tr><th id="823">823</th><td><u>#<span data-ppcond="802">endif</span>	/* !__HAVE_SIMPLE_MUTEXES */</u></td></tr>
+<tr><th id="824">824</th><td></td></tr>
+<tr><th id="825">825</th><td><i>/*</i></td></tr>
+<tr><th id="826">826</th><td><i> * mutex_owned:</i></td></tr>
+<tr><th id="827">827</th><td><i> *</i></td></tr>
+<tr><th id="828">828</th><td><i> *	Return true if the current LWP (adaptive) or CPU (spin)</i></td></tr>
+<tr><th id="829">829</th><td><i> *	holds the mutex.</i></td></tr>
+<tr><th id="830">830</th><td><i> */</i></td></tr>
+<tr><th id="831">831</th><td><em>int</em></td></tr>
+<tr><th id="832">832</th><td><dfn class="decl def fn" id="mutex_owned" title='mutex_owned' data-ref="mutex_owned" data-ref-filename="mutex_owned">mutex_owned</dfn>(<em>const</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col8 decl" id="48mtx" title='mtx' data-type='const kmutex_t *' data-ref="48mtx" data-ref-filename="48mtx">mtx</dfn>)</td></tr>
+<tr><th id="833">833</th><td>{</td></tr>
+<tr><th id="834">834</th><td></td></tr>
+<tr><th id="835">835</th><td>	<b>if</b> (<a class="local col8 ref" href="#48mtx" title='mtx' data-ref="48mtx" data-ref-filename="48mtx">mtx</a> == <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="836">836</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="837">837</th><td>	<b>if</b> (<a class="macro" href="#206" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) == 0)" data-ref="_M/MUTEX_ADAPTIVE_P">MUTEX_ADAPTIVE_P</a>(<a class="local col8 ref" href="#48mtx" title='mtx' data-ref="48mtx" data-ref-filename="48mtx">mtx</a>))</td></tr>
+<tr><th id="838">838</th><td>		<b>return</b> <a class="macro" href="#179" title="(mtx-&gt;u.mtxa_owner &amp; ((uintptr_t)-16L))" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</a>(<a class="local col8 ref" href="#48mtx" title='mtx' data-ref="48mtx" data-ref-filename="48mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>) == (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="839">839</th><td><u>#<span data-ppcond="839">ifdef</span> <a class="macro" href="#73" data-ref="_M/FULL">FULL</a></u></td></tr>
+<tr><th id="840">840</th><td>	<b>return</b> <a class="macro" href="#131" title="__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</a>(<a class="local col8 ref" href="#48mtx" title='mtx' data-ref="48mtx" data-ref-filename="48mtx">mtx</a>);</td></tr>
+<tr><th id="841">841</th><td><u>#<span data-ppcond="839">else</span></u></td></tr>
+<tr><th id="842">842</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="843">843</th><td><u>#<span data-ppcond="839">endif</span></u></td></tr>
+<tr><th id="844">844</th><td>}</td></tr>
+<tr><th id="845">845</th><td></td></tr>
+<tr><th id="846">846</th><td><i>/*</i></td></tr>
+<tr><th id="847">847</th><td><i> * mutex_owner:</i></td></tr>
+<tr><th id="848">848</th><td><i> *</i></td></tr>
+<tr><th id="849">849</th><td><i> *	Return the current owner of an adaptive mutex.  Used for</i></td></tr>
+<tr><th id="850">850</th><td><i> *	priority inheritance.</i></td></tr>
+<tr><th id="851">851</th><td><i> */</i></td></tr>
+<tr><th id="852">852</th><td><a class="typedef" href="../sys/types.h.html#lwp_t" title='lwp_t' data-type='struct lwp' data-ref="lwp_t" data-ref-filename="lwp_t">lwp_t</a> *</td></tr>
+<tr><th id="853">853</th><td><dfn class="decl def fn" id="mutex_owner" title='mutex_owner' data-ref="mutex_owner" data-ref-filename="mutex_owner">mutex_owner</dfn>(<em>const</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col9 decl" id="49mtx" title='mtx' data-type='const kmutex_t *' data-ref="49mtx" data-ref-filename="49mtx">mtx</dfn>)</td></tr>
+<tr><th id="854">854</th><td>{</td></tr>
+<tr><th id="855">855</th><td></td></tr>
+<tr><th id="856">856</th><td>	<a class="macro" href="#111" title="do { if (__builtin_expect((!((((mtx)-&gt;u.mtxa_owner &amp; 0x01) == 0))) != 0, 0)) mutex_abort(__func__, 856, mtx, &quot;assertion failed: &quot; &quot;MUTEX_ADAPTIVE_P(mtx)&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col9 ref" href="#49mtx" title='mtx' data-ref="49mtx" data-ref-filename="49mtx">mtx</a>, <a class="macro" href="#206" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) == 0)" data-ref="_M/MUTEX_ADAPTIVE_P">MUTEX_ADAPTIVE_P</a>(<a class="local col9 ref" href="#49mtx" title='mtx' data-ref="49mtx" data-ref-filename="49mtx">mtx</a>));</td></tr>
+<tr><th id="857">857</th><td>	<b>return</b> (<b>struct</b> <a class="type" href="../sys/lwp.h.html#lwp" title='lwp' data-ref="lwp" data-ref-filename="lwp">lwp</a> *)<a class="macro" href="#179" title="(mtx-&gt;u.mtxa_owner &amp; ((uintptr_t)-16L))" data-ref="_M/MUTEX_OWNER">MUTEX_OWNER</a>(<a class="local col9 ref" href="#49mtx" title='mtx' data-ref="49mtx" data-ref-filename="49mtx">mtx</a>-&gt;<a class="macro" href="../arch/x86/include/mutex.h.html#51" title="u.mtxa_owner" data-ref="_M/mtx_owner">mtx_owner</a>);</td></tr>
+<tr><th id="858">858</th><td>}</td></tr>
+<tr><th id="859">859</th><td></td></tr>
+<tr><th id="860">860</th><td><i>/*</i></td></tr>
+<tr><th id="861">861</th><td><i> * mutex_ownable:</i></td></tr>
+<tr><th id="862">862</th><td><i> *</i></td></tr>
+<tr><th id="863">863</th><td><i> *	When compiled with DEBUG and LOCKDEBUG defined, ensure that</i></td></tr>
+<tr><th id="864">864</th><td><i> *	the mutex is available.  We cannot use !mutex_owned() since</i></td></tr>
+<tr><th id="865">865</th><td><i> *	that won't work correctly for spin mutexes.</i></td></tr>
+<tr><th id="866">866</th><td><i> */</i></td></tr>
+<tr><th id="867">867</th><td><em>int</em></td></tr>
+<tr><th id="868">868</th><td><dfn class="decl def fn" id="mutex_ownable" title='mutex_ownable' data-ref="mutex_ownable" data-ref-filename="mutex_ownable">mutex_ownable</dfn>(<em>const</em> <a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col0 decl" id="50mtx" title='mtx' data-type='const kmutex_t *' data-ref="50mtx" data-ref-filename="50mtx">mtx</dfn>)</td></tr>
+<tr><th id="869">869</th><td>{</td></tr>
+<tr><th id="870">870</th><td></td></tr>
+<tr><th id="871">871</th><td><u>#<span data-ppcond="871">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="872">872</th><td>	MUTEX_TESTLOCK(mtx);</td></tr>
+<tr><th id="873">873</th><td><u>#<span data-ppcond="871">endif</span></u></td></tr>
+<tr><th id="874">874</th><td>	<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="875">875</th><td>}</td></tr>
+<tr><th id="876">876</th><td></td></tr>
+<tr><th id="877">877</th><td><i>/*</i></td></tr>
+<tr><th id="878">878</th><td><i> * mutex_tryenter:</i></td></tr>
+<tr><th id="879">879</th><td><i> *</i></td></tr>
+<tr><th id="880">880</th><td><i> *	Try to acquire the mutex; return non-zero if we did.</i></td></tr>
+<tr><th id="881">881</th><td><i> */</i></td></tr>
+<tr><th id="882">882</th><td><em>int</em></td></tr>
+<tr><th id="883">883</th><td><dfn class="decl def fn" id="mutex_tryenter" title='mutex_tryenter' data-ref="mutex_tryenter" data-ref-filename="mutex_tryenter">mutex_tryenter</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col1 decl" id="51mtx" title='mtx' data-type='kmutex_t *' data-ref="51mtx" data-ref-filename="51mtx">mtx</dfn>)</td></tr>
+<tr><th id="884">884</th><td>{</td></tr>
+<tr><th id="885">885</th><td>	<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a> <dfn class="local col2 decl" id="52curthread" title='curthread' data-type='uintptr_t' data-ref="52curthread" data-ref-filename="52curthread">curthread</dfn>;</td></tr>
+<tr><th id="886">886</th><td></td></tr>
+<tr><th id="887">887</th><td>	<i>/*</i></td></tr>
+<tr><th id="888">888</th><td><i>	 * Handle spin mutexes.</i></td></tr>
+<tr><th id="889">889</th><td><i>	 */</i></td></tr>
+<tr><th id="890">890</th><td>	<b>if</b> (<a class="macro" href="#204" title="(((mtx)-&gt;u.mtxa_owner &amp; 0x01) != 0)" data-ref="_M/MUTEX_SPIN_P">MUTEX_SPIN_P</a>(<a class="local col1 ref" href="#51mtx" title='mtx' data-ref="51mtx" data-ref-filename="51mtx">mtx</a>)) {</td></tr>
+<tr><th id="891">891</th><td>		<a class="macro" href="#149" title="do { struct cpu_info *x__ci; int x__cnt, s; s = splraiseipl(((mtx)-&gt;u.s.mtxs_ipl)); x__ci = x86_curcpu(); x__cnt = x__ci-&gt;ci_mtx_count--; __asm volatile(&quot;&quot;:::&quot;memory&quot;); if (x__cnt == 0) x__ci-&gt;ci_mtx_oldspl = (s); } while ( 0)" data-ref="_M/MUTEX_SPIN_SPLRAISE">MUTEX_SPIN_SPLRAISE</a>(<a class="local col1 ref" href="#51mtx" title='mtx' data-ref="51mtx" data-ref-filename="51mtx">mtx</a>);</td></tr>
+<tr><th id="892">892</th><td><u>#<span data-ppcond="892">ifdef</span> <a class="macro" href="#73" data-ref="_M/FULL">FULL</a></u></td></tr>
+<tr><th id="893">893</th><td>		<b>if</b> (<a class="macro" href="#134" title="__cpu_simple_lock_try(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCK_TRY">MUTEX_SPINBIT_LOCK_TRY</a>(<a class="local col1 ref" href="#51mtx" title='mtx' data-ref="51mtx" data-ref-filename="51mtx">mtx</a>)) {</td></tr>
+<tr><th id="894">894</th><td>			<a class="macro" href="#80" title="" data-ref="_M/MUTEX_WANTLOCK">MUTEX_WANTLOCK</a>(mtx);</td></tr>
+<tr><th id="895">895</th><td>			<a class="macro" href="#86" title="" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</a>(mtx);</td></tr>
+<tr><th id="896">896</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="897">897</th><td>		}</td></tr>
+<tr><th id="898">898</th><td>		<a class="macro" href="#161" title="do { struct cpu_info *x__ci = x86_curcpu(); int s = x__ci-&gt;ci_mtx_oldspl; __asm volatile(&quot;&quot;:::&quot;memory&quot;); if (++(x__ci-&gt;ci_mtx_count) == 0) spllower(s); } while ( 0)" data-ref="_M/MUTEX_SPIN_SPLRESTORE">MUTEX_SPIN_SPLRESTORE</a>(mtx);</td></tr>
+<tr><th id="899">899</th><td><u>#<span data-ppcond="892">else</span></u></td></tr>
+<tr><th id="900">900</th><td>		MUTEX_WANTLOCK(mtx);</td></tr>
+<tr><th id="901">901</th><td>		MUTEX_LOCKED(mtx);</td></tr>
+<tr><th id="902">902</th><td>		<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="903">903</th><td><u>#<span data-ppcond="892">endif</span></u></td></tr>
+<tr><th id="904">904</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="905">905</th><td>		<a class="local col2 ref" href="#52curthread" title='curthread' data-ref="52curthread" data-ref-filename="52curthread">curthread</a> = (<a class="typedef" href="../sys/stdint.h.html#uintptr_t" title='uintptr_t' data-type='__uintptr_t' data-ref="uintptr_t" data-ref-filename="uintptr_t">uintptr_t</a>)<a class="macro" href="../arch/x86/include/cpu.h.html#405" title="x86_curlwp()" data-ref="_M/curlwp">curlwp</a>;</td></tr>
+<tr><th id="906">906</th><td>		<a class="macro" href="#111" title="do { if (__builtin_expect((!(curthread != 0)) != 0, 0)) mutex_abort(__func__, 906, mtx, &quot;assertion failed: &quot; &quot;curthread != 0&quot;); } while ( 0)" data-ref="_M/MUTEX_ASSERT">MUTEX_ASSERT</a>(<a class="local col1 ref" href="#51mtx" title='mtx' data-ref="51mtx" data-ref-filename="51mtx">mtx</a>, <a class="local col2 ref" href="#52curthread" title='curthread' data-ref="52curthread" data-ref-filename="52curthread">curthread</a> != <var>0</var>);</td></tr>
+<tr><th id="907">907</th><td>		<b>if</b> (<a class="tu ref fn" href="#MUTEX_ACQUIRE" title='MUTEX_ACQUIRE' data-use='c' data-ref="MUTEX_ACQUIRE" data-ref-filename="MUTEX_ACQUIRE">MUTEX_ACQUIRE</a>(<a class="local col1 ref" href="#51mtx" title='mtx' data-ref="51mtx" data-ref-filename="51mtx">mtx</a>, <a class="local col2 ref" href="#52curthread" title='curthread' data-ref="52curthread" data-ref-filename="52curthread">curthread</a>)) {</td></tr>
+<tr><th id="908">908</th><td>			<a class="macro" href="#80" title="" data-ref="_M/MUTEX_WANTLOCK">MUTEX_WANTLOCK</a>(mtx);</td></tr>
+<tr><th id="909">909</th><td>			<a class="macro" href="#86" title="" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</a>(mtx);</td></tr>
+<tr><th id="910">910</th><td>			<a class="macro" href="#105" title="" data-ref="_M/MUTEX_DASSERT">MUTEX_DASSERT</a>(mtx,</td></tr>
+<tr><th id="911">911</th><td>			    MUTEX_OWNER(mtx-&gt;mtx_owner) == curthread);</td></tr>
+<tr><th id="912">912</th><td>			<b>return</b> <var>1</var>;</td></tr>
+<tr><th id="913">913</th><td>		}</td></tr>
+<tr><th id="914">914</th><td>	}</td></tr>
+<tr><th id="915">915</th><td></td></tr>
+<tr><th id="916">916</th><td>	<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="917">917</th><td>}</td></tr>
+<tr><th id="918">918</th><td></td></tr>
+<tr><th id="919">919</th><td><u>#<span data-ppcond="919">if</span> defined(<a class="macro" href="../arch/x86/include/mutex.h.html#56" data-ref="_M/__HAVE_SPIN_MUTEX_STUBS">__HAVE_SPIN_MUTEX_STUBS</a>) || defined(<a class="macro" href="#73" data-ref="_M/FULL">FULL</a>)</u></td></tr>
+<tr><th id="920">920</th><td><i>/*</i></td></tr>
+<tr><th id="921">921</th><td><i> * mutex_spin_retry:</i></td></tr>
+<tr><th id="922">922</th><td><i> *</i></td></tr>
+<tr><th id="923">923</th><td><i> *	Support routine for mutex_spin_enter().  Assumes that the caller</i></td></tr>
+<tr><th id="924">924</th><td><i> *	has already raised the SPL, and adjusted counters.</i></td></tr>
+<tr><th id="925">925</th><td><i> */</i></td></tr>
+<tr><th id="926">926</th><td><em>void</em></td></tr>
+<tr><th id="927">927</th><td><dfn class="decl def fn" id="mutex_spin_retry" title='mutex_spin_retry' data-ref="mutex_spin_retry" data-ref-filename="mutex_spin_retry">mutex_spin_retry</dfn>(<a class="typedef" href="../sys/mutex.h.html#kmutex_t" title='kmutex_t' data-type='struct kmutex' data-ref="kmutex_t" data-ref-filename="kmutex_t">kmutex_t</a> *<dfn class="local col8 decl" id="58mtx" title='mtx' data-type='kmutex_t *' data-ref="58mtx" data-ref-filename="58mtx">mtx</dfn>)</td></tr>
+<tr><th id="928">928</th><td>{</td></tr>
+<tr><th id="929">929</th><td><u>#<span data-ppcond="929">ifdef</span> <a class="macro" href="../../objdir.amd64/sys/arch/amd64/compile/GENERIC/opt_multiprocessor.h.html#1" data-ref="_M/MULTIPROCESSOR">MULTIPROCESSOR</a></u></td></tr>
+<tr><th id="930">930</th><td>	<a class="typedef" href="../sys/types.h.html#u_int" title='u_int' data-type='unsigned int' data-ref="u_int" data-ref-filename="u_int">u_int</a> <dfn class="local col9 decl" id="59count" title='count' data-type='u_int' data-ref="59count" data-ref-filename="59count">count</dfn>;</td></tr>
+<tr><th id="931">931</th><td>	<a class="macro" href="../dev/lockstat.h.html#159" title="uint64_t spintime = 0" data-ref="_M/LOCKSTAT_TIMER">LOCKSTAT_TIMER</a>(<dfn class="local col0 decl" id="60spintime" title='spintime' data-type='uint64_t' data-ref="60spintime" data-ref-filename="60spintime">spintime</dfn>);</td></tr>
+<tr><th id="932">932</th><td>	<a class="macro" href="../dev/lockstat.h.html#161" title="int lsflag" data-ref="_M/LOCKSTAT_FLAG">LOCKSTAT_FLAG</a>(<dfn class="local col1 decl" id="61lsflag" title='lsflag' data-type='int' data-ref="61lsflag" data-ref-filename="61lsflag">lsflag</dfn>);</td></tr>
+<tr><th id="933">933</th><td><u>#<span data-ppcond="933">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="934">934</th><td>	u_int spins = <var>0</var>;</td></tr>
+<tr><th id="935">935</th><td><u>#<span data-ppcond="933">endif</span>	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="936">936</th><td></td></tr>
+<tr><th id="937">937</th><td>	<a class="macro" href="#80" title="" data-ref="_M/MUTEX_WANTLOCK">MUTEX_WANTLOCK</a>(mtx);</td></tr>
+<tr><th id="938">938</th><td></td></tr>
+<tr><th id="939">939</th><td>	<a class="macro" href="../dev/lockstat.h.html#162" title="lsflag = lockstat_enabled" data-ref="_M/LOCKSTAT_ENTER">LOCKSTAT_ENTER</a>(<a class="local col1 ref" href="#932" title='lsflag' data-ref="61lsflag" data-ref-filename="61lsflag">lsflag</a>);</td></tr>
+<tr><th id="940">940</th><td>	<a class="macro" href="../dev/lockstat.h.html#165" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) -= cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_START_TIMER">LOCKSTAT_START_TIMER</a>(<a class="local col1 ref" href="#932" title='lsflag' data-ref="61lsflag" data-ref-filename="61lsflag">lsflag</a>, <a class="local col0 ref" href="#931" title='spintime' data-ref="60spintime" data-ref-filename="60spintime">spintime</a>);</td></tr>
+<tr><th id="941">941</th><td>	<a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a> = <a class="macro" href="../sys/lock.h.html#88" title="4" data-ref="_M/SPINLOCK_BACKOFF_MIN">SPINLOCK_BACKOFF_MIN</a>;</td></tr>
+<tr><th id="942">942</th><td></td></tr>
+<tr><th id="943">943</th><td>	<i>/*</i></td></tr>
+<tr><th id="944">944</th><td><i>	 * Spin testing the lock word and do exponential backoff</i></td></tr>
+<tr><th id="945">945</th><td><i>	 * to reduce cache line ping-ponging between CPUs.</i></td></tr>
+<tr><th id="946">946</th><td><i>	 */</i></td></tr>
+<tr><th id="947">947</th><td>	<b>do</b> {</td></tr>
+<tr><th id="948">948</th><td><u>#<span data-ppcond="948">if</span> <a class="macro" href="#64" title="1" data-ref="_M/MUTEX_PANIC_SKIP_SPIN">MUTEX_PANIC_SKIP_SPIN</a></u></td></tr>
+<tr><th id="949">949</th><td>		<b>if</b> (<a class="ref" href="../sys/systm.h.html#panicstr" title='panicstr' data-ref="panicstr" data-ref-filename="panicstr">panicstr</a> != <a class="macro" href="../sys/null.h.html#13" title="((void *)0)" data-ref="_M/NULL">NULL</a>)</td></tr>
+<tr><th id="950">950</th><td>			<b>break</b>;</td></tr>
+<tr><th id="951">951</th><td><u>#<span data-ppcond="948">endif</span></u></td></tr>
+<tr><th id="952">952</th><td>		<b>while</b> (<a class="macro" href="#131" title="__SIMPLELOCK_LOCKED_P(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCKED_P">MUTEX_SPINBIT_LOCKED_P</a>(<a class="local col8 ref" href="#58mtx" title='mtx' data-ref="58mtx" data-ref-filename="58mtx">mtx</a>)) {</td></tr>
+<tr><th id="953">953</th><td>			<a class="macro" href="../sys/lock.h.html#94" title="do { int __i; for (__i = (count); __i != 0; __i--) { x86_pause(); } if ((count) &lt; 128) (count) += (count); } while ( 0);" data-ref="_M/SPINLOCK_BACKOFF">SPINLOCK_BACKOFF</a>(<a class="local col9 ref" href="#59count" title='count' data-ref="59count" data-ref-filename="59count">count</a>);</td></tr>
+<tr><th id="954">954</th><td><u>#<span data-ppcond="954">ifdef</span> <span class="macro" data-ref="_M/LOCKDEBUG">LOCKDEBUG</span></u></td></tr>
+<tr><th id="955">955</th><td>			<b>if</b> (SPINLOCK_SPINOUT(spins))</td></tr>
+<tr><th id="956">956</th><td>				MUTEX_ABORT(mtx, <q>"spinout"</q>);</td></tr>
+<tr><th id="957">957</th><td><u>#<span data-ppcond="954">endif</span>	/* LOCKDEBUG */</u></td></tr>
+<tr><th id="958">958</th><td>		}</td></tr>
+<tr><th id="959">959</th><td>	} <b>while</b> (!<a class="macro" href="#134" title="__cpu_simple_lock_try(&amp;(mtx)-&gt;u.s.mtxs_lock)" data-ref="_M/MUTEX_SPINBIT_LOCK_TRY">MUTEX_SPINBIT_LOCK_TRY</a>(<a class="local col8 ref" href="#58mtx" title='mtx' data-ref="58mtx" data-ref-filename="58mtx">mtx</a>));</td></tr>
+<tr><th id="960">960</th><td></td></tr>
+<tr><th id="961">961</th><td>	<a class="macro" href="../dev/lockstat.h.html#171" title="do { if (__builtin_expect((lsflag) != 0, 0)) (spintime) += cpu_counter(); } while ( 0)" data-ref="_M/LOCKSTAT_STOP_TIMER">LOCKSTAT_STOP_TIMER</a>(<a class="local col1 ref" href="#932" title='lsflag' data-ref="61lsflag" data-ref-filename="61lsflag">lsflag</a>, <a class="local col0 ref" href="#931" title='spintime' data-ref="60spintime" data-ref-filename="60spintime">spintime</a>);</td></tr>
+<tr><th id="962">962</th><td>	<a class="macro" href="../dev/lockstat.h.html#144" title="do { if (__builtin_expect((lsflag) != 0, 0)) lockstat_event((uintptr_t)(mtx), (uintptr_t)__builtin_return_address(0), (0x00000200 | 0x00000001), (1), (spintime)); } while ( 0);" data-ref="_M/LOCKSTAT_EVENT">LOCKSTAT_EVENT</a>(<a class="local col1 ref" href="#932" title='lsflag' data-ref="61lsflag" data-ref-filename="61lsflag">lsflag</a>, <a class="local col8 ref" href="#58mtx" title='mtx' data-ref="58mtx" data-ref-filename="58mtx">mtx</a>, <a class="macro" href="../dev/lockstat.h.html#113" title="0x00000200" data-ref="_M/LB_SPIN_MUTEX">LB_SPIN_MUTEX</a> | <a class="macro" href="../dev/lockstat.h.html#102" title="0x00000001" data-ref="_M/LB_SPIN">LB_SPIN</a>, <var>1</var>, <a class="local col0 ref" href="#931" title='spintime' data-ref="60spintime" data-ref-filename="60spintime">spintime</a>);</td></tr>
+<tr><th id="963">963</th><td>	<a class="macro" href="../dev/lockstat.h.html#163" title="" data-ref="_M/LOCKSTAT_EXIT">LOCKSTAT_EXIT</a>(lsflag);</td></tr>
+<tr><th id="964">964</th><td></td></tr>
+<tr><th id="965">965</th><td>	<a class="macro" href="#86" title="" data-ref="_M/MUTEX_LOCKED">MUTEX_LOCKED</a>(mtx);</td></tr>
+<tr><th id="966">966</th><td><u>#<span data-ppcond="929">else</span>	/* MULTIPROCESSOR */</u></td></tr>
+<tr><th id="967">967</th><td>	MUTEX_ABORT(mtx, <q>"locking against myself"</q>);</td></tr>
+<tr><th id="968">968</th><td><u>#<span data-ppcond="929">endif</span>	/* MULTIPROCESSOR */</u></td></tr>
+<tr><th id="969">969</th><td>}</td></tr>
+<tr><th id="970">970</th><td><u>#<span data-ppcond="919">endif</span>	/* defined(__HAVE_SPIN_MUTEX_STUBS) || defined(FULL) */</u></td></tr>
+<tr><th id="971">971</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>stream_buffer_encoder.c source code [netbsd/external/public-domain/xz/dist/src/liblzma/common/stream_buffer_encoder.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/public-domain/xz/dist/src/liblzma/common/stream_buffer_encoder.c'; var root_path = '../../../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../../../..'>netbsd</a>/<a href='../../../../../..'>external</a>/<a href='../../../../..'>public-domain</a>/<a href='../../../..'>xz</a>/<a href='../../..'>dist</a>/<a href='../..'>src</a>/<a href='..'>liblzma</a>/<a href='./'>common</a>/<a href='stream_buffer_encoder.c.html'>stream_buffer_encoder.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>///////////////////////////////////////////////////////////////////////////////</i></td></tr>
+<tr><th id="2">2</th><td><i>//</i></td></tr>
+<tr><th id="3">3</th><td><i>/// \file       stream_buffer_encoder.c</i></td></tr>
+<tr><th id="4">4</th><td><i>/// \brief      Single-call .xz Stream encoder</i></td></tr>
+<tr><th id="5">5</th><td><i>//</i></td></tr>
+<tr><th id="6">6</th><td><i>//  Author:     Lasse Collin</i></td></tr>
+<tr><th id="7">7</th><td><i>//</i></td></tr>
+<tr><th id="8">8</th><td><i>//  This file has been put into the public domain.</i></td></tr>
+<tr><th id="9">9</th><td><i>//  You can do whatever you want with this file.</i></td></tr>
+<tr><th id="10">10</th><td><i>//</i></td></tr>
+<tr><th id="11">11</th><td><i>///////////////////////////////////////////////////////////////////////////////</i></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#include <a href="index.h.html">"index.h"</a></u></td></tr>
+<tr><th id="14">14</th><td></td></tr>
+<tr><th id="15">15</th><td></td></tr>
+<tr><th id="16">16</th><td><i class="doc">/// Maximum size of Index that has exactly one Record.</i></td></tr>
+<tr><th id="17">17</th><td><i class="doc">/// Index Indicator + Number of Records + Record + CRC32 rounded up to</i></td></tr>
+<tr><th id="18">18</th><td><i class="doc">/// the next multiple of four.</i></td></tr>
+<tr><th id="19">19</th><td><u>#define <dfn class="macro" id="_M/INDEX_BOUND" data-ref="_M/INDEX_BOUND">INDEX_BOUND</dfn> ((1 + 1 + 2 * LZMA_VLI_BYTES_MAX + 4 + 3) &amp; ~3)</u></td></tr>
+<tr><th id="20">20</th><td></td></tr>
+<tr><th id="21">21</th><td><i class="doc">/// Stream Header, Stream Footer, and Index</i></td></tr>
+<tr><th id="22">22</th><td><u>#define <dfn class="macro" id="_M/HEADERS_BOUND" data-ref="_M/HEADERS_BOUND">HEADERS_BOUND</dfn> (2 * LZMA_STREAM_HEADER_SIZE + INDEX_BOUND)</u></td></tr>
+<tr><th id="23">23</th><td></td></tr>
+<tr><th id="24">24</th><td></td></tr>
+<tr><th id="25">25</th><td><b>extern</b> <a class="macro" href="common.h.html#33" title="__attribute__((__visibility__(&quot;default&quot;))) size_t" data-ref="_M/LZMA_API">LZMA_API</a>(<a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a>)</td></tr>
+<tr><th id="26">26</th><td><dfn class="decl def fn" id="lzma_stream_buffer_bound" title='lzma_stream_buffer_bound' data-ref="lzma_stream_buffer_bound" data-ref-filename="lzma_stream_buffer_bound">lzma_stream_buffer_bound</dfn>(<a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="1uncompressed_size" title='uncompressed_size' data-type='size_t' data-ref="1uncompressed_size" data-ref-filename="1uncompressed_size">uncompressed_size</dfn>)</td></tr>
+<tr><th id="27">27</th><td>{</td></tr>
+<tr><th id="28">28</th><td>	<i>// Get the maximum possible size of a Block.</i></td></tr>
+<tr><th id="29">29</th><td>	<em>const</em> <a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col2 decl" id="2block_bound" title='block_bound' data-type='const size_t' data-ref="2block_bound" data-ref-filename="2block_bound">block_bound</dfn> = <a class="ref fn" href="../api/lzma/block.h.html#lzma_block_buffer_bound" title='lzma_block_buffer_bound' data-ref="lzma_block_buffer_bound" data-ref-filename="lzma_block_buffer_bound">lzma_block_buffer_bound</a>(<a class="local col1 ref" href="#1uncompressed_size" title='uncompressed_size' data-ref="1uncompressed_size" data-ref-filename="1uncompressed_size">uncompressed_size</a>);</td></tr>
+<tr><th id="30">30</th><td>	<b>if</b> (<a class="local col2 ref" href="#2block_bound" title='block_bound' data-ref="2block_bound" data-ref-filename="2block_bound">block_bound</a> == <var>0</var>)</td></tr>
+<tr><th id="31">31</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="32">32</th><td></td></tr>
+<tr><th id="33">33</th><td>	<i>// Catch the possible integer overflow and also prevent the size of</i></td></tr>
+<tr><th id="34">34</th><td><i>	// the Stream exceeding LZMA_VLI_MAX (theoretically possible on</i></td></tr>
+<tr><th id="35">35</th><td><i>	// 64-bit systems).</i></td></tr>
+<tr><th id="36">36</th><td>	<b>if</b> (<a class="macro" href="../../common/sysdefs.h.html#189" title="((4294967295U) &lt; ((18446744073709551615ULL / 2)) ? (4294967295U) : ((18446744073709551615ULL / 2)))" data-ref="_M/my_min">my_min</a>(<a class="macro" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/common_int_limits.h.html#128" title="4294967295U" data-ref="_M/SIZE_MAX">SIZE_MAX</a>, <a class="macro" href="../api/lzma/vli.h.html#34" title="(18446744073709551615ULL / 2)" data-ref="_M/LZMA_VLI_MAX">LZMA_VLI_MAX</a>) - <a class="local col2 ref" href="#2block_bound" title='block_bound' data-ref="2block_bound" data-ref-filename="2block_bound">block_bound</a> &lt; <a class="macro" href="#22" title="(2 * 12 + ((1 + 1 + 2 * 9 + 4 + 3) &amp; ~3))" data-ref="_M/HEADERS_BOUND">HEADERS_BOUND</a>)</td></tr>
+<tr><th id="37">37</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="38">38</th><td></td></tr>
+<tr><th id="39">39</th><td>	<b>return</b> <a class="local col2 ref" href="#2block_bound" title='block_bound' data-ref="2block_bound" data-ref-filename="2block_bound">block_bound</a> + <a class="macro" href="#22" title="(2 * 12 + ((1 + 1 + 2 * 9 + 4 + 3) &amp; ~3))" data-ref="_M/HEADERS_BOUND">HEADERS_BOUND</a>;</td></tr>
+<tr><th id="40">40</th><td>}</td></tr>
+<tr><th id="41">41</th><td></td></tr>
+<tr><th id="42">42</th><td></td></tr>
+<tr><th id="43">43</th><td><b>extern</b> <a class="macro" href="common.h.html#33" title="__attribute__((__visibility__(&quot;default&quot;))) lzma_ret" data-ref="_M/LZMA_API">LZMA_API</a>(<a class="typedef" href="../api/lzma/base.h.html#lzma_ret" title='lzma_ret' data-type='enum lzma_ret' data-ref="lzma_ret" data-ref-filename="lzma_ret">lzma_ret</a>)</td></tr>
+<tr><th id="44">44</th><td><dfn class="decl def fn" id="lzma_stream_buffer_encode" title='lzma_stream_buffer_encode' data-ref="lzma_stream_buffer_encode" data-ref-filename="lzma_stream_buffer_encode">lzma_stream_buffer_encode</dfn>(<a class="typedef" href="../api/lzma/filter.h.html#lzma_filter" title='lzma_filter' data-type='struct lzma_filter' data-ref="lzma_filter" data-ref-filename="lzma_filter">lzma_filter</a> *<dfn class="local col3 decl" id="3filters" title='filters' data-type='lzma_filter *' data-ref="3filters" data-ref-filename="3filters">filters</dfn>, <a class="typedef" href="../api/lzma/check.h.html#lzma_check" title='lzma_check' data-type='enum lzma_check' data-ref="lzma_check" data-ref-filename="lzma_check">lzma_check</a> <dfn class="local col4 decl" id="4check" title='check' data-type='lzma_check' data-ref="4check" data-ref-filename="4check">check</dfn>,</td></tr>
+<tr><th id="45">45</th><td>		<em>const</em> <a class="typedef" href="../api/lzma/base.h.html#lzma_allocator" title='lzma_allocator' data-type='struct lzma_allocator' data-ref="lzma_allocator" data-ref-filename="lzma_allocator">lzma_allocator</a> *<dfn class="local col5 decl" id="5allocator" title='allocator' data-type='const lzma_allocator *' data-ref="5allocator" data-ref-filename="5allocator">allocator</dfn>,</td></tr>
+<tr><th id="46">46</th><td>		<em>const</em> <a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> *<dfn class="local col6 decl" id="6in" title='in' data-type='const uint8_t *' data-ref="6in" data-ref-filename="6in">in</dfn>, <a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col7 decl" id="7in_size" title='in_size' data-type='size_t' data-ref="7in_size" data-ref-filename="7in_size">in_size</dfn>,</td></tr>
+<tr><th id="47">47</th><td>		<a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#uint8_t" title='uint8_t' data-type='__uint8_t' data-ref="uint8_t" data-ref-filename="uint8_t">uint8_t</a> *<dfn class="local col8 decl" id="8out" title='out' data-type='uint8_t *' data-ref="8out" data-ref-filename="8out">out</dfn>, <a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> *<dfn class="local col9 decl" id="9out_pos_ptr" title='out_pos_ptr' data-type='size_t *' data-ref="9out_pos_ptr" data-ref-filename="9out_pos_ptr">out_pos_ptr</dfn>, <a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col0 decl" id="10out_size" title='out_size' data-type='size_t' data-ref="10out_size" data-ref-filename="10out_size">out_size</dfn>)</td></tr>
+<tr><th id="48">48</th><td>{</td></tr>
+<tr><th id="49">49</th><td>	<i>// Sanity checks</i></td></tr>
+<tr><th id="50">50</th><td>	<b>if</b> (<a class="local col3 ref" href="#3filters" title='filters' data-ref="3filters" data-ref-filename="3filters">filters</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> || (<em>unsigned</em> <em>int</em>)(<a class="local col4 ref" href="#4check" title='check' data-ref="4check" data-ref-filename="4check">check</a>) &gt; <a class="macro" href="../api/lzma/check.h.html#68" title="15" data-ref="_M/LZMA_CHECK_ID_MAX">LZMA_CHECK_ID_MAX</a></td></tr>
+<tr><th id="51">51</th><td>			|| (<a class="local col6 ref" href="#6in" title='in' data-ref="6in" data-ref-filename="6in">in</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> &amp;&amp; <a class="local col7 ref" href="#7in_size" title='in_size' data-ref="7in_size" data-ref-filename="7in_size">in_size</a> != <var>0</var>) || <a class="local col8 ref" href="#8out" title='out' data-ref="8out" data-ref-filename="8out">out</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span></td></tr>
+<tr><th id="52">52</th><td>			|| <a class="local col9 ref" href="#9out_pos_ptr" title='out_pos_ptr' data-ref="9out_pos_ptr" data-ref-filename="9out_pos_ptr">out_pos_ptr</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> || *<a class="local col9 ref" href="#9out_pos_ptr" title='out_pos_ptr' data-ref="9out_pos_ptr" data-ref-filename="9out_pos_ptr">out_pos_ptr</a> &gt; <a class="local col0 ref" href="#10out_size" title='out_size' data-ref="10out_size" data-ref-filename="10out_size">out_size</a>)</td></tr>
+<tr><th id="53">53</th><td>		<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_PROG_ERROR" title='LZMA_PROG_ERROR' data-ref="LZMA_PROG_ERROR" data-ref-filename="LZMA_PROG_ERROR">LZMA_PROG_ERROR</a>;</td></tr>
+<tr><th id="54">54</th><td></td></tr>
+<tr><th id="55">55</th><td>	<b>if</b> (!<a class="ref fn" href="../api/lzma/check.h.html#lzma_check_is_supported" title='lzma_check_is_supported' data-ref="lzma_check_is_supported" data-ref-filename="lzma_check_is_supported">lzma_check_is_supported</a>(<a class="local col4 ref" href="#4check" title='check' data-ref="4check" data-ref-filename="4check">check</a>))</td></tr>
+<tr><th id="56">56</th><td>		<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_UNSUPPORTED_CHECK" title='LZMA_UNSUPPORTED_CHECK' data-ref="LZMA_UNSUPPORTED_CHECK" data-ref-filename="LZMA_UNSUPPORTED_CHECK">LZMA_UNSUPPORTED_CHECK</a>;</td></tr>
+<tr><th id="57">57</th><td></td></tr>
+<tr><th id="58">58</th><td>	<i>// Note for the paranoids: Index encoder prevents the Stream from</i></td></tr>
+<tr><th id="59">59</th><td><i>	// getting too big and still being accepted with LZMA_OK, and Block</i></td></tr>
+<tr><th id="60">60</th><td><i>	// encoder catches if the input is too big. So we don't need to</i></td></tr>
+<tr><th id="61">61</th><td><i>	// separately check if the buffers are too big.</i></td></tr>
+<tr><th id="62">62</th><td><i></i></td></tr>
+<tr><th id="63">63</th><td><i>	// Use a local copy. We update *out_pos_ptr only if everything</i></td></tr>
+<tr><th id="64">64</th><td><i>	// succeeds.</i></td></tr>
+<tr><th id="65">65</th><td>	<a class="typedef" href="../../../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#size_t" title='size_t' data-type='unsigned int' data-ref="size_t" data-ref-filename="size_t">size_t</a> <dfn class="local col1 decl" id="11out_pos" title='out_pos' data-type='size_t' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</dfn> = *<a class="local col9 ref" href="#9out_pos_ptr" title='out_pos_ptr' data-ref="9out_pos_ptr" data-ref-filename="9out_pos_ptr">out_pos_ptr</a>;</td></tr>
+<tr><th id="66">66</th><td></td></tr>
+<tr><th id="67">67</th><td>	<i>// Check that there's enough space for both Stream Header and</i></td></tr>
+<tr><th id="68">68</th><td><i>	// Stream Footer.</i></td></tr>
+<tr><th id="69">69</th><td>	<b>if</b> (<a class="local col0 ref" href="#10out_size" title='out_size' data-ref="10out_size" data-ref-filename="10out_size">out_size</a> - <a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a> &lt;= <var>2</var> * <a class="macro" href="../api/lzma/stream_flags.h.html#27" title="12" data-ref="_M/LZMA_STREAM_HEADER_SIZE">LZMA_STREAM_HEADER_SIZE</a>)</td></tr>
+<tr><th id="70">70</th><td>		<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_BUF_ERROR" title='LZMA_BUF_ERROR' data-ref="LZMA_BUF_ERROR" data-ref-filename="LZMA_BUF_ERROR">LZMA_BUF_ERROR</a>;</td></tr>
+<tr><th id="71">71</th><td></td></tr>
+<tr><th id="72">72</th><td>	<i>// Reserve space for Stream Footer so we don't need to check for</i></td></tr>
+<tr><th id="73">73</th><td><i>	// available space again before encoding Stream Footer.</i></td></tr>
+<tr><th id="74">74</th><td>	<a class="local col0 ref" href="#10out_size" title='out_size' data-ref="10out_size" data-ref-filename="10out_size">out_size</a> -= <a class="macro" href="../api/lzma/stream_flags.h.html#27" title="12" data-ref="_M/LZMA_STREAM_HEADER_SIZE">LZMA_STREAM_HEADER_SIZE</a>;</td></tr>
+<tr><th id="75">75</th><td></td></tr>
+<tr><th id="76">76</th><td>	<i>// Encode the Stream Header.</i></td></tr>
+<tr><th id="77">77</th><td>	<a class="typedef" href="../api/lzma/stream_flags.h.html#lzma_stream_flags" title='lzma_stream_flags' data-type='struct lzma_stream_flags' data-ref="lzma_stream_flags" data-ref-filename="lzma_stream_flags">lzma_stream_flags</a> <dfn class="local col2 decl" id="12stream_flags" title='stream_flags' data-type='lzma_stream_flags' data-ref="12stream_flags" data-ref-filename="12stream_flags">stream_flags</dfn> = {</td></tr>
+<tr><th id="78">78</th><td>		.<a class="ref field" href="../api/lzma/stream_flags.h.html#(anonymous)::version" title='(anonymous struct)::version' data-ref="(anonymous)::version" data-ref-filename="(anonymous)..version">version</a> = <var>0</var>,</td></tr>
+<tr><th id="79">79</th><td>		.<a class="ref field" href="../api/lzma/stream_flags.h.html#(anonymous)::check" title='(anonymous struct)::check' data-ref="(anonymous)::check" data-ref-filename="(anonymous)..check">check</a> = <a class="local col4 ref" href="#4check" title='check' data-ref="4check" data-ref-filename="4check">check</a>,</td></tr>
+<tr><th id="80">80</th><td>	};</td></tr>
+<tr><th id="81">81</th><td></td></tr>
+<tr><th id="82">82</th><td>	<b>if</b> (<a class="ref fn" href="../api/lzma/stream_flags.h.html#lzma_stream_header_encode" title='lzma_stream_header_encode' data-ref="lzma_stream_header_encode" data-ref-filename="lzma_stream_header_encode">lzma_stream_header_encode</a>(&amp;<a class="local col2 ref" href="#12stream_flags" title='stream_flags' data-ref="12stream_flags" data-ref-filename="12stream_flags">stream_flags</a>, <a class="local col8 ref" href="#8out" title='out' data-ref="8out" data-ref-filename="8out">out</a> + <a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a>)</td></tr>
+<tr><th id="83">83</th><td>			!= <a class="enum" href="../api/lzma/base.h.html#LZMA_OK" title='LZMA_OK' data-ref="LZMA_OK" data-ref-filename="LZMA_OK">LZMA_OK</a>)</td></tr>
+<tr><th id="84">84</th><td>		<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_PROG_ERROR" title='LZMA_PROG_ERROR' data-ref="LZMA_PROG_ERROR" data-ref-filename="LZMA_PROG_ERROR">LZMA_PROG_ERROR</a>;</td></tr>
+<tr><th id="85">85</th><td></td></tr>
+<tr><th id="86">86</th><td>	<a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a> += <a class="macro" href="../api/lzma/stream_flags.h.html#27" title="12" data-ref="_M/LZMA_STREAM_HEADER_SIZE">LZMA_STREAM_HEADER_SIZE</a>;</td></tr>
+<tr><th id="87">87</th><td></td></tr>
+<tr><th id="88">88</th><td>	<i>// Encode a Block but only if there is at least one byte of input.</i></td></tr>
+<tr><th id="89">89</th><td>	<a class="typedef" href="../api/lzma/block.h.html#lzma_block" title='lzma_block' data-type='struct lzma_block' data-ref="lzma_block" data-ref-filename="lzma_block">lzma_block</a> <dfn class="local col3 decl" id="13block" title='block' data-type='lzma_block' data-ref="13block" data-ref-filename="13block">block</dfn> = {</td></tr>
+<tr><th id="90">90</th><td>		.<a class="ref field" href="../api/lzma/block.h.html#(anonymous)::version" title='(anonymous struct)::version' data-ref="(anonymous)::version" data-ref-filename="(anonymous)..version">version</a> = <var>0</var>,</td></tr>
+<tr><th id="91">91</th><td>		.<a class="ref field" href="../api/lzma/block.h.html#(anonymous)::check" title='(anonymous struct)::check' data-ref="(anonymous)::check" data-ref-filename="(anonymous)..check">check</a> = <a class="local col4 ref" href="#4check" title='check' data-ref="4check" data-ref-filename="4check">check</a>,</td></tr>
+<tr><th id="92">92</th><td>		.<a class="ref field" href="../api/lzma/block.h.html#(anonymous)::filters" title='(anonymous struct)::filters' data-ref="(anonymous)::filters" data-ref-filename="(anonymous)..filters">filters</a> = <a class="local col3 ref" href="#3filters" title='filters' data-ref="3filters" data-ref-filename="3filters">filters</a>,</td></tr>
+<tr><th id="93">93</th><td>	};</td></tr>
+<tr><th id="94">94</th><td></td></tr>
+<tr><th id="95">95</th><td>	<b>if</b> (<a class="local col7 ref" href="#7in_size" title='in_size' data-ref="7in_size" data-ref-filename="7in_size">in_size</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="96">96</th><td>		<a class="macro" href="common.h.html#278" title="do { const lzma_ret ret_ = (lzma_block_buffer_encode(&amp;block, allocator, in, in_size, out, &amp;out_pos, out_size)); if (ret_ != LZMA_OK) return ret_; } while (0)" data-ref="_M/return_if_error">return_if_error</a>(<a class="ref fn" href="../api/lzma/block.h.html#lzma_block_buffer_encode" title='lzma_block_buffer_encode' data-ref="lzma_block_buffer_encode" data-ref-filename="lzma_block_buffer_encode">lzma_block_buffer_encode</a>(&amp;<a class="local col3 ref" href="#13block" title='block' data-ref="13block" data-ref-filename="13block">block</a>, <a class="local col5 ref" href="#5allocator" title='allocator' data-ref="5allocator" data-ref-filename="5allocator">allocator</a>,</td></tr>
+<tr><th id="97">97</th><td>				<a class="local col6 ref" href="#6in" title='in' data-ref="6in" data-ref-filename="6in">in</a>, <a class="local col7 ref" href="#7in_size" title='in_size' data-ref="7in_size" data-ref-filename="7in_size">in_size</a>, <a class="local col8 ref" href="#8out" title='out' data-ref="8out" data-ref-filename="8out">out</a>, &amp;<a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a>, <a class="local col0 ref" href="#10out_size" title='out_size' data-ref="10out_size" data-ref-filename="10out_size">out_size</a>));</td></tr>
+<tr><th id="98">98</th><td></td></tr>
+<tr><th id="99">99</th><td>	<i>// Index</i></td></tr>
+<tr><th id="100">100</th><td>	{</td></tr>
+<tr><th id="101">101</th><td>		<i>// Create an Index. It will have one Record if there was</i></td></tr>
+<tr><th id="102">102</th><td><i>		// at least one byte of input to encode. Otherwise the</i></td></tr>
+<tr><th id="103">103</th><td><i>		// Index will be empty.</i></td></tr>
+<tr><th id="104">104</th><td>		<a class="typedef" href="../api/lzma/index.h.html#lzma_index" title='lzma_index' data-type='struct lzma_index_s' data-ref="lzma_index" data-ref-filename="lzma_index">lzma_index</a> *<dfn class="local col4 decl" id="14i" title='i' data-type='lzma_index *' data-ref="14i" data-ref-filename="14i">i</dfn> = <a class="ref fn" href="../api/lzma/index.h.html#lzma_index_init" title='lzma_index_init' data-ref="lzma_index_init" data-ref-filename="lzma_index_init">lzma_index_init</a>(<a class="local col5 ref" href="#5allocator" title='allocator' data-ref="5allocator" data-ref-filename="5allocator">allocator</a>);</td></tr>
+<tr><th id="105">105</th><td>		<b>if</b> (<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a> == <span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span>)</td></tr>
+<tr><th id="106">106</th><td>			<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_MEM_ERROR" title='LZMA_MEM_ERROR' data-ref="LZMA_MEM_ERROR" data-ref-filename="LZMA_MEM_ERROR">LZMA_MEM_ERROR</a>;</td></tr>
+<tr><th id="107">107</th><td></td></tr>
+<tr><th id="108">108</th><td>		<a class="typedef" href="../api/lzma/base.h.html#lzma_ret" title='lzma_ret' data-type='enum lzma_ret' data-ref="lzma_ret" data-ref-filename="lzma_ret">lzma_ret</a> <dfn class="local col5 decl" id="15ret" title='ret' data-type='lzma_ret' data-ref="15ret" data-ref-filename="15ret">ret</dfn> = <a class="enum" href="../api/lzma/base.h.html#LZMA_OK" title='LZMA_OK' data-ref="LZMA_OK" data-ref-filename="LZMA_OK">LZMA_OK</a>;</td></tr>
+<tr><th id="109">109</th><td></td></tr>
+<tr><th id="110">110</th><td>		<b>if</b> (<a class="local col7 ref" href="#7in_size" title='in_size' data-ref="7in_size" data-ref-filename="7in_size">in_size</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="111">111</th><td>			<a class="local col5 ref" href="#15ret" title='ret' data-ref="15ret" data-ref-filename="15ret">ret</a> = <a class="ref fn" href="../api/lzma/index.h.html#lzma_index_append" title='lzma_index_append' data-ref="lzma_index_append" data-ref-filename="lzma_index_append">lzma_index_append</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>, <a class="local col5 ref" href="#5allocator" title='allocator' data-ref="5allocator" data-ref-filename="5allocator">allocator</a>,</td></tr>
+<tr><th id="112">112</th><td>					<a class="ref fn" href="../api/lzma/block.h.html#lzma_block_unpadded_size" title='lzma_block_unpadded_size' data-ref="lzma_block_unpadded_size" data-ref-filename="lzma_block_unpadded_size">lzma_block_unpadded_size</a>(&amp;<a class="local col3 ref" href="#13block" title='block' data-ref="13block" data-ref-filename="13block">block</a>),</td></tr>
+<tr><th id="113">113</th><td>					<a class="local col3 ref" href="#13block" title='block' data-ref="13block" data-ref-filename="13block">block</a>.<a class="ref field" href="../api/lzma/block.h.html#(anonymous)::uncompressed_size" title='(anonymous struct)::uncompressed_size' data-ref="(anonymous)::uncompressed_size" data-ref-filename="(anonymous)..uncompressed_size">uncompressed_size</a>);</td></tr>
+<tr><th id="114">114</th><td></td></tr>
+<tr><th id="115">115</th><td>		<i>// If adding the Record was successful, encode the Index</i></td></tr>
+<tr><th id="116">116</th><td><i>		// and get its size which will be stored into Stream Footer.</i></td></tr>
+<tr><th id="117">117</th><td>		<b>if</b> (<a class="local col5 ref" href="#15ret" title='ret' data-ref="15ret" data-ref-filename="15ret">ret</a> == <a class="enum" href="../api/lzma/base.h.html#LZMA_OK" title='LZMA_OK' data-ref="LZMA_OK" data-ref-filename="LZMA_OK">LZMA_OK</a>) {</td></tr>
+<tr><th id="118">118</th><td>			<a class="local col5 ref" href="#15ret" title='ret' data-ref="15ret" data-ref-filename="15ret">ret</a> = <a class="ref fn" href="../api/lzma/index.h.html#lzma_index_buffer_encode" title='lzma_index_buffer_encode' data-ref="lzma_index_buffer_encode" data-ref-filename="lzma_index_buffer_encode">lzma_index_buffer_encode</a>(</td></tr>
+<tr><th id="119">119</th><td>					<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>, <a class="local col8 ref" href="#8out" title='out' data-ref="8out" data-ref-filename="8out">out</a>, &amp;<a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a>, <a class="local col0 ref" href="#10out_size" title='out_size' data-ref="10out_size" data-ref-filename="10out_size">out_size</a>);</td></tr>
+<tr><th id="120">120</th><td></td></tr>
+<tr><th id="121">121</th><td>			<a class="local col2 ref" href="#12stream_flags" title='stream_flags' data-ref="12stream_flags" data-ref-filename="12stream_flags">stream_flags</a>.<a class="ref field" href="../api/lzma/stream_flags.h.html#(anonymous)::backward_size" title='(anonymous struct)::backward_size' data-ref="(anonymous)::backward_size" data-ref-filename="(anonymous)..backward_size">backward_size</a> = <a class="ref fn" href="../api/lzma/index.h.html#lzma_index_size" title='lzma_index_size' data-ref="lzma_index_size" data-ref-filename="lzma_index_size">lzma_index_size</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>);</td></tr>
+<tr><th id="122">122</th><td>		}</td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td>		<a class="ref fn" href="../api/lzma/index.h.html#lzma_index_end" title='lzma_index_end' data-ref="lzma_index_end" data-ref-filename="lzma_index_end">lzma_index_end</a>(<a class="local col4 ref" href="#14i" title='i' data-ref="14i" data-ref-filename="14i">i</a>, <a class="local col5 ref" href="#5allocator" title='allocator' data-ref="5allocator" data-ref-filename="5allocator">allocator</a>);</td></tr>
+<tr><th id="125">125</th><td></td></tr>
+<tr><th id="126">126</th><td>		<b>if</b> (<a class="local col5 ref" href="#15ret" title='ret' data-ref="15ret" data-ref-filename="15ret">ret</a> != <a class="enum" href="../api/lzma/base.h.html#LZMA_OK" title='LZMA_OK' data-ref="LZMA_OK" data-ref-filename="LZMA_OK">LZMA_OK</a>)</td></tr>
+<tr><th id="127">127</th><td>			<b>return</b> <a class="local col5 ref" href="#15ret" title='ret' data-ref="15ret" data-ref-filename="15ret">ret</a>;</td></tr>
+<tr><th id="128">128</th><td>	}</td></tr>
+<tr><th id="129">129</th><td></td></tr>
+<tr><th id="130">130</th><td>	<i>// Stream Footer. We have already reserved space for this.</i></td></tr>
+<tr><th id="131">131</th><td>	<b>if</b> (<a class="ref fn" href="../api/lzma/stream_flags.h.html#lzma_stream_footer_encode" title='lzma_stream_footer_encode' data-ref="lzma_stream_footer_encode" data-ref-filename="lzma_stream_footer_encode">lzma_stream_footer_encode</a>(&amp;<a class="local col2 ref" href="#12stream_flags" title='stream_flags' data-ref="12stream_flags" data-ref-filename="12stream_flags">stream_flags</a>, <a class="local col8 ref" href="#8out" title='out' data-ref="8out" data-ref-filename="8out">out</a> + <a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a>)</td></tr>
+<tr><th id="132">132</th><td>			!= <a class="enum" href="../api/lzma/base.h.html#LZMA_OK" title='LZMA_OK' data-ref="LZMA_OK" data-ref-filename="LZMA_OK">LZMA_OK</a>)</td></tr>
+<tr><th id="133">133</th><td>		<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_PROG_ERROR" title='LZMA_PROG_ERROR' data-ref="LZMA_PROG_ERROR" data-ref-filename="LZMA_PROG_ERROR">LZMA_PROG_ERROR</a>;</td></tr>
+<tr><th id="134">134</th><td></td></tr>
+<tr><th id="135">135</th><td>	<a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a> += <a class="macro" href="../api/lzma/stream_flags.h.html#27" title="12" data-ref="_M/LZMA_STREAM_HEADER_SIZE">LZMA_STREAM_HEADER_SIZE</a>;</td></tr>
+<tr><th id="136">136</th><td></td></tr>
+<tr><th id="137">137</th><td>	<i>// Everything went fine, make the new output position available</i></td></tr>
+<tr><th id="138">138</th><td><i>	// to the application.</i></td></tr>
+<tr><th id="139">139</th><td>	*<a class="local col9 ref" href="#9out_pos_ptr" title='out_pos_ptr' data-ref="9out_pos_ptr" data-ref-filename="9out_pos_ptr">out_pos_ptr</a> = <a class="local col1 ref" href="#11out_pos" title='out_pos' data-ref="11out_pos" data-ref-filename="11out_pos">out_pos</a>;</td></tr>
+<tr><th id="140">140</th><td>	<b>return</b> <a class="enum" href="../api/lzma/base.h.html#LZMA_OK" title='LZMA_OK' data-ref="LZMA_OK" data-ref-filename="LZMA_OK">LZMA_OK</a>;</td></tr>
+<tr><th id="141">141</th><td>}</td></tr>
+<tr><th id="142">142</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

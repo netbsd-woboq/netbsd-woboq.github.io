@@ -1,0 +1,1470 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>refclock_msfees.c source code [netbsd/external/bsd/ntp/dist/ntpd/refclock_msfees.c] - Woboq Code Browser</title>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/refclock_msfees.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='refclock_msfees.c.html'>refclock_msfees.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: refclock_msfees.c,v 1.4 2016/01/08 21:35:39 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/* refclock_ees - clock driver for the EES M201 receiver */</i></td></tr>
+<tr><th id="4">4</th><td></td></tr>
+<tr><th id="5">5</th><td><u>#<span data-ppcond="5">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="6">6</th><td><u>#include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="7">7</th><td><u>#<span data-ppcond="5">endif</span></u></td></tr>
+<tr><th id="8">8</th><td></td></tr>
+<tr><th id="9">9</th><td><u>#include <a href="../include/ntp_types.h.html">"ntp_types.h"</a></u></td></tr>
+<tr><th id="10">10</th><td></td></tr>
+<tr><th id="11">11</th><td><u>#<span data-ppcond="11">if</span> defined(<a class="macro" href="../../include/config.h.html#1519" data-ref="_M/REFCLOCK">REFCLOCK</a>) &amp;&amp; defined(<span class="macro" data-ref="_M/CLOCK_MSFEES">CLOCK_MSFEES</span>) &amp;&amp; defined(<span class="macro" data-ref="_M/PPS">PPS</span>)</u></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><i>/* Currently REQUIRES STREAM and PPSCD. CLK and CBREAK modes</i></td></tr>
+<tr><th id="14">14</th><td><i> * were removed as the code was overly hairy, they weren't in use</i></td></tr>
+<tr><th id="15">15</th><td><i> * (hence probably didn't work).  Still in RCS file at cl.cam.ac.uk</i></td></tr>
+<tr><th id="16">16</th><td><i> */</i></td></tr>
+<tr><th id="17">17</th><td></td></tr>
+<tr><th id="18">18</th><td><u>#include "ntpd.h"</u></td></tr>
+<tr><th id="19">19</th><td><u>#include "ntp_io.h"</u></td></tr>
+<tr><th id="20">20</th><td><u>#include "ntp_refclock.h"</u></td></tr>
+<tr><th id="21">21</th><td><u>#include "timevalops.h"</u></td></tr>
+<tr><th id="22">22</th><td></td></tr>
+<tr><th id="23">23</th><td><u>#include &lt;ctype.h&gt;</u></td></tr>
+<tr><th id="24">24</th><td><u>#if defined(HAVE_BSD_TTYS)</u></td></tr>
+<tr><th id="25">25</th><td><u>#include &lt;sgtty.h&gt;</u></td></tr>
+<tr><th id="26">26</th><td><u>#endif /* HAVE_BSD_TTYS */</u></td></tr>
+<tr><th id="27">27</th><td><u>#if defined(HAVE_SYSV_TTYS)</u></td></tr>
+<tr><th id="28">28</th><td><u>#include &lt;termio.h&gt;</u></td></tr>
+<tr><th id="29">29</th><td><u>#endif /* HAVE_SYSV_TTYS */</u></td></tr>
+<tr><th id="30">30</th><td><u>#if defined(HAVE_TERMIOS)</u></td></tr>
+<tr><th id="31">31</th><td><u>#include &lt;termios.h&gt;</u></td></tr>
+<tr><th id="32">32</th><td><u>#endif</u></td></tr>
+<tr><th id="33">33</th><td><u>#if defined(STREAM)</u></td></tr>
+<tr><th id="34">34</th><td><u>#include &lt;stropts.h&gt;</u></td></tr>
+<tr><th id="35">35</th><td><u>#endif</u></td></tr>
+<tr><th id="36">36</th><td></td></tr>
+<tr><th id="37">37</th><td><u>#ifdef HAVE_SYS_TERMIOS_H</u></td></tr>
+<tr><th id="38">38</th><td><u># include &lt;sys/termios.h&gt;</u></td></tr>
+<tr><th id="39">39</th><td><u>#endif</u></td></tr>
+<tr><th id="40">40</th><td><u>#ifdef HAVE_SYS_PPSCLOCK_H</u></td></tr>
+<tr><th id="41">41</th><td><u># include &lt;sys/ppsclock.h&gt;</u></td></tr>
+<tr><th id="42">42</th><td><u>#endif</u></td></tr>
+<tr><th id="43">43</th><td></td></tr>
+<tr><th id="44">44</th><td><u>#include "ntp_stdlib.h"</u></td></tr>
+<tr><th id="45">45</th><td></td></tr>
+<tr><th id="46">46</th><td><em>int</em> dbg = <var>0</var>;</td></tr>
+<tr><th id="47">47</th><td><i>/*</i></td></tr>
+<tr><th id="48">48</th><td><i>	fudgefactor	= fudgetime1;</i></td></tr>
+<tr><th id="49">49</th><td><i>	os_delay	= fudgetime2;</i></td></tr>
+<tr><th id="50">50</th><td><i>	   offset_fudge	= os_delay + fudgefactor + inherent_delay;</i></td></tr>
+<tr><th id="51">51</th><td><i>	stratumtouse	= fudgeval1 &amp; 0xf</i></td></tr>
+<tr><th id="52">52</th><td><i>	dbg		= fudgeval2;</i></td></tr>
+<tr><th id="53">53</th><td><i>	sloppyclockflag	= flags &amp; CLK_FLAG1;</i></td></tr>
+<tr><th id="54">54</th><td><i>		1	  log smoothing summary when processing sample</i></td></tr>
+<tr><th id="55">55</th><td><i>		4	  dump the buffer from the clock</i></td></tr>
+<tr><th id="56">56</th><td><i>		8	  EIOGETKD the last n uS time stamps</i></td></tr>
+<tr><th id="57">57</th><td><i>	if (flags &amp; CLK_FLAG2 &amp;&amp; unitinuse) ees-&gt;leaphold = 0;</i></td></tr>
+<tr><th id="58">58</th><td><i>	ees-&gt;dump_vals	= flags &amp; CLK_FLAG3;</i></td></tr>
+<tr><th id="59">59</th><td><i>	ees-&gt;usealldata	= flags &amp; CLK_FLAG4;</i></td></tr>
+<tr><th id="60">60</th><td><i></i></td></tr>
+<tr><th id="61">61</th><td><i></i></td></tr>
+<tr><th id="62">62</th><td><i>	bug-&gt;values[0] = (ees-&gt;lasttime) ? current_time - ees-&gt;lasttime : 0;</i></td></tr>
+<tr><th id="63">63</th><td><i>	bug-&gt;values[1] = (ees-&gt;clocklastgood)?current_time-ees-&gt;clocklastgood:0;</i></td></tr>
+<tr><th id="64">64</th><td><i>	bug-&gt;values[2] = (u_long)ees-&gt;status;</i></td></tr>
+<tr><th id="65">65</th><td><i>	bug-&gt;values[3] = (u_long)ees-&gt;lastevent;</i></td></tr>
+<tr><th id="66">66</th><td><i>	bug-&gt;values[4] = (u_long)ees-&gt;reason;</i></td></tr>
+<tr><th id="67">67</th><td><i>	bug-&gt;values[5] = (u_long)ees-&gt;nsamples;</i></td></tr>
+<tr><th id="68">68</th><td><i>	bug-&gt;values[6] = (u_long)ees-&gt;codestate;</i></td></tr>
+<tr><th id="69">69</th><td><i>	bug-&gt;values[7] = (u_long)ees-&gt;day;</i></td></tr>
+<tr><th id="70">70</th><td><i>	bug-&gt;values[8] = (u_long)ees-&gt;hour;</i></td></tr>
+<tr><th id="71">71</th><td><i>	bug-&gt;values[9] = (u_long)ees-&gt;minute;</i></td></tr>
+<tr><th id="72">72</th><td><i>	bug-&gt;values[10] = (u_long)ees-&gt;second;</i></td></tr>
+<tr><th id="73">73</th><td><i>	bug-&gt;values[11] = (u_long)ees-&gt;tz;</i></td></tr>
+<tr><th id="74">74</th><td><i>	bug-&gt;values[12] = ees-&gt;yearstart;</i></td></tr>
+<tr><th id="75">75</th><td><i>	bug-&gt;values[13] = (ees-&gt;leaphold &gt; current_time) ?</i></td></tr>
+<tr><th id="76">76</th><td><i>				ees-&gt;leaphold - current_time : 0;</i></td></tr>
+<tr><th id="77">77</th><td><i>	bug-&gt;values[14] = inherent_delay[unit].l_uf;</i></td></tr>
+<tr><th id="78">78</th><td><i>	bug-&gt;values[15] = offset_fudge[unit].l_uf;</i></td></tr>
+<tr><th id="79">79</th><td><i></i></td></tr>
+<tr><th id="80">80</th><td><i>	bug-&gt;times[0] = ees-&gt;reftime;</i></td></tr>
+<tr><th id="81">81</th><td><i>	bug-&gt;times[1] = ees-&gt;arrvtime;</i></td></tr>
+<tr><th id="82">82</th><td><i>	bug-&gt;times[2] = ees-&gt;lastsampletime;</i></td></tr>
+<tr><th id="83">83</th><td><i>	bug-&gt;times[3] = ees-&gt;offset;</i></td></tr>
+<tr><th id="84">84</th><td><i>	bug-&gt;times[4] = ees-&gt;lowoffset;</i></td></tr>
+<tr><th id="85">85</th><td><i>	bug-&gt;times[5] = ees-&gt;highoffset;</i></td></tr>
+<tr><th id="86">86</th><td><i>	bug-&gt;times[6] = inherent_delay[unit];</i></td></tr>
+<tr><th id="87">87</th><td><i>	bug-&gt;times[8] = os_delay[unit];</i></td></tr>
+<tr><th id="88">88</th><td><i>	bug-&gt;times[7] = fudgefactor[unit];</i></td></tr>
+<tr><th id="89">89</th><td><i>	bug-&gt;times[9] = offset_fudge[unit];</i></td></tr>
+<tr><th id="90">90</th><td><i>	bug-&gt;times[10]= ees-&gt;yearstart, 0;</i></td></tr>
+<tr><th id="91">91</th><td><i>	*/</i></td></tr>
+<tr><th id="92">92</th><td></td></tr>
+<tr><th id="93">93</th><td><i>/* This should support the use of an EES M201 receiver with RS232</i></td></tr>
+<tr><th id="94">94</th><td><i> * output (modified to transmit time once per second).</i></td></tr>
+<tr><th id="95">95</th><td><i> *</i></td></tr>
+<tr><th id="96">96</th><td><i> * For the format of the message sent by the clock, see the EESM_</i></td></tr>
+<tr><th id="97">97</th><td><i> * definitions below.</i></td></tr>
+<tr><th id="98">98</th><td><i> *</i></td></tr>
+<tr><th id="99">99</th><td><i> * It appears to run free for an integral number of minutes, until the error</i></td></tr>
+<tr><th id="100">100</th><td><i> * reaches 4mS, at which point it steps at second = 01.</i></td></tr>
+<tr><th id="101">101</th><td><i> * It appears that sometimes it steps 4mS (say at 7 min interval),</i></td></tr>
+<tr><th id="102">102</th><td><i> * then the next minute it decides that it was an error, so steps back.</i></td></tr>
+<tr><th id="103">103</th><td><i> * On the next minute it steps forward again :-(</i></td></tr>
+<tr><th id="104">104</th><td><i> * This is typically 16.5uS/S then 3975uS at the 4min re-sync,</i></td></tr>
+<tr><th id="105">105</th><td><i> * or 9.5uS/S then 3990.5uS at a 7min re-sync,</i></td></tr>
+<tr><th id="106">106</th><td><i> * at which point it may lose the "00" second time stamp.</i></td></tr>
+<tr><th id="107">107</th><td><i> * I assume that the most accurate time is just AFTER the re-sync.</i></td></tr>
+<tr><th id="108">108</th><td><i> * Hence remember the last cycle interval,</i></td></tr>
+<tr><th id="109">109</th><td><i> *</i></td></tr>
+<tr><th id="110">110</th><td><i> * Can run in any one of:</i></td></tr>
+<tr><th id="111">111</th><td><i> *</i></td></tr>
+<tr><th id="112">112</th><td><i> *	PPSCD	PPS signal sets CD which interupts, and grabs the current TOD</i></td></tr>
+<tr><th id="113">113</th><td><i> *	(sun)		*in the interupt code*, so as to avoid problems with</i></td></tr>
+<tr><th id="114">114</th><td><i> *			the STREAMS scheduling.</i></td></tr>
+<tr><th id="115">115</th><td><i> *</i></td></tr>
+<tr><th id="116">116</th><td><i> * It appears that it goes 16.5 uS slow each second, then every 4 mins it</i></td></tr>
+<tr><th id="117">117</th><td><i> * generates no "00" second tick, and gains 3975 uS. Ho Hum ! (93/2/7)</i></td></tr>
+<tr><th id="118">118</th><td><i> */</i></td></tr>
+<tr><th id="119">119</th><td></td></tr>
+<tr><th id="120">120</th><td><i>/* Definitions */</i></td></tr>
+<tr><th id="121">121</th><td><u>#ifndef	MAXUNITS</u></td></tr>
+<tr><th id="122">122</th><td><u>#define	MAXUNITS	4	/* maximum number of EES units permitted */</u></td></tr>
+<tr><th id="123">123</th><td><u>#endif</u></td></tr>
+<tr><th id="124">124</th><td></td></tr>
+<tr><th id="125">125</th><td><u>#ifndef	EES232</u></td></tr>
+<tr><th id="126">126</th><td><u>#define	EES232	"/dev/ees%d"	/* Device to open to read the data */</u></td></tr>
+<tr><th id="127">127</th><td><u>#endif</u></td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><i>/* Other constant stuff */</i></td></tr>
+<tr><th id="130">130</th><td><u>#ifndef	EESPRECISION</u></td></tr>
+<tr><th id="131">131</th><td><u>#define	EESPRECISION	(-10)		/* what the heck - 2**-10 = 1ms */</u></td></tr>
+<tr><th id="132">132</th><td><u>#endif</u></td></tr>
+<tr><th id="133">133</th><td><u>#ifndef	EESREFID</u></td></tr>
+<tr><th id="134">134</th><td><u>#define	EESREFID	"MSF\0"		/* String to identify the clock */</u></td></tr>
+<tr><th id="135">135</th><td><u>#endif</u></td></tr>
+<tr><th id="136">136</th><td><u>#ifndef	EESHSREFID</u></td></tr>
+<tr><th id="137">137</th><td><u>#define	EESHSREFID	(0x7f7f0000 | ((REFCLK_MSF_EES) &lt;&lt; 8)) /* Numeric refid */</u></td></tr>
+<tr><th id="138">138</th><td><u>#endif</u></td></tr>
+<tr><th id="139">139</th><td></td></tr>
+<tr><th id="140">140</th><td><i>/* Description of clock */</i></td></tr>
+<tr><th id="141">141</th><td><u>#define	EESDESCRIPTION		"EES M201 MSF Receiver"</u></td></tr>
+<tr><th id="142">142</th><td></td></tr>
+<tr><th id="143">143</th><td><i>/* Speed we run the clock port at. If this is changed the UARTDELAY</i></td></tr>
+<tr><th id="144">144</th><td><i> * value should be recomputed to suit.</i></td></tr>
+<tr><th id="145">145</th><td><i> */</i></td></tr>
+<tr><th id="146">146</th><td><u>#ifndef	SPEED232</u></td></tr>
+<tr><th id="147">147</th><td><u>#define	SPEED232	B9600	/* 9600 baud */</u></td></tr>
+<tr><th id="148">148</th><td><u>#endif</u></td></tr>
+<tr><th id="149">149</th><td></td></tr>
+<tr><th id="150">150</th><td><i>/* What is the inherent delay for this mode of working, i.e. when is the</i></td></tr>
+<tr><th id="151">151</th><td><i> * data time stamped.</i></td></tr>
+<tr><th id="152">152</th><td><i> */</i></td></tr>
+<tr><th id="153">153</th><td><u>#define	SAFETY_SHIFT	10	/* Split the shift to avoid overflow */</u></td></tr>
+<tr><th id="154">154</th><td><u>#define	BITS_TO_L_FP(bits, baud) \</u></td></tr>
+<tr><th id="155">155</th><td><u>(((((bits)*2 +1) &lt;&lt; (FRACTION_PREC-SAFETY_SHIFT)) / (2*baud)) &lt;&lt; SAFETY_SHIFT)</u></td></tr>
+<tr><th id="156">156</th><td><u>#define	INH_DELAY_CBREAK	BITS_TO_L_FP(119, 9600)</u></td></tr>
+<tr><th id="157">157</th><td><u>#define	INH_DELAY_PPS		BITS_TO_L_FP(  0, 9600)</u></td></tr>
+<tr><th id="158">158</th><td></td></tr>
+<tr><th id="159">159</th><td><u>#ifndef	STREAM_PP1</u></td></tr>
+<tr><th id="160">160</th><td><u>#define	STREAM_PP1	"ppsclocd\0&lt;-- patch space for module name1 --&gt;"</u></td></tr>
+<tr><th id="161">161</th><td><u>#endif</u></td></tr>
+<tr><th id="162">162</th><td><u>#ifndef	STREAM_PP2</u></td></tr>
+<tr><th id="163">163</th><td><u>#define	STREAM_PP2	"ppsclock\0&lt;-- patch space for module name2 --&gt;"</u></td></tr>
+<tr><th id="164">164</th><td><u>#endif</u></td></tr>
+<tr><th id="165">165</th><td></td></tr>
+<tr><th id="166">166</th><td>     <i>/* Offsets of the bytes of the serial line code.  The clock gives</i></td></tr>
+<tr><th id="167">167</th><td><i> * local time with a GMT/BST indication. The EESM_ definitions</i></td></tr>
+<tr><th id="168">168</th><td><i> * give offsets into ees-&gt;lastcode.</i></td></tr>
+<tr><th id="169">169</th><td><i> */</i></td></tr>
+<tr><th id="170">170</th><td><u>#define EESM_CSEC	 0	/* centiseconds - always zero in our clock  */</u></td></tr>
+<tr><th id="171">171</th><td><u>#define EESM_SEC	 1	/* seconds in BCD			    */</u></td></tr>
+<tr><th id="172">172</th><td><u>#define EESM_MIN	 2	/* minutes in BCD			    */</u></td></tr>
+<tr><th id="173">173</th><td><u>#define EESM_HOUR	 3	/* hours in BCD				    */</u></td></tr>
+<tr><th id="174">174</th><td><u>#define EESM_DAYWK	 4	/* day of week (Sun = 0 etc)		    */</u></td></tr>
+<tr><th id="175">175</th><td><u>#define EESM_DAY	 5	/* day of month in BCD			    */</u></td></tr>
+<tr><th id="176">176</th><td><u>#define EESM_MON	 6	/* month in BCD				    */</u></td></tr>
+<tr><th id="177">177</th><td><u>#define EESM_YEAR	 7	/* year MOD 100 in BCD			    */</u></td></tr>
+<tr><th id="178">178</th><td><u>#define EESM_LEAP	 8	/* 0x0f if leap year, otherwise zero        */</u></td></tr>
+<tr><th id="179">179</th><td><u>#define EESM_BST	 9	/* 0x03 if BST, 0x00 if GMT		    */</u></td></tr>
+<tr><th id="180">180</th><td><u>#define EESM_MSFOK	10	/* 0x3f if radio good, otherwise zero	    */</u></td></tr>
+<tr><th id="181">181</th><td>				<i>/* followed by a frame alignment byte (0xff) /</i></td></tr>
+<tr><th id="182">182</th><td><i>				/  which is not put into the lastcode buffer*/</i></td></tr>
+<tr><th id="183">183</th><td></td></tr>
+<tr><th id="184">184</th><td><i>/* Length of the serial time code, in characters.  The first length</i></td></tr>
+<tr><th id="185">185</th><td><i> * is less the frame alignment byte.</i></td></tr>
+<tr><th id="186">186</th><td><i> */</i></td></tr>
+<tr><th id="187">187</th><td><u>#define	LENEESPRT	(EESM_MSFOK+1)</u></td></tr>
+<tr><th id="188">188</th><td><u>#define	LENEESCODE	(LENEESPRT+1)</u></td></tr>
+<tr><th id="189">189</th><td></td></tr>
+<tr><th id="190">190</th><td>     <i>/* Code state. */</i></td></tr>
+<tr><th id="191">191</th><td><u>#define	EESCS_WAIT	0       /* waiting for start of timecode */</u></td></tr>
+<tr><th id="192">192</th><td><u>#define	EESCS_GOTSOME	1	/* have an incomplete time code buffered */</u></td></tr>
+<tr><th id="193">193</th><td></td></tr>
+<tr><th id="194">194</th><td>     <i>/* Default fudge factor and character to receive */</i></td></tr>
+<tr><th id="195">195</th><td><u>#define	DEFFUDGETIME	0	/* Default user supplied fudge factor */</u></td></tr>
+<tr><th id="196">196</th><td><u>#ifndef	DEFOSTIME</u></td></tr>
+<tr><th id="197">197</th><td><u>#define	DEFOSTIME	0	/* Default OS delay -- passed by Make ? */</u></td></tr>
+<tr><th id="198">198</th><td><u>#endif</u></td></tr>
+<tr><th id="199">199</th><td><u>#define	DEFINHTIME	INH_DELAY_PPS /* inherent delay due to sample point*/</u></td></tr>
+<tr><th id="200">200</th><td></td></tr>
+<tr><th id="201">201</th><td>     <i>/* Limits on things.  Reduce the number of samples to SAMPLEREDUCE by median</i></td></tr>
+<tr><th id="202">202</th><td><i> * elimination.  If we're running with an accurate clock, chose the BESTSAMPLE</i></td></tr>
+<tr><th id="203">203</th><td><i> * as the estimated offset, otherwise average the remainder.</i></td></tr>
+<tr><th id="204">204</th><td><i> */</i></td></tr>
+<tr><th id="205">205</th><td><u>#define	FULLSHIFT	6			/* NCODES root 2 */</u></td></tr>
+<tr><th id="206">206</th><td><u>#define NCODES		(1&lt;&lt; FULLSHIFT)		/* 64 */</u></td></tr>
+<tr><th id="207">207</th><td><u>#define	REDUCESHIFT	(FULLSHIFT -1)		/* SAMPLEREDUCE root 2 */</u></td></tr>
+<tr><th id="208">208</th><td></td></tr>
+<tr><th id="209">209</th><td>     <i>/* Towards the high ( Why ?) end of half */</i></td></tr>
+<tr><th id="210">210</th><td><u>#define	BESTSAMPLE	((samplereduce * 3) /4)	/* 24 */</u></td></tr>
+<tr><th id="211">211</th><td></td></tr>
+<tr><th id="212">212</th><td>     <i>/* Leap hold time.  After a leap second the clock will no longer be</i></td></tr>
+<tr><th id="213">213</th><td><i> * reliable until it resynchronizes.  Hope 40 minutes is enough. */</i></td></tr>
+<tr><th id="214">214</th><td><u>#define	EESLEAPHOLD	(40 * 60)</u></td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td><u>#define	EES_STEP_F	(1 &lt;&lt; 24) /* the receiver steps in units of about 4ms */</u></td></tr>
+<tr><th id="217">217</th><td><u>#define	EES_STEP_F_GRACE (EES_STEP_F/8) /*Allow for slop of 1/8 which is .5ms*/</u></td></tr>
+<tr><th id="218">218</th><td><u>#define	EES_STEP_NOTE	(1 &lt;&lt; 21)/* Log any unexpected jumps, say .5 ms .... */</u></td></tr>
+<tr><th id="219">219</th><td><u>#define	EES_STEP_NOTES	50	/* Only do a limited number */</u></td></tr>
+<tr><th id="220">220</th><td><u>#define	MAX_STEP	16	/* Max number of steps to remember */</u></td></tr>
+<tr><th id="221">221</th><td></td></tr>
+<tr><th id="222">222</th><td>     <i>/* debug is a bit mask of debugging that is wanted */</i></td></tr>
+<tr><th id="223">223</th><td><u>#define	DB_SYSLOG_SMPLI		0x0001</u></td></tr>
+<tr><th id="224">224</th><td><u>#define	DB_SYSLOG_SMPLE		0x0002</u></td></tr>
+<tr><th id="225">225</th><td><u>#define	DB_SYSLOG_SMTHI		0x0004</u></td></tr>
+<tr><th id="226">226</th><td><u>#define	DB_SYSLOG_NSMTHE	0x0008</u></td></tr>
+<tr><th id="227">227</th><td><u>#define	DB_SYSLOG_NSMTHI	0x0010</u></td></tr>
+<tr><th id="228">228</th><td><u>#define	DB_SYSLOG_SMTHE		0x0020</u></td></tr>
+<tr><th id="229">229</th><td><u>#define	DB_PRINT_EV		0x0040</u></td></tr>
+<tr><th id="230">230</th><td><u>#define	DB_PRINT_CDT		0x0080</u></td></tr>
+<tr><th id="231">231</th><td><u>#define	DB_PRINT_CDTC		0x0100</u></td></tr>
+<tr><th id="232">232</th><td><u>#define	DB_SYSLOG_KEEPD		0x0800</u></td></tr>
+<tr><th id="233">233</th><td><u>#define	DB_SYSLOG_KEEPE		0x1000</u></td></tr>
+<tr><th id="234">234</th><td><u>#define	DB_LOG_DELTAS		0x2000</u></td></tr>
+<tr><th id="235">235</th><td><u>#define	DB_PRINT_DELTAS		0x4000</u></td></tr>
+<tr><th id="236">236</th><td><u>#define	DB_LOG_AWAITMORE	0x8000</u></td></tr>
+<tr><th id="237">237</th><td><u>#define	DB_LOG_SAMPLES		0x10000</u></td></tr>
+<tr><th id="238">238</th><td><u>#define	DB_NO_PPS		0x20000</u></td></tr>
+<tr><th id="239">239</th><td><u>#define	DB_INC_PPS		0x40000</u></td></tr>
+<tr><th id="240">240</th><td><u>#define	DB_DUMP_DELTAS		0x80000</u></td></tr>
+<tr><th id="241">241</th><td></td></tr>
+<tr><th id="242">242</th><td>     <b>struct</b> eesunit {			<i>/* EES unit control structure. */</i></td></tr>
+<tr><th id="243">243</th><td>	     <b>struct</b> peer *peer;		<i>/* associated peer structure */</i></td></tr>
+<tr><th id="244">244</th><td>	     <b>struct</b> refclockio io;		<i>/* given to the I/O handler */</i></td></tr>
+<tr><th id="245">245</th><td>	     l_fp	reftime;		<i>/* reference time */</i></td></tr>
+<tr><th id="246">246</th><td>	     l_fp	lastsampletime;		<i>/* time as in txt from last EES msg */</i></td></tr>
+<tr><th id="247">247</th><td>	     l_fp	arrvtime;		<i>/* Time at which pkt arrived */</i></td></tr>
+<tr><th id="248">248</th><td>	     l_fp	codeoffsets[NCODES];	<i>/* the time of arrival of 232 codes */</i></td></tr>
+<tr><th id="249">249</th><td>	     l_fp	offset;			<i>/* chosen offset        (for clkbug) */</i></td></tr>
+<tr><th id="250">250</th><td>	     l_fp	lowoffset;		<i>/* lowest sample offset (for clkbug) */</i></td></tr>
+<tr><th id="251">251</th><td>	     l_fp	highoffset;		<i>/* highest   "     "    (for clkbug) */</i></td></tr>
+<tr><th id="252">252</th><td>	     <em>char</em>	lastcode[LENEESCODE+<var>6</var>];	<i>/* last time code we received */</i></td></tr>
+<tr><th id="253">253</th><td>	     u_long	lasttime;		<i>/* last time clock heard from */</i></td></tr>
+<tr><th id="254">254</th><td>	     u_long	clocklastgood;		<i>/* last time good radio seen */</i></td></tr>
+<tr><th id="255">255</th><td>	     u_char	lencode;		<i>/* length of code in buffer */</i></td></tr>
+<tr><th id="256">256</th><td>	     u_char	nsamples;		<i>/* number of samples we've collected */</i></td></tr>
+<tr><th id="257">257</th><td>	     u_char	codestate;		<i>/* state of 232 code reception */</i></td></tr>
+<tr><th id="258">258</th><td>	     u_char	unit;			<i>/* unit number for this guy */</i></td></tr>
+<tr><th id="259">259</th><td>	     u_char	status;			<i>/* clock status */</i></td></tr>
+<tr><th id="260">260</th><td>	     u_char	lastevent;		<i>/* last clock event */</i></td></tr>
+<tr><th id="261">261</th><td>	     u_char	reason;			<i>/* reason for last abort */</i></td></tr>
+<tr><th id="262">262</th><td>	     u_char	hour;			<i>/* hour of day */</i></td></tr>
+<tr><th id="263">263</th><td>	     u_char	minute;			<i>/* minute of hour */</i></td></tr>
+<tr><th id="264">264</th><td>	     u_char	second;			<i>/* seconds of minute */</i></td></tr>
+<tr><th id="265">265</th><td>	     <em>char</em>	tz;			<i>/* timezone from clock */</i></td></tr>
+<tr><th id="266">266</th><td>	     u_char	ttytype;		<i>/* method used */</i></td></tr>
+<tr><th id="267">267</th><td>	     u_char	dump_vals;		<i>/* Should clock values be dumped */</i></td></tr>
+<tr><th id="268">268</th><td>	     u_char	usealldata;		<i>/* Use ALL samples */</i></td></tr>
+<tr><th id="269">269</th><td>	     u_short	day;			<i>/* day of year from last code */</i></td></tr>
+<tr><th id="270">270</th><td>	     u_long	yearstart;		<i>/* start of current year */</i></td></tr>
+<tr><th id="271">271</th><td>	     u_long	leaphold;		<i>/* time of leap hold expiry */</i></td></tr>
+<tr><th id="272">272</th><td>	     u_long	badformat;		<i>/* number of bad format codes */</i></td></tr>
+<tr><th id="273">273</th><td>	     u_long	baddata;		<i>/* number of invalid time codes */</i></td></tr>
+<tr><th id="274">274</th><td>	     u_long	timestarted;		<i>/* time we started this */</i></td></tr>
+<tr><th id="275">275</th><td>	     <em>long</em>	last_pps_no;		<i>/* The serial # of the last PPS */</i></td></tr>
+<tr><th id="276">276</th><td>	     <em>char</em>	fix_pending;		<i>/* Is a "sync to time" pending ? */</i></td></tr>
+<tr><th id="277">277</th><td>	     <i>/* Fine tuning - compensate for 4 mS ramping .... */</i></td></tr>
+<tr><th id="278">278</th><td>	     l_fp	last_l;			<i>/* last time stamp */</i></td></tr>
+<tr><th id="279">279</th><td>	     u_char	last_steps[MAX_STEP];	<i>/* Most recent n steps */</i></td></tr>
+<tr><th id="280">280</th><td>	     <em>int</em>	best_av_step;		<i>/* Best guess at average step */</i></td></tr>
+<tr><th id="281">281</th><td>	     <em>char</em>	best_av_step_count;	<i>/* # of steps over used above */</i></td></tr>
+<tr><th id="282">282</th><td>	     <em>char</em>	this_step;		<i>/* Current pos in buffer */</i></td></tr>
+<tr><th id="283">283</th><td>	     <em>int</em>	last_step_late;		<i>/* How late the last step was (0-59) */</i></td></tr>
+<tr><th id="284">284</th><td>	     <em>long</em>	jump_fsecs;		<i>/* # of fractions of a sec last jump */</i></td></tr>
+<tr><th id="285">285</th><td>	     u_long	last_step;		<i>/* time of last step */</i></td></tr>
+<tr><th id="286">286</th><td>	     <em>int</em>	last_step_secs;		<i>/* Number of seconds in last step */</i></td></tr>
+<tr><th id="287">287</th><td>	     <em>int</em>	using_ramp;		<i>/* 1 -&gt; noemal, -1 -&gt; over stepped */</i></td></tr>
+<tr><th id="288">288</th><td>     };</td></tr>
+<tr><th id="289">289</th><td><u>#define	last_sec	last_l.l_ui</u></td></tr>
+<tr><th id="290">290</th><td><u>#define	last_sfsec	last_l.l_f</u></td></tr>
+<tr><th id="291">291</th><td><u>#define	this_uisec	((ees-&gt;arrvtime).l_ui)</u></td></tr>
+<tr><th id="292">292</th><td><u>#define	this_sfsec	((ees-&gt;arrvtime).l_f)</u></td></tr>
+<tr><th id="293">293</th><td><u>#define	msec(x)		((x) / (1&lt;&lt;22))</u></td></tr>
+<tr><th id="294">294</th><td><u>#define	LAST_STEPS	(sizeof ees-&gt;last_steps / sizeof ees-&gt;last_steps[0])</u></td></tr>
+<tr><th id="295">295</th><td><u>#define	subms(x)	((((((x &lt; 0) ? (-(x)) : (x)) % (1&lt;&lt;22))/2) * 625) / (1&lt;&lt;(22 -5)))</u></td></tr>
+<tr><th id="296">296</th><td></td></tr>
+<tr><th id="297">297</th><td><i>/* Bitmask for what methods to try to use -- currently only PPS enabled */</i></td></tr>
+<tr><th id="298">298</th><td><u>#define	T_CBREAK	1</u></td></tr>
+<tr><th id="299">299</th><td><u>#define	T_PPS		8</u></td></tr>
+<tr><th id="300">300</th><td><i>/* macros to test above */</i></td></tr>
+<tr><th id="301">301</th><td><u>#define	is_cbreak(x)	((x)-&gt;ttytype &amp; T_CBREAK)</u></td></tr>
+<tr><th id="302">302</th><td><u>#define	is_pps(x)	((x)-&gt;ttytype &amp; T_PPS)</u></td></tr>
+<tr><th id="303">303</th><td><u>#define	is_any(x)	((x)-&gt;ttytype)</u></td></tr>
+<tr><th id="304">304</th><td></td></tr>
+<tr><th id="305">305</th><td><u>#define	CODEREASON	20	/* reason codes */</u></td></tr>
+<tr><th id="306">306</th><td></td></tr>
+<tr><th id="307">307</th><td><i>/* Data space for the unit structures.  Note that we allocate these on</i></td></tr>
+<tr><th id="308">308</th><td><i> * the fly, but never give them back. */</i></td></tr>
+<tr><th id="309">309</th><td><em>static</em> <b>struct</b> eesunit *eesunits[MAXUNITS];</td></tr>
+<tr><th id="310">310</th><td><em>static</em> u_char unitinuse[MAXUNITS];</td></tr>
+<tr><th id="311">311</th><td></td></tr>
+<tr><th id="312">312</th><td><i>/* Keep the fudge factors separately so they can be set even</i></td></tr>
+<tr><th id="313">313</th><td><i> * when no clock is configured. */</i></td></tr>
+<tr><th id="314">314</th><td><em>static</em> l_fp inherent_delay[MAXUNITS];		<i>/* when time stamp is taken */</i></td></tr>
+<tr><th id="315">315</th><td><em>static</em> l_fp fudgefactor[MAXUNITS];		<i>/* fudgetime1 */</i></td></tr>
+<tr><th id="316">316</th><td><em>static</em> l_fp os_delay[MAXUNITS];			<i>/* fudgetime2 */</i></td></tr>
+<tr><th id="317">317</th><td><em>static</em> l_fp offset_fudge[MAXUNITS];		<i>/* Sum of above */</i></td></tr>
+<tr><th id="318">318</th><td><em>static</em> u_char stratumtouse[MAXUNITS];</td></tr>
+<tr><th id="319">319</th><td><em>static</em> u_char sloppyclockflag[MAXUNITS];</td></tr>
+<tr><th id="320">320</th><td></td></tr>
+<tr><th id="321">321</th><td><em>static</em> <em>int</em> deltas[<var>60</var>];</td></tr>
+<tr><th id="322">322</th><td></td></tr>
+<tr><th id="323">323</th><td><em>static</em> l_fp acceptable_slop; <i>/* = { 0, 1 &lt;&lt; (FRACTION_PREC -2) }; */</i></td></tr>
+<tr><th id="324">324</th><td><em>static</em> l_fp onesec; <i>/* = { 1, 0 }; */</i></td></tr>
+<tr><th id="325">325</th><td></td></tr>
+<tr><th id="326">326</th><td><u>#ifndef	DUMP_BUF_SIZE	/* Size of buffer to be used by dump_buf */</u></td></tr>
+<tr><th id="327">327</th><td><u>#define	DUMP_BUF_SIZE	10112</u></td></tr>
+<tr><th id="328">328</th><td><u>#endif</u></td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td><i>/* ees_reset - reset the count back to zero */</i></td></tr>
+<tr><th id="331">331</th><td><u>#define	ees_reset(ees) (ees)-&gt;nsamples = 0; \</u></td></tr>
+<tr><th id="332">332</th><td><u>(ees)-&gt;codestate = EESCS_WAIT</u></td></tr>
+<tr><th id="333">333</th><td></td></tr>
+<tr><th id="334">334</th><td><i>/* ees_event - record and report an event */</i></td></tr>
+<tr><th id="335">335</th><td><u>#define	ees_event(ees, evcode) if ((ees)-&gt;status != (u_char)(evcode)) \</u></td></tr>
+<tr><th id="336">336</th><td><u>ees_report_event((ees), (evcode))</u></td></tr>
+<tr><th id="337">337</th><td></td></tr>
+<tr><th id="338">338</th><td>     <i>/* Find the precision of the system clock by reading it */</i></td></tr>
+<tr><th id="339">339</th><td><u>#define	USECS	1000000</u></td></tr>
+<tr><th id="340">340</th><td><u>#define	MINSTEP	5	/* some systems increment uS on each call */</u></td></tr>
+<tr><th id="341">341</th><td><u>#define	MAXLOOPS (USECS/9)</u></td></tr>
+<tr><th id="342">342</th><td></td></tr>
+<tr><th id="343">343</th><td><i>/*</i></td></tr>
+<tr><th id="344">344</th><td><i> * Function prototypes</i></td></tr>
+<tr><th id="345">345</th><td><i> */</i></td></tr>
+<tr><th id="346">346</th><td></td></tr>
+<tr><th id="347">347</th><td><em>static</em>	<em>int</em>	msfees_start	P((<em>int</em> unit, <b>struct</b> peer *peer));</td></tr>
+<tr><th id="348">348</th><td><em>static</em>	<em>void</em>	msfees_shutdown	P((<em>int</em> unit, <b>struct</b> peer *peer));</td></tr>
+<tr><th id="349">349</th><td><em>static</em>	<em>void</em>	msfees_poll	P((<em>int</em> unit, <b>struct</b> peer *peer));</td></tr>
+<tr><th id="350">350</th><td><em>static</em>	<em>void</em>	msfees_init	P((<em>void</em>));</td></tr>
+<tr><th id="351">351</th><td><em>static</em>	<em>void</em>	dump_buf	P((l_fp *coffs, <em>int</em> from, <em>int</em> to, <em>char</em> *text));</td></tr>
+<tr><th id="352">352</th><td><em>static</em>	<em>void</em>	ees_report_event P((<b>struct</b> eesunit *ees, <em>int</em> code));</td></tr>
+<tr><th id="353">353</th><td><em>static</em>	<em>void</em>	ees_receive	P((<b>struct</b> recvbuf *rbufp));</td></tr>
+<tr><th id="354">354</th><td><em>static</em>	<em>void</em>	ees_process	P((<b>struct</b> eesunit *ees));</td></tr>
+<tr><th id="355">355</th><td><em>static</em>	<em>int</em>	offcompare	P((<em>const</em> <em>void</em> *va, <em>const</em> <em>void</em> *vb));</td></tr>
+<tr><th id="356">356</th><td></td></tr>
+<tr><th id="357">357</th><td></td></tr>
+<tr><th id="358">358</th><td><i>/*</i></td></tr>
+<tr><th id="359">359</th><td><i> * Transfer vector</i></td></tr>
+<tr><th id="360">360</th><td><i> */</i></td></tr>
+<tr><th id="361">361</th><td><b>struct</b>	refclock refclock_msfees = {</td></tr>
+<tr><th id="362">362</th><td>	msfees_start,		<i>/* start up driver */</i></td></tr>
+<tr><th id="363">363</th><td>	msfees_shutdown,	<i>/* shut down driver */</i></td></tr>
+<tr><th id="364">364</th><td>	msfees_poll,		<i>/* transmit poll message */</i></td></tr>
+<tr><th id="365">365</th><td>	noentry,		<i>/* not used */</i></td></tr>
+<tr><th id="366">366</th><td>	msfees_init,		<i>/* initialize driver */</i></td></tr>
+<tr><th id="367">367</th><td>	noentry,		<i>/* not used */</i></td></tr>
+<tr><th id="368">368</th><td>	NOFLAGS			<i>/* not used */</i></td></tr>
+<tr><th id="369">369</th><td>};</td></tr>
+<tr><th id="370">370</th><td></td></tr>
+<tr><th id="371">371</th><td></td></tr>
+<tr><th id="372">372</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="373">373</th><td>dump_buf(</td></tr>
+<tr><th id="374">374</th><td>	l_fp *coffs,</td></tr>
+<tr><th id="375">375</th><td>	<em>int</em> from,</td></tr>
+<tr><th id="376">376</th><td>	<em>int</em> to,</td></tr>
+<tr><th id="377">377</th><td>	<em>char</em> *text</td></tr>
+<tr><th id="378">378</th><td>	)</td></tr>
+<tr><th id="379">379</th><td>{</td></tr>
+<tr><th id="380">380</th><td>	<em>char</em> buff[DUMP_BUF_SIZE + <var>80</var>];</td></tr>
+<tr><th id="381">381</th><td>	<em>int</em> i;</td></tr>
+<tr><th id="382">382</th><td>	<em>register</em> <em>char</em> *ptr = buff;</td></tr>
+<tr><th id="383">383</th><td></td></tr>
+<tr><th id="384">384</th><td>	snprintf(buff, <b>sizeof</b>(buff), text);</td></tr>
+<tr><th id="385">385</th><td>	<b>for</b> (i = from; i &lt; to; i++) {</td></tr>
+<tr><th id="386">386</th><td>		ptr += strlen(ptr);</td></tr>
+<tr><th id="387">387</th><td>		<b>if</b> ((ptr - buff) &gt; DUMP_BUF_SIZE) {</td></tr>
+<tr><th id="388">388</th><td>			msyslog(LOG_DEBUG, <q>"D: %s"</q>, buff);</td></tr>
+<tr><th id="389">389</th><td>			ptr = buff;</td></tr>
+<tr><th id="390">390</th><td>		}</td></tr>
+<tr><th id="391">391</th><td>		snprintf(ptr, <b>sizeof</b>(buff) - (ptr - buff),</td></tr>
+<tr><th id="392">392</th><td>			 <q>" %06d"</q>, ((<em>int</em>)coffs[i].l_f) / <var>4295</var>);</td></tr>
+<tr><th id="393">393</th><td>	}</td></tr>
+<tr><th id="394">394</th><td>	msyslog(LOG_DEBUG, <q>"D: %s"</q>, buff);</td></tr>
+<tr><th id="395">395</th><td>}</td></tr>
+<tr><th id="396">396</th><td></td></tr>
+<tr><th id="397">397</th><td><i>/* msfees_init - initialize internal ees driver data */</i></td></tr>
+<tr><th id="398">398</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="399">399</th><td>msfees_init(<em>void</em>)</td></tr>
+<tr><th id="400">400</th><td>{</td></tr>
+<tr><th id="401">401</th><td>	<em>register</em> <em>int</em> i;</td></tr>
+<tr><th id="402">402</th><td>	<i>/* Just zero the data arrays */</i></td></tr>
+<tr><th id="403">403</th><td>	memset((<em>char</em> *)eesunits, <var>0</var>, <b>sizeof</b> eesunits);</td></tr>
+<tr><th id="404">404</th><td>	memset((<em>char</em> *)unitinuse, <var>0</var>, <b>sizeof</b> unitinuse);</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td>	acceptable_slop.l_ui = <var>0</var>;</td></tr>
+<tr><th id="407">407</th><td>	acceptable_slop.l_uf = <var>1</var> &lt;&lt; (FRACTION_PREC -<var>2</var>);</td></tr>
+<tr><th id="408">408</th><td></td></tr>
+<tr><th id="409">409</th><td>	onesec.l_ui = <var>1</var>;</td></tr>
+<tr><th id="410">410</th><td>	onesec.l_uf = <var>0</var>;</td></tr>
+<tr><th id="411">411</th><td></td></tr>
+<tr><th id="412">412</th><td>	<i>/* Initialize fudge factors to default. */</i></td></tr>
+<tr><th id="413">413</th><td>	<b>for</b> (i = <var>0</var>; i &lt; MAXUNITS; i++) {</td></tr>
+<tr><th id="414">414</th><td>		fudgefactor[i].l_ui	= <var>0</var>;</td></tr>
+<tr><th id="415">415</th><td>		fudgefactor[i].l_uf	= DEFFUDGETIME;</td></tr>
+<tr><th id="416">416</th><td>		os_delay[i].l_ui	= <var>0</var>;</td></tr>
+<tr><th id="417">417</th><td>		os_delay[i].l_uf	= DEFOSTIME;</td></tr>
+<tr><th id="418">418</th><td>		inherent_delay[i].l_ui	= <var>0</var>;</td></tr>
+<tr><th id="419">419</th><td>		inherent_delay[i].l_uf	= DEFINHTIME;</td></tr>
+<tr><th id="420">420</th><td>		offset_fudge[i]		= os_delay[i];</td></tr>
+<tr><th id="421">421</th><td>		L_ADD(&amp;offset_fudge[i], &amp;fudgefactor[i]);</td></tr>
+<tr><th id="422">422</th><td>		L_ADD(&amp;offset_fudge[i], &amp;inherent_delay[i]);</td></tr>
+<tr><th id="423">423</th><td>		stratumtouse[i]		= <var>0</var>;</td></tr>
+<tr><th id="424">424</th><td>		sloppyclockflag[i]	= <var>0</var>;</td></tr>
+<tr><th id="425">425</th><td>	}</td></tr>
+<tr><th id="426">426</th><td>}</td></tr>
+<tr><th id="427">427</th><td></td></tr>
+<tr><th id="428">428</th><td></td></tr>
+<tr><th id="429">429</th><td><i>/* msfees_start - open the EES devices and initialize data for processing */</i></td></tr>
+<tr><th id="430">430</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="431">431</th><td>msfees_start(</td></tr>
+<tr><th id="432">432</th><td>	<em>int</em> unit,</td></tr>
+<tr><th id="433">433</th><td>	<b>struct</b> peer *peer</td></tr>
+<tr><th id="434">434</th><td>	)</td></tr>
+<tr><th id="435">435</th><td>{</td></tr>
+<tr><th id="436">436</th><td>	<em>register</em> <b>struct</b> eesunit *ees;</td></tr>
+<tr><th id="437">437</th><td>	<em>register</em> <em>int</em> i;</td></tr>
+<tr><th id="438">438</th><td>	<em>int</em> fd232 = -<var>1</var>;</td></tr>
+<tr><th id="439">439</th><td>	<em>char</em> eesdev[<var>20</var>];</td></tr>
+<tr><th id="440">440</th><td>	<b>struct</b> termios ttyb, *ttyp;</td></tr>
+<tr><th id="441">441</th><td>	<b>struct</b> refclockproc *pp;</td></tr>
+<tr><th id="442">442</th><td>	pp = peer-&gt;procptr;</td></tr>
+<tr><th id="443">443</th><td></td></tr>
+<tr><th id="444">444</th><td>	<b>if</b> (unit &gt;= MAXUNITS) {</td></tr>
+<tr><th id="445">445</th><td>		msyslog(LOG_ERR, <q>"ees clock: unit number %d invalid (max %d)"</q>,</td></tr>
+<tr><th id="446">446</th><td>			unit, MAXUNITS-<var>1</var>);</td></tr>
+<tr><th id="447">447</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="448">448</th><td>	}</td></tr>
+<tr><th id="449">449</th><td>	<b>if</b> (unitinuse[unit]) {</td></tr>
+<tr><th id="450">450</th><td>		msyslog(LOG_ERR, <q>"ees clock: unit number %d in use"</q>, unit);</td></tr>
+<tr><th id="451">451</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="452">452</th><td>	}</td></tr>
+<tr><th id="453">453</th><td></td></tr>
+<tr><th id="454">454</th><td>	<i>/* Unit okay, attempt to open the devices.  We do them both at</i></td></tr>
+<tr><th id="455">455</th><td><i>	 * once to make sure we can */</i></td></tr>
+<tr><th id="456">456</th><td>	snprintf(eesdev, <b>sizeof</b>(eesdev), EES232, unit);</td></tr>
+<tr><th id="457">457</th><td></td></tr>
+<tr><th id="458">458</th><td>	fd232 = open(eesdev, O_RDWR, <var>0777</var>);</td></tr>
+<tr><th id="459">459</th><td>	<b>if</b> (fd232 == -<var>1</var>) {</td></tr>
+<tr><th id="460">460</th><td>		msyslog(LOG_ERR, <q>"ees clock: open of %s failed: %m"</q>, eesdev);</td></tr>
+<tr><th id="461">461</th><td>		<b>return</b> <var>0</var>;</td></tr>
+<tr><th id="462">462</th><td>	}</td></tr>
+<tr><th id="463">463</th><td></td></tr>
+<tr><th id="464">464</th><td><u>#ifdef	TIOCEXCL</u></td></tr>
+<tr><th id="465">465</th><td>	<i>/* Set for exclusive use */</i></td></tr>
+<tr><th id="466">466</th><td>	<b>if</b> (ioctl(fd232, TIOCEXCL, (<em>char</em> *)<var>0</var>) &lt; <var>0</var>) {</td></tr>
+<tr><th id="467">467</th><td>		msyslog(LOG_ERR, <q>"ees clock: ioctl(%s, TIOCEXCL): %m"</q>, eesdev);</td></tr>
+<tr><th id="468">468</th><td>		<b>goto</b> screwed;</td></tr>
+<tr><th id="469">469</th><td>	}</td></tr>
+<tr><th id="470">470</th><td><u>#endif</u></td></tr>
+<tr><th id="471">471</th><td></td></tr>
+<tr><th id="472">472</th><td>	<i>/* STRIPPED DOWN VERSION: Only PPS CD is supported at the moment */</i></td></tr>
+<tr><th id="473">473</th><td></td></tr>
+<tr><th id="474">474</th><td>	<i>/* Set port characteristics.  If we don't have a STREAMS module or</i></td></tr>
+<tr><th id="475">475</th><td><i>	 * a clock line discipline, cooked mode is just usable, even though it</i></td></tr>
+<tr><th id="476">476</th><td><i>	 * strips the top bit.  The only EES byte which uses the top</i></td></tr>
+<tr><th id="477">477</th><td><i>	 * bit is the year, and we don't use that anyway. If we do</i></td></tr>
+<tr><th id="478">478</th><td><i>	 * have the line discipline, we choose raw mode, and the</i></td></tr>
+<tr><th id="479">479</th><td><i>	 * line discipline code will block up the messages.</i></td></tr>
+<tr><th id="480">480</th><td><i>	 */</i></td></tr>
+<tr><th id="481">481</th><td></td></tr>
+<tr><th id="482">482</th><td>	<i>/* STIPPED DOWN VERSION: Only PPS CD is supported at the moment */</i></td></tr>
+<tr><th id="483">483</th><td></td></tr>
+<tr><th id="484">484</th><td>	ttyp = &amp;ttyb;</td></tr>
+<tr><th id="485">485</th><td>	<b>if</b> (tcgetattr(fd232, ttyp) &lt; <var>0</var>) {</td></tr>
+<tr><th id="486">486</th><td>		msyslog(LOG_ERR, <q>"msfees_start: tcgetattr(%s): %m"</q>, eesdev);</td></tr>
+<tr><th id="487">487</th><td>		<b>goto</b> screwed;</td></tr>
+<tr><th id="488">488</th><td>	}</td></tr>
+<tr><th id="489">489</th><td></td></tr>
+<tr><th id="490">490</th><td>	ttyp-&gt;c_iflag = IGNBRK|IGNPAR|ICRNL;</td></tr>
+<tr><th id="491">491</th><td>	ttyp-&gt;c_cflag = SPEED232|CS8|CLOCAL|CREAD;</td></tr>
+<tr><th id="492">492</th><td>	ttyp-&gt;c_oflag = <var>0</var>;</td></tr>
+<tr><th id="493">493</th><td>	ttyp-&gt;c_lflag = ICANON;</td></tr>
+<tr><th id="494">494</th><td>	ttyp-&gt;c_cc[VERASE] = ttyp-&gt;c_cc[VKILL] = <kbd>'\0'</kbd>;</td></tr>
+<tr><th id="495">495</th><td>	<b>if</b> (tcsetattr(fd232, TCSANOW, ttyp) &lt; <var>0</var>) {</td></tr>
+<tr><th id="496">496</th><td>		msyslog(LOG_ERR, <q>"msfees_start: tcsetattr(%s): %m"</q>, eesdev);</td></tr>
+<tr><th id="497">497</th><td>		<b>goto</b> screwed;</td></tr>
+<tr><th id="498">498</th><td>	}</td></tr>
+<tr><th id="499">499</th><td></td></tr>
+<tr><th id="500">500</th><td>	<b>if</b> (tcflush(fd232, TCIOFLUSH) &lt; <var>0</var>) {</td></tr>
+<tr><th id="501">501</th><td>		msyslog(LOG_ERR, <q>"msfees_start: tcflush(%s): %m"</q>, eesdev);</td></tr>
+<tr><th id="502">502</th><td>		<b>goto</b> screwed;</td></tr>
+<tr><th id="503">503</th><td>	}</td></tr>
+<tr><th id="504">504</th><td></td></tr>
+<tr><th id="505">505</th><td>	inherent_delay[unit].l_uf = INH_DELAY_PPS;</td></tr>
+<tr><th id="506">506</th><td></td></tr>
+<tr><th id="507">507</th><td>	<i>/* offset fudge (how *late* the timestamp is) = fudge + os delays */</i></td></tr>
+<tr><th id="508">508</th><td>	offset_fudge[unit] = os_delay[unit];</td></tr>
+<tr><th id="509">509</th><td>	L_ADD(&amp;offset_fudge[unit], &amp;fudgefactor[unit]);</td></tr>
+<tr><th id="510">510</th><td>	L_ADD(&amp;offset_fudge[unit], &amp;inherent_delay[unit]);</td></tr>
+<tr><th id="511">511</th><td></td></tr>
+<tr><th id="512">512</th><td>	<i>/* Looks like this might succeed.  Find memory for the structure.</i></td></tr>
+<tr><th id="513">513</th><td><i>	 * Look to see if there are any unused ones, if not we malloc() one.</i></td></tr>
+<tr><th id="514">514</th><td><i>	 */</i></td></tr>
+<tr><th id="515">515</th><td>	<b>if</b> (eesunits[unit] != <var>0</var>) <i>/* The one we want is okay */</i></td></tr>
+<tr><th id="516">516</th><td>	    ees = eesunits[unit];</td></tr>
+<tr><th id="517">517</th><td>	<b>else</b> {</td></tr>
+<tr><th id="518">518</th><td>		<i>/* Look for an unused, but allocated struct */</i></td></tr>
+<tr><th id="519">519</th><td>		<b>for</b> (i = <var>0</var>; i &lt; MAXUNITS; i++) {</td></tr>
+<tr><th id="520">520</th><td>			<b>if</b> (!unitinuse[i] &amp;&amp; eesunits[i] != <var>0</var>)</td></tr>
+<tr><th id="521">521</th><td>			    <b>break</b>;</td></tr>
+<tr><th id="522">522</th><td>		}</td></tr>
+<tr><th id="523">523</th><td></td></tr>
+<tr><th id="524">524</th><td>		<b>if</b> (i &lt; MAXUNITS) {	<i>/* Reclaim this one */</i></td></tr>
+<tr><th id="525">525</th><td>			ees = eesunits[i];</td></tr>
+<tr><th id="526">526</th><td>			eesunits[i] = <var>0</var>;</td></tr>
+<tr><th id="527">527</th><td>		}			<i>/* no spare -- make a new one */</i></td></tr>
+<tr><th id="528">528</th><td>		<b>else</b> ees = (<b>struct</b> eesunit *) emalloc(<b>sizeof</b>(<b>struct</b> eesunit));</td></tr>
+<tr><th id="529">529</th><td>	}</td></tr>
+<tr><th id="530">530</th><td>	memset((<em>char</em> *)ees, <var>0</var>, <b>sizeof</b>(<b>struct</b> eesunit));</td></tr>
+<tr><th id="531">531</th><td>	eesunits[unit] = ees;</td></tr>
+<tr><th id="532">532</th><td></td></tr>
+<tr><th id="533">533</th><td>	<i>/* Set up the structures */</i></td></tr>
+<tr><th id="534">534</th><td>	ees-&gt;peer	= peer;</td></tr>
+<tr><th id="535">535</th><td>	ees-&gt;unit	= (u_char)unit;</td></tr>
+<tr><th id="536">536</th><td>	ees-&gt;timestarted= current_time;</td></tr>
+<tr><th id="537">537</th><td>	ees-&gt;ttytype	= <var>0</var>;</td></tr>
+<tr><th id="538">538</th><td>	ees-&gt;io.clock_recv= ees_receive;</td></tr>
+<tr><th id="539">539</th><td>	ees-&gt;io.srcclock= peer;</td></tr>
+<tr><th id="540">540</th><td>	ees-&gt;io.datalen	= <var>0</var>;</td></tr>
+<tr><th id="541">541</th><td>	ees-&gt;io.fd	= fd232;</td></tr>
+<tr><th id="542">542</th><td></td></tr>
+<tr><th id="543">543</th><td>	<i>/* Okay.  Push one of the two (linked into the kernel, or dynamically</i></td></tr>
+<tr><th id="544">544</th><td><i>	 * loaded) STREAMS module, and give it to the I/O code to start</i></td></tr>
+<tr><th id="545">545</th><td><i>	 * receiving stuff.</i></td></tr>
+<tr><th id="546">546</th><td><i>	 */</i></td></tr>
+<tr><th id="547">547</th><td></td></tr>
+<tr><th id="548">548</th><td><u>#ifdef STREAM</u></td></tr>
+<tr><th id="549">549</th><td>	{</td></tr>
+<tr><th id="550">550</th><td>		<em>int</em> rc1;</td></tr>
+<tr><th id="551">551</th><td>		<i>/* Pop any existing onews first ... */</i></td></tr>
+<tr><th id="552">552</th><td>		<b>while</b> (ioctl(fd232, I_POP, <var>0</var> ) &gt;= <var>0</var>) ;</td></tr>
+<tr><th id="553">553</th><td></td></tr>
+<tr><th id="554">554</th><td>		<i>/* Now try pushing either of the possible modules */</i></td></tr>
+<tr><th id="555">555</th><td>		<b>if</b> ((rc1=ioctl(fd232, I_PUSH, STREAM_PP1)) &lt; <var>0</var> &amp;&amp;</td></tr>
+<tr><th id="556">556</th><td>		    ioctl(fd232, I_PUSH, STREAM_PP2) &lt; <var>0</var>) {</td></tr>
+<tr><th id="557">557</th><td>			msyslog(LOG_ERR,</td></tr>
+<tr><th id="558">558</th><td>				<q>"ees clock: Push of `%s' and `%s' to %s failed %m"</q>,</td></tr>
+<tr><th id="559">559</th><td>				STREAM_PP1, STREAM_PP2, eesdev);</td></tr>
+<tr><th id="560">560</th><td>			<b>goto</b> screwed;</td></tr>
+<tr><th id="561">561</th><td>		}</td></tr>
+<tr><th id="562">562</th><td>		<b>else</b> {</td></tr>
+<tr><th id="563">563</th><td>			NLOG(NLOG_CLOCKINFO) <i>/* conditional if clause for conditional syslog */</i></td></tr>
+<tr><th id="564">564</th><td>				msyslog(LOG_INFO, <q>"I: ees clock: PUSHed %s on %s"</q>,</td></tr>
+<tr><th id="565">565</th><td>					(rc1 &gt;= <var>0</var>) ? STREAM_PP1 : STREAM_PP2, eesdev);</td></tr>
+<tr><th id="566">566</th><td>			ees-&gt;ttytype |= T_PPS;</td></tr>
+<tr><th id="567">567</th><td>		}</td></tr>
+<tr><th id="568">568</th><td>	}</td></tr>
+<tr><th id="569">569</th><td><u>#endif /* STREAM */</u></td></tr>
+<tr><th id="570">570</th><td></td></tr>
+<tr><th id="571">571</th><td>	<i>/* Add the clock */</i></td></tr>
+<tr><th id="572">572</th><td>	<b>if</b> (!io_addclock(&amp;ees-&gt;io)) {</td></tr>
+<tr><th id="573">573</th><td>		<i>/* Oh shit.  Just close and return. */</i></td></tr>
+<tr><th id="574">574</th><td>		msyslog(LOG_ERR, <q>"ees clock: io_addclock(%s): %m"</q>, eesdev);</td></tr>
+<tr><th id="575">575</th><td>		<b>goto</b> screwed;</td></tr>
+<tr><th id="576">576</th><td>	}</td></tr>
+<tr><th id="577">577</th><td></td></tr>
+<tr><th id="578">578</th><td></td></tr>
+<tr><th id="579">579</th><td>	<i>/* All done.  Initialize a few random peer variables, then</i></td></tr>
+<tr><th id="580">580</th><td><i>	 * return success. */</i></td></tr>
+<tr><th id="581">581</th><td>	peer-&gt;precision	= sys_precision;</td></tr>
+<tr><th id="582">582</th><td>	peer-&gt;stratum	= stratumtouse[unit];</td></tr>
+<tr><th id="583">583</th><td>	<b>if</b> (stratumtouse[unit] &lt;= <var>1</var>) {</td></tr>
+<tr><th id="584">584</th><td>		memcpy((<em>char</em> *)&amp;pp-&gt;refid, EESREFID, <var>4</var>);</td></tr>
+<tr><th id="585">585</th><td>		<b>if</b> (unit &gt; <var>0</var> &amp;&amp; unit &lt; <var>10</var>)</td></tr>
+<tr><th id="586">586</th><td>		    ((<em>char</em> *)&amp;pp-&gt;refid)[<var>3</var>] = <kbd>'0'</kbd> + unit;</td></tr>
+<tr><th id="587">587</th><td>	} <b>else</b> {</td></tr>
+<tr><th id="588">588</th><td>		peer-&gt;refid = htonl(EESHSREFID);</td></tr>
+<tr><th id="589">589</th><td>	}</td></tr>
+<tr><th id="590">590</th><td>	unitinuse[unit] = <var>1</var>;</td></tr>
+<tr><th id="591">591</th><td>	pp-&gt;unitptr = &amp;eesunits[unit];</td></tr>
+<tr><th id="592">592</th><td>	pp-&gt;clockdesc = EESDESCRIPTION;</td></tr>
+<tr><th id="593">593</th><td>	msyslog(LOG_ERR, <q>"ees clock: %s OK on %d"</q>, eesdev, unit);</td></tr>
+<tr><th id="594">594</th><td>	<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="595">595</th><td></td></tr>
+<tr><th id="596">596</th><td>    screwed:</td></tr>
+<tr><th id="597">597</th><td>	<b>if</b> (fd232 != -<var>1</var>)</td></tr>
+<tr><th id="598">598</th><td>	    (<em>void</em>) close(fd232);</td></tr>
+<tr><th id="599">599</th><td>	<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="600">600</th><td>}</td></tr>
+<tr><th id="601">601</th><td></td></tr>
+<tr><th id="602">602</th><td></td></tr>
+<tr><th id="603">603</th><td><i>/* msfees_shutdown - shut down a EES clock */</i></td></tr>
+<tr><th id="604">604</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="605">605</th><td>msfees_shutdown(</td></tr>
+<tr><th id="606">606</th><td>	<em>int</em> unit,</td></tr>
+<tr><th id="607">607</th><td>	<b>struct</b> peer *peer</td></tr>
+<tr><th id="608">608</th><td>	)</td></tr>
+<tr><th id="609">609</th><td>{</td></tr>
+<tr><th id="610">610</th><td>	<em>register</em> <b>struct</b> eesunit *ees;</td></tr>
+<tr><th id="611">611</th><td></td></tr>
+<tr><th id="612">612</th><td>	<b>if</b> (unit &gt;= MAXUNITS) {</td></tr>
+<tr><th id="613">613</th><td>		msyslog(LOG_ERR,</td></tr>
+<tr><th id="614">614</th><td>			<q>"ees clock: INTERNAL ERROR, unit number %d invalid (max %d)"</q>,</td></tr>
+<tr><th id="615">615</th><td>			unit, MAXUNITS);</td></tr>
+<tr><th id="616">616</th><td>		<b>return</b>;</td></tr>
+<tr><th id="617">617</th><td>	}</td></tr>
+<tr><th id="618">618</th><td>	<b>if</b> (!unitinuse[unit]) {</td></tr>
+<tr><th id="619">619</th><td>		msyslog(LOG_ERR,</td></tr>
+<tr><th id="620">620</th><td>			<q>"ees clock: INTERNAL ERROR, unit number %d not in use"</q>, unit);</td></tr>
+<tr><th id="621">621</th><td>		<b>return</b>;</td></tr>
+<tr><th id="622">622</th><td>	}</td></tr>
+<tr><th id="623">623</th><td></td></tr>
+<tr><th id="624">624</th><td>	<i>/* Tell the I/O module to turn us off.  We're history. */</i></td></tr>
+<tr><th id="625">625</th><td>	ees = eesunits[unit];</td></tr>
+<tr><th id="626">626</th><td>	io_closeclock(&amp;ees-&gt;io);</td></tr>
+<tr><th id="627">627</th><td>	unitinuse[unit] = <var>0</var>;</td></tr>
+<tr><th id="628">628</th><td>}</td></tr>
+<tr><th id="629">629</th><td></td></tr>
+<tr><th id="630">630</th><td></td></tr>
+<tr><th id="631">631</th><td><i>/* ees_report_event - note the occurance of an event */</i></td></tr>
+<tr><th id="632">632</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="633">633</th><td>ees_report_event(</td></tr>
+<tr><th id="634">634</th><td>	<b>struct</b> eesunit *ees,</td></tr>
+<tr><th id="635">635</th><td>	<em>int</em> code</td></tr>
+<tr><th id="636">636</th><td>	)</td></tr>
+<tr><th id="637">637</th><td>{</td></tr>
+<tr><th id="638">638</th><td>	<b>if</b> (ees-&gt;status != (u_char)code) {</td></tr>
+<tr><th id="639">639</th><td>		ees-&gt;status = (u_char)code;</td></tr>
+<tr><th id="640">640</th><td>		<b>if</b> (code != CEVNT_NOMINAL)</td></tr>
+<tr><th id="641">641</th><td>		    ees-&gt;lastevent = (u_char)code;</td></tr>
+<tr><th id="642">642</th><td>		<i>/* Should report event to trap handler in here.</i></td></tr>
+<tr><th id="643">643</th><td><i>		 * Soon...</i></td></tr>
+<tr><th id="644">644</th><td><i>		 */</i></td></tr>
+<tr><th id="645">645</th><td>	}</td></tr>
+<tr><th id="646">646</th><td>}</td></tr>
+<tr><th id="647">647</th><td></td></tr>
+<tr><th id="648">648</th><td></td></tr>
+<tr><th id="649">649</th><td><i>/* ees_receive - receive data from the serial interface on an EES clock */</i></td></tr>
+<tr><th id="650">650</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="651">651</th><td>ees_receive(</td></tr>
+<tr><th id="652">652</th><td>	<b>struct</b> recvbuf *rbufp</td></tr>
+<tr><th id="653">653</th><td>	)</td></tr>
+<tr><th id="654">654</th><td>{</td></tr>
+<tr><th id="655">655</th><td>	<em>register</em> <em>int</em> n_sample;</td></tr>
+<tr><th id="656">656</th><td>	<em>register</em> <em>int</em> day;</td></tr>
+<tr><th id="657">657</th><td>	<em>register</em> <b>struct</b> eesunit *ees;</td></tr>
+<tr><th id="658">658</th><td>	<em>register</em> u_char *dpt;		<i>/* Data PoinTeR: move along ... */</i></td></tr>
+<tr><th id="659">659</th><td>	<em>register</em> u_char *dpend;		<i>/* Points just *after* last data char */</i></td></tr>
+<tr><th id="660">660</th><td>	<em>register</em> <em>char</em> *cp;</td></tr>
+<tr><th id="661">661</th><td>	l_fp tmp;</td></tr>
+<tr><th id="662">662</th><td>	<em>int</em> call_pps_sample = <var>0</var>;</td></tr>
+<tr><th id="663">663</th><td>	l_fp pps_arrvstamp;</td></tr>
+<tr><th id="664">664</th><td>	<em>int</em>	sincelast;</td></tr>
+<tr><th id="665">665</th><td>	<em>int</em>	pps_step = <var>0</var>;</td></tr>
+<tr><th id="666">666</th><td>	<em>int</em>	suspect_4ms_step = <var>0</var>;</td></tr>
+<tr><th id="667">667</th><td>	<b>struct</b> ppsclockev ppsclockev;</td></tr>
+<tr><th id="668">668</th><td>	<em>long</em> *ptr = (<em>long</em> *) &amp;ppsclockev;</td></tr>
+<tr><th id="669">669</th><td>	<em>int</em> rc;</td></tr>
+<tr><th id="670">670</th><td>	<em>int</em> request;</td></tr>
+<tr><th id="671">671</th><td><u>#ifdef HAVE_CIOGETEV</u></td></tr>
+<tr><th id="672">672</th><td>	request = CIOGETEV;</td></tr>
+<tr><th id="673">673</th><td><u>#endif</u></td></tr>
+<tr><th id="674">674</th><td><u>#ifdef HAVE_TIOCGPPSEV</u></td></tr>
+<tr><th id="675">675</th><td>	request = TIOCGPPSEV;</td></tr>
+<tr><th id="676">676</th><td><u>#endif</u></td></tr>
+<tr><th id="677">677</th><td></td></tr>
+<tr><th id="678">678</th><td>	<i>/* Get the clock this applies to and a pointer to the data */</i></td></tr>
+<tr><th id="679">679</th><td>	ees = (<b>struct</b> eesunit *)rbufp-&gt;recv_peer-&gt;procptr-&gt;unitptr;</td></tr>
+<tr><th id="680">680</th><td>	dpt = (u_char *)&amp;rbufp-&gt;recv_space;</td></tr>
+<tr><th id="681">681</th><td>	dpend = dpt + rbufp-&gt;recv_length;</td></tr>
+<tr><th id="682">682</th><td>	<b>if</b> ((dbg &amp; DB_LOG_AWAITMORE) &amp;&amp; (rbufp-&gt;recv_length != LENEESCODE))</td></tr>
+<tr><th id="683">683</th><td>	    printf(<q>"[%d] "</q>, rbufp-&gt;recv_length);</td></tr>
+<tr><th id="684">684</th><td></td></tr>
+<tr><th id="685">685</th><td>	<i>/* Check out our state and process appropriately */</i></td></tr>
+<tr><th id="686">686</th><td>	<b>switch</b> (ees-&gt;codestate) {</td></tr>
+<tr><th id="687">687</th><td>	    <b>case</b> EESCS_WAIT:</td></tr>
+<tr><th id="688">688</th><td>		<i>/* Set an initial guess at the timestamp as the recv time.</i></td></tr>
+<tr><th id="689">689</th><td><i>		 * If just running in CBREAK mode, we can't improve this.</i></td></tr>
+<tr><th id="690">690</th><td><i>		 * If we have the CLOCK Line Discipline, PPSCD, or sime such,</i></td></tr>
+<tr><th id="691">691</th><td><i>		 * then we will do better later ....</i></td></tr>
+<tr><th id="692">692</th><td><i>		 */</i></td></tr>
+<tr><th id="693">693</th><td>		ees-&gt;arrvtime = rbufp-&gt;recv_time;</td></tr>
+<tr><th id="694">694</th><td>		ees-&gt;codestate = EESCS_GOTSOME;</td></tr>
+<tr><th id="695">695</th><td>		ees-&gt;lencode = <var>0</var>;</td></tr>
+<tr><th id="696">696</th><td>		<i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="697">697</th><td></td></tr>
+<tr><th id="698">698</th><td>	    <b>case</b> EESCS_GOTSOME:</td></tr>
+<tr><th id="699">699</th><td>		cp = &amp;(ees-&gt;lastcode[ees-&gt;lencode]);</td></tr>
+<tr><th id="700">700</th><td></td></tr>
+<tr><th id="701">701</th><td>		<i>/* Gobble the bytes until the final (possibly stripped) 0xff */</i></td></tr>
+<tr><th id="702">702</th><td>		<b>while</b> (dpt &lt; dpend &amp;&amp; (*dpt &amp; <var>0x7f</var>) != <var>0x7f</var>) {</td></tr>
+<tr><th id="703">703</th><td>			*cp++ = (<em>char</em>)*dpt++;</td></tr>
+<tr><th id="704">704</th><td>			ees-&gt;lencode++;</td></tr>
+<tr><th id="705">705</th><td>			<i>/* Oh dear -- too many bytes .. */</i></td></tr>
+<tr><th id="706">706</th><td>			<b>if</b> (ees-&gt;lencode &gt; LENEESPRT) {</td></tr>
+<tr><th id="707">707</th><td>				NLOG(NLOG_CLOCKINFO) <i>/* conditional if clause for conditional syslog */</i></td></tr>
+<tr><th id="708">708</th><td>					msyslog(LOG_INFO,</td></tr>
+<tr><th id="709">709</th><td>						<q>"I: ees clock: %d + %d &gt; %d [%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x]"</q>,</td></tr>
+<tr><th id="710">710</th><td>						ees-&gt;lencode, dpend - dpt, LENEESPRT,</td></tr>
+<tr><th id="711">711</th><td><u>#define D(x) (ees-&gt;lastcode[x])</u></td></tr>
+<tr><th id="712">712</th><td>						D(<var>0</var>), D(<var>1</var>), D(<var>2</var>), D(<var>3</var>), D(<var>4</var>), D(<var>5</var>), D(<var>6</var>),</td></tr>
+<tr><th id="713">713</th><td>						D(<var>7</var>), D(<var>8</var>), D(<var>9</var>), D(<var>10</var>), D(<var>11</var>), D(<var>12</var>));</td></tr>
+<tr><th id="714">714</th><td><u>#undef	D</u></td></tr>
+<tr><th id="715">715</th><td>				ees-&gt;badformat++;</td></tr>
+<tr><th id="716">716</th><td>				ees-&gt;reason = CODEREASON + <var>1</var>;</td></tr>
+<tr><th id="717">717</th><td>				ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="718">718</th><td>				ees_reset(ees);</td></tr>
+<tr><th id="719">719</th><td>				<b>return</b>;</td></tr>
+<tr><th id="720">720</th><td>			}</td></tr>
+<tr><th id="721">721</th><td>		}</td></tr>
+<tr><th id="722">722</th><td>		<i>/* Gave up because it was end of the buffer, rather than ff */</i></td></tr>
+<tr><th id="723">723</th><td>		<b>if</b> (dpt == dpend) {</td></tr>
+<tr><th id="724">724</th><td>			<i>/* Incomplete.  Wait for more. */</i></td></tr>
+<tr><th id="725">725</th><td>			<b>if</b> (dbg &amp; DB_LOG_AWAITMORE)</td></tr>
+<tr><th id="726">726</th><td>			    msyslog(LOG_INFO,</td></tr>
+<tr><th id="727">727</th><td>				    <q>"I: ees clock %d: %p == %p: await more"</q>,</td></tr>
+<tr><th id="728">728</th><td>				    ees-&gt;unit, dpt, dpend);</td></tr>
+<tr><th id="729">729</th><td>			<b>return</b>;</td></tr>
+<tr><th id="730">730</th><td>		}</td></tr>
+<tr><th id="731">731</th><td></td></tr>
+<tr><th id="732">732</th><td>		<i>/* This shouldn't happen ... ! */</i></td></tr>
+<tr><th id="733">733</th><td>		<b>if</b> ((*dpt &amp; <var>0x7f</var>) != <var>0x7f</var>) {</td></tr>
+<tr><th id="734">734</th><td>			msyslog(LOG_INFO, <q>"I: ees clock: %0x &amp; 0x7f != 0x7f"</q>, *dpt);</td></tr>
+<tr><th id="735">735</th><td>			ees-&gt;badformat++;</td></tr>
+<tr><th id="736">736</th><td>			ees-&gt;reason = CODEREASON + <var>2</var>;</td></tr>
+<tr><th id="737">737</th><td>			ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="738">738</th><td>			ees_reset(ees);</td></tr>
+<tr><th id="739">739</th><td>			<b>return</b>;</td></tr>
+<tr><th id="740">740</th><td>		}</td></tr>
+<tr><th id="741">741</th><td></td></tr>
+<tr><th id="742">742</th><td>		<i>/* Skip the 0xff */</i></td></tr>
+<tr><th id="743">743</th><td>		dpt++;</td></tr>
+<tr><th id="744">744</th><td></td></tr>
+<tr><th id="745">745</th><td>		<i>/* Finally, got a complete buffer.  Mainline code will</i></td></tr>
+<tr><th id="746">746</th><td><i>		 * continue on. */</i></td></tr>
+<tr><th id="747">747</th><td>		cp = ees-&gt;lastcode;</td></tr>
+<tr><th id="748">748</th><td>		<b>break</b>;</td></tr>
+<tr><th id="749">749</th><td></td></tr>
+<tr><th id="750">750</th><td>	    <b>default</b>:</td></tr>
+<tr><th id="751">751</th><td>		msyslog(LOG_ERR, <q>"ees clock: INTERNAL ERROR: %d state %d"</q>,</td></tr>
+<tr><th id="752">752</th><td>			ees-&gt;unit, ees-&gt;codestate);</td></tr>
+<tr><th id="753">753</th><td>		ees-&gt;reason = CODEREASON + <var>5</var>;</td></tr>
+<tr><th id="754">754</th><td>		ees_event(ees, CEVNT_FAULT);</td></tr>
+<tr><th id="755">755</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="756">756</th><td>		<b>return</b>;</td></tr>
+<tr><th id="757">757</th><td>	}</td></tr>
+<tr><th id="758">758</th><td></td></tr>
+<tr><th id="759">759</th><td>	<i>/* Boy!  After all that crap, the lastcode buffer now contains</i></td></tr>
+<tr><th id="760">760</th><td><i>	 * something we hope will be a valid time code.  Do length</i></td></tr>
+<tr><th id="761">761</th><td><i>	 * checks and sanity checks on constant data.</i></td></tr>
+<tr><th id="762">762</th><td><i>	 */</i></td></tr>
+<tr><th id="763">763</th><td>	ees-&gt;codestate = EESCS_WAIT;</td></tr>
+<tr><th id="764">764</th><td>	ees-&gt;lasttime = current_time;</td></tr>
+<tr><th id="765">765</th><td>	<b>if</b> (ees-&gt;lencode != LENEESPRT) {</td></tr>
+<tr><th id="766">766</th><td>		ees-&gt;badformat++;</td></tr>
+<tr><th id="767">767</th><td>		ees-&gt;reason = CODEREASON + <var>6</var>;</td></tr>
+<tr><th id="768">768</th><td>		ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="769">769</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="770">770</th><td>		<b>return</b>;</td></tr>
+<tr><th id="771">771</th><td>	}</td></tr>
+<tr><th id="772">772</th><td></td></tr>
+<tr><th id="773">773</th><td>	cp = ees-&gt;lastcode;</td></tr>
+<tr><th id="774">774</th><td></td></tr>
+<tr><th id="775">775</th><td>	<i>/* Check that centisecond is zero */</i></td></tr>
+<tr><th id="776">776</th><td>	<b>if</b> (cp[EESM_CSEC] != <var>0</var>) {</td></tr>
+<tr><th id="777">777</th><td>		ees-&gt;baddata++;</td></tr>
+<tr><th id="778">778</th><td>		ees-&gt;reason = CODEREASON + <var>7</var>;</td></tr>
+<tr><th id="779">779</th><td>		ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="780">780</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="781">781</th><td>		<b>return</b>;</td></tr>
+<tr><th id="782">782</th><td>	}</td></tr>
+<tr><th id="783">783</th><td></td></tr>
+<tr><th id="784">784</th><td>	<i>/* Check flag formats */</i></td></tr>
+<tr><th id="785">785</th><td>	<b>if</b> (cp[EESM_LEAP] != <var>0</var> &amp;&amp; cp[EESM_LEAP] != <var>0x0f</var>) {</td></tr>
+<tr><th id="786">786</th><td>		ees-&gt;badformat++;</td></tr>
+<tr><th id="787">787</th><td>		ees-&gt;reason = CODEREASON + <var>8</var>;</td></tr>
+<tr><th id="788">788</th><td>		ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="789">789</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="790">790</th><td>		<b>return</b>;</td></tr>
+<tr><th id="791">791</th><td>	}</td></tr>
+<tr><th id="792">792</th><td></td></tr>
+<tr><th id="793">793</th><td>	<b>if</b> (cp[EESM_BST] != <var>0</var> &amp;&amp; cp[EESM_BST] != <var>0x03</var>) {</td></tr>
+<tr><th id="794">794</th><td>		ees-&gt;badformat++;</td></tr>
+<tr><th id="795">795</th><td>		ees-&gt;reason = CODEREASON + <var>9</var>;</td></tr>
+<tr><th id="796">796</th><td>		ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="797">797</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="798">798</th><td>		<b>return</b>;</td></tr>
+<tr><th id="799">799</th><td>	}</td></tr>
+<tr><th id="800">800</th><td></td></tr>
+<tr><th id="801">801</th><td>	<b>if</b> (cp[EESM_MSFOK] != <var>0</var> &amp;&amp; cp[EESM_MSFOK] != <var>0x3f</var>) {</td></tr>
+<tr><th id="802">802</th><td>		ees-&gt;badformat++;</td></tr>
+<tr><th id="803">803</th><td>		ees-&gt;reason = CODEREASON + <var>10</var>;</td></tr>
+<tr><th id="804">804</th><td>		ees_event(ees, CEVNT_BADREPLY);</td></tr>
+<tr><th id="805">805</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="806">806</th><td>		<b>return</b>;</td></tr>
+<tr><th id="807">807</th><td>	}</td></tr>
+<tr><th id="808">808</th><td></td></tr>
+<tr><th id="809">809</th><td>	<i>/* So far, so good.  Compute day, hours, minutes, seconds,</i></td></tr>
+<tr><th id="810">810</th><td><i>	 * time zone.  Do range checks on these.</i></td></tr>
+<tr><th id="811">811</th><td><i>	 */</i></td></tr>
+<tr><th id="812">812</th><td></td></tr>
+<tr><th id="813">813</th><td><u>#define bcdunpack(val)	( (((val)&gt;&gt;4) &amp; 0x0f) * 10 + ((val) &amp; 0x0f) )</u></td></tr>
+<tr><th id="814">814</th><td><u>#define istrue(x)	((x)?1:0)</u></td></tr>
+<tr><th id="815">815</th><td></td></tr>
+<tr><th id="816">816</th><td>	ees-&gt;second  = bcdunpack(cp[EESM_SEC]);  <i>/* second       */</i></td></tr>
+<tr><th id="817">817</th><td>	ees-&gt;minute  = bcdunpack(cp[EESM_MIN]);  <i>/* minute       */</i></td></tr>
+<tr><th id="818">818</th><td>	ees-&gt;hour    = bcdunpack(cp[EESM_HOUR]); <i>/* hour         */</i></td></tr>
+<tr><th id="819">819</th><td></td></tr>
+<tr><th id="820">820</th><td>	day          = bcdunpack(cp[EESM_DAY]);  <i>/* day of month */</i></td></tr>
+<tr><th id="821">821</th><td></td></tr>
+<tr><th id="822">822</th><td>	<b>switch</b> (bcdunpack(cp[EESM_MON])) {       <i>/* month        */</i></td></tr>
+<tr><th id="823">823</th><td></td></tr>
+<tr><th id="824">824</th><td>		<i>/*  Add in lengths of all previous months.  Add one more</i></td></tr>
+<tr><th id="825">825</th><td><i>		    if it is a leap year and after February.</i></td></tr>
+<tr><th id="826">826</th><td><i>		*/</i></td></tr>
+<tr><th id="827">827</th><td>	    <b>case</b> <var>12</var>:	day += NOV;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="828">828</th><td>	    <b>case</b> <var>11</var>:	day += OCT;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="829">829</th><td>	    <b>case</b> <var>10</var>:	day += SEP;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="830">830</th><td>	    <b>case</b>  <var>9</var>:	day += AUG;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="831">831</th><td>	    <b>case</b>  <var>8</var>:	day += JUL;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="832">832</th><td>	    <b>case</b>  <var>7</var>:	day += JUN;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="833">833</th><td>	    <b>case</b>  <var>6</var>:	day += MAY;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="834">834</th><td>	    <b>case</b>  <var>5</var>:	day += APR;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="835">835</th><td>	    <b>case</b>  <var>4</var>:	day += MAR;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="836">836</th><td>	    <b>case</b>  <var>3</var>:	day += FEB;</td></tr>
+<tr><th id="837">837</th><td>		<b>if</b> (istrue(cp[EESM_LEAP])) day++; <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="838">838</th><td>	    <b>case</b>  <var>2</var>:	day += JAN;			  <i>/*FALLSTHROUGH*/</i></td></tr>
+<tr><th id="839">839</th><td>	    <b>case</b>  <var>1</var>:	<b>break</b>;</td></tr>
+<tr><th id="840">840</th><td>	    <b>default</b>:	ees-&gt;baddata++;</td></tr>
+<tr><th id="841">841</th><td>		ees-&gt;reason = CODEREASON + <var>11</var>;</td></tr>
+<tr><th id="842">842</th><td>		ees_event(ees, CEVNT_BADDATE);</td></tr>
+<tr><th id="843">843</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="844">844</th><td>		<b>return</b>;</td></tr>
+<tr><th id="845">845</th><td>	}</td></tr>
+<tr><th id="846">846</th><td></td></tr>
+<tr><th id="847">847</th><td>	ees-&gt;day     = day;</td></tr>
+<tr><th id="848">848</th><td></td></tr>
+<tr><th id="849">849</th><td>	<i>/* Get timezone. The clocktime routine wants the number</i></td></tr>
+<tr><th id="850">850</th><td><i>	 * of hours to add to the delivered time to get UT.</i></td></tr>
+<tr><th id="851">851</th><td><i>	 * Currently -1 if BST flag set, 0 otherwise.  This</i></td></tr>
+<tr><th id="852">852</th><td><i>	 * is the place to tweak things if double summer time</i></td></tr>
+<tr><th id="853">853</th><td><i>	 * ever happens.</i></td></tr>
+<tr><th id="854">854</th><td><i>	 */</i></td></tr>
+<tr><th id="855">855</th><td>	ees-&gt;tz      = istrue(cp[EESM_BST]) ? -<var>1</var> : <var>0</var>;</td></tr>
+<tr><th id="856">856</th><td></td></tr>
+<tr><th id="857">857</th><td>	<b>if</b> (ees-&gt;day &gt; <var>366</var> || ees-&gt;day &lt; <var>1</var> ||</td></tr>
+<tr><th id="858">858</th><td>	    ees-&gt;hour &gt; <var>23</var> || ees-&gt;minute &gt; <var>59</var> || ees-&gt;second &gt; <var>59</var>) {</td></tr>
+<tr><th id="859">859</th><td>		ees-&gt;baddata++;</td></tr>
+<tr><th id="860">860</th><td>		ees-&gt;reason = CODEREASON + <var>12</var>;</td></tr>
+<tr><th id="861">861</th><td>		ees_event(ees, CEVNT_BADDATE);</td></tr>
+<tr><th id="862">862</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="863">863</th><td>		<b>return</b>;</td></tr>
+<tr><th id="864">864</th><td>	}</td></tr>
+<tr><th id="865">865</th><td></td></tr>
+<tr><th id="866">866</th><td>	n_sample = ees-&gt;nsamples;</td></tr>
+<tr><th id="867">867</th><td></td></tr>
+<tr><th id="868">868</th><td>	<i>/* Now, compute the reference time value: text -&gt; tmp.l_ui */</i></td></tr>
+<tr><th id="869">869</th><td>	<b>if</b> (!clocktime(ees-&gt;day, ees-&gt;hour, ees-&gt;minute, ees-&gt;second,</td></tr>
+<tr><th id="870">870</th><td>		       ees-&gt;tz, rbufp-&gt;recv_time.l_ui, &amp;ees-&gt;yearstart,</td></tr>
+<tr><th id="871">871</th><td>		       &amp;tmp.l_ui)) {</td></tr>
+<tr><th id="872">872</th><td>		ees-&gt;baddata++;</td></tr>
+<tr><th id="873">873</th><td>		ees-&gt;reason = CODEREASON + <var>13</var>;</td></tr>
+<tr><th id="874">874</th><td>		ees_event(ees, CEVNT_BADDATE);</td></tr>
+<tr><th id="875">875</th><td>		ees_reset(ees);</td></tr>
+<tr><th id="876">876</th><td>		<b>return</b>;</td></tr>
+<tr><th id="877">877</th><td>	}</td></tr>
+<tr><th id="878">878</th><td>	tmp.l_uf = <var>0</var>;</td></tr>
+<tr><th id="879">879</th><td></td></tr>
+<tr><th id="880">880</th><td>	<i>/*  DON'T use ees-&gt;arrvtime -- it may be &lt; reftime */</i></td></tr>
+<tr><th id="881">881</th><td>	ees-&gt;lastsampletime = tmp;</td></tr>
+<tr><th id="882">882</th><td></td></tr>
+<tr><th id="883">883</th><td>	<i>/* If we are synchronised to the radio, update the reference time.</i></td></tr>
+<tr><th id="884">884</th><td><i>	 * Also keep a note of when clock was last good.</i></td></tr>
+<tr><th id="885">885</th><td><i>	 */</i></td></tr>
+<tr><th id="886">886</th><td>	<b>if</b> (istrue(cp[EESM_MSFOK])) {</td></tr>
+<tr><th id="887">887</th><td>		ees-&gt;reftime = tmp;</td></tr>
+<tr><th id="888">888</th><td>		ees-&gt;clocklastgood = current_time;</td></tr>
+<tr><th id="889">889</th><td>	}</td></tr>
+<tr><th id="890">890</th><td></td></tr>
+<tr><th id="891">891</th><td></td></tr>
+<tr><th id="892">892</th><td>	<i>/* Compute the offset.  For the fractional part of the</i></td></tr>
+<tr><th id="893">893</th><td><i>	 * offset we use the expected delay for the message.</i></td></tr>
+<tr><th id="894">894</th><td><i>	 */</i></td></tr>
+<tr><th id="895">895</th><td>	ees-&gt;codeoffsets[n_sample].l_ui = tmp.l_ui;</td></tr>
+<tr><th id="896">896</th><td>	ees-&gt;codeoffsets[n_sample].l_uf = <var>0</var>;</td></tr>
+<tr><th id="897">897</th><td></td></tr>
+<tr><th id="898">898</th><td>	<i>/* Number of seconds since the last step */</i></td></tr>
+<tr><th id="899">899</th><td>	sincelast = this_uisec - ees-&gt;last_step;</td></tr>
+<tr><th id="900">900</th><td></td></tr>
+<tr><th id="901">901</th><td>	memset((<em>char</em> *) &amp;ppsclockev, <var>0</var>, <b>sizeof</b> ppsclockev);</td></tr>
+<tr><th id="902">902</th><td></td></tr>
+<tr><th id="903">903</th><td>	rc = ioctl(ees-&gt;io.fd, request, (<em>char</em> *) &amp;ppsclockev);</td></tr>
+<tr><th id="904">904</th><td>	<b>if</b> (dbg &amp; DB_PRINT_EV) fprintf(stderr,</td></tr>
+<tr><th id="905">905</th><td>					 <q>"[%x] CIOGETEV u%d %d (%x %d) gave %d (%d): %08lx %08lx %ld\n"</q>,</td></tr>
+<tr><th id="906">906</th><td>					 DB_PRINT_EV, ees-&gt;unit, ees-&gt;io.fd, request, is_pps(ees),</td></tr>
+<tr><th id="907">907</th><td>					 rc, errno, ptr[<var>0</var>], ptr[<var>1</var>], ptr[<var>2</var>]);</td></tr>
+<tr><th id="908">908</th><td></td></tr>
+<tr><th id="909">909</th><td>	<i>/* If we managed to get the time of arrival, process the info */</i></td></tr>
+<tr><th id="910">910</th><td>	<b>if</b> (rc &gt;= <var>0</var>) {</td></tr>
+<tr><th id="911">911</th><td>		<em>int</em> conv = -<var>1</var>;</td></tr>
+<tr><th id="912">912</th><td>		pps_step = ppsclockev.serial - ees-&gt;last_pps_no;</td></tr>
+<tr><th id="913">913</th><td></td></tr>
+<tr><th id="914">914</th><td>		<i>/* Possible that PPS triggered, but text message didn't */</i></td></tr>
+<tr><th id="915">915</th><td>		<b>if</b> (pps_step == <var>2</var>) msyslog(LOG_ERR, <q>"pps step = 2 @ %02d"</q>, ees-&gt;second);</td></tr>
+<tr><th id="916">916</th><td>		<b>if</b> (pps_step == <var>2</var> &amp;&amp; ees-&gt;second == <var>1</var>) suspect_4ms_step |= <var>1</var>;</td></tr>
+<tr><th id="917">917</th><td>		<b>if</b> (pps_step == <var>2</var> &amp;&amp; ees-&gt;second == <var>2</var>) suspect_4ms_step |= <var>4</var>;</td></tr>
+<tr><th id="918">918</th><td></td></tr>
+<tr><th id="919">919</th><td>		<i>/* allow for single loss of PPS only */</i></td></tr>
+<tr><th id="920">920</th><td>		<b>if</b> (pps_step != <var>1</var> &amp;&amp; pps_step != <var>2</var>)</td></tr>
+<tr><th id="921">921</th><td>		    fprintf(stderr, <q>"PPS step: %d too far off %ld (%d)\n"</q>,</td></tr>
+<tr><th id="922">922</th><td>			    ppsclockev.serial, ees-&gt;last_pps_no, pps_step);</td></tr>
+<tr><th id="923">923</th><td>		<b>else</b> {</td></tr>
+<tr><th id="924">924</th><td>			pps_arrvstamp = tval_stamp_to_lfp(ppsclockev.tv);</td></tr>
+<tr><th id="925">925</th><td>			<i>/* if ((ABS(time difference) - 0.25) &lt; 0)</i></td></tr>
+<tr><th id="926">926</th><td><i>			 * then believe it ...</i></td></tr>
+<tr><th id="927">927</th><td><i>			 */</i></td></tr>
+<tr><th id="928">928</th><td>			l_fp diff;</td></tr>
+<tr><th id="929">929</th><td>			diff = pps_arrvstamp;</td></tr>
+<tr><th id="930">930</th><td>			conv = <var>0</var>;</td></tr>
+<tr><th id="931">931</th><td>			L_SUB(&amp;diff, &amp;ees-&gt;arrvtime);</td></tr>
+<tr><th id="932">932</th><td>			<b>if</b> (dbg &amp; DB_PRINT_CDT)</td></tr>
+<tr><th id="933">933</th><td>			    printf(<q>"[%x] Have %lx.%08lx and %lx.%08lx -&gt; %lx.%08lx @ %s"</q>,</td></tr>
+<tr><th id="934">934</th><td>				   DB_PRINT_CDT, (<em>long</em>)ees-&gt;arrvtime.l_ui, (<em>long</em>)ees-&gt;arrvtime.l_uf,</td></tr>
+<tr><th id="935">935</th><td>				   (<em>long</em>)pps_arrvstamp.l_ui, (<em>long</em>)pps_arrvstamp.l_uf,</td></tr>
+<tr><th id="936">936</th><td>				   (<em>long</em>)diff.l_ui, (<em>long</em>)diff.l_uf,</td></tr>
+<tr><th id="937">937</th><td>				   ctime(&amp;(ppsclockev.tv.tv_sec)));</td></tr>
+<tr><th id="938">938</th><td>			<b>if</b> (L_ISNEG(&amp;diff)) M_NEG(diff.l_ui, diff.l_uf);</td></tr>
+<tr><th id="939">939</th><td>			L_SUB(&amp;diff, &amp;acceptable_slop);</td></tr>
+<tr><th id="940">940</th><td>			<b>if</b> (L_ISNEG(&amp;diff)) {	<i>/* AOK -- pps_sample */</i></td></tr>
+<tr><th id="941">941</th><td>				ees-&gt;arrvtime = pps_arrvstamp;</td></tr>
+<tr><th id="942">942</th><td>				conv++;</td></tr>
+<tr><th id="943">943</th><td>				call_pps_sample++;</td></tr>
+<tr><th id="944">944</th><td>			}</td></tr>
+<tr><th id="945">945</th><td>			<i>/* Some loss of some signals around sec = 1 */</i></td></tr>
+<tr><th id="946">946</th><td>			<b>else</b> <b>if</b> (ees-&gt;second == <var>1</var>) {</td></tr>
+<tr><th id="947">947</th><td>				diff = pps_arrvstamp;</td></tr>
+<tr><th id="948">948</th><td>				L_ADD(&amp;diff, &amp;onesec);</td></tr>
+<tr><th id="949">949</th><td>				L_SUB(&amp;diff, &amp;ees-&gt;arrvtime);</td></tr>
+<tr><th id="950">950</th><td>				<b>if</b> (L_ISNEG(&amp;diff)) M_NEG(diff.l_ui, diff.l_uf);</td></tr>
+<tr><th id="951">951</th><td>				L_SUB(&amp;diff, &amp;acceptable_slop);</td></tr>
+<tr><th id="952">952</th><td>				msyslog(LOG_ERR, <q>"Have sec==1 slip %ds a=%08x-p=%08x -&gt; %x.%08x (u=%d) %s"</q>,</td></tr>
+<tr><th id="953">953</th><td>					pps_arrvstamp.l_ui - ees-&gt;arrvtime.l_ui,</td></tr>
+<tr><th id="954">954</th><td>					pps_arrvstamp.l_uf,</td></tr>
+<tr><th id="955">955</th><td>					ees-&gt;arrvtime.l_uf,</td></tr>
+<tr><th id="956">956</th><td>					diff.l_ui, diff.l_uf,</td></tr>
+<tr><th id="957">957</th><td>					(<em>int</em>)ppsclockev.tv.tv_usec,</td></tr>
+<tr><th id="958">958</th><td>					ctime(&amp;(ppsclockev.tv.tv_sec)));</td></tr>
+<tr><th id="959">959</th><td>				<b>if</b> (L_ISNEG(&amp;diff)) {	<i>/* AOK -- pps_sample */</i></td></tr>
+<tr><th id="960">960</th><td>					suspect_4ms_step |= <var>2</var>;</td></tr>
+<tr><th id="961">961</th><td>					ees-&gt;arrvtime = pps_arrvstamp;</td></tr>
+<tr><th id="962">962</th><td>					L_ADD(&amp;ees-&gt;arrvtime, &amp;onesec);</td></tr>
+<tr><th id="963">963</th><td>					conv++;</td></tr>
+<tr><th id="964">964</th><td>					call_pps_sample++;</td></tr>
+<tr><th id="965">965</th><td>				}</td></tr>
+<tr><th id="966">966</th><td>			}</td></tr>
+<tr><th id="967">967</th><td>		}</td></tr>
+<tr><th id="968">968</th><td>		ees-&gt;last_pps_no = ppsclockev.serial;</td></tr>
+<tr><th id="969">969</th><td>		<b>if</b> (dbg &amp; DB_PRINT_CDTC)</td></tr>
+<tr><th id="970">970</th><td>		    printf(</td></tr>
+<tr><th id="971">971</th><td>			    <q>"[%x] %08lx %08lx %d u%d (%d %d)\n"</q>,</td></tr>
+<tr><th id="972">972</th><td>			    DB_PRINT_CDTC, (<em>long</em>)pps_arrvstamp.l_ui,</td></tr>
+<tr><th id="973">973</th><td>			    (<em>long</em>)pps_arrvstamp.l_uf, conv, ees-&gt;unit,</td></tr>
+<tr><th id="974">974</th><td>			    call_pps_sample, pps_step);</td></tr>
+<tr><th id="975">975</th><td>	}</td></tr>
+<tr><th id="976">976</th><td></td></tr>
+<tr><th id="977">977</th><td>	<i>/* See if there has been a 4ms jump at a minute boundry */</i></td></tr>
+<tr><th id="978">978</th><td>	{	l_fp	delta;</td></tr>
+<tr><th id="979">979</th><td><u>#define	delta_isec	delta.l_ui</u></td></tr>
+<tr><th id="980">980</th><td><u>#define	delta_ssec	delta.l_i</u></td></tr>
+<tr><th id="981">981</th><td><u>#define	delta_sfsec	delta.l_f</u></td></tr>
+<tr><th id="982">982</th><td>	<em>long</em>	delta_f_abs;</td></tr>
+<tr><th id="983">983</th><td></td></tr>
+<tr><th id="984">984</th><td>	delta.l_i = ees-&gt;arrvtime.l_i;</td></tr>
+<tr><th id="985">985</th><td>	delta.l_f = ees-&gt;arrvtime.l_f;</td></tr>
+<tr><th id="986">986</th><td></td></tr>
+<tr><th id="987">987</th><td>	L_SUB(&amp;delta, &amp;ees-&gt;last_l);</td></tr>
+<tr><th id="988">988</th><td>	delta_f_abs = delta_sfsec;</td></tr>
+<tr><th id="989">989</th><td>	<b>if</b> (delta_f_abs &lt; <var>0</var>) delta_f_abs = -delta_f_abs;</td></tr>
+<tr><th id="990">990</th><td></td></tr>
+<tr><th id="991">991</th><td>	<i>/* Dump the deltas each minute */</i></td></tr>
+<tr><th id="992">992</th><td>	<b>if</b> (dbg &amp; DB_DUMP_DELTAS)</td></tr>
+<tr><th id="993">993</th><td>	{	</td></tr>
+<tr><th id="994">994</th><td>		<b>if</b> (<i>/*0 &lt;= ees-&gt;second &amp;&amp; */</i></td></tr>
+<tr><th id="995">995</th><td>		    ees-&gt;second &lt; COUNTOF(deltas))</td></tr>
+<tr><th id="996">996</th><td>			deltas[ees-&gt;second] = delta_sfsec;</td></tr>
+<tr><th id="997">997</th><td>	<i>/* Dump on second 1, as second 0 sometimes missed */</i></td></tr>
+<tr><th id="998">998</th><td>	<b>if</b> (ees-&gt;second == <var>1</var>) {</td></tr>
+<tr><th id="999">999</th><td>		<em>char</em> text[<var>16</var> * COUNTOF(deltas)];</td></tr>
+<tr><th id="1000">1000</th><td>		<em>char</em> *cptr=text;</td></tr>
+<tr><th id="1001">1001</th><td>		<em>int</em> i;</td></tr>
+<tr><th id="1002">1002</th><td>		<b>for</b> (i = <var>0</var>; i &lt; COUNTOF(deltas); i++) {</td></tr>
+<tr><th id="1003">1003</th><td>			snprintf(cptr, <b>sizeof</b>(text) / COUNTOF(deltas),</td></tr>
+<tr><th id="1004">1004</th><td>				<q>" %d.%04d"</q>, msec(deltas[i]),</td></tr>
+<tr><th id="1005">1005</th><td>				subms(deltas[i]));</td></tr>
+<tr><th id="1006">1006</th><td>			cptr += strlen(cptr);</td></tr>
+<tr><th id="1007">1007</th><td>		}</td></tr>
+<tr><th id="1008">1008</th><td>		msyslog(LOG_ERR, <q>"Deltas: %d.%04d&lt;-&gt;%d.%04d: %s"</q>,</td></tr>
+<tr><th id="1009">1009</th><td>			msec(EES_STEP_F - EES_STEP_F_GRACE), subms(EES_STEP_F - EES_STEP_F_GRACE),</td></tr>
+<tr><th id="1010">1010</th><td>			msec(EES_STEP_F + EES_STEP_F_GRACE), subms(EES_STEP_F + EES_STEP_F_GRACE),</td></tr>
+<tr><th id="1011">1011</th><td>			text+<var>1</var>);</td></tr>
+<tr><th id="1012">1012</th><td>		<b>for</b> (i=<var>0</var>; i&lt;((<b>sizeof</b> deltas) / (<b>sizeof</b> deltas[<var>0</var>])); i++) deltas[i] = <var>0</var>;</td></tr>
+<tr><th id="1013">1013</th><td>	}</td></tr>
+<tr><th id="1014">1014</th><td>	}</td></tr>
+<tr><th id="1015">1015</th><td></td></tr>
+<tr><th id="1016">1016</th><td>	<i>/* Lets see if we have a 4 mS step at a minute boundaary */</i></td></tr>
+<tr><th id="1017">1017</th><td>	<b>if</b> (	((EES_STEP_F - EES_STEP_F_GRACE) &lt; delta_f_abs) &amp;&amp;</td></tr>
+<tr><th id="1018">1018</th><td>		(delta_f_abs &lt; (EES_STEP_F + EES_STEP_F_GRACE)) &amp;&amp;</td></tr>
+<tr><th id="1019">1019</th><td>		(ees-&gt;second == <var>0</var> || ees-&gt;second == <var>1</var> || ees-&gt;second == <var>2</var>) &amp;&amp;</td></tr>
+<tr><th id="1020">1020</th><td>		(sincelast &lt; <var>0</var> || sincelast &gt; <var>122</var>)</td></tr>
+<tr><th id="1021">1021</th><td>		) {	<i>/* 4ms jump at min boundry */</i></td></tr>
+<tr><th id="1022">1022</th><td>		<em>int</em> old_sincelast;</td></tr>
+<tr><th id="1023">1023</th><td>		<em>int</em> count=<var>0</var>;</td></tr>
+<tr><th id="1024">1024</th><td>		<em>int</em> sum = <var>0</var>;</td></tr>
+<tr><th id="1025">1025</th><td>		<i>/* Yes -- so compute the ramp time */</i></td></tr>
+<tr><th id="1026">1026</th><td>		<b>if</b> (ees-&gt;last_step == <var>0</var>) sincelast = <var>0</var>;</td></tr>
+<tr><th id="1027">1027</th><td>		old_sincelast = sincelast;</td></tr>
+<tr><th id="1028">1028</th><td></td></tr>
+<tr><th id="1029">1029</th><td>		<i>/* First time in, just set "ees-&gt;last_step" */</i></td></tr>
+<tr><th id="1030">1030</th><td>		<b>if</b>(ees-&gt;last_step) {</td></tr>
+<tr><th id="1031">1031</th><td>			<em>int</em> other_step = <var>0</var>;</td></tr>
+<tr><th id="1032">1032</th><td>			<em>int</em> third_step = <var>0</var>;</td></tr>
+<tr><th id="1033">1033</th><td>			<em>int</em> this_step = (sincelast + (<var>60</var> /<var>2</var>)) / <var>60</var>;</td></tr>
+<tr><th id="1034">1034</th><td>			<em>int</em> p_step = ees-&gt;this_step;</td></tr>
+<tr><th id="1035">1035</th><td>			<em>int</em> p;</td></tr>
+<tr><th id="1036">1036</th><td>			ees-&gt;last_steps[p_step] = this_step;</td></tr>
+<tr><th id="1037">1037</th><td>			p= p_step;</td></tr>
+<tr><th id="1038">1038</th><td>			p_step++;</td></tr>
+<tr><th id="1039">1039</th><td>			<b>if</b> (p_step &gt;= LAST_STEPS) p_step = <var>0</var>;</td></tr>
+<tr><th id="1040">1040</th><td>			ees-&gt;this_step = p_step;</td></tr>
+<tr><th id="1041">1041</th><td>				<i>/* Find the "average" interval */</i></td></tr>
+<tr><th id="1042">1042</th><td>			<b>while</b> (p != p_step) {</td></tr>
+<tr><th id="1043">1043</th><td>				<em>int</em> this = ees-&gt;last_steps[p];</td></tr>
+<tr><th id="1044">1044</th><td>				<b>if</b> (this == <var>0</var>) <b>break</b>;</td></tr>
+<tr><th id="1045">1045</th><td>				<b>if</b> (this != this_step) {</td></tr>
+<tr><th id="1046">1046</th><td>					<b>if</b> (other_step == <var>0</var> &amp;&amp; (</td></tr>
+<tr><th id="1047">1047</th><td>						this== (this_step +<var>2</var>) ||</td></tr>
+<tr><th id="1048">1048</th><td>						this== (this_step -<var>2</var>) ||</td></tr>
+<tr><th id="1049">1049</th><td>						this== (this_step +<var>1</var>) ||</td></tr>
+<tr><th id="1050">1050</th><td>						this== (this_step -<var>1</var>)))</td></tr>
+<tr><th id="1051">1051</th><td>					    other_step = this;</td></tr>
+<tr><th id="1052">1052</th><td>					<b>if</b> (other_step != this) {</td></tr>
+<tr><th id="1053">1053</th><td>						<em>int</em> idelta = (this_step - other_step);</td></tr>
+<tr><th id="1054">1054</th><td>						<b>if</b> (idelta &lt; <var>0</var>) idelta = - idelta;</td></tr>
+<tr><th id="1055">1055</th><td>						<b>if</b> (third_step == <var>0</var> &amp;&amp; (</td></tr>
+<tr><th id="1056">1056</th><td>							(idelta == <var>1</var>) ? (</td></tr>
+<tr><th id="1057">1057</th><td>								this == (other_step +<var>1</var>) ||</td></tr>
+<tr><th id="1058">1058</th><td>								this == (other_step -<var>1</var>) ||</td></tr>
+<tr><th id="1059">1059</th><td>								this == (this_step +<var>1</var>) ||</td></tr>
+<tr><th id="1060">1060</th><td>								this == (this_step -<var>1</var>))</td></tr>
+<tr><th id="1061">1061</th><td>							:</td></tr>
+<tr><th id="1062">1062</th><td>							(</td></tr>
+<tr><th id="1063">1063</th><td>								this == (this_step + other_step)/<var>2</var></td></tr>
+<tr><th id="1064">1064</th><td>								)</td></tr>
+<tr><th id="1065">1065</th><td>							)) third_step = this;</td></tr>
+<tr><th id="1066">1066</th><td>						<b>if</b> (third_step != this) <b>break</b>;</td></tr>
+<tr><th id="1067">1067</th><td>					}</td></tr>
+<tr><th id="1068">1068</th><td>				}</td></tr>
+<tr><th id="1069">1069</th><td>				sum += this;</td></tr>
+<tr><th id="1070">1070</th><td>				p--;</td></tr>
+<tr><th id="1071">1071</th><td>				<b>if</b> (p &lt; <var>0</var>) p += LAST_STEPS;</td></tr>
+<tr><th id="1072">1072</th><td>				count++;</td></tr>
+<tr><th id="1073">1073</th><td>			}</td></tr>
+<tr><th id="1074">1074</th><td>			msyslog(LOG_ERR, <q>"MSF%d: %d: This=%d (%d), other=%d/%d, sum=%d, count=%d, pps_step=%d, suspect=%x"</q>, ees-&gt;unit, p, ees-&gt;last_steps[p], this_step, other_step, third_step, sum, count, pps_step, suspect_4ms_step);</td></tr>
+<tr><th id="1075">1075</th><td>			<b>if</b> (count != <var>0</var>) sum = ((sum * <var>60</var>) + (count /<var>2</var>)) / count;</td></tr>
+<tr><th id="1076">1076</th><td><u>#define	SV(x) (ees-&gt;last_steps[(x + p_step) % LAST_STEPS])</u></td></tr>
+<tr><th id="1077">1077</th><td>			msyslog(LOG_ERR, <q>"MSF%d: %x steps %d: %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d"</q>,</td></tr>
+<tr><th id="1078">1078</th><td>				ees-&gt;unit, suspect_4ms_step, p_step, SV(<var>0</var>), SV(<var>1</var>), SV(<var>2</var>), SV(<var>3</var>), SV(<var>4</var>), SV(<var>5</var>), SV(<var>6</var>),</td></tr>
+<tr><th id="1079">1079</th><td>				SV(<var>7</var>), SV(<var>8</var>), SV(<var>9</var>), SV(<var>10</var>), SV(<var>11</var>), SV(<var>12</var>), SV(<var>13</var>), SV(<var>14</var>), SV(<var>15</var>));</td></tr>
+<tr><th id="1080">1080</th><td>			printf(<q>"MSF%d: steps %d: %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n"</q>,</td></tr>
+<tr><th id="1081">1081</th><td>			       ees-&gt;unit, p_step, SV(<var>0</var>), SV(<var>1</var>), SV(<var>2</var>), SV(<var>3</var>), SV(<var>4</var>), SV(<var>5</var>), SV(<var>6</var>),</td></tr>
+<tr><th id="1082">1082</th><td>			       SV(<var>7</var>), SV(<var>8</var>), SV(<var>9</var>), SV(<var>10</var>), SV(<var>11</var>), SV(<var>12</var>), SV(<var>13</var>), SV(<var>14</var>), SV(<var>15</var>));</td></tr>
+<tr><th id="1083">1083</th><td><u>#undef SV</u></td></tr>
+<tr><th id="1084">1084</th><td>			ees-&gt;jump_fsecs = delta_sfsec;</td></tr>
+<tr><th id="1085">1085</th><td>			ees-&gt;using_ramp = <var>1</var>;</td></tr>
+<tr><th id="1086">1086</th><td>			<b>if</b> (sincelast &gt; <var>170</var>)</td></tr>
+<tr><th id="1087">1087</th><td>			    ees-&gt;last_step_late += sincelast - ((sum) ? sum : ees-&gt;last_step_secs);</td></tr>
+<tr><th id="1088">1088</th><td>			<b>else</b> ees-&gt;last_step_late = <var>30</var>;</td></tr>
+<tr><th id="1089">1089</th><td>			<b>if</b> (ees-&gt;last_step_late &lt; -<var>60</var> || ees-&gt;last_step_late &gt; <var>120</var>) ees-&gt;last_step_late = <var>30</var>;</td></tr>
+<tr><th id="1090">1090</th><td>			<b>if</b> (ees-&gt;last_step_late &lt; <var>0</var>) ees-&gt;last_step_late = <var>0</var>;</td></tr>
+<tr><th id="1091">1091</th><td>			<b>if</b> (ees-&gt;last_step_late &gt;= <var>60</var>) ees-&gt;last_step_late = <var>59</var>;</td></tr>
+<tr><th id="1092">1092</th><td>			sincelast = <var>0</var>;</td></tr>
+<tr><th id="1093">1093</th><td>		}</td></tr>
+<tr><th id="1094">1094</th><td>		<b>else</b> {	<i>/* First time in -- just save info */</i></td></tr>
+<tr><th id="1095">1095</th><td>			ees-&gt;last_step_late = <var>30</var>;</td></tr>
+<tr><th id="1096">1096</th><td>			ees-&gt;jump_fsecs = delta_sfsec;</td></tr>
+<tr><th id="1097">1097</th><td>			ees-&gt;using_ramp = <var>1</var>;</td></tr>
+<tr><th id="1098">1098</th><td>			sum = <var>4</var> * <var>60</var>;</td></tr>
+<tr><th id="1099">1099</th><td>		}</td></tr>
+<tr><th id="1100">1100</th><td>		ees-&gt;last_step = this_uisec;</td></tr>
+<tr><th id="1101">1101</th><td>		printf(<q>"MSF%d: d=%3ld.%04ld@%d :%d:%d:$%d:%d:%d\n"</q>,</td></tr>
+<tr><th id="1102">1102</th><td>		       ees-&gt;unit, (<em>long</em>)msec(delta_sfsec), (<em>long</em>)subms(delta_sfsec),</td></tr>
+<tr><th id="1103">1103</th><td>		       ees-&gt;second, old_sincelast, ees-&gt;last_step_late, count, sum,</td></tr>
+<tr><th id="1104">1104</th><td>		       ees-&gt;last_step_secs);</td></tr>
+<tr><th id="1105">1105</th><td>		msyslog(LOG_ERR, <q>"MSF%d: d=%3d.%04d@%d :%d:%d:%d:%d:%d"</q>,</td></tr>
+<tr><th id="1106">1106</th><td>			ees-&gt;unit, msec(delta_sfsec), subms(delta_sfsec), ees-&gt;second,</td></tr>
+<tr><th id="1107">1107</th><td>			old_sincelast, ees-&gt;last_step_late, count, sum, ees-&gt;last_step_secs);</td></tr>
+<tr><th id="1108">1108</th><td>		<b>if</b> (sum) ees-&gt;last_step_secs = sum;</td></tr>
+<tr><th id="1109">1109</th><td>	}</td></tr>
+<tr><th id="1110">1110</th><td>	<i>/* OK, so not a 4ms step at a minute boundry */</i></td></tr>
+<tr><th id="1111">1111</th><td>	<b>else</b> {</td></tr>
+<tr><th id="1112">1112</th><td>		<b>if</b> (suspect_4ms_step) msyslog(LOG_ERR,</td></tr>
+<tr><th id="1113">1113</th><td>					      <q>"MSF%d: suspect = %x, but delta of %d.%04d [%d.%04d&lt;%d.%04d&lt;%d.%04d: %d %d]"</q>,</td></tr>
+<tr><th id="1114">1114</th><td>					      ees-&gt;unit, suspect_4ms_step, msec(delta_sfsec), subms(delta_sfsec),</td></tr>
+<tr><th id="1115">1115</th><td>					      msec(EES_STEP_F - EES_STEP_F_GRACE),</td></tr>
+<tr><th id="1116">1116</th><td>					      subms(EES_STEP_F - EES_STEP_F_GRACE),</td></tr>
+<tr><th id="1117">1117</th><td>					      (<em>int</em>)msec(delta_f_abs),</td></tr>
+<tr><th id="1118">1118</th><td>					      (<em>int</em>)subms(delta_f_abs),</td></tr>
+<tr><th id="1119">1119</th><td>					      msec(EES_STEP_F + EES_STEP_F_GRACE),</td></tr>
+<tr><th id="1120">1120</th><td>					      subms(EES_STEP_F + EES_STEP_F_GRACE),</td></tr>
+<tr><th id="1121">1121</th><td>					      ees-&gt;second,</td></tr>
+<tr><th id="1122">1122</th><td>					      sincelast);</td></tr>
+<tr><th id="1123">1123</th><td>		<b>if</b> ((delta_f_abs &gt; EES_STEP_NOTE) &amp;&amp; ees-&gt;last_l.l_i) {</td></tr>
+<tr><th id="1124">1124</th><td>			<em>static</em> <em>int</em> ees_step_notes = EES_STEP_NOTES;</td></tr>
+<tr><th id="1125">1125</th><td>			<b>if</b> (ees_step_notes &gt; <var>0</var>) {</td></tr>
+<tr><th id="1126">1126</th><td>				ees_step_notes--;</td></tr>
+<tr><th id="1127">1127</th><td>				printf(<q>"MSF%d: D=%3ld.%04ld@%02d :%d%s\n"</q>,</td></tr>
+<tr><th id="1128">1128</th><td>				       ees-&gt;unit, (<em>long</em>)msec(delta_sfsec), (<em>long</em>)subms(delta_sfsec),</td></tr>
+<tr><th id="1129">1129</th><td>				       ees-&gt;second, sincelast, ees_step_notes ? <q>""</q> : <q>" -- NO MORE !"</q>);</td></tr>
+<tr><th id="1130">1130</th><td>				msyslog(LOG_ERR, <q>"MSF%d: D=%3d.%04d@%02d :%d%s"</q>,</td></tr>
+<tr><th id="1131">1131</th><td>					ees-&gt;unit, msec(delta_sfsec), subms(delta_sfsec), ees-&gt;second, (ees-&gt;last_step) ? sincelast : -<var>1</var>, ees_step_notes ? <q>""</q> : <q>" -- NO MORE !"</q>);</td></tr>
+<tr><th id="1132">1132</th><td>			}</td></tr>
+<tr><th id="1133">1133</th><td>		}</td></tr>
+<tr><th id="1134">1134</th><td>	}</td></tr>
+<tr><th id="1135">1135</th><td>	}</td></tr>
+<tr><th id="1136">1136</th><td>	ees-&gt;last_l = ees-&gt;arrvtime;</td></tr>
+<tr><th id="1137">1137</th><td></td></tr>
+<tr><th id="1138">1138</th><td>	<i>/* IF we have found that it's ramping</i></td></tr>
+<tr><th id="1139">1139</th><td><i>	 * &amp;&amp; it's within twice the expected ramp period</i></td></tr>
+<tr><th id="1140">1140</th><td><i>	 * &amp;&amp; there is a non zero step size (avoid /0 !)</i></td></tr>
+<tr><th id="1141">1141</th><td><i>	 * THEN we twiddle things</i></td></tr>
+<tr><th id="1142">1142</th><td><i>	 */</i></td></tr>
+<tr><th id="1143">1143</th><td>	<b>if</b> (ees-&gt;using_ramp &amp;&amp;</td></tr>
+<tr><th id="1144">1144</th><td>	    sincelast &lt; (ees-&gt;last_step_secs)*<var>2</var> &amp;&amp;</td></tr>
+<tr><th id="1145">1145</th><td>	    ees-&gt;last_step_secs)</td></tr>
+<tr><th id="1146">1146</th><td>	{	<em>long</em>	sec_of_ramp = sincelast + ees-&gt;last_step_late;</td></tr>
+<tr><th id="1147">1147</th><td>	<em>long</em>	fsecs;</td></tr>
+<tr><th id="1148">1148</th><td>	l_fp	inc;</td></tr>
+<tr><th id="1149">1149</th><td></td></tr>
+<tr><th id="1150">1150</th><td>	<i>/* Ramp time may vary, so may ramp for longer than last time */</i></td></tr>
+<tr><th id="1151">1151</th><td>	<b>if</b> (sec_of_ramp &gt; (ees-&gt;last_step_secs + <var>120</var>))</td></tr>
+<tr><th id="1152">1152</th><td>	    sec_of_ramp =  ees-&gt;last_step_secs;</td></tr>
+<tr><th id="1153">1153</th><td></td></tr>
+<tr><th id="1154">1154</th><td>	<i>/* sec_of_ramp * ees-&gt;jump_fsecs may overflow 2**32 */</i></td></tr>
+<tr><th id="1155">1155</th><td>	fsecs = sec_of_ramp * (ees-&gt;jump_fsecs /  ees-&gt;last_step_secs);</td></tr>
+<tr><th id="1156">1156</th><td></td></tr>
+<tr><th id="1157">1157</th><td>	<b>if</b> (dbg &amp; DB_LOG_DELTAS) msyslog(LOG_ERR,</td></tr>
+<tr><th id="1158">1158</th><td>					   <q>"[%x] MSF%d: %3ld/%03d -&gt; d=%11ld (%d|%ld)"</q>,</td></tr>
+<tr><th id="1159">1159</th><td>					   DB_LOG_DELTAS,</td></tr>
+<tr><th id="1160">1160</th><td>					   ees-&gt;unit, sec_of_ramp, ees-&gt;last_step_secs, fsecs,</td></tr>
+<tr><th id="1161">1161</th><td>					   pps_arrvstamp.l_f, pps_arrvstamp.l_f + fsecs);</td></tr>
+<tr><th id="1162">1162</th><td>	<b>if</b> (dbg &amp; DB_PRINT_DELTAS) printf(</td></tr>
+<tr><th id="1163">1163</th><td>		<q>"MSF%d: %3ld/%03d -&gt; d=%11ld (%ld|%ld)\n"</q>,</td></tr>
+<tr><th id="1164">1164</th><td>		ees-&gt;unit, sec_of_ramp, ees-&gt;last_step_secs, fsecs,</td></tr>
+<tr><th id="1165">1165</th><td>		(<em>long</em>)pps_arrvstamp.l_f, pps_arrvstamp.l_f + fsecs);</td></tr>
+<tr><th id="1166">1166</th><td></td></tr>
+<tr><th id="1167">1167</th><td>	<i>/* Must sign extend the result */</i></td></tr>
+<tr><th id="1168">1168</th><td>	inc.l_i = (fsecs &lt; <var>0</var>) ? -<var>1</var> : <var>0</var>;</td></tr>
+<tr><th id="1169">1169</th><td>	inc.l_f = fsecs;</td></tr>
+<tr><th id="1170">1170</th><td>	<b>if</b> (dbg &amp; DB_INC_PPS)</td></tr>
+<tr><th id="1171">1171</th><td>	{	L_SUB(&amp;pps_arrvstamp, &amp;inc);</td></tr>
+<tr><th id="1172">1172</th><td>	L_SUB(&amp;ees-&gt;arrvtime, &amp;inc);</td></tr>
+<tr><th id="1173">1173</th><td>	}</td></tr>
+<tr><th id="1174">1174</th><td>	<b>else</b></td></tr>
+<tr><th id="1175">1175</th><td>	{	L_ADD(&amp;pps_arrvstamp, &amp;inc);</td></tr>
+<tr><th id="1176">1176</th><td>	L_ADD(&amp;ees-&gt;arrvtime, &amp;inc);</td></tr>
+<tr><th id="1177">1177</th><td>	}</td></tr>
+<tr><th id="1178">1178</th><td>	}</td></tr>
+<tr><th id="1179">1179</th><td>	<b>else</b> {</td></tr>
+<tr><th id="1180">1180</th><td>		<b>if</b> (dbg &amp; DB_LOG_DELTAS) msyslog(LOG_ERR,</td></tr>
+<tr><th id="1181">1181</th><td>						   <q>"[%x] MSF%d: ees-&gt;using_ramp=%d, sincelast=%x / %x, ees-&gt;last_step_secs=%x"</q>,</td></tr>
+<tr><th id="1182">1182</th><td>						   DB_LOG_DELTAS,</td></tr>
+<tr><th id="1183">1183</th><td>						   ees-&gt;unit, ees-&gt;using_ramp,</td></tr>
+<tr><th id="1184">1184</th><td>						   sincelast,</td></tr>
+<tr><th id="1185">1185</th><td>						   (ees-&gt;last_step_secs)*<var>2</var>,</td></tr>
+<tr><th id="1186">1186</th><td>						   ees-&gt;last_step_secs);</td></tr>
+<tr><th id="1187">1187</th><td>		<b>if</b> (dbg &amp; DB_PRINT_DELTAS) printf(</td></tr>
+<tr><th id="1188">1188</th><td>			<q>"[%x] MSF%d: ees-&gt;using_ramp=%d, sincelast=%x / %x, ees-&gt;last_step_secs=%x\n"</q>,</td></tr>
+<tr><th id="1189">1189</th><td>			DB_LOG_DELTAS,</td></tr>
+<tr><th id="1190">1190</th><td>			ees-&gt;unit, ees-&gt;using_ramp,</td></tr>
+<tr><th id="1191">1191</th><td>			sincelast,</td></tr>
+<tr><th id="1192">1192</th><td>			(ees-&gt;last_step_secs)*<var>2</var>,</td></tr>
+<tr><th id="1193">1193</th><td>			ees-&gt;last_step_secs);</td></tr>
+<tr><th id="1194">1194</th><td>	}</td></tr>
+<tr><th id="1195">1195</th><td></td></tr>
+<tr><th id="1196">1196</th><td>	L_SUB(&amp;ees-&gt;arrvtime, &amp;offset_fudge[ees-&gt;unit]);</td></tr>
+<tr><th id="1197">1197</th><td>	L_SUB(&amp;pps_arrvstamp, &amp;offset_fudge[ees-&gt;unit]);</td></tr>
+<tr><th id="1198">1198</th><td></td></tr>
+<tr><th id="1199">1199</th><td>	<b>if</b> (call_pps_sample &amp;&amp; !(dbg &amp; DB_NO_PPS)) {</td></tr>
+<tr><th id="1200">1200</th><td>		<i>/* Sigh -- it expects its args negated */</i></td></tr>
+<tr><th id="1201">1201</th><td>		L_NEG(&amp;pps_arrvstamp);</td></tr>
+<tr><th id="1202">1202</th><td>		<i>/*</i></td></tr>
+<tr><th id="1203">1203</th><td><i>		 * I had to disable this here, since it appears there is no pointer to the</i></td></tr>
+<tr><th id="1204">1204</th><td><i>		 * peer structure.</i></td></tr>
+<tr><th id="1205">1205</th><td><i>		 *</i></td></tr>
+<tr><th id="1206">1206</th><td><i>		 (void) pps_sample(peer, &amp;pps_arrvstamp);</i></td></tr>
+<tr><th id="1207">1207</th><td><i>		*/</i></td></tr>
+<tr><th id="1208">1208</th><td>	}</td></tr>
+<tr><th id="1209">1209</th><td></td></tr>
+<tr><th id="1210">1210</th><td>	<i>/* Subtract off the local clock time stamp */</i></td></tr>
+<tr><th id="1211">1211</th><td>	L_SUB(&amp;ees-&gt;codeoffsets[n_sample], &amp;ees-&gt;arrvtime);</td></tr>
+<tr><th id="1212">1212</th><td>	<b>if</b> (dbg &amp; DB_LOG_SAMPLES) msyslog(LOG_ERR,</td></tr>
+<tr><th id="1213">1213</th><td>					    <q>"MSF%d: [%x] %d (ees: %d %d) (pps: %d %d)%s"</q>,</td></tr>
+<tr><th id="1214">1214</th><td>					    ees-&gt;unit, DB_LOG_DELTAS, n_sample,</td></tr>
+<tr><th id="1215">1215</th><td>					    ees-&gt;codeoffsets[n_sample].l_f,</td></tr>
+<tr><th id="1216">1216</th><td>					    ees-&gt;codeoffsets[n_sample].l_f / <var>4295</var>,</td></tr>
+<tr><th id="1217">1217</th><td>					    pps_arrvstamp.l_f,</td></tr>
+<tr><th id="1218">1218</th><td>					    pps_arrvstamp.l_f /<var>4295</var>,</td></tr>
+<tr><th id="1219">1219</th><td>					    (dbg &amp; DB_NO_PPS) ? <q>" [no PPS]"</q> : <q>""</q>);</td></tr>
+<tr><th id="1220">1220</th><td></td></tr>
+<tr><th id="1221">1221</th><td>	<b>if</b> (ees-&gt;nsamples++ == NCODES-<var>1</var>) ees_process(ees);</td></tr>
+<tr><th id="1222">1222</th><td></td></tr>
+<tr><th id="1223">1223</th><td>	<i>/* Done! */</i></td></tr>
+<tr><th id="1224">1224</th><td>}</td></tr>
+<tr><th id="1225">1225</th><td></td></tr>
+<tr><th id="1226">1226</th><td></td></tr>
+<tr><th id="1227">1227</th><td><i>/* offcompare - auxiliary comparison routine for offset sort */</i></td></tr>
+<tr><th id="1228">1228</th><td></td></tr>
+<tr><th id="1229">1229</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="1230">1230</th><td>offcompare(</td></tr>
+<tr><th id="1231">1231</th><td>	<em>const</em> <em>void</em> *va,</td></tr>
+<tr><th id="1232">1232</th><td>	<em>const</em> <em>void</em> *vb</td></tr>
+<tr><th id="1233">1233</th><td>	)</td></tr>
+<tr><th id="1234">1234</th><td>{</td></tr>
+<tr><th id="1235">1235</th><td>	<em>const</em> l_fp *a = (<em>const</em> l_fp *)va;</td></tr>
+<tr><th id="1236">1236</th><td>	<em>const</em> l_fp *b = (<em>const</em> l_fp *)vb;</td></tr>
+<tr><th id="1237">1237</th><td>	<b>return</b>(L_ISGEQ(a, b) ? (L_ISEQU(a, b) ? <var>0</var> : <var>1</var>) : -<var>1</var>);</td></tr>
+<tr><th id="1238">1238</th><td>}</td></tr>
+<tr><th id="1239">1239</th><td></td></tr>
+<tr><th id="1240">1240</th><td></td></tr>
+<tr><th id="1241">1241</th><td><i>/* ees_process - process a pile of samples from the clock */</i></td></tr>
+<tr><th id="1242">1242</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="1243">1243</th><td>ees_process(</td></tr>
+<tr><th id="1244">1244</th><td>	<b>struct</b> eesunit *ees</td></tr>
+<tr><th id="1245">1245</th><td>	)</td></tr>
+<tr><th id="1246">1246</th><td>{</td></tr>
+<tr><th id="1247">1247</th><td>	<em>static</em> <em>int</em> last_samples = -<var>1</var>;</td></tr>
+<tr><th id="1248">1248</th><td>	<em>register</em> <em>int</em> i, j;</td></tr>
+<tr><th id="1249">1249</th><td>	<em>register</em> <em>int</em> noff;</td></tr>
+<tr><th id="1250">1250</th><td>	<em>register</em> l_fp *coffs = ees-&gt;codeoffsets;</td></tr>
+<tr><th id="1251">1251</th><td>	l_fp offset, tmp;</td></tr>
+<tr><th id="1252">1252</th><td>	<em>double</em> dispersion;	<i>/* ++++ */</i></td></tr>
+<tr><th id="1253">1253</th><td>	<em>int</em> lostsync, isinsync;</td></tr>
+<tr><th id="1254">1254</th><td>	<em>int</em> samples = ees-&gt;nsamples;</td></tr>
+<tr><th id="1255">1255</th><td>	<em>int</em> samplelog = <var>0</var>;	<i>/* keep "gcc -Wall" happy ! */</i></td></tr>
+<tr><th id="1256">1256</th><td>	<em>int</em> samplereduce = (samples + <var>1</var>) / <var>2</var>;</td></tr>
+<tr><th id="1257">1257</th><td>	<em>double</em> doffset;</td></tr>
+<tr><th id="1258">1258</th><td></td></tr>
+<tr><th id="1259">1259</th><td>	<i>/* Reset things to zero so we don't have to worry later */</i></td></tr>
+<tr><th id="1260">1260</th><td>	ees_reset(ees);</td></tr>
+<tr><th id="1261">1261</th><td></td></tr>
+<tr><th id="1262">1262</th><td>	<b>if</b> (sloppyclockflag[ees-&gt;unit]) {</td></tr>
+<tr><th id="1263">1263</th><td>		samplelog = (samples &lt;  <var>2</var>) ? <var>0</var> :</td></tr>
+<tr><th id="1264">1264</th><td>			(samples &lt;  <var>5</var>) ? <var>1</var> :</td></tr>
+<tr><th id="1265">1265</th><td>			(samples &lt;  <var>9</var>) ? <var>2</var> :</td></tr>
+<tr><th id="1266">1266</th><td>			(samples &lt; <var>17</var>) ? <var>3</var> :</td></tr>
+<tr><th id="1267">1267</th><td>			(samples &lt; <var>33</var>) ? <var>4</var> : <var>5</var>;</td></tr>
+<tr><th id="1268">1268</th><td>		samplereduce = (<var>1</var> &lt;&lt; samplelog);</td></tr>
+<tr><th id="1269">1269</th><td>	}</td></tr>
+<tr><th id="1270">1270</th><td></td></tr>
+<tr><th id="1271">1271</th><td>	<b>if</b> (samples != last_samples &amp;&amp;</td></tr>
+<tr><th id="1272">1272</th><td>	    ((samples != (last_samples-<var>1</var>)) || samples &lt; <var>3</var>)) {</td></tr>
+<tr><th id="1273">1273</th><td>		msyslog(LOG_ERR, <q>"Samples=%d (%d), samplereduce=%d ...."</q>,</td></tr>
+<tr><th id="1274">1274</th><td>			samples, last_samples, samplereduce);</td></tr>
+<tr><th id="1275">1275</th><td>		last_samples = samples;</td></tr>
+<tr><th id="1276">1276</th><td>	}</td></tr>
+<tr><th id="1277">1277</th><td>	<b>if</b> (samples &lt; <var>1</var>) <b>return</b>;</td></tr>
+<tr><th id="1278">1278</th><td></td></tr>
+<tr><th id="1279">1279</th><td>	<i>/* If requested, dump the raw data we have in the buffer */</i></td></tr>
+<tr><th id="1280">1280</th><td>	<b>if</b> (ees-&gt;dump_vals)</td></tr>
+<tr><th id="1281">1281</th><td>		dump_buf(coffs, <var>0</var>, samples, <q>"Raw  data  is:"</q>);</td></tr>
+<tr><th id="1282">1282</th><td></td></tr>
+<tr><th id="1283">1283</th><td>	<i>/* Sort the offsets, trim off the extremes, then choose one. */</i></td></tr>
+<tr><th id="1284">1284</th><td>	qsort(coffs, (size_t)samples, <b>sizeof</b>(coffs[<var>0</var>]), offcompare);</td></tr>
+<tr><th id="1285">1285</th><td></td></tr>
+<tr><th id="1286">1286</th><td>	noff = samples;</td></tr>
+<tr><th id="1287">1287</th><td>	i = <var>0</var>;</td></tr>
+<tr><th id="1288">1288</th><td>	<b>while</b> ((noff - i) &gt; samplereduce) {</td></tr>
+<tr><th id="1289">1289</th><td>		<i>/* Trim off the sample which is further away</i></td></tr>
+<tr><th id="1290">1290</th><td><i>		 * from the median.  We work this out by doubling</i></td></tr>
+<tr><th id="1291">1291</th><td><i>		 * the median, subtracting off the end samples, and</i></td></tr>
+<tr><th id="1292">1292</th><td><i>		 * looking at the sign of the answer, using the</i></td></tr>
+<tr><th id="1293">1293</th><td><i>		 * identity (c-b)-(b-a) == 2*b-a-c</i></td></tr>
+<tr><th id="1294">1294</th><td><i>		 */</i></td></tr>
+<tr><th id="1295">1295</th><td>		tmp = coffs[(noff + i)/<var>2</var>];</td></tr>
+<tr><th id="1296">1296</th><td>		L_ADD(&amp;tmp, &amp;tmp);</td></tr>
+<tr><th id="1297">1297</th><td>		L_SUB(&amp;tmp, &amp;coffs[i]);</td></tr>
+<tr><th id="1298">1298</th><td>		L_SUB(&amp;tmp, &amp;coffs[noff-<var>1</var>]);</td></tr>
+<tr><th id="1299">1299</th><td>		<b>if</b> (L_ISNEG(&amp;tmp)) noff--; <b>else</b> i++;</td></tr>
+<tr><th id="1300">1300</th><td>	}</td></tr>
+<tr><th id="1301">1301</th><td></td></tr>
+<tr><th id="1302">1302</th><td>	<i>/* If requested, dump the reduce data we have in the buffer */</i></td></tr>
+<tr><th id="1303">1303</th><td>	<b>if</b> (ees-&gt;dump_vals) dump_buf(coffs, i, noff, <q>"Reduced    to:"</q>);</td></tr>
+<tr><th id="1304">1304</th><td></td></tr>
+<tr><th id="1305">1305</th><td>	<i>/* What we do next depends on the setting of the sloppy clock flag.</i></td></tr>
+<tr><th id="1306">1306</th><td><i>	 * If it is on, average the remainder to derive our estimate.</i></td></tr>
+<tr><th id="1307">1307</th><td><i>	 * Otherwise, just pick a representative value from the remaining stuff</i></td></tr>
+<tr><th id="1308">1308</th><td><i>	 */</i></td></tr>
+<tr><th id="1309">1309</th><td>	<b>if</b> (sloppyclockflag[ees-&gt;unit]) {</td></tr>
+<tr><th id="1310">1310</th><td>		offset.l_ui = offset.l_uf = <var>0</var>;</td></tr>
+<tr><th id="1311">1311</th><td>		<b>for</b> (j = i; j &lt; noff; j++)</td></tr>
+<tr><th id="1312">1312</th><td>		    L_ADD(&amp;offset, &amp;coffs[j]);</td></tr>
+<tr><th id="1313">1313</th><td>		<b>for</b> (j = samplelog; j &gt; <var>0</var>; j--)</td></tr>
+<tr><th id="1314">1314</th><td>		    L_RSHIFTU(&amp;offset);</td></tr>
+<tr><th id="1315">1315</th><td>	}</td></tr>
+<tr><th id="1316">1316</th><td>	<b>else</b> offset = coffs[i+BESTSAMPLE];</td></tr>
+<tr><th id="1317">1317</th><td></td></tr>
+<tr><th id="1318">1318</th><td>	<i>/* Compute the dispersion as the difference between the</i></td></tr>
+<tr><th id="1319">1319</th><td><i>	 * lowest and highest offsets that remain in the</i></td></tr>
+<tr><th id="1320">1320</th><td><i>	 * consideration list.</i></td></tr>
+<tr><th id="1321">1321</th><td><i>	 *</i></td></tr>
+<tr><th id="1322">1322</th><td><i>	 * It looks like MOST clocks have MOD (max error), so halve it !</i></td></tr>
+<tr><th id="1323">1323</th><td><i>	 */</i></td></tr>
+<tr><th id="1324">1324</th><td>	tmp = coffs[noff-<var>1</var>];</td></tr>
+<tr><th id="1325">1325</th><td>	L_SUB(&amp;tmp, &amp;coffs[i]);</td></tr>
+<tr><th id="1326">1326</th><td><u>#define	FRACT_SEC(n) ((1 &lt;&lt; 30) / (n/2))</u></td></tr>
+<tr><th id="1327">1327</th><td>	dispersion = LFPTOFP(&amp;tmp) / <var>2</var>; <i>/* ++++ */</i></td></tr>
+<tr><th id="1328">1328</th><td>	<b>if</b> (dbg &amp; (DB_SYSLOG_SMPLI | DB_SYSLOG_SMPLE)) msyslog(</td></tr>
+<tr><th id="1329">1329</th><td>		(dbg &amp; DB_SYSLOG_SMPLE) ? LOG_ERR : LOG_INFO,</td></tr>
+<tr><th id="1330">1330</th><td>		<q>"I: [%x] Offset=%06d (%d), disp=%f%s [%d], %d %d=%d %d:%d %d=%d %d"</q>,</td></tr>
+<tr><th id="1331">1331</th><td>		dbg &amp; (DB_SYSLOG_SMPLI | DB_SYSLOG_SMPLE),</td></tr>
+<tr><th id="1332">1332</th><td>		offset.l_f / <var>4295</var>, offset.l_f,</td></tr>
+<tr><th id="1333">1333</th><td>		(dispersion * <var>1526</var>) / <var>100</var>,</td></tr>
+<tr><th id="1334">1334</th><td>		(sloppyclockflag[ees-&gt;unit]) ? <q>" by averaging"</q> : <q>""</q>,</td></tr>
+<tr><th id="1335">1335</th><td>		FRACT_SEC(<var>10</var>) / <var>4295</var>,</td></tr>
+<tr><th id="1336">1336</th><td>		(coffs[<var>0</var>].l_f) / <var>4295</var>,</td></tr>
+<tr><th id="1337">1337</th><td>		i,</td></tr>
+<tr><th id="1338">1338</th><td>		(coffs[i].l_f) / <var>4295</var>,</td></tr>
+<tr><th id="1339">1339</th><td>		(coffs[samples/<var>2</var>].l_f) / <var>4295</var>,</td></tr>
+<tr><th id="1340">1340</th><td>		(coffs[i+BESTSAMPLE].l_f) / <var>4295</var>,</td></tr>
+<tr><th id="1341">1341</th><td>		noff-<var>1</var>,</td></tr>
+<tr><th id="1342">1342</th><td>		(coffs[noff-<var>1</var>].l_f) / <var>4295</var>,</td></tr>
+<tr><th id="1343">1343</th><td>		(coffs[samples-<var>1</var>].l_f) / <var>4295</var>);</td></tr>
+<tr><th id="1344">1344</th><td></td></tr>
+<tr><th id="1345">1345</th><td>	<i>/* Are we playing silly wotsits ?</i></td></tr>
+<tr><th id="1346">1346</th><td><i>	 * If we are using all data, see if there is a "small" delta,</i></td></tr>
+<tr><th id="1347">1347</th><td><i>	 * and if so, blurr this with 3/4 of the delta from the last value</i></td></tr>
+<tr><th id="1348">1348</th><td><i>	 */</i></td></tr>
+<tr><th id="1349">1349</th><td>	<b>if</b> (ees-&gt;usealldata &amp;&amp; ees-&gt;offset.l_uf) {</td></tr>
+<tr><th id="1350">1350</th><td>		<em>long</em> diff = (<em>long</em>) (ees-&gt;offset.l_uf - offset.l_uf);</td></tr>
+<tr><th id="1351">1351</th><td></td></tr>
+<tr><th id="1352">1352</th><td>		<i>/* is the delta small enough ? */</i></td></tr>
+<tr><th id="1353">1353</th><td>		<b>if</b> ((- FRACT_SEC(<var>100</var>)) &lt; diff &amp;&amp; diff &lt; FRACT_SEC(<var>100</var>)) {</td></tr>
+<tr><th id="1354">1354</th><td>			<em>int</em> samd = (<var>64</var> * <var>4</var>) / samples;</td></tr>
+<tr><th id="1355">1355</th><td>			<em>long</em> new;</td></tr>
+<tr><th id="1356">1356</th><td>			<b>if</b> (samd &lt; <var>2</var>) samd = <var>2</var>;</td></tr>
+<tr><th id="1357">1357</th><td>			new = offset.l_uf + ((diff * (samd -<var>1</var>)) / samd);</td></tr>
+<tr><th id="1358">1358</th><td></td></tr>
+<tr><th id="1359">1359</th><td>			<i>/* Sign change -&gt; need to fix up int part */</i></td></tr>
+<tr><th id="1360">1360</th><td>			<b>if</b> ((new &amp; <var>0x80000000</var>) !=</td></tr>
+<tr><th id="1361">1361</th><td>			    (((<em>long</em>) offset.l_uf) &amp; <var>0x80000000</var>))</td></tr>
+<tr><th id="1362">1362</th><td>			{	NLOG(NLOG_CLOCKINFO) <i>/* conditional if clause for conditional syslog */</i></td></tr>
+<tr><th id="1363">1363</th><td>					msyslog(LOG_INFO, <q>"I: %lx != %lx (%lx %lx), so add %d"</q>,</td></tr>
+<tr><th id="1364">1364</th><td>						new &amp; <var>0x80000000</var>,</td></tr>
+<tr><th id="1365">1365</th><td>						((<em>long</em>) offset.l_uf) &amp; <var>0x80000000</var>,</td></tr>
+<tr><th id="1366">1366</th><td>						new, (<em>long</em>) offset.l_uf,</td></tr>
+<tr><th id="1367">1367</th><td>						(new &lt; <var>0</var>) ? -<var>1</var> : <var>1</var>);</td></tr>
+<tr><th id="1368">1368</th><td>				offset.l_ui += (new &lt; <var>0</var>) ? -<var>1</var> : <var>1</var>;</td></tr>
+<tr><th id="1369">1369</th><td>			}</td></tr>
+<tr><th id="1370">1370</th><td>			dispersion /= <var>4</var>;</td></tr>
+<tr><th id="1371">1371</th><td>			<b>if</b> (dbg &amp; (DB_SYSLOG_SMTHI | DB_SYSLOG_SMTHE)) msyslog(</td></tr>
+<tr><th id="1372">1372</th><td>				(dbg &amp; DB_SYSLOG_SMTHE) ? LOG_ERR : LOG_INFO,</td></tr>
+<tr><th id="1373">1373</th><td>				<q>"I: [%x] Smooth data: %ld -&gt; %ld, dispersion now %f"</q>,</td></tr>
+<tr><th id="1374">1374</th><td>				dbg &amp; (DB_SYSLOG_SMTHI | DB_SYSLOG_SMTHE),</td></tr>
+<tr><th id="1375">1375</th><td>				((<em>long</em>) offset.l_uf) / <var>4295</var>, new / <var>4295</var>,</td></tr>
+<tr><th id="1376">1376</th><td>				(dispersion * <var>1526</var>) / <var>100</var>);</td></tr>
+<tr><th id="1377">1377</th><td>			offset.l_uf = (<em>unsigned</em> <em>long</em>) new;</td></tr>
+<tr><th id="1378">1378</th><td>		}</td></tr>
+<tr><th id="1379">1379</th><td>		<b>else</b> <b>if</b> (dbg &amp; (DB_SYSLOG_NSMTHI | DB_SYSLOG_NSMTHE)) msyslog(</td></tr>
+<tr><th id="1380">1380</th><td>			(dbg &amp; DB_SYSLOG_NSMTHE) ? LOG_ERR : LOG_INFO,</td></tr>
+<tr><th id="1381">1381</th><td>			<q>"[%x] No smooth as delta not %d &lt; %ld &lt; %d"</q>,</td></tr>
+<tr><th id="1382">1382</th><td>			dbg &amp; (DB_SYSLOG_NSMTHI | DB_SYSLOG_NSMTHE),</td></tr>
+<tr><th id="1383">1383</th><td>			- FRACT_SEC(<var>100</var>), diff, FRACT_SEC(<var>100</var>));</td></tr>
+<tr><th id="1384">1384</th><td>	}</td></tr>
+<tr><th id="1385">1385</th><td>	<b>else</b> <b>if</b> (dbg &amp; (DB_SYSLOG_NSMTHI | DB_SYSLOG_NSMTHE)) msyslog(</td></tr>
+<tr><th id="1386">1386</th><td>		(dbg &amp; DB_SYSLOG_NSMTHE) ? LOG_ERR : LOG_INFO,</td></tr>
+<tr><th id="1387">1387</th><td>		<q>"I: [%x] No smooth as flag=%x and old=%x=%d (%d:%d)"</q>,</td></tr>
+<tr><th id="1388">1388</th><td>		dbg &amp; (DB_SYSLOG_NSMTHI | DB_SYSLOG_NSMTHE),</td></tr>
+<tr><th id="1389">1389</th><td>		ees-&gt;usealldata, ees-&gt;offset.l_f, ees-&gt;offset.l_uf,</td></tr>
+<tr><th id="1390">1390</th><td>		offset.l_f, ees-&gt;offset.l_f - offset.l_f);</td></tr>
+<tr><th id="1391">1391</th><td></td></tr>
+<tr><th id="1392">1392</th><td>	<i>/* Collect offset info for debugging info */</i></td></tr>
+<tr><th id="1393">1393</th><td>	ees-&gt;offset = offset;</td></tr>
+<tr><th id="1394">1394</th><td>	ees-&gt;lowoffset = coffs[i];</td></tr>
+<tr><th id="1395">1395</th><td>	ees-&gt;highoffset = coffs[noff-<var>1</var>];</td></tr>
+<tr><th id="1396">1396</th><td></td></tr>
+<tr><th id="1397">1397</th><td>	<i>/* Determine synchronization status.  Can be unsync'd either</i></td></tr>
+<tr><th id="1398">1398</th><td><i>	 * by a report from the clock or by a leap hold.</i></td></tr>
+<tr><th id="1399">1399</th><td><i>	 *</i></td></tr>
+<tr><th id="1400">1400</th><td><i>	 * Loss of the radio signal for a short time does not cause</i></td></tr>
+<tr><th id="1401">1401</th><td><i>	 * us to go unsynchronised, since the receiver keeps quite</i></td></tr>
+<tr><th id="1402">1402</th><td><i>	 * good time on its own.  The spec says 20ms in 4 hours; the</i></td></tr>
+<tr><th id="1403">1403</th><td><i>	 * observed drift in our clock (Cambridge) is about a second</i></td></tr>
+<tr><th id="1404">1404</th><td><i>	 * a day, but even that keeps us within the inherent tolerance</i></td></tr>
+<tr><th id="1405">1405</th><td><i>	 * of the clock for about 15 minutes. Observation shows that</i></td></tr>
+<tr><th id="1406">1406</th><td><i>	 * the typical "short" outage is 3 minutes, so to allow us</i></td></tr>
+<tr><th id="1407">1407</th><td><i>	 * to ride out those, we will give it 5 minutes.</i></td></tr>
+<tr><th id="1408">1408</th><td><i>	 */</i></td></tr>
+<tr><th id="1409">1409</th><td>	lostsync = current_time - ees-&gt;clocklastgood &gt; <var>300</var> ? <var>1</var> : <var>0</var>;</td></tr>
+<tr><th id="1410">1410</th><td>	isinsync = (lostsync || ees-&gt;leaphold &gt; current_time) ? <var>0</var> : <var>1</var>;</td></tr>
+<tr><th id="1411">1411</th><td></td></tr>
+<tr><th id="1412">1412</th><td>	<i>/* Done.  Use time of last good, synchronised code as the</i></td></tr>
+<tr><th id="1413">1413</th><td><i>	 * reference time, and lastsampletime as the receive time.</i></td></tr>
+<tr><th id="1414">1414</th><td><i>	 */</i></td></tr>
+<tr><th id="1415">1415</th><td>	<b>if</b> (ees-&gt;fix_pending) {</td></tr>
+<tr><th id="1416">1416</th><td>		msyslog(LOG_ERR, <q>"MSF%d: fix_pending=%d -&gt; jump %x.%08x"</q>,</td></tr>
+<tr><th id="1417">1417</th><td>			ees-&gt;fix_pending, ees-&gt;unit, offset.l_i, offset.l_f);</td></tr>
+<tr><th id="1418">1418</th><td>		ees-&gt;fix_pending = <var>0</var>;</td></tr>
+<tr><th id="1419">1419</th><td>	}</td></tr>
+<tr><th id="1420">1420</th><td>	LFPTOD(&amp;offset, doffset);</td></tr>
+<tr><th id="1421">1421</th><td>	refclock_receive(ees-&gt;peer);</td></tr>
+<tr><th id="1422">1422</th><td>	ees_event(ees, lostsync ? CEVNT_PROP : CEVNT_NOMINAL);</td></tr>
+<tr><th id="1423">1423</th><td>}</td></tr>
+<tr><th id="1424">1424</th><td></td></tr>
+<tr><th id="1425">1425</th><td><i>/* msfees_poll - called by the transmit procedure */</i></td></tr>
+<tr><th id="1426">1426</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="1427">1427</th><td>msfees_poll(</td></tr>
+<tr><th id="1428">1428</th><td>	<em>int</em> unit,</td></tr>
+<tr><th id="1429">1429</th><td>	<b>struct</b> peer *peer</td></tr>
+<tr><th id="1430">1430</th><td>	)</td></tr>
+<tr><th id="1431">1431</th><td>{</td></tr>
+<tr><th id="1432">1432</th><td>	<b>if</b> (unit &gt;= MAXUNITS) {</td></tr>
+<tr><th id="1433">1433</th><td>		msyslog(LOG_ERR, <q>"ees clock poll: INTERNAL: unit %d invalid"</q>,</td></tr>
+<tr><th id="1434">1434</th><td>			unit);</td></tr>
+<tr><th id="1435">1435</th><td>		<b>return</b>;</td></tr>
+<tr><th id="1436">1436</th><td>	}</td></tr>
+<tr><th id="1437">1437</th><td>	<b>if</b> (!unitinuse[unit]) {</td></tr>
+<tr><th id="1438">1438</th><td>		msyslog(LOG_ERR, <q>"ees clock poll: INTERNAL: unit %d unused"</q>,</td></tr>
+<tr><th id="1439">1439</th><td>			unit);</td></tr>
+<tr><th id="1440">1440</th><td>		<b>return</b>;</td></tr>
+<tr><th id="1441">1441</th><td>	}</td></tr>
+<tr><th id="1442">1442</th><td></td></tr>
+<tr><th id="1443">1443</th><td>	ees_process(eesunits[unit]);</td></tr>
+<tr><th id="1444">1444</th><td></td></tr>
+<tr><th id="1445">1445</th><td>	<b>if</b> ((current_time - eesunits[unit]-&gt;lasttime) &gt; <var>150</var>)</td></tr>
+<tr><th id="1446">1446</th><td>	    ees_event(eesunits[unit], CEVNT_FAULT);</td></tr>
+<tr><th id="1447">1447</th><td>}</td></tr>
+<tr><th id="1448">1448</th><td></td></tr>
+<tr><th id="1449">1449</th><td></td></tr>
+<tr><th id="1450">1450</th><td><u>#<span data-ppcond="11">else</span></u></td></tr>
+<tr><th id="1451">1451</th><td><a class="macro" href="../include/ntp_types.h.html#266" title="extern void exit(int);" data-ref="_M/NONEMPTY_TRANSLATION_UNIT">NONEMPTY_TRANSLATION_UNIT</a></td></tr>
+<tr><th id="1452">1452</th><td><u>#<span data-ppcond="11">endif</span> /* REFCLOCK */</u></td></tr>
+<tr><th id="1453">1453</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>

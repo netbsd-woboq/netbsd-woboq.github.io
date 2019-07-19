@@ -1,0 +1,625 @@
+<!doctype html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>refclock_wwvb.c source code [netbsd/external/bsd/ntp/dist/ntpd/refclock_wwvb.c] - Woboq Code Browser</title>
+<meta name="woboq:interestingDefinitions" content="wwvbunit "/>
+<link rel="stylesheet" href="https://code.woboq.org/data/qtcreator.css" title="QtCreator"/>
+<link rel="alternate stylesheet" href="https://code.woboq.org/data/kdevelop.css" title="KDevelop"/>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="https://code.woboq.org/data/jquery/jquery-ui.min.js"></script>
+<script>var file = 'netbsd/external/bsd/ntp/dist/ntpd/refclock_wwvb.c'; var root_path = '../../../../../..'; var data_path = 'https://code.woboq.org/data'; var ecma_script_api_version = 2;</script>
+<script src='https://code.woboq.org/data/codebrowser.js'></script>
+</head>
+<body><div id='header'><h1 id='breadcrumb'><span>Browse the source code of </span><a href='../../../../..'>netbsd</a>/<a href='../../../..'>external</a>/<a href='../../..'>bsd</a>/<a href='../..'>ntp</a>/<a href='..'>dist</a>/<a href='./'>ntpd</a>/<a href='refclock_wwvb.c.html'>refclock_wwvb.c</a></h1></div>
+<hr/><div id='content'><table class="code">
+<tr><th id="1">1</th><td><i>/*	$NetBSD: refclock_wwvb.c,v 1.6 2016/01/08 21:35:39 christos Exp $	*/</i></td></tr>
+<tr><th id="2">2</th><td></td></tr>
+<tr><th id="3">3</th><td><i>/*</i></td></tr>
+<tr><th id="4">4</th><td><i> * refclock_wwvb - clock driver for Spectracom WWVB and GPS receivers</i></td></tr>
+<tr><th id="5">5</th><td><i> */</i></td></tr>
+<tr><th id="6">6</th><td></td></tr>
+<tr><th id="7">7</th><td><u>#<span data-ppcond="7">ifdef</span> <span class="macro" data-ref="_M/HAVE_CONFIG_H">HAVE_CONFIG_H</span></u></td></tr>
+<tr><th id="8">8</th><td><u>#include <a href="../../include/config.h.html">&lt;config.h&gt;</a></u></td></tr>
+<tr><th id="9">9</th><td><u>#<span data-ppcond="7">endif</span></u></td></tr>
+<tr><th id="10">10</th><td></td></tr>
+<tr><th id="11">11</th><td><u>#<span data-ppcond="11">if</span> defined(<a class="macro" href="../../include/config.h.html#1519" data-ref="_M/REFCLOCK">REFCLOCK</a>) &amp;&amp; defined(<a class="macro" href="../../include/config.h.html#140" data-ref="_M/CLOCK_SPECTRACOM">CLOCK_SPECTRACOM</a>)</u></td></tr>
+<tr><th id="12">12</th><td></td></tr>
+<tr><th id="13">13</th><td><u>#include <a href="../include/ntpd.h.html">"ntpd.h"</a></u></td></tr>
+<tr><th id="14">14</th><td><u>#include <a href="../include/ntp_io.h.html">"ntp_io.h"</a></u></td></tr>
+<tr><th id="15">15</th><td><u>#include <a href="../include/ntp_refclock.h.html">"ntp_refclock.h"</a></u></td></tr>
+<tr><th id="16">16</th><td><u>#include <a href="../include/ntp_calendar.h.html">"ntp_calendar.h"</a></u></td></tr>
+<tr><th id="17">17</th><td><u>#include <a href="../include/ntp_stdlib.h.html">"ntp_stdlib.h"</a></u></td></tr>
+<tr><th id="18">18</th><td></td></tr>
+<tr><th id="19">19</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html">&lt;stdio.h&gt;</a></u></td></tr>
+<tr><th id="20">20</th><td><u>#include <a href="../../../../../objdir.amd64/destdir.amd64/usr/include/ctype.h.html">&lt;ctype.h&gt;</a></u></td></tr>
+<tr><th id="21">21</th><td></td></tr>
+<tr><th id="22">22</th><td><u>#<span data-ppcond="22">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="23">23</th><td><u>#include <a href="ppsapi_timepps.h.html">"ppsapi_timepps.h"</a></u></td></tr>
+<tr><th id="24">24</th><td><u>#include <a href="../include/refclock_atom.h.html">"refclock_atom.h"</a></u></td></tr>
+<tr><th id="25">25</th><td><u>#<span data-ppcond="22">endif</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="26">26</th><td></td></tr>
+<tr><th id="27">27</th><td><i>/*</i></td></tr>
+<tr><th id="28">28</th><td><i> * This driver supports the Spectracom Model 8170 and Netclock/2 WWVB</i></td></tr>
+<tr><th id="29">29</th><td><i> * Synchronized Clocks and the Netclock/GPS Master Clock. Both the WWVB</i></td></tr>
+<tr><th id="30">30</th><td><i> * and GPS clocks have proven reliable sources of time; however, the</i></td></tr>
+<tr><th id="31">31</th><td><i> * WWVB clocks have proven vulnerable to high ambient conductive RF</i></td></tr>
+<tr><th id="32">32</th><td><i> * interference. The claimed accuracy of the WWVB clocks is 100 us</i></td></tr>
+<tr><th id="33">33</th><td><i> * relative to the broadcast signal, while the claimed accuracy of the</i></td></tr>
+<tr><th id="34">34</th><td><i> * GPS clock is 50 ns; however, in most cases the actual accuracy is</i></td></tr>
+<tr><th id="35">35</th><td><i> * limited by the resolution of the timecode and the latencies of the</i></td></tr>
+<tr><th id="36">36</th><td><i> * serial interface and operating system.</i></td></tr>
+<tr><th id="37">37</th><td><i> *</i></td></tr>
+<tr><th id="38">38</th><td><i> * The WWVB and GPS clocks should be configured for 24-hour display,</i></td></tr>
+<tr><th id="39">39</th><td><i> * AUTO DST off, time zone 0 (UTC), data format 0 or 2 (see below) and</i></td></tr>
+<tr><th id="40">40</th><td><i> * baud rate 9600. If the clock is to used as the source for the IRIG</i></td></tr>
+<tr><th id="41">41</th><td><i> * Audio Decoder (refclock_irig.c in this distribution), it should be</i></td></tr>
+<tr><th id="42">42</th><td><i> * configured for AM IRIG output and IRIG format 1 (IRIG B with</i></td></tr>
+<tr><th id="43">43</th><td><i> * signature control). The GPS clock can be configured either to respond</i></td></tr>
+<tr><th id="44">44</th><td><i> * to a 'T' poll character or left running continuously. </i></td></tr>
+<tr><th id="45">45</th><td><i> *</i></td></tr>
+<tr><th id="46">46</th><td><i> * There are two timecode formats used by these clocks. Format 0, which</i></td></tr>
+<tr><th id="47">47</th><td><i> * is available with both the Netclock/2 and 8170, and format 2, which</i></td></tr>
+<tr><th id="48">48</th><td><i> * is available only with the Netclock/2, specially modified 8170 and</i></td></tr>
+<tr><th id="49">49</th><td><i> * GPS.</i></td></tr>
+<tr><th id="50">50</th><td><i> *</i></td></tr>
+<tr><th id="51">51</th><td><i> * Format 0 (22 ASCII printing characters):</i></td></tr>
+<tr><th id="52">52</th><td><i> *</i></td></tr>
+<tr><th id="53">53</th><td><i> * &lt;cr&gt;&lt;lf&gt;i  ddd hh:mm:ss TZ=zz&lt;cr&gt;&lt;lf&gt;</i></td></tr>
+<tr><th id="54">54</th><td><i> *</i></td></tr>
+<tr><th id="55">55</th><td><i> *	on-time = first &lt;cr&gt;</i></td></tr>
+<tr><th id="56">56</th><td><i> *	hh:mm:ss = hours, minutes, seconds</i></td></tr>
+<tr><th id="57">57</th><td><i> *	i = synchronization flag (' ' = in synch, '?' = out of synch)</i></td></tr>
+<tr><th id="58">58</th><td><i> *</i></td></tr>
+<tr><th id="59">59</th><td><i> * The alarm condition is indicated by other than ' ' at i, which occurs</i></td></tr>
+<tr><th id="60">60</th><td><i> * during initial synchronization and when received signal is lost for</i></td></tr>
+<tr><th id="61">61</th><td><i> * about ten hours.</i></td></tr>
+<tr><th id="62">62</th><td><i> *</i></td></tr>
+<tr><th id="63">63</th><td><i> * Format 2 (24 ASCII printing characters):</i></td></tr>
+<tr><th id="64">64</th><td><i> *</i></td></tr>
+<tr><th id="65">65</th><td><i> * &lt;cr&gt;&lt;lf&gt;iqyy ddd hh:mm:ss.fff ld</i></td></tr>
+<tr><th id="66">66</th><td><i> *</i></td></tr>
+<tr><th id="67">67</th><td><i> *	on-time = &lt;cr&gt;</i></td></tr>
+<tr><th id="68">68</th><td><i> *	i = synchronization flag (' ' = in synch, '?' = out of synch)</i></td></tr>
+<tr><th id="69">69</th><td><i> *	q = quality indicator (' ' = locked, 'A'...'D' = unlocked)</i></td></tr>
+<tr><th id="70">70</th><td><i> *	yy = year (as broadcast)</i></td></tr>
+<tr><th id="71">71</th><td><i> *	ddd = day of year</i></td></tr>
+<tr><th id="72">72</th><td><i> *	hh:mm:ss.fff = hours, minutes, seconds, milliseconds</i></td></tr>
+<tr><th id="73">73</th><td><i> *</i></td></tr>
+<tr><th id="74">74</th><td><i> * The alarm condition is indicated by other than ' ' at i, which occurs</i></td></tr>
+<tr><th id="75">75</th><td><i> * during initial synchronization and when received signal is lost for</i></td></tr>
+<tr><th id="76">76</th><td><i> * about ten hours. The unlock condition is indicated by other than ' '</i></td></tr>
+<tr><th id="77">77</th><td><i> * at q.</i></td></tr>
+<tr><th id="78">78</th><td><i> *</i></td></tr>
+<tr><th id="79">79</th><td><i> * The q is normally ' ' when the time error is less than 1 ms and a</i></td></tr>
+<tr><th id="80">80</th><td><i> * character in the set 'A'...'D' when the time error is less than 10,</i></td></tr>
+<tr><th id="81">81</th><td><i> * 100, 500 and greater than 500 ms respectively. The l is normally ' ',</i></td></tr>
+<tr><th id="82">82</th><td><i> * but is set to 'L' early in the month of an upcoming UTC leap second</i></td></tr>
+<tr><th id="83">83</th><td><i> * and reset to ' ' on the first day of the following month. The d is</i></td></tr>
+<tr><th id="84">84</th><td><i> * set to 'S' for standard time 'I' on the day preceding a switch to</i></td></tr>
+<tr><th id="85">85</th><td><i> * daylight time, 'D' for daylight time and 'O' on the day preceding a</i></td></tr>
+<tr><th id="86">86</th><td><i> * switch to standard time. The start bit of the first &lt;cr&gt; is</i></td></tr>
+<tr><th id="87">87</th><td><i> * synchronized to the indicated time as returned.</i></td></tr>
+<tr><th id="88">88</th><td><i> *</i></td></tr>
+<tr><th id="89">89</th><td><i> * This driver does not need to be told which format is in use - it</i></td></tr>
+<tr><th id="90">90</th><td><i> * figures out which one from the length of the message. The driver</i></td></tr>
+<tr><th id="91">91</th><td><i> * makes no attempt to correct for the intrinsic jitter of the radio</i></td></tr>
+<tr><th id="92">92</th><td><i> * itself, which is a known problem with the older radios.</i></td></tr>
+<tr><th id="93">93</th><td><i> *</i></td></tr>
+<tr><th id="94">94</th><td><i> * PPS Signal Processing</i></td></tr>
+<tr><th id="95">95</th><td><i> *</i></td></tr>
+<tr><th id="96">96</th><td><i> * When PPS signal processing is enabled, and when the system clock has</i></td></tr>
+<tr><th id="97">97</th><td><i> * been set by this or another driver and the PPS signal offset is</i></td></tr>
+<tr><th id="98">98</th><td><i> * within 0.4 s of the system clock offset, the PPS signal replaces the</i></td></tr>
+<tr><th id="99">99</th><td><i> * timecode for as long as the PPS signal is active. If for some reason</i></td></tr>
+<tr><th id="100">100</th><td><i> * the PPS signal fails for one or more poll intervals, the driver</i></td></tr>
+<tr><th id="101">101</th><td><i> * reverts to the timecode. If the timecode fails for one or more poll</i></td></tr>
+<tr><th id="102">102</th><td><i> * intervals, the PPS signal is disconnected.</i></td></tr>
+<tr><th id="103">103</th><td><i> *</i></td></tr>
+<tr><th id="104">104</th><td><i> * Fudge Factors</i></td></tr>
+<tr><th id="105">105</th><td><i> *</i></td></tr>
+<tr><th id="106">106</th><td><i> * This driver can retrieve a table of quality data maintained</i></td></tr>
+<tr><th id="107">107</th><td><i> * internally by the Netclock/2 clock. If flag4 of the fudge</i></td></tr>
+<tr><th id="108">108</th><td><i> * configuration command is set to 1, the driver will retrieve this</i></td></tr>
+<tr><th id="109">109</th><td><i> * table and write it to the clockstats file when the first timecode</i></td></tr>
+<tr><th id="110">110</th><td><i> * message of a new day is received.</i></td></tr>
+<tr><th id="111">111</th><td><i> *</i></td></tr>
+<tr><th id="112">112</th><td><i> * PPS calibration fudge time 1: format 0 .003134, format 2 .004034</i></td></tr>
+<tr><th id="113">113</th><td><i> */</i></td></tr>
+<tr><th id="114">114</th><td><i>/*</i></td></tr>
+<tr><th id="115">115</th><td><i> * Interface definitions</i></td></tr>
+<tr><th id="116">116</th><td><i> */</i></td></tr>
+<tr><th id="117">117</th><td><u>#define	<dfn class="macro" id="_M/DEVICE" data-ref="_M/DEVICE">DEVICE</dfn>		"/dev/wwvb%d" /* device name and unit */</u></td></tr>
+<tr><th id="118">118</th><td><u>#define	<dfn class="macro" id="_M/SPEED232" data-ref="_M/SPEED232">SPEED232</dfn>	B9600	/* uart speed (9600 baud) */</u></td></tr>
+<tr><th id="119">119</th><td><u>#define	<dfn class="macro" id="_M/PRECISION" data-ref="_M/PRECISION">PRECISION</dfn>	(-13)	/* precision assumed (about 100 us) */</u></td></tr>
+<tr><th id="120">120</th><td><u>#define	<dfn class="macro" id="_M/PPS_PRECISION" data-ref="_M/PPS_PRECISION">PPS_PRECISION</dfn>	(-13)	/* precision assumed (about 100 us) */</u></td></tr>
+<tr><th id="121">121</th><td><u>#define	<dfn class="macro" id="_M/REFID" data-ref="_M/REFID">REFID</dfn>		"WWVB"	/* reference ID */</u></td></tr>
+<tr><th id="122">122</th><td><u>#define	<dfn class="macro" id="_M/DESCRIPTION" data-ref="_M/DESCRIPTION">DESCRIPTION</dfn>	"Spectracom WWVB/GPS Receiver" /* WRU */</u></td></tr>
+<tr><th id="123">123</th><td></td></tr>
+<tr><th id="124">124</th><td><u>#define	<dfn class="macro" id="_M/LENWWVB0" data-ref="_M/LENWWVB0">LENWWVB0</dfn>	22	/* format 0 timecode length */</u></td></tr>
+<tr><th id="125">125</th><td><u>#define	<dfn class="macro" id="_M/LENWWVB2" data-ref="_M/LENWWVB2">LENWWVB2</dfn>	24	/* format 2 timecode length */</u></td></tr>
+<tr><th id="126">126</th><td><u>#define <dfn class="macro" id="_M/LENWWVB3" data-ref="_M/LENWWVB3">LENWWVB3</dfn>	29	/* format 3 timecode length */</u></td></tr>
+<tr><th id="127">127</th><td><u>#define <dfn class="macro" id="_M/MONLIN" data-ref="_M/MONLIN">MONLIN</dfn>		15	/* number of monitoring lines */</u></td></tr>
+<tr><th id="128">128</th><td></td></tr>
+<tr><th id="129">129</th><td><i>/*</i></td></tr>
+<tr><th id="130">130</th><td><i> * WWVB unit control structure</i></td></tr>
+<tr><th id="131">131</th><td><i> */</i></td></tr>
+<tr><th id="132">132</th><td><b>struct</b> <dfn class="type def" id="wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</dfn> {</td></tr>
+<tr><th id="133">133</th><td><u>#<span data-ppcond="133">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="134">134</th><td>	<b>struct</b> <a class="type" href="../include/refclock_atom.h.html#refclock_atom" title='refclock_atom' data-ref="refclock_atom" data-ref-filename="refclock_atom">refclock_atom</a> <dfn class="tu decl field" id="wwvbunit::atom" title='wwvbunit::atom' data-type='struct refclock_atom' data-ref="wwvbunit::atom" data-ref-filename="wwvbunit..atom">atom</dfn>; <i  data-doc="wwvbunit::atom">/* PPSAPI structure */</i></td></tr>
+<tr><th id="135">135</th><td>	<em>int</em>	<dfn class="tu decl field" id="wwvbunit::ppsapi_tried" title='wwvbunit::ppsapi_tried' data-type='int' data-ref="wwvbunit::ppsapi_tried" data-ref-filename="wwvbunit..ppsapi_tried">ppsapi_tried</dfn>;	<i  data-doc="wwvbunit::ppsapi_tried">/* attempt PPSAPI once */</i></td></tr>
+<tr><th id="136">136</th><td>	<em>int</em>	<dfn class="tu decl field" id="wwvbunit::ppsapi_lit" title='wwvbunit::ppsapi_lit' data-type='int' data-ref="wwvbunit::ppsapi_lit" data-ref-filename="wwvbunit..ppsapi_lit">ppsapi_lit</dfn>;	<i  data-doc="wwvbunit::ppsapi_lit">/* time_pps_create() worked */</i></td></tr>
+<tr><th id="137">137</th><td>	<em>int</em>	<dfn class="tu decl field" id="wwvbunit::tcount" title='wwvbunit::tcount' data-type='int' data-ref="wwvbunit::tcount" data-ref-filename="wwvbunit..tcount">tcount</dfn>;		<i  data-doc="wwvbunit::tcount">/* timecode sample counter */</i></td></tr>
+<tr><th id="138">138</th><td>	<em>int</em>	<dfn class="tu decl field" id="wwvbunit::pcount" title='wwvbunit::pcount' data-type='int' data-ref="wwvbunit::pcount" data-ref-filename="wwvbunit..pcount">pcount</dfn>;		<i  data-doc="wwvbunit::pcount">/* PPS sample counter */</i></td></tr>
+<tr><th id="139">139</th><td><u>#<span data-ppcond="133">endif</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="140">140</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>	<dfn class="tu decl field" id="wwvbunit::laststamp" title='wwvbunit::laststamp' data-type='l_fp' data-ref="wwvbunit::laststamp" data-ref-filename="wwvbunit..laststamp">laststamp</dfn>;	<i  data-doc="wwvbunit::laststamp">/* last &lt;CR&gt; timestamp */</i></td></tr>
+<tr><th id="141">141</th><td>	<em>int</em>	<dfn class="tu decl field" id="wwvbunit::prev_eol_cr" title='wwvbunit::prev_eol_cr' data-type='int' data-ref="wwvbunit::prev_eol_cr" data-ref-filename="wwvbunit..prev_eol_cr">prev_eol_cr</dfn>;	<i  data-doc="wwvbunit::prev_eol_cr">/* was last EOL &lt;CR&gt; (not &lt;LF&gt;)? */</i></td></tr>
+<tr><th id="142">142</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a>	<dfn class="tu decl field" id="wwvbunit::lasthour" title='wwvbunit::lasthour' data-type='u_char' data-ref="wwvbunit::lasthour" data-ref-filename="wwvbunit..lasthour">lasthour</dfn>;	<i  data-doc="wwvbunit::lasthour">/* last hour (for monitor) */</i></td></tr>
+<tr><th id="143">143</th><td>	<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a>	<dfn class="tu decl field" id="wwvbunit::linect" title='wwvbunit::linect' data-type='u_char' data-ref="wwvbunit::linect" data-ref-filename="wwvbunit..linect">linect</dfn>;		<i  data-doc="wwvbunit::linect">/* count ignored lines (for monitor */</i></td></tr>
+<tr><th id="144">144</th><td>};</td></tr>
+<tr><th id="145">145</th><td></td></tr>
+<tr><th id="146">146</th><td><i  data-doc="wwvb_start">/*</i></td></tr>
+<tr><th id="147">147</th><td><i  data-doc="wwvb_start"> * Function prototypes</i></td></tr>
+<tr><th id="148">148</th><td><i  data-doc="wwvb_start"> */</i></td></tr>
+<tr><th id="149">149</th><td><em>static</em>	<em>int</em>	<a class="tu decl fn" href="#wwvb_start" title='wwvb_start' data-type='int wwvb_start(int , struct peer * )' data-ref="wwvb_start" data-ref-filename="wwvb_start">wwvb_start</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="150">150</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#wwvb_shutdown" title='wwvb_shutdown' data-type='void wwvb_shutdown(int , struct peer * )' data-ref="wwvb_shutdown" data-ref-filename="wwvb_shutdown">wwvb_shutdown</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="151">151</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#wwvb_receive" title='wwvb_receive' data-type='void wwvb_receive(struct recvbuf * )' data-ref="wwvb_receive" data-ref-filename="wwvb_receive">wwvb_receive</a>	(<b>struct</b> <a class="type" href="../include/recvbuff.h.html#recvbuf" title='recvbuf' data-ref="recvbuf" data-ref-filename="recvbuf">recvbuf</a> *);</td></tr>
+<tr><th id="152">152</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#wwvb_poll" title='wwvb_poll' data-type='void wwvb_poll(int , struct peer * )' data-ref="wwvb_poll" data-ref-filename="wwvb_poll">wwvb_poll</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="153">153</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#wwvb_timer" title='wwvb_timer' data-type='void wwvb_timer(int , struct peer * )' data-ref="wwvb_timer" data-ref-filename="wwvb_timer">wwvb_timer</a>	(<em>int</em>, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="154">154</th><td><u>#<span data-ppcond="154">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="155">155</th><td><em>static</em>	<em>void</em>	<a class="tu decl fn" href="#wwvb_control" title='wwvb_control' data-type='void wwvb_control(int , const struct refclockstat * , struct refclockstat * , struct peer * )' data-ref="wwvb_control" data-ref-filename="wwvb_control">wwvb_control</a>	(<em>int</em>, <em>const</em> <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *,</td></tr>
+<tr><th id="156">156</th><td>				 <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *, <b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *);</td></tr>
+<tr><th id="157">157</th><td><u>#define		<dfn class="macro" id="_M/WWVB_CONTROL" data-ref="_M/WWVB_CONTROL">WWVB_CONTROL</dfn>	<a class="tu ref fn" href="#wwvb_control" title='wwvb_control' data-use='r' data-ref="wwvb_control" data-ref-filename="wwvb_control">wwvb_control</a></u></td></tr>
+<tr><th id="158">158</th><td><u>#<span data-ppcond="154">else</span></u></td></tr>
+<tr><th id="159">159</th><td><u>#define		WWVB_CONTROL	(void)(*)</u></td></tr>
+<tr><th id="160">160</th><td>noentry</td></tr>
+<tr><th id="161">161</th><td><u>#<span data-ppcond="154">endif</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="162">162</th><td></td></tr>
+<tr><th id="163">163</th><td><i>/*</i></td></tr>
+<tr><th id="164">164</th><td><i> * Transfer vector</i></td></tr>
+<tr><th id="165">165</th><td><i> */</i></td></tr>
+<tr><th id="166">166</th><td><b>struct</b>	<a class="type" href="../include/ntp_refclock.h.html#refclock" title='refclock' data-ref="refclock" data-ref-filename="refclock">refclock</a> <dfn class="decl def" id="refclock_wwvb" title='refclock_wwvb' data-ref="refclock_wwvb" data-ref-filename="refclock_wwvb">refclock_wwvb</dfn> = {</td></tr>
+<tr><th id="167">167</th><td>	<a class="tu ref fn" href="#wwvb_start" title='wwvb_start' data-use='r' data-ref="wwvb_start" data-ref-filename="wwvb_start">wwvb_start</a>,		<i>/* start up driver */</i></td></tr>
+<tr><th id="168">168</th><td>	<a class="tu ref fn" href="#wwvb_shutdown" title='wwvb_shutdown' data-use='r' data-ref="wwvb_shutdown" data-ref-filename="wwvb_shutdown">wwvb_shutdown</a>,		<i>/* shut down driver */</i></td></tr>
+<tr><th id="169">169</th><td>	<a class="tu ref fn" href="#wwvb_poll" title='wwvb_poll' data-use='r' data-ref="wwvb_poll" data-ref-filename="wwvb_poll">wwvb_poll</a>,		<i>/* transmit poll message */</i></td></tr>
+<tr><th id="170">170</th><td>	<a class="macro" href="#157" title="wwvb_control" data-ref="_M/WWVB_CONTROL">WWVB_CONTROL</a>,		<i>/* fudge set/change notification */</i></td></tr>
+<tr><th id="171">171</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* initialize driver (not used) */</i></td></tr>
+<tr><th id="172">172</th><td>	<a class="macro" href="../include/ntp_refclock.h.html#200" title="0" data-ref="_M/noentry">noentry</a>,		<i>/* not used (old wwvb_buginfo) */</i></td></tr>
+<tr><th id="173">173</th><td>	<a class="tu ref fn" href="#wwvb_timer" title='wwvb_timer' data-use='r' data-ref="wwvb_timer" data-ref-filename="wwvb_timer">wwvb_timer</a>		<i>/* called once per second */</i></td></tr>
+<tr><th id="174">174</th><td>};</td></tr>
+<tr><th id="175">175</th><td></td></tr>
+<tr><th id="176">176</th><td></td></tr>
+<tr><th id="177">177</th><td><i  data-doc="wwvb_start">/*</i></td></tr>
+<tr><th id="178">178</th><td><i  data-doc="wwvb_start"> * wwvb_start - open the devices and initialize data for processing</i></td></tr>
+<tr><th id="179">179</th><td><i  data-doc="wwvb_start"> */</i></td></tr>
+<tr><th id="180">180</th><td><em>static</em> <em>int</em></td></tr>
+<tr><th id="181">181</th><td><dfn class="tu decl def fn" id="wwvb_start" title='wwvb_start' data-type='int wwvb_start(int unit, struct peer * peer)' data-ref="wwvb_start" data-ref-filename="wwvb_start">wwvb_start</dfn>(</td></tr>
+<tr><th id="182">182</th><td>	<em>int</em> <dfn class="local col1 decl" id="1unit" title='unit' data-type='int' data-ref="1unit" data-ref-filename="1unit">unit</dfn>,</td></tr>
+<tr><th id="183">183</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col2 decl" id="2peer" title='peer' data-type='struct peer *' data-ref="2peer" data-ref-filename="2peer">peer</dfn></td></tr>
+<tr><th id="184">184</th><td>	)</td></tr>
+<tr><th id="185">185</th><td>{</td></tr>
+<tr><th id="186">186</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</a> *<dfn class="local col3 decl" id="3up" title='up' data-type='struct wwvbunit *' data-ref="3up" data-ref-filename="3up">up</dfn>;</td></tr>
+<tr><th id="187">187</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col4 decl" id="4pp" title='pp' data-type='struct refclockproc *' data-ref="4pp" data-ref-filename="4pp">pp</dfn>;</td></tr>
+<tr><th id="188">188</th><td>	<em>int</em> <dfn class="local col5 decl" id="5fd" title='fd' data-type='int' data-ref="5fd" data-ref-filename="5fd">fd</dfn>;</td></tr>
+<tr><th id="189">189</th><td>	<em>char</em> <dfn class="local col6 decl" id="6device" title='device' data-type='char [20]' data-ref="6device" data-ref-filename="6device">device</dfn>[<var>20</var>];</td></tr>
+<tr><th id="190">190</th><td></td></tr>
+<tr><th id="191">191</th><td>	<i>/*</i></td></tr>
+<tr><th id="192">192</th><td><i>	 * Open serial port. Use CLK line discipline, if available.</i></td></tr>
+<tr><th id="193">193</th><td><i>	 */</i></td></tr>
+<tr><th id="194">194</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#snprintf" title='snprintf' data-ref="snprintf" data-ref-filename="snprintf">snprintf</a>(<a class="local col6 ref" href="#6device" title='device' data-ref="6device" data-ref-filename="6device">device</a>, <b>sizeof</b>(<a class="local col6 ref" href="#6device" title='device' data-ref="6device" data-ref-filename="6device">device</a>), <a class="macro" href="#117" title="&quot;/dev/wwvb%d&quot;" data-ref="_M/DEVICE">DEVICE</a>, <a class="local col1 ref" href="#1unit" title='unit' data-ref="1unit" data-ref-filename="1unit">unit</a>);</td></tr>
+<tr><th id="195">195</th><td>	<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a> = <a class="ref fn" href="../include/ntp_refclock.h.html#refclock_open" title='refclock_open' data-ref="refclock_open" data-ref-filename="refclock_open">refclock_open</a>(<a class="local col6 ref" href="#6device" title='device' data-ref="6device" data-ref-filename="6device">device</a>, <a class="macro" href="#118" title="9600U" data-ref="_M/SPEED232">SPEED232</a>, <a class="macro" href="../include/ntp_tty.h.html#86" title="0x001" data-ref="_M/LDISC_CLK">LDISC_CLK</a>);</td></tr>
+<tr><th id="196">196</th><td>	<b>if</b> (<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a> &lt;= <var>0</var>)</td></tr>
+<tr><th id="197">197</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="198">198</th><td></td></tr>
+<tr><th id="199">199</th><td>	<i>/*</i></td></tr>
+<tr><th id="200">200</th><td><i>	 * Allocate and initialize unit structure</i></td></tr>
+<tr><th id="201">201</th><td><i>	 */</i></td></tr>
+<tr><th id="202">202</th><td>	<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a> = <a class="macro" href="../include/ntp_stdlib.h.html#115" title="ereallocz(((void*)0), (sizeof(*up)), 0, 1)" data-ref="_M/emalloc_zero">emalloc_zero</a>(<b>sizeof</b>(*<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>));</td></tr>
+<tr><th id="203">203</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="204">204</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::clock_recv" title='refclockio::clock_recv' data-ref="refclockio::clock_recv" data-ref-filename="refclockio..clock_recv">clock_recv</a> = <a class="tu ref fn" href="#wwvb_receive" title='wwvb_receive' data-use='r' data-ref="wwvb_receive" data-ref-filename="wwvb_receive">wwvb_receive</a>;</td></tr>
+<tr><th id="205">205</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::srcclock" title='refclockio::srcclock' data-ref="refclockio::srcclock" data-ref-filename="refclockio..srcclock">srcclock</a> = <a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>;</td></tr>
+<tr><th id="206">206</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::datalen" title='refclockio::datalen' data-ref="refclockio::datalen" data-ref-filename="refclockio..datalen">datalen</a> = <var>0</var>;</td></tr>
+<tr><th id="207">207</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a> = <a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a>;</td></tr>
+<tr><th id="208">208</th><td>	<b>if</b> (!<a class="ref fn" href="../include/ntp_refclock.h.html#io_addclock" title='io_addclock' data-ref="io_addclock" data-ref-filename="io_addclock">io_addclock</a>(&amp;<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>)) {</td></tr>
+<tr><th id="209">209</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#close" title='close' data-ref="close" data-ref-filename="close">close</a>(<a class="local col5 ref" href="#5fd" title='fd' data-ref="5fd" data-ref-filename="5fd">fd</a>);</td></tr>
+<tr><th id="210">210</th><td>		<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a> = -<var>1</var>;</td></tr>
+<tr><th id="211">211</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>);</td></tr>
+<tr><th id="212">212</th><td>		<b>return</b> (<var>0</var>);</td></tr>
+<tr><th id="213">213</th><td>	}</td></tr>
+<tr><th id="214">214</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a> = <a class="local col3 ref" href="#3up" title='up' data-ref="3up" data-ref-filename="3up">up</a>;</td></tr>
+<tr><th id="215">215</th><td></td></tr>
+<tr><th id="216">216</th><td>	<i>/*</i></td></tr>
+<tr><th id="217">217</th><td><i>	 * Initialize miscellaneous variables</i></td></tr>
+<tr><th id="218">218</th><td><i>	 */</i></td></tr>
+<tr><th id="219">219</th><td>	<a class="local col2 ref" href="#2peer" title='peer' data-ref="2peer" data-ref-filename="2peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::precision" title='peer::precision' data-ref="peer::precision" data-ref-filename="peer..precision">precision</a> = <a class="macro" href="#119" title="(-13)" data-ref="_M/PRECISION">PRECISION</a>;</td></tr>
+<tr><th id="220">220</th><td>	<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::clockdesc" title='refclockproc::clockdesc' data-ref="refclockproc::clockdesc" data-ref-filename="refclockproc..clockdesc">clockdesc</a> = <a class="macro" href="#122" title="&quot;Spectracom WWVB/GPS Receiver&quot;" data-ref="_M/DESCRIPTION">DESCRIPTION</a>;</td></tr>
+<tr><th id="221">221</th><td>	<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/string.h.html#memcpy" title='memcpy' data-ref="memcpy" data-ref-filename="memcpy">memcpy</a>(&amp;<a class="local col4 ref" href="#4pp" title='pp' data-ref="4pp" data-ref-filename="4pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::refid" title='refclockproc::refid' data-ref="refclockproc::refid" data-ref-filename="refclockproc..refid">refid</a>, <a class="macro" href="#121" title="&quot;WWVB&quot;" data-ref="_M/REFID">REFID</a>, <var>4</var>);</td></tr>
+<tr><th id="222">222</th><td>	<b>return</b> (<var>1</var>);</td></tr>
+<tr><th id="223">223</th><td>}</td></tr>
+<tr><th id="224">224</th><td></td></tr>
+<tr><th id="225">225</th><td></td></tr>
+<tr><th id="226">226</th><td><i  data-doc="wwvb_shutdown">/*</i></td></tr>
+<tr><th id="227">227</th><td><i  data-doc="wwvb_shutdown"> * wwvb_shutdown - shut down the clock</i></td></tr>
+<tr><th id="228">228</th><td><i  data-doc="wwvb_shutdown"> */</i></td></tr>
+<tr><th id="229">229</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="230">230</th><td><dfn class="tu decl def fn" id="wwvb_shutdown" title='wwvb_shutdown' data-type='void wwvb_shutdown(int unit, struct peer * peer)' data-ref="wwvb_shutdown" data-ref-filename="wwvb_shutdown">wwvb_shutdown</dfn>(</td></tr>
+<tr><th id="231">231</th><td>	<em>int</em> <dfn class="local col7 decl" id="7unit" title='unit' data-type='int' data-ref="7unit" data-ref-filename="7unit">unit</dfn>,</td></tr>
+<tr><th id="232">232</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col8 decl" id="8peer" title='peer' data-type='struct peer *' data-ref="8peer" data-ref-filename="8peer">peer</dfn></td></tr>
+<tr><th id="233">233</th><td>	)</td></tr>
+<tr><th id="234">234</th><td>{</td></tr>
+<tr><th id="235">235</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *	<dfn class="local col9 decl" id="9pp" title='pp' data-type='struct refclockproc *' data-ref="9pp" data-ref-filename="9pp">pp</dfn>;</td></tr>
+<tr><th id="236">236</th><td>	<b>struct</b> <a class="type" href="#wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</a> *	<dfn class="local col0 decl" id="10up" title='up' data-type='struct wwvbunit *' data-ref="10up" data-ref-filename="10up">up</dfn>;</td></tr>
+<tr><th id="237">237</th><td></td></tr>
+<tr><th id="238">238</th><td>	<a class="local col9 ref" href="#9pp" title='pp' data-ref="9pp" data-ref-filename="9pp">pp</a> = <a class="local col8 ref" href="#8peer" title='peer' data-ref="8peer" data-ref-filename="8peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="239">239</th><td>	<a class="local col0 ref" href="#10up" title='up' data-ref="10up" data-ref-filename="10up">up</a> = <a class="local col9 ref" href="#9pp" title='pp' data-ref="9pp" data-ref-filename="9pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="240">240</th><td>	<b>if</b> (-<var>1</var> != <a class="local col9 ref" href="#9pp" title='pp' data-ref="9pp" data-ref-filename="9pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a>)</td></tr>
+<tr><th id="241">241</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#io_closeclock" title='io_closeclock' data-ref="io_closeclock" data-ref-filename="io_closeclock">io_closeclock</a>(&amp;<a class="local col9 ref" href="#9pp" title='pp' data-ref="9pp" data-ref-filename="9pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>);</td></tr>
+<tr><th id="242">242</th><td>	<b>if</b> (<span class="macro" title="((void*)0)" data-ref="_M/NULL">NULL</span> != <a class="local col0 ref" href="#10up" title='up' data-ref="10up" data-ref-filename="10up">up</a>)</td></tr>
+<tr><th id="243">243</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdlib.h.html#free" title='free' data-ref="free" data-ref-filename="free">free</a>(<a class="local col0 ref" href="#10up" title='up' data-ref="10up" data-ref-filename="10up">up</a>);</td></tr>
+<tr><th id="244">244</th><td>}</td></tr>
+<tr><th id="245">245</th><td></td></tr>
+<tr><th id="246">246</th><td></td></tr>
+<tr><th id="247">247</th><td><i  data-doc="wwvb_receive">/*</i></td></tr>
+<tr><th id="248">248</th><td><i  data-doc="wwvb_receive"> * wwvb_receive - receive data from the serial interface</i></td></tr>
+<tr><th id="249">249</th><td><i  data-doc="wwvb_receive"> */</i></td></tr>
+<tr><th id="250">250</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="251">251</th><td><dfn class="tu decl def fn" id="wwvb_receive" title='wwvb_receive' data-type='void wwvb_receive(struct recvbuf * rbufp)' data-ref="wwvb_receive" data-ref-filename="wwvb_receive">wwvb_receive</dfn>(</td></tr>
+<tr><th id="252">252</th><td>	<b>struct</b> <a class="type" href="../include/recvbuff.h.html#recvbuf" title='recvbuf' data-ref="recvbuf" data-ref-filename="recvbuf">recvbuf</a> *<dfn class="local col1 decl" id="11rbufp" title='rbufp' data-type='struct recvbuf *' data-ref="11rbufp" data-ref-filename="11rbufp">rbufp</dfn></td></tr>
+<tr><th id="253">253</th><td>	)</td></tr>
+<tr><th id="254">254</th><td>{</td></tr>
+<tr><th id="255">255</th><td>	<b>struct</b> <a class="type" href="#wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</a> *<dfn class="local col2 decl" id="12up" title='up' data-type='struct wwvbunit *' data-ref="12up" data-ref-filename="12up">up</dfn>;</td></tr>
+<tr><th id="256">256</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col3 decl" id="13pp" title='pp' data-type='struct refclockproc *' data-ref="13pp" data-ref-filename="13pp">pp</dfn>;</td></tr>
+<tr><th id="257">257</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col4 decl" id="14peer" title='peer' data-type='struct peer *' data-ref="14peer" data-ref-filename="14peer">peer</dfn>;</td></tr>
+<tr><th id="258">258</th><td></td></tr>
+<tr><th id="259">259</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>	<dfn class="local col5 decl" id="15trtmp" title='trtmp' data-type='l_fp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</dfn>;		<i>/* arrival timestamp */</i></td></tr>
+<tr><th id="260">260</th><td>	<em>int</em>	<dfn class="local col6 decl" id="16tz" title='tz' data-type='int' data-ref="16tz" data-ref-filename="16tz">tz</dfn>;		<i>/* time zone */</i></td></tr>
+<tr><th id="261">261</th><td>	<em>int</em>	<dfn class="local col7 decl" id="17day" title='day' data-type='int' data-ref="17day" data-ref-filename="17day">day</dfn>, <dfn class="local col8 decl" id="18month" title='month' data-type='int' data-ref="18month" data-ref-filename="18month">month</dfn>;	<i>/* ddd conversion */</i></td></tr>
+<tr><th id="262">262</th><td>	<em>int</em>	<dfn class="local col9 decl" id="19temp" title='temp' data-type='int' data-ref="19temp" data-ref-filename="19temp">temp</dfn>;		<i>/* int temp */</i></td></tr>
+<tr><th id="263">263</th><td>	<em>char</em>	<dfn class="local col0 decl" id="20syncchar" title='syncchar' data-type='char' data-ref="20syncchar" data-ref-filename="20syncchar">syncchar</dfn>;	<i>/* synchronization indicator */</i></td></tr>
+<tr><th id="264">264</th><td>	<em>char</em>	<dfn class="local col1 decl" id="21qualchar" title='qualchar' data-type='char' data-ref="21qualchar" data-ref-filename="21qualchar">qualchar</dfn>;	<i>/* quality indicator */</i></td></tr>
+<tr><th id="265">265</th><td>	<em>char</em>	<dfn class="local col2 decl" id="22leapchar" title='leapchar' data-type='char' data-ref="22leapchar" data-ref-filename="22leapchar">leapchar</dfn>;	<i>/* leap indicator */</i></td></tr>
+<tr><th id="266">266</th><td>	<em>char</em>	<dfn class="local col3 decl" id="23dstchar" title='dstchar' data-type='char' data-ref="23dstchar" data-ref-filename="23dstchar">dstchar</dfn>;	<i>/* daylight/standard indicator */</i></td></tr>
+<tr><th id="267">267</th><td>	<em>char</em>	<dfn class="local col4 decl" id="24tmpchar" title='tmpchar' data-type='char' data-ref="24tmpchar" data-ref-filename="24tmpchar">tmpchar</dfn>;	<i>/* trashbin */</i></td></tr>
+<tr><th id="268">268</th><td></td></tr>
+<tr><th id="269">269</th><td>	<i>/*</i></td></tr>
+<tr><th id="270">270</th><td><i>	 * Initialize pointers and read the timecode and timestamp</i></td></tr>
+<tr><th id="271">271</th><td><i>	 */</i></td></tr>
+<tr><th id="272">272</th><td>	<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a> = <a class="local col1 ref" href="#11rbufp" title='rbufp' data-ref="11rbufp" data-ref-filename="11rbufp">rbufp</a>-&gt;<a class="macro" href="../include/recvbuff.h.html#61" title="X_from_where.X_recv_peer" data-ref="_M/recv_peer">recv_peer</a>;</td></tr>
+<tr><th id="273">273</th><td>	<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a> = <a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="274">274</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a> = <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="275">275</th><td>	<a class="local col9 ref" href="#19temp" title='temp' data-ref="19temp" data-ref-filename="19temp">temp</a> = <a class="ref fn" href="../include/ntp_refclock.h.html#refclock_gtlin" title='refclock_gtlin' data-ref="refclock_gtlin" data-ref-filename="refclock_gtlin">refclock_gtlin</a>(<a class="local col1 ref" href="#11rbufp" title='rbufp' data-ref="11rbufp" data-ref-filename="11rbufp">rbufp</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>, <a class="macro" href="../include/ntp_refclock.h.html#140" title="128" data-ref="_M/BMAX">BMAX</a>, &amp;<a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>);</td></tr>
+<tr><th id="276">276</th><td></td></tr>
+<tr><th id="277">277</th><td>	<i>/*</i></td></tr>
+<tr><th id="278">278</th><td><i>	 * Note we get a buffer and timestamp for both a &lt;cr&gt; and &lt;lf&gt;,</i></td></tr>
+<tr><th id="279">279</th><td><i>	 * but only the &lt;cr&gt; timestamp is retained. Note: in format 0 on</i></td></tr>
+<tr><th id="280">280</th><td><i>	 * a Netclock/2 or upgraded 8170 the start bit is delayed 100</i></td></tr>
+<tr><th id="281">281</th><td><i>	 * +-50 us relative to the pps; however, on an unmodified 8170</i></td></tr>
+<tr><th id="282">282</th><td><i>	 * the start bit can be delayed up to 10 ms. In format 2 the</i></td></tr>
+<tr><th id="283">283</th><td><i>	 * reading precision is only to the millisecond. Thus, unless</i></td></tr>
+<tr><th id="284">284</th><td><i>	 * you have a PPS gadget and don't have to have the year, format</i></td></tr>
+<tr><th id="285">285</th><td><i>	 * 0 provides the lowest jitter.</i></td></tr>
+<tr><th id="286">286</th><td><i>	 * Save the timestamp of each &lt;CR&gt; in up-&gt;laststamp.  Lines with</i></td></tr>
+<tr><th id="287">287</th><td><i>	 * no characters occur for every &lt;LF&gt;, and for some &lt;CR&gt;s when</i></td></tr>
+<tr><th id="288">288</th><td><i>	 * format 0 is used. Format 0 starts and ends each cycle with a</i></td></tr>
+<tr><th id="289">289</th><td><i>	 * &lt;CR&gt;&lt;LF&gt; pair, format 2 starts each cycle with its only pair.</i></td></tr>
+<tr><th id="290">290</th><td><i>	 * The preceding &lt;CR&gt; is the on-time character for both formats.</i></td></tr>
+<tr><th id="291">291</th><td><i>	 * The timestamp provided with non-empty lines corresponds to</i></td></tr>
+<tr><th id="292">292</th><td><i>	 * the &lt;CR&gt; following the timecode, which is ultimately not used</i></td></tr>
+<tr><th id="293">293</th><td><i>	 * with format 0 and is used for the following timecode for</i></td></tr>
+<tr><th id="294">294</th><td><i>	 * format 2.</i></td></tr>
+<tr><th id="295">295</th><td><i>	 */</i></td></tr>
+<tr><th id="296">296</th><td>	<b>if</b> (<a class="local col9 ref" href="#19temp" title='temp' data-ref="19temp" data-ref-filename="19temp">temp</a> == <var>0</var>) {</td></tr>
+<tr><th id="297">297</th><td>		<b>if</b> (<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::prev_eol_cr" title='wwvbunit::prev_eol_cr' data-use='r' data-ref="wwvbunit::prev_eol_cr" data-ref-filename="wwvbunit..prev_eol_cr">prev_eol_cr</a>) {</td></tr>
+<tr><th id="298">298</th><td>			<a class="macro" href="../include/ntpd.h.html#43" title="do { if (debug &gt;= (2)) mprintf (&quot;wwvb: &lt;LF&gt; @ %s\n&quot;, prettydate(&amp;trtmp)); } while (0)" data-ref="_M/DPRINTF">DPRINTF</a>(<var>2</var>, (<q>"wwvb: &lt;LF&gt; @ %s\n"</q>,</td></tr>
+<tr><th id="299">299</th><td>				    <a class="ref fn" href="../include/ntp_fp.h.html#prettydate" title='prettydate' data-ref="prettydate" data-ref-filename="prettydate">prettydate</a>(&amp;<a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>)));</td></tr>
+<tr><th id="300">300</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="301">301</th><td>			<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::laststamp" title='wwvbunit::laststamp' data-use='w' data-ref="wwvbunit::laststamp" data-ref-filename="wwvbunit..laststamp">laststamp</a> = <a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>;</td></tr>
+<tr><th id="302">302</th><td>			<a class="macro" href="../include/ntpd.h.html#43" title="do { if (debug &gt;= (2)) mprintf (&quot;wwvb: &lt;CR&gt; @ %s\n&quot;, prettydate(&amp;trtmp)); } while (0)" data-ref="_M/DPRINTF">DPRINTF</a>(<var>2</var>, (<q>"wwvb: &lt;CR&gt; @ %s\n"</q>, </td></tr>
+<tr><th id="303">303</th><td>				    <a class="ref fn" href="../include/ntp_fp.h.html#prettydate" title='prettydate' data-ref="prettydate" data-ref-filename="prettydate">prettydate</a>(&amp;<a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>)));</td></tr>
+<tr><th id="304">304</th><td>		}</td></tr>
+<tr><th id="305">305</th><td>		<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::prev_eol_cr" title='wwvbunit::prev_eol_cr' data-use='w' data-ref="wwvbunit::prev_eol_cr" data-ref-filename="wwvbunit..prev_eol_cr">prev_eol_cr</a> = !<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::prev_eol_cr" title='wwvbunit::prev_eol_cr' data-use='r' data-ref="wwvbunit::prev_eol_cr" data-ref-filename="wwvbunit..prev_eol_cr">prev_eol_cr</a>;</td></tr>
+<tr><th id="306">306</th><td>		<b>return</b>;</td></tr>
+<tr><th id="307">307</th><td>	}</td></tr>
+<tr><th id="308">308</th><td>	<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a> = <a class="local col9 ref" href="#19temp" title='temp' data-ref="19temp" data-ref-filename="19temp">temp</a>;</td></tr>
+<tr><th id="309">309</th><td>	<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a> = <a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::laststamp" title='wwvbunit::laststamp' data-use='r' data-ref="wwvbunit::laststamp" data-ref-filename="wwvbunit..laststamp">laststamp</a>;</td></tr>
+<tr><th id="310">310</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::laststamp" title='wwvbunit::laststamp' data-use='w' data-ref="wwvbunit::laststamp" data-ref-filename="wwvbunit..laststamp">laststamp</a> = <a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>;</td></tr>
+<tr><th id="311">311</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::prev_eol_cr" title='wwvbunit::prev_eol_cr' data-use='w' data-ref="wwvbunit::prev_eol_cr" data-ref-filename="wwvbunit..prev_eol_cr">prev_eol_cr</a> = <a class="macro" href="../include/ntp_types.h.html#34" title="1" data-ref="_M/TRUE">TRUE</a>;</td></tr>
+<tr><th id="312">312</th><td>	<a class="macro" href="../include/ntpd.h.html#43" title="do { if (debug &gt;= (2)) mprintf (&quot;wwvb: code @ %s\n&quot; &quot;       using %s minus one char\n&quot;, prettydate(&amp;trtmp), prettydate(&amp;pp-&gt;lastrec)); } while (0)" data-ref="_M/DPRINTF">DPRINTF</a>(<var>2</var>, (<q>"wwvb: code @ %s\n"</q></td></tr>
+<tr><th id="313">313</th><td>		    <q>"       using %s minus one char\n"</q>,</td></tr>
+<tr><th id="314">314</th><td>		    <a class="ref fn" href="../include/ntp_fp.h.html#prettydate" title='prettydate' data-ref="prettydate" data-ref-filename="prettydate">prettydate</a>(&amp;<a class="local col5 ref" href="#15trtmp" title='trtmp' data-ref="15trtmp" data-ref-filename="15trtmp">trtmp</a>), <a class="ref fn" href="../include/ntp_fp.h.html#prettydate" title='prettydate' data-ref="prettydate" data-ref-filename="prettydate">prettydate</a>(&amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>)));</td></tr>
+<tr><th id="315">315</th><td>	<b>if</b> (<a class="macro" href="../include/ntp_fp.h.html#242" title="(((&amp;pp-&gt;lastrec)-&gt;Ul_i.Xl_ui | (&amp;pp-&gt;lastrec)-&gt;l_uf) == 0)" data-ref="_M/L_ISZERO">L_ISZERO</a>(&amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>))</td></tr>
+<tr><th id="316">316</th><td>		<b>return</b>;</td></tr>
+<tr><th id="317">317</th><td></td></tr>
+<tr><th id="318">318</th><td>	<i>/*</i></td></tr>
+<tr><th id="319">319</th><td><i>	 * We get down to business, check the timecode format and decode</i></td></tr>
+<tr><th id="320">320</th><td><i>	 * its contents. This code uses the timecode length to determine</i></td></tr>
+<tr><th id="321">321</th><td><i>	 * format 0, 2 or 3. If the timecode has invalid length or is</i></td></tr>
+<tr><th id="322">322</th><td><i>	 * not in proper format, we declare bad format and exit.</i></td></tr>
+<tr><th id="323">323</th><td><i>	 */</i></td></tr>
+<tr><th id="324">324</th><td>	<a class="local col0 ref" href="#20syncchar" title='syncchar' data-ref="20syncchar" data-ref-filename="20syncchar">syncchar</a> = <a class="local col1 ref" href="#21qualchar" title='qualchar' data-ref="21qualchar" data-ref-filename="21qualchar">qualchar</a> = <a class="local col2 ref" href="#22leapchar" title='leapchar' data-ref="22leapchar" data-ref-filename="22leapchar">leapchar</a> = <a class="local col3 ref" href="#23dstchar" title='dstchar' data-ref="23dstchar" data-ref-filename="23dstchar">dstchar</a> = <kbd>' '</kbd>;</td></tr>
+<tr><th id="325">325</th><td>	<a class="local col6 ref" href="#16tz" title='tz' data-ref="16tz" data-ref-filename="16tz">tz</a> = <var>0</var>;</td></tr>
+<tr><th id="326">326</th><td>	<b>switch</b> (<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>) {</td></tr>
+<tr><th id="327">327</th><td></td></tr>
+<tr><th id="328">328</th><td>	<b>case</b> <a class="macro" href="#124" title="22" data-ref="_M/LENWWVB0">LENWWVB0</a>:</td></tr>
+<tr><th id="329">329</th><td></td></tr>
+<tr><th id="330">330</th><td>		<i>/*</i></td></tr>
+<tr><th id="331">331</th><td><i>		 * Timecode format 0: "I  ddd hh:mm:ss DTZ=nn"</i></td></tr>
+<tr><th id="332">332</th><td><i>		 */</i></td></tr>
+<tr><th id="333">333</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sscanf" title='sscanf' data-ref="sscanf" data-ref-filename="sscanf">sscanf</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>,</td></tr>
+<tr><th id="334">334</th><td>		    <q>"%c %3d %2d:%2d:%2d%c%cTZ=%2d"</q>,</td></tr>
+<tr><th id="335">335</th><td>		    &amp;<a class="local col0 ref" href="#20syncchar" title='syncchar' data-ref="20syncchar" data-ref-filename="20syncchar">syncchar</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::day" title='refclockproc::day' data-ref="refclockproc::day" data-ref-filename="refclockproc..day">day</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::hour" title='refclockproc::hour' data-ref="refclockproc::hour" data-ref-filename="refclockproc..hour">hour</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::minute" title='refclockproc::minute' data-ref="refclockproc::minute" data-ref-filename="refclockproc..minute">minute</a>,</td></tr>
+<tr><th id="336">336</th><td>		    &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::second" title='refclockproc::second' data-ref="refclockproc::second" data-ref-filename="refclockproc..second">second</a>, &amp;<a class="local col4 ref" href="#24tmpchar" title='tmpchar' data-ref="24tmpchar" data-ref-filename="24tmpchar">tmpchar</a>, &amp;<a class="local col3 ref" href="#23dstchar" title='dstchar' data-ref="23dstchar" data-ref-filename="23dstchar">dstchar</a>, &amp;<a class="local col6 ref" href="#16tz" title='tz' data-ref="16tz" data-ref-filename="16tz">tz</a>) == <var>8</var>) {</td></tr>
+<tr><th id="337">337</th><td>			<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::nsec" title='refclockproc::nsec' data-ref="refclockproc::nsec" data-ref-filename="refclockproc..nsec">nsec</a> = <var>0</var>;</td></tr>
+<tr><th id="338">338</th><td>			<b>break</b>;</td></tr>
+<tr><th id="339">339</th><td>		}</td></tr>
+<tr><th id="340">340</th><td>		<b>goto</b> <a class="lbl" href="#25bad_format" data-ref="25bad_format" data-ref-filename="25bad_format">bad_format</a>;</td></tr>
+<tr><th id="341">341</th><td></td></tr>
+<tr><th id="342">342</th><td>	<b>case</b> <a class="macro" href="#125" title="24" data-ref="_M/LENWWVB2">LENWWVB2</a>:</td></tr>
+<tr><th id="343">343</th><td></td></tr>
+<tr><th id="344">344</th><td>		<i>/*</i></td></tr>
+<tr><th id="345">345</th><td><i>		 * Timecode format 2: "IQyy ddd hh:mm:ss.mmm LD" */</i></td></tr>
+<tr><th id="346">346</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sscanf" title='sscanf' data-ref="sscanf" data-ref-filename="sscanf">sscanf</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>,</td></tr>
+<tr><th id="347">347</th><td>		    <q>"%c%c %2d %3d %2d:%2d:%2d.%3ld %c"</q>,</td></tr>
+<tr><th id="348">348</th><td>		    &amp;<a class="local col0 ref" href="#20syncchar" title='syncchar' data-ref="20syncchar" data-ref-filename="20syncchar">syncchar</a>, &amp;<a class="local col1 ref" href="#21qualchar" title='qualchar' data-ref="21qualchar" data-ref-filename="21qualchar">qualchar</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::year" title='refclockproc::year' data-ref="refclockproc::year" data-ref-filename="refclockproc..year">year</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::day" title='refclockproc::day' data-ref="refclockproc::day" data-ref-filename="refclockproc..day">day</a>,</td></tr>
+<tr><th id="349">349</th><td>		    &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::hour" title='refclockproc::hour' data-ref="refclockproc::hour" data-ref-filename="refclockproc..hour">hour</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::minute" title='refclockproc::minute' data-ref="refclockproc::minute" data-ref-filename="refclockproc..minute">minute</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::second" title='refclockproc::second' data-ref="refclockproc::second" data-ref-filename="refclockproc..second">second</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::nsec" title='refclockproc::nsec' data-ref="refclockproc::nsec" data-ref-filename="refclockproc..nsec">nsec</a>,</td></tr>
+<tr><th id="350">350</th><td>		    &amp;<a class="local col2 ref" href="#22leapchar" title='leapchar' data-ref="22leapchar" data-ref-filename="22leapchar">leapchar</a>) == <var>9</var>) {</td></tr>
+<tr><th id="351">351</th><td>			<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::nsec" title='refclockproc::nsec' data-ref="refclockproc::nsec" data-ref-filename="refclockproc..nsec">nsec</a> *= <var>1000000</var>;</td></tr>
+<tr><th id="352">352</th><td>			<b>break</b>;</td></tr>
+<tr><th id="353">353</th><td>		}</td></tr>
+<tr><th id="354">354</th><td>		<b>goto</b> <a class="lbl" href="#25bad_format" data-ref="25bad_format" data-ref-filename="25bad_format">bad_format</a>;</td></tr>
+<tr><th id="355">355</th><td></td></tr>
+<tr><th id="356">356</th><td>	<b>case</b> <a class="macro" href="#126" title="29" data-ref="_M/LENWWVB3">LENWWVB3</a>:</td></tr>
+<tr><th id="357">357</th><td></td></tr>
+<tr><th id="358">358</th><td>		<i>/*</i></td></tr>
+<tr><th id="359">359</th><td><i>		 * Timecode format 3: "0003I yyyymmdd hhmmss+0000SL#"</i></td></tr>
+<tr><th id="360">360</th><td><i>		 * WARNING: Undocumented, and the on-time character # is</i></td></tr>
+<tr><th id="361">361</th><td><i>		 * not yet handled correctly by this driver.  It may be</i></td></tr>
+<tr><th id="362">362</th><td><i>		 * as simple as compensating for an additional 1/960 s.</i></td></tr>
+<tr><th id="363">363</th><td><i>		 */</i></td></tr>
+<tr><th id="364">364</th><td>		<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#sscanf" title='sscanf' data-ref="sscanf" data-ref-filename="sscanf">sscanf</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>,</td></tr>
+<tr><th id="365">365</th><td>		    <q>"0003%c %4d%2d%2d %2d%2d%2d+0000%c%c"</q>,</td></tr>
+<tr><th id="366">366</th><td>		    &amp;<a class="local col0 ref" href="#20syncchar" title='syncchar' data-ref="20syncchar" data-ref-filename="20syncchar">syncchar</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::year" title='refclockproc::year' data-ref="refclockproc::year" data-ref-filename="refclockproc..year">year</a>, &amp;<a class="local col8 ref" href="#18month" title='month' data-ref="18month" data-ref-filename="18month">month</a>, &amp;<a class="local col7 ref" href="#17day" title='day' data-ref="17day" data-ref-filename="17day">day</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::hour" title='refclockproc::hour' data-ref="refclockproc::hour" data-ref-filename="refclockproc..hour">hour</a>,</td></tr>
+<tr><th id="367">367</th><td>		    &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::minute" title='refclockproc::minute' data-ref="refclockproc::minute" data-ref-filename="refclockproc..minute">minute</a>, &amp;<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::second" title='refclockproc::second' data-ref="refclockproc::second" data-ref-filename="refclockproc..second">second</a>, &amp;<a class="local col3 ref" href="#23dstchar" title='dstchar' data-ref="23dstchar" data-ref-filename="23dstchar">dstchar</a>, &amp;<a class="local col2 ref" href="#22leapchar" title='leapchar' data-ref="22leapchar" data-ref-filename="22leapchar">leapchar</a>) == <var>8</var>)</td></tr>
+<tr><th id="368">368</th><td>		    {</td></tr>
+<tr><th id="369">369</th><td>			<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::day" title='refclockproc::day' data-ref="refclockproc::day" data-ref-filename="refclockproc..day">day</a> = <a class="ref fn" href="../include/ntp_stdlib.h.html#ymd2yd" title='ymd2yd' data-ref="ymd2yd" data-ref-filename="ymd2yd">ymd2yd</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::year" title='refclockproc::year' data-ref="refclockproc::year" data-ref-filename="refclockproc..year">year</a>, <a class="local col8 ref" href="#18month" title='month' data-ref="18month" data-ref-filename="18month">month</a>, <a class="local col7 ref" href="#17day" title='day' data-ref="17day" data-ref-filename="17day">day</a>);</td></tr>
+<tr><th id="370">370</th><td>			<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::nsec" title='refclockproc::nsec' data-ref="refclockproc::nsec" data-ref-filename="refclockproc..nsec">nsec</a> = <var>0</var>;</td></tr>
+<tr><th id="371">371</th><td>			<b>break</b>;</td></tr>
+<tr><th id="372">372</th><td>		}</td></tr>
+<tr><th id="373">373</th><td>		<b>goto</b> <a class="lbl" href="#25bad_format" data-ref="25bad_format" data-ref-filename="25bad_format">bad_format</a>;</td></tr>
+<tr><th id="374">374</th><td></td></tr>
+<tr><th id="375">375</th><td>	<b>default</b>:</td></tr>
+<tr><th id="376">376</th><td>	<dfn class="lbl" id="25bad_format" data-ref="25bad_format" data-ref-filename="25bad_format">bad_format</dfn>:</td></tr>
+<tr><th id="377">377</th><td></td></tr>
+<tr><th id="378">378</th><td>		<i>/*</i></td></tr>
+<tr><th id="379">379</th><td><i>		 * Unknown format: If dumping internal table, record</i></td></tr>
+<tr><th id="380">380</th><td><i>		 * stats; otherwise, declare bad format.</i></td></tr>
+<tr><th id="381">381</th><td><i>		 */</i></td></tr>
+<tr><th id="382">382</th><td>		<b>if</b> (<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::linect" title='wwvbunit::linect' data-use='r' data-ref="wwvbunit::linect" data-ref-filename="wwvbunit..linect">linect</a> &gt; <var>0</var>) {</td></tr>
+<tr><th id="383">383</th><td>			<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::linect" title='wwvbunit::linect' data-use='w' data-ref="wwvbunit::linect" data-ref-filename="wwvbunit..linect">linect</a>--;</td></tr>
+<tr><th id="384">384</th><td>			<a class="ref fn" href="../include/ntpd.h.html#record_clock_stats" title='record_clock_stats' data-ref="record_clock_stats" data-ref-filename="record_clock_stats">record_clock_stats</a>(&amp;<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::srcadr" title='peer::srcadr' data-ref="peer::srcadr" data-ref-filename="peer..srcadr">srcadr</a>,</td></tr>
+<tr><th id="385">385</th><td>			    <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>);</td></tr>
+<tr><th id="386">386</th><td>		} <b>else</b> {</td></tr>
+<tr><th id="387">387</th><td>			<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>, <a class="macro" href="../include/ntp.h.html#677" title="2" data-ref="_M/CEVNT_BADREPLY">CEVNT_BADREPLY</a>);</td></tr>
+<tr><th id="388">388</th><td>		}</td></tr>
+<tr><th id="389">389</th><td>		<b>return</b>;</td></tr>
+<tr><th id="390">390</th><td>	}</td></tr>
+<tr><th id="391">391</th><td></td></tr>
+<tr><th id="392">392</th><td>	<i>/*</i></td></tr>
+<tr><th id="393">393</th><td><i>	 * Decode synchronization, quality and leap characters. If</i></td></tr>
+<tr><th id="394">394</th><td><i>	 * unsynchronized, set the leap bits accordingly and exit.</i></td></tr>
+<tr><th id="395">395</th><td><i>	 * Otherwise, set the leap bits according to the leap character.</i></td></tr>
+<tr><th id="396">396</th><td><i>	 * Once synchronized, the dispersion depends only on the</i></td></tr>
+<tr><th id="397">397</th><td><i>	 * quality character.</i></td></tr>
+<tr><th id="398">398</th><td><i>	 */</i></td></tr>
+<tr><th id="399">399</th><td>	<b>switch</b> (<a class="local col1 ref" href="#21qualchar" title='qualchar' data-ref="21qualchar" data-ref-filename="21qualchar">qualchar</a>) {</td></tr>
+<tr><th id="400">400</th><td></td></tr>
+<tr><th id="401">401</th><td>	<b>case</b> <kbd>' '</kbd>:</td></tr>
+<tr><th id="402">402</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <var>.001</var>;</td></tr>
+<tr><th id="403">403</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastref" title='refclockproc::lastref' data-ref="refclockproc::lastref" data-ref-filename="refclockproc..lastref">lastref</a> = <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lastrec" title='refclockproc::lastrec' data-ref="refclockproc::lastrec" data-ref-filename="refclockproc..lastrec">lastrec</a>;</td></tr>
+<tr><th id="404">404</th><td>		<b>break</b>;</td></tr>
+<tr><th id="405">405</th><td></td></tr>
+<tr><th id="406">406</th><td>	<b>case</b> <kbd>'A'</kbd>:</td></tr>
+<tr><th id="407">407</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <var>.01</var>;</td></tr>
+<tr><th id="408">408</th><td>		<b>break</b>;</td></tr>
+<tr><th id="409">409</th><td></td></tr>
+<tr><th id="410">410</th><td>	<b>case</b> <kbd>'B'</kbd>:</td></tr>
+<tr><th id="411">411</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <var>.1</var>;</td></tr>
+<tr><th id="412">412</th><td>		<b>break</b>;</td></tr>
+<tr><th id="413">413</th><td></td></tr>
+<tr><th id="414">414</th><td>	<b>case</b> <kbd>'C'</kbd>:</td></tr>
+<tr><th id="415">415</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <var>.5</var>;</td></tr>
+<tr><th id="416">416</th><td>		<b>break</b>;</td></tr>
+<tr><th id="417">417</th><td></td></tr>
+<tr><th id="418">418</th><td>	<b>case</b> <kbd>'D'</kbd>:</td></tr>
+<tr><th id="419">419</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <a class="macro" href="../include/ntp.h.html#116" title="16." data-ref="_M/MAXDISPERSE">MAXDISPERSE</a>;</td></tr>
+<tr><th id="420">420</th><td>		<b>break</b>;</td></tr>
+<tr><th id="421">421</th><td></td></tr>
+<tr><th id="422">422</th><td>	<b>default</b>:</td></tr>
+<tr><th id="423">423</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::disp" title='refclockproc::disp' data-ref="refclockproc::disp" data-ref-filename="refclockproc..disp">disp</a> = <a class="macro" href="../include/ntp.h.html#116" title="16." data-ref="_M/MAXDISPERSE">MAXDISPERSE</a>;</td></tr>
+<tr><th id="424">424</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>, <a class="macro" href="../include/ntp.h.html#677" title="2" data-ref="_M/CEVNT_BADREPLY">CEVNT_BADREPLY</a>);</td></tr>
+<tr><th id="425">425</th><td>		<b>break</b>;</td></tr>
+<tr><th id="426">426</th><td>	}</td></tr>
+<tr><th id="427">427</th><td>	<b>if</b> (<a class="local col0 ref" href="#20syncchar" title='syncchar' data-ref="20syncchar" data-ref-filename="20syncchar">syncchar</a> != <kbd>' '</kbd>)</td></tr>
+<tr><th id="428">428</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#417" title="0x3" data-ref="_M/LEAP_NOTINSYNC">LEAP_NOTINSYNC</a>;</td></tr>
+<tr><th id="429">429</th><td>	<b>else</b> <b>if</b> (<a class="local col2 ref" href="#22leapchar" title='leapchar' data-ref="22leapchar" data-ref-filename="22leapchar">leapchar</a> == <kbd>'L'</kbd>)</td></tr>
+<tr><th id="430">430</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#415" title="0x1" data-ref="_M/LEAP_ADDSECOND">LEAP_ADDSECOND</a>;</td></tr>
+<tr><th id="431">431</th><td>	<b>else</b></td></tr>
+<tr><th id="432">432</th><td>		<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::leap" title='refclockproc::leap' data-ref="refclockproc::leap" data-ref-filename="refclockproc..leap">leap</a> = <a class="macro" href="../include/ntp.h.html#414" title="0x0" data-ref="_M/LEAP_NOWARNING">LEAP_NOWARNING</a>;</td></tr>
+<tr><th id="433">433</th><td></td></tr>
+<tr><th id="434">434</th><td>	<i>/*</i></td></tr>
+<tr><th id="435">435</th><td><i>	 * Process the new sample in the median filter and determine the</i></td></tr>
+<tr><th id="436">436</th><td><i>	 * timecode timestamp, but only if the PPS is not in control.</i></td></tr>
+<tr><th id="437">437</th><td><i>	 */</i></td></tr>
+<tr><th id="438">438</th><td><u>#<span data-ppcond="438">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="439">439</th><td>	<a class="local col2 ref" href="#12up" title='up' data-ref="12up" data-ref-filename="12up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::tcount" title='wwvbunit::tcount' data-use='w' data-ref="wwvbunit::tcount" data-ref-filename="wwvbunit..tcount">tcount</a>++;</td></tr>
+<tr><th id="440">440</th><td>	<b>if</b> (<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::flags" title='peer::flags' data-ref="peer::flags" data-ref-filename="peer..flags">flags</a> &amp; <a class="macro" href="../include/ntp.h.html#459" title="0x0080" data-ref="_M/FLAG_PPS">FLAG_PPS</a>)</td></tr>
+<tr><th id="441">441</th><td>		<b>return</b>;</td></tr>
+<tr><th id="442">442</th><td></td></tr>
+<tr><th id="443">443</th><td><u>#<span data-ppcond="438">endif</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="444">444</th><td>	<b>if</b> (!<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_process_f" title='refclock_process_f' data-ref="refclock_process_f" data-ref-filename="refclock_process_f">refclock_process_f</a>(<a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>, <a class="local col3 ref" href="#13pp" title='pp' data-ref="13pp" data-ref-filename="13pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::fudgetime2" title='refclockproc::fudgetime2' data-ref="refclockproc::fudgetime2" data-ref-filename="refclockproc..fudgetime2">fudgetime2</a>))</td></tr>
+<tr><th id="445">445</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col4 ref" href="#14peer" title='peer' data-ref="14peer" data-ref-filename="14peer">peer</a>, <a class="macro" href="../include/ntp.h.html#681" title="6" data-ref="_M/CEVNT_BADTIME">CEVNT_BADTIME</a>);</td></tr>
+<tr><th id="446">446</th><td>}</td></tr>
+<tr><th id="447">447</th><td></td></tr>
+<tr><th id="448">448</th><td></td></tr>
+<tr><th id="449">449</th><td><i  data-doc="wwvb_timer">/*</i></td></tr>
+<tr><th id="450">450</th><td><i  data-doc="wwvb_timer"> * wwvb_timer - called once per second by the transmit procedure</i></td></tr>
+<tr><th id="451">451</th><td><i  data-doc="wwvb_timer"> */</i></td></tr>
+<tr><th id="452">452</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="453">453</th><td><dfn class="tu decl def fn" id="wwvb_timer" title='wwvb_timer' data-type='void wwvb_timer(int unit, struct peer * peer)' data-ref="wwvb_timer" data-ref-filename="wwvb_timer">wwvb_timer</dfn>(</td></tr>
+<tr><th id="454">454</th><td>	<em>int</em> <dfn class="local col6 decl" id="26unit" title='unit' data-type='int' data-ref="26unit" data-ref-filename="26unit">unit</dfn>,</td></tr>
+<tr><th id="455">455</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col7 decl" id="27peer" title='peer' data-type='struct peer *' data-ref="27peer" data-ref-filename="27peer">peer</dfn></td></tr>
+<tr><th id="456">456</th><td>	)</td></tr>
+<tr><th id="457">457</th><td>{</td></tr>
+<tr><th id="458">458</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</a> *<dfn class="local col8 decl" id="28up" title='up' data-type='struct wwvbunit *' data-ref="28up" data-ref-filename="28up">up</dfn>;</td></tr>
+<tr><th id="459">459</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col9 decl" id="29pp" title='pp' data-type='struct refclockproc *' data-ref="29pp" data-ref-filename="29pp">pp</dfn>;</td></tr>
+<tr><th id="460">460</th><td>	<em>char</em>	<dfn class="local col0 decl" id="30pollchar" title='pollchar' data-type='char' data-ref="30pollchar" data-ref-filename="30pollchar">pollchar</dfn>;	<i>/* character sent to clock */</i></td></tr>
+<tr><th id="461">461</th><td><u>#<span data-ppcond="461">ifdef</span> <a class="macro" href="../../include/config.h.html#184" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="462">462</th><td>	<a class="typedef" href="../include/ntp_fp.h.html#l_fp" title='l_fp' data-type='struct l_fp' data-ref="l_fp" data-ref-filename="l_fp">l_fp</a>	<dfn class="local col1 decl" id="31now" title='now' data-type='l_fp' data-ref="31now" data-ref-filename="31now">now</dfn>;</td></tr>
+<tr><th id="463">463</th><td><u>#<span data-ppcond="461">endif</span></u></td></tr>
+<tr><th id="464">464</th><td></td></tr>
+<tr><th id="465">465</th><td>	<i>/*</i></td></tr>
+<tr><th id="466">466</th><td><i>	 * Time to poll the clock. The Spectracom clock responds to a</i></td></tr>
+<tr><th id="467">467</th><td><i>	 * 'T' by returning a timecode in the format(s) specified above.</i></td></tr>
+<tr><th id="468">468</th><td><i>	 * Note there is no checking on state, since this may not be the</i></td></tr>
+<tr><th id="469">469</th><td><i>	 * only customer reading the clock. Only one customer need poll</i></td></tr>
+<tr><th id="470">470</th><td><i>	 * the clock; all others just listen in.</i></td></tr>
+<tr><th id="471">471</th><td><i>	 */</i></td></tr>
+<tr><th id="472">472</th><td>	<a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a> = <a class="local col7 ref" href="#27peer" title='peer' data-ref="27peer" data-ref-filename="27peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="473">473</th><td>	<a class="local col8 ref" href="#28up" title='up' data-ref="28up" data-ref-filename="28up">up</a> = <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="474">474</th><td>	<b>if</b> (<a class="local col8 ref" href="#28up" title='up' data-ref="28up" data-ref-filename="28up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::linect" title='wwvbunit::linect' data-use='r' data-ref="wwvbunit::linect" data-ref-filename="wwvbunit..linect">linect</a> &gt; <var>0</var>)</td></tr>
+<tr><th id="475">475</th><td>		<a class="local col0 ref" href="#30pollchar" title='pollchar' data-ref="30pollchar" data-ref-filename="30pollchar">pollchar</a> = <kbd>'R'</kbd>;</td></tr>
+<tr><th id="476">476</th><td>	<b>else</b></td></tr>
+<tr><th id="477">477</th><td>		<a class="local col0 ref" href="#30pollchar" title='pollchar' data-ref="30pollchar" data-ref-filename="30pollchar">pollchar</a> = <kbd>'T'</kbd>;</td></tr>
+<tr><th id="478">478</th><td>	<b>if</b> (<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/unistd.h.html#write" title='write' data-ref="write" data-ref-filename="write">write</a>(<a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a>, &amp;<a class="local col0 ref" href="#30pollchar" title='pollchar' data-ref="30pollchar" data-ref-filename="30pollchar">pollchar</a>, <var>1</var>) != <var>1</var>)</td></tr>
+<tr><th id="479">479</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col7 ref" href="#27peer" title='peer' data-ref="27peer" data-ref-filename="27peer">peer</a>, <a class="macro" href="../include/ntp.h.html#678" title="3" data-ref="_M/CEVNT_FAULT">CEVNT_FAULT</a>);</td></tr>
+<tr><th id="480">480</th><td><u>#<span data-ppcond="480">ifdef</span> <a class="macro" href="../../include/config.h.html#184" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="481">481</th><td>	<a class="ref fn" href="../include/ntp_fp.h.html#get_systime" title='get_systime' data-ref="get_systime" data-ref-filename="get_systime">get_systime</a>(&amp;<a class="local col1 ref" href="#31now" title='now' data-ref="31now" data-ref-filename="31now">now</a>);</td></tr>
+<tr><th id="482">482</th><td>	<b>if</b> (<a class="ref" href="../include/declcond.h.html#debug" title='debug' data-ref="debug" data-ref-filename="debug">debug</a>)</td></tr>
+<tr><th id="483">483</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"%c poll at %s\n"</q>, <a class="local col0 ref" href="#30pollchar" title='pollchar' data-ref="30pollchar" data-ref-filename="30pollchar">pollchar</a>, <a class="ref fn" href="../include/ntp_fp.h.html#prettydate" title='prettydate' data-ref="prettydate" data-ref-filename="prettydate">prettydate</a>(&amp;<a class="local col1 ref" href="#31now" title='now' data-ref="31now" data-ref-filename="31now">now</a>));</td></tr>
+<tr><th id="484">484</th><td><u>#<span data-ppcond="480">endif</span></u></td></tr>
+<tr><th id="485">485</th><td><u>#<span data-ppcond="485">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="486">486</th><td>	<b>if</b> (<a class="local col8 ref" href="#28up" title='up' data-ref="28up" data-ref-filename="28up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_lit" title='wwvbunit::ppsapi_lit' data-use='r' data-ref="wwvbunit::ppsapi_lit" data-ref-filename="wwvbunit..ppsapi_lit">ppsapi_lit</a> &amp;&amp;</td></tr>
+<tr><th id="487">487</th><td>	    <a class="ref fn" href="../include/refclock_atom.h.html#refclock_pps" title='refclock_pps' data-ref="refclock_pps" data-ref-filename="refclock_pps">refclock_pps</a>(<a class="local col7 ref" href="#27peer" title='peer' data-ref="27peer" data-ref-filename="27peer">peer</a>, &amp;<a class="local col8 ref" href="#28up" title='up' data-ref="28up" data-ref-filename="28up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::atom" title='wwvbunit::atom' data-use='a' data-ref="wwvbunit::atom" data-ref-filename="wwvbunit..atom">atom</a>, <a class="local col9 ref" href="#29pp" title='pp' data-ref="29pp" data-ref-filename="29pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::sloppyclockflag" title='refclockproc::sloppyclockflag' data-ref="refclockproc::sloppyclockflag" data-ref-filename="refclockproc..sloppyclockflag">sloppyclockflag</a>) &gt; <var>0</var>) {</td></tr>
+<tr><th id="488">488</th><td>		<a class="local col8 ref" href="#28up" title='up' data-ref="28up" data-ref-filename="28up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::pcount" title='wwvbunit::pcount' data-use='w' data-ref="wwvbunit::pcount" data-ref-filename="wwvbunit..pcount">pcount</a>++,</td></tr>
+<tr><th id="489">489</th><td>		<a class="local col7 ref" href="#27peer" title='peer' data-ref="27peer" data-ref-filename="27peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::flags" title='peer::flags' data-ref="peer::flags" data-ref-filename="peer..flags">flags</a> |= <a class="macro" href="../include/ntp.h.html#459" title="0x0080" data-ref="_M/FLAG_PPS">FLAG_PPS</a>;</td></tr>
+<tr><th id="490">490</th><td>		<a class="local col7 ref" href="#27peer" title='peer' data-ref="27peer" data-ref-filename="27peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::precision" title='peer::precision' data-ref="peer::precision" data-ref-filename="peer..precision">precision</a> = <a class="macro" href="#120" title="(-13)" data-ref="_M/PPS_PRECISION">PPS_PRECISION</a>;</td></tr>
+<tr><th id="491">491</th><td>	}</td></tr>
+<tr><th id="492">492</th><td><u>#<span data-ppcond="485">endif</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="493">493</th><td>}</td></tr>
+<tr><th id="494">494</th><td></td></tr>
+<tr><th id="495">495</th><td></td></tr>
+<tr><th id="496">496</th><td><i  data-doc="wwvb_poll">/*</i></td></tr>
+<tr><th id="497">497</th><td><i  data-doc="wwvb_poll"> * wwvb_poll - called by the transmit procedure</i></td></tr>
+<tr><th id="498">498</th><td><i  data-doc="wwvb_poll"> */</i></td></tr>
+<tr><th id="499">499</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="500">500</th><td><dfn class="tu decl def fn" id="wwvb_poll" title='wwvb_poll' data-type='void wwvb_poll(int unit, struct peer * peer)' data-ref="wwvb_poll" data-ref-filename="wwvb_poll">wwvb_poll</dfn>(</td></tr>
+<tr><th id="501">501</th><td>	<em>int</em> <dfn class="local col2 decl" id="32unit" title='unit' data-type='int' data-ref="32unit" data-ref-filename="32unit">unit</dfn>,</td></tr>
+<tr><th id="502">502</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col3 decl" id="33peer" title='peer' data-type='struct peer *' data-ref="33peer" data-ref-filename="33peer">peer</dfn></td></tr>
+<tr><th id="503">503</th><td>	)</td></tr>
+<tr><th id="504">504</th><td>{</td></tr>
+<tr><th id="505">505</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</a> *<dfn class="local col4 decl" id="34up" title='up' data-type='struct wwvbunit *' data-ref="34up" data-ref-filename="34up">up</dfn>;</td></tr>
+<tr><th id="506">506</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col5 decl" id="35pp" title='pp' data-type='struct refclockproc *' data-ref="35pp" data-ref-filename="35pp">pp</dfn>;</td></tr>
+<tr><th id="507">507</th><td></td></tr>
+<tr><th id="508">508</th><td>	<i>/*</i></td></tr>
+<tr><th id="509">509</th><td><i>	 * Sweep up the samples received since the last poll. If none</i></td></tr>
+<tr><th id="510">510</th><td><i>	 * are received, declare a timeout and keep going.</i></td></tr>
+<tr><th id="511">511</th><td><i>	 */</i></td></tr>
+<tr><th id="512">512</th><td>	<a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a> = <a class="local col3 ref" href="#33peer" title='peer' data-ref="33peer" data-ref-filename="33peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="513">513</th><td>	<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a> = <a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="514">514</th><td>	<a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::polls" title='refclockproc::polls' data-ref="refclockproc::polls" data-ref-filename="refclockproc..polls">polls</a>++;</td></tr>
+<tr><th id="515">515</th><td></td></tr>
+<tr><th id="516">516</th><td>	<i>/*</i></td></tr>
+<tr><th id="517">517</th><td><i>	 * If the monitor flag is set (flag4), we dump the internal</i></td></tr>
+<tr><th id="518">518</th><td><i>	 * quality table at the first timecode beginning the day.</i></td></tr>
+<tr><th id="519">519</th><td><i>	 */</i></td></tr>
+<tr><th id="520">520</th><td>	<b>if</b> (<a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::sloppyclockflag" title='refclockproc::sloppyclockflag' data-ref="refclockproc::sloppyclockflag" data-ref-filename="refclockproc..sloppyclockflag">sloppyclockflag</a> &amp; <a class="macro" href="../include/ntp_refclock.h.html#53" title="0x8" data-ref="_M/CLK_FLAG4">CLK_FLAG4</a> &amp;&amp; <a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::hour" title='refclockproc::hour' data-ref="refclockproc::hour" data-ref-filename="refclockproc..hour">hour</a> &lt;</td></tr>
+<tr><th id="521">521</th><td>	    (<em>int</em>)<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::lasthour" title='wwvbunit::lasthour' data-use='r' data-ref="wwvbunit::lasthour" data-ref-filename="wwvbunit..lasthour">lasthour</a>)</td></tr>
+<tr><th id="522">522</th><td>		<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::linect" title='wwvbunit::linect' data-use='w' data-ref="wwvbunit::linect" data-ref-filename="wwvbunit..linect">linect</a> = <a class="macro" href="#127" title="15" data-ref="_M/MONLIN">MONLIN</a>;</td></tr>
+<tr><th id="523">523</th><td>	<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::lasthour" title='wwvbunit::lasthour' data-use='w' data-ref="wwvbunit::lasthour" data-ref-filename="wwvbunit..lasthour">lasthour</a> = (<a class="typedef" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/types.h.html#u_char" title='u_char' data-type='unsigned char' data-ref="u_char" data-ref-filename="u_char">u_char</a>)<a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::hour" title='refclockproc::hour' data-ref="refclockproc::hour" data-ref-filename="refclockproc..hour">hour</a>;</td></tr>
+<tr><th id="524">524</th><td></td></tr>
+<tr><th id="525">525</th><td>	<i>/*</i></td></tr>
+<tr><th id="526">526</th><td><i>	 * Process median filter samples. If none received, declare a</i></td></tr>
+<tr><th id="527">527</th><td><i>	 * timeout and keep going.</i></td></tr>
+<tr><th id="528">528</th><td><i>	 */</i></td></tr>
+<tr><th id="529">529</th><td><u>#<span data-ppcond="529">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="530">530</th><td>	<b>if</b> (<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::pcount" title='wwvbunit::pcount' data-use='r' data-ref="wwvbunit::pcount" data-ref-filename="wwvbunit..pcount">pcount</a> == <var>0</var>) {</td></tr>
+<tr><th id="531">531</th><td>		<a class="local col3 ref" href="#33peer" title='peer' data-ref="33peer" data-ref-filename="33peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::flags" title='peer::flags' data-ref="peer::flags" data-ref-filename="peer..flags">flags</a> &amp;= ~<a class="macro" href="../include/ntp.h.html#459" title="0x0080" data-ref="_M/FLAG_PPS">FLAG_PPS</a>;</td></tr>
+<tr><th id="532">532</th><td>		<a class="local col3 ref" href="#33peer" title='peer' data-ref="33peer" data-ref-filename="33peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::precision" title='peer::precision' data-ref="peer::precision" data-ref-filename="peer..precision">precision</a> = <a class="macro" href="#119" title="(-13)" data-ref="_M/PRECISION">PRECISION</a>;</td></tr>
+<tr><th id="533">533</th><td>	}</td></tr>
+<tr><th id="534">534</th><td>	<b>if</b> (<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::tcount" title='wwvbunit::tcount' data-use='r' data-ref="wwvbunit::tcount" data-ref-filename="wwvbunit..tcount">tcount</a> == <var>0</var>) {</td></tr>
+<tr><th id="535">535</th><td>		<a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::coderecv" title='refclockproc::coderecv' data-ref="refclockproc::coderecv" data-ref-filename="refclockproc..coderecv">coderecv</a> = <a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::codeproc" title='refclockproc::codeproc' data-ref="refclockproc::codeproc" data-ref-filename="refclockproc..codeproc">codeproc</a>;</td></tr>
+<tr><th id="536">536</th><td>		<a class="ref fn" href="../include/ntp_refclock.h.html#refclock_report" title='refclock_report' data-ref="refclock_report" data-ref-filename="refclock_report">refclock_report</a>(<a class="local col3 ref" href="#33peer" title='peer' data-ref="33peer" data-ref-filename="33peer">peer</a>, <a class="macro" href="../include/ntp.h.html#676" title="1" data-ref="_M/CEVNT_TIMEOUT">CEVNT_TIMEOUT</a>);</td></tr>
+<tr><th id="537">537</th><td>		<b>return</b>;</td></tr>
+<tr><th id="538">538</th><td>	}</td></tr>
+<tr><th id="539">539</th><td>	<a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::pcount" title='wwvbunit::pcount' data-use='w' data-ref="wwvbunit::pcount" data-ref-filename="wwvbunit..pcount">pcount</a> = <a class="local col4 ref" href="#34up" title='up' data-ref="34up" data-ref-filename="34up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::tcount" title='wwvbunit::tcount' data-use='w' data-ref="wwvbunit::tcount" data-ref-filename="wwvbunit..tcount">tcount</a> = <var>0</var>;</td></tr>
+<tr><th id="540">540</th><td><u>#<span data-ppcond="529">else</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="541">541</th><td>	<b>if</b> (pp-&gt;coderecv == pp-&gt;codeproc) {</td></tr>
+<tr><th id="542">542</th><td>		refclock_report(peer, CEVNT_TIMEOUT);</td></tr>
+<tr><th id="543">543</th><td>		<b>return</b>;</td></tr>
+<tr><th id="544">544</th><td>	}</td></tr>
+<tr><th id="545">545</th><td><u>#<span data-ppcond="529">endif</span> /* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="546">546</th><td>	<a class="ref fn" href="../include/ntpd.h.html#refclock_receive" title='refclock_receive' data-ref="refclock_receive" data-ref-filename="refclock_receive">refclock_receive</a>(<a class="local col3 ref" href="#33peer" title='peer' data-ref="33peer" data-ref-filename="33peer">peer</a>);</td></tr>
+<tr><th id="547">547</th><td>	<a class="ref fn" href="../include/ntpd.h.html#record_clock_stats" title='record_clock_stats' data-ref="record_clock_stats" data-ref-filename="record_clock_stats">record_clock_stats</a>(&amp;<a class="local col3 ref" href="#33peer" title='peer' data-ref="33peer" data-ref-filename="33peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::srcadr" title='peer::srcadr' data-ref="peer::srcadr" data-ref-filename="peer..srcadr">srcadr</a>, <a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>);</td></tr>
+<tr><th id="548">548</th><td><u>#<span data-ppcond="548">ifdef</span> <a class="macro" href="../../include/config.h.html#184" data-ref="_M/DEBUG">DEBUG</a></u></td></tr>
+<tr><th id="549">549</th><td>	<b>if</b> (<a class="ref" href="../include/declcond.h.html#debug" title='debug' data-ref="debug" data-ref-filename="debug">debug</a>)</td></tr>
+<tr><th id="550">550</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/stdio.h.html#printf" title='printf' data-ref="printf" data-ref-filename="printf">printf</a>(<q>"wwvb: timecode %d %s\n"</q>, <a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::lencode" title='refclockproc::lencode' data-ref="refclockproc::lencode" data-ref-filename="refclockproc..lencode">lencode</a>,</td></tr>
+<tr><th id="551">551</th><td>		    <a class="local col5 ref" href="#35pp" title='pp' data-ref="35pp" data-ref-filename="35pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::a_lastcode" title='refclockproc::a_lastcode' data-ref="refclockproc::a_lastcode" data-ref-filename="refclockproc..a_lastcode">a_lastcode</a>);</td></tr>
+<tr><th id="552">552</th><td><u>#<span data-ppcond="548">endif</span></u></td></tr>
+<tr><th id="553">553</th><td>}</td></tr>
+<tr><th id="554">554</th><td></td></tr>
+<tr><th id="555">555</th><td></td></tr>
+<tr><th id="556">556</th><td><i>/*</i></td></tr>
+<tr><th id="557">557</th><td><i> * wwvb_control - fudge parameters have been set or changed</i></td></tr>
+<tr><th id="558">558</th><td><i> */</i></td></tr>
+<tr><th id="559">559</th><td><u>#<span data-ppcond="559">ifdef</span> <a class="macro" href="../../include/config.h.html#691" data-ref="_M/HAVE_PPSAPI">HAVE_PPSAPI</a></u></td></tr>
+<tr><th id="560">560</th><td><em>static</em> <em>void</em></td></tr>
+<tr><th id="561">561</th><td><dfn class="tu decl def fn" id="wwvb_control" title='wwvb_control' data-type='void wwvb_control(int unit, const struct refclockstat * in_st, struct refclockstat * out_st, struct peer * peer)' data-ref="wwvb_control" data-ref-filename="wwvb_control">wwvb_control</dfn>(</td></tr>
+<tr><th id="562">562</th><td>	<em>int</em> <dfn class="local col6 decl" id="36unit" title='unit' data-type='int' data-ref="36unit" data-ref-filename="36unit">unit</dfn>,</td></tr>
+<tr><th id="563">563</th><td>	<em>const</em> <b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *<dfn class="local col7 decl" id="37in_st" title='in_st' data-type='const struct refclockstat *' data-ref="37in_st" data-ref-filename="37in_st">in_st</dfn>,</td></tr>
+<tr><th id="564">564</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockstat" title='refclockstat' data-ref="refclockstat" data-ref-filename="refclockstat">refclockstat</a> *<dfn class="local col8 decl" id="38out_st" title='out_st' data-type='struct refclockstat *' data-ref="38out_st" data-ref-filename="38out_st">out_st</dfn>,</td></tr>
+<tr><th id="565">565</th><td>	<b>struct</b> <a class="type" href="../include/ntp.h.html#peer" title='peer' data-ref="peer" data-ref-filename="peer">peer</a> *<dfn class="local col9 decl" id="39peer" title='peer' data-type='struct peer *' data-ref="39peer" data-ref-filename="39peer">peer</dfn></td></tr>
+<tr><th id="566">566</th><td>	)</td></tr>
+<tr><th id="567">567</th><td>{</td></tr>
+<tr><th id="568">568</th><td>	<em>register</em> <b>struct</b> <a class="type" href="#wwvbunit" title='wwvbunit' data-ref="wwvbunit" data-ref-filename="wwvbunit">wwvbunit</a> *<dfn class="local col0 decl" id="40up" title='up' data-type='struct wwvbunit *' data-ref="40up" data-ref-filename="40up">up</dfn>;</td></tr>
+<tr><th id="569">569</th><td>	<b>struct</b> <a class="type" href="../include/ntp_refclock.h.html#refclockproc" title='refclockproc' data-ref="refclockproc" data-ref-filename="refclockproc">refclockproc</a> *<dfn class="local col1 decl" id="41pp" title='pp' data-type='struct refclockproc *' data-ref="41pp" data-ref-filename="41pp">pp</dfn>;</td></tr>
+<tr><th id="570">570</th><td>	</td></tr>
+<tr><th id="571">571</th><td>	<a class="local col1 ref" href="#41pp" title='pp' data-ref="41pp" data-ref-filename="41pp">pp</a> = <a class="local col9 ref" href="#39peer" title='peer' data-ref="39peer" data-ref-filename="39peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::procptr" title='peer::procptr' data-ref="peer::procptr" data-ref-filename="peer..procptr">procptr</a>;</td></tr>
+<tr><th id="572">572</th><td>	<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a> = <a class="local col1 ref" href="#41pp" title='pp' data-ref="41pp" data-ref-filename="41pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::unitptr" title='refclockproc::unitptr' data-ref="refclockproc::unitptr" data-ref-filename="refclockproc..unitptr">unitptr</a>;</td></tr>
+<tr><th id="573">573</th><td></td></tr>
+<tr><th id="574">574</th><td>	<b>if</b> (!(<a class="local col1 ref" href="#41pp" title='pp' data-ref="41pp" data-ref-filename="41pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::sloppyclockflag" title='refclockproc::sloppyclockflag' data-ref="refclockproc::sloppyclockflag" data-ref-filename="refclockproc..sloppyclockflag">sloppyclockflag</a> &amp; <a class="macro" href="../include/ntp_refclock.h.html#50" title="0x1" data-ref="_M/CLK_FLAG1">CLK_FLAG1</a>)) {</td></tr>
+<tr><th id="575">575</th><td>		<b>if</b> (!<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_tried" title='wwvbunit::ppsapi_tried' data-use='r' data-ref="wwvbunit::ppsapi_tried" data-ref-filename="wwvbunit..ppsapi_tried">ppsapi_tried</a>)</td></tr>
+<tr><th id="576">576</th><td>			<b>return</b>;</td></tr>
+<tr><th id="577">577</th><td>		<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_tried" title='wwvbunit::ppsapi_tried' data-use='w' data-ref="wwvbunit::ppsapi_tried" data-ref-filename="wwvbunit..ppsapi_tried">ppsapi_tried</a> = <var>0</var>;</td></tr>
+<tr><th id="578">578</th><td>		<b>if</b> (!<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_lit" title='wwvbunit::ppsapi_lit' data-use='r' data-ref="wwvbunit::ppsapi_lit" data-ref-filename="wwvbunit..ppsapi_lit">ppsapi_lit</a>)</td></tr>
+<tr><th id="579">579</th><td>			<b>return</b>;</td></tr>
+<tr><th id="580">580</th><td>		<a class="local col9 ref" href="#39peer" title='peer' data-ref="39peer" data-ref-filename="39peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::flags" title='peer::flags' data-ref="peer::flags" data-ref-filename="peer..flags">flags</a> &amp;= ~<a class="macro" href="../include/ntp.h.html#459" title="0x0080" data-ref="_M/FLAG_PPS">FLAG_PPS</a>;</td></tr>
+<tr><th id="581">581</th><td>		<a class="local col9 ref" href="#39peer" title='peer' data-ref="39peer" data-ref-filename="39peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::precision" title='peer::precision' data-ref="peer::precision" data-ref-filename="peer..precision">precision</a> = <a class="macro" href="#119" title="(-13)" data-ref="_M/PRECISION">PRECISION</a>;</td></tr>
+<tr><th id="582">582</th><td>		<a class="ref fn" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/timepps.h.html#time_pps_destroy" title='time_pps_destroy' data-ref="time_pps_destroy" data-ref-filename="time_pps_destroy">time_pps_destroy</a>(<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::atom" title='wwvbunit::atom' data-use='m' data-ref="wwvbunit::atom" data-ref-filename="wwvbunit..atom">atom</a>.<a class="ref field" href="../include/refclock_atom.h.html#refclock_atom::handle" title='refclock_atom::handle' data-ref="refclock_atom::handle" data-ref-filename="refclock_atom..handle">handle</a>);</td></tr>
+<tr><th id="583">583</th><td>		<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::atom" title='wwvbunit::atom' data-use='m' data-ref="wwvbunit::atom" data-ref-filename="wwvbunit..atom">atom</a>.<a class="ref field" href="../include/refclock_atom.h.html#refclock_atom::handle" title='refclock_atom::handle' data-ref="refclock_atom::handle" data-ref-filename="refclock_atom..handle">handle</a> = <var>0</var>;</td></tr>
+<tr><th id="584">584</th><td>		<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_lit" title='wwvbunit::ppsapi_lit' data-use='w' data-ref="wwvbunit::ppsapi_lit" data-ref-filename="wwvbunit..ppsapi_lit">ppsapi_lit</a> = <var>0</var>;</td></tr>
+<tr><th id="585">585</th><td>		<b>return</b>;</td></tr>
+<tr><th id="586">586</th><td>	}</td></tr>
+<tr><th id="587">587</th><td></td></tr>
+<tr><th id="588">588</th><td>	<b>if</b> (<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_tried" title='wwvbunit::ppsapi_tried' data-use='r' data-ref="wwvbunit::ppsapi_tried" data-ref-filename="wwvbunit..ppsapi_tried">ppsapi_tried</a>)</td></tr>
+<tr><th id="589">589</th><td>		<b>return</b>;</td></tr>
+<tr><th id="590">590</th><td>	<i>/*</i></td></tr>
+<tr><th id="591">591</th><td><i>	 * Light up the PPSAPI interface.</i></td></tr>
+<tr><th id="592">592</th><td><i>	 */</i></td></tr>
+<tr><th id="593">593</th><td>	<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_tried" title='wwvbunit::ppsapi_tried' data-use='w' data-ref="wwvbunit::ppsapi_tried" data-ref-filename="wwvbunit..ppsapi_tried">ppsapi_tried</a> = <var>1</var>;</td></tr>
+<tr><th id="594">594</th><td>	<b>if</b> (<a class="ref fn" href="../include/refclock_atom.h.html#refclock_ppsapi" title='refclock_ppsapi' data-ref="refclock_ppsapi" data-ref-filename="refclock_ppsapi">refclock_ppsapi</a>(<a class="local col1 ref" href="#41pp" title='pp' data-ref="41pp" data-ref-filename="41pp">pp</a>-&gt;<a class="ref field" href="../include/ntp_refclock.h.html#refclockproc::io" title='refclockproc::io' data-ref="refclockproc::io" data-ref-filename="refclockproc..io">io</a>.<a class="ref field" href="../include/ntp_refclock.h.html#refclockio::fd" title='refclockio::fd' data-ref="refclockio::fd" data-ref-filename="refclockio..fd">fd</a>, &amp;<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::atom" title='wwvbunit::atom' data-use='a' data-ref="wwvbunit::atom" data-ref-filename="wwvbunit..atom">atom</a>)) {</td></tr>
+<tr><th id="595">595</th><td>		<a class="local col0 ref" href="#40up" title='up' data-ref="40up" data-ref-filename="40up">up</a>-&gt;<a class="tu ref field" href="#wwvbunit::ppsapi_lit" title='wwvbunit::ppsapi_lit' data-use='w' data-ref="wwvbunit::ppsapi_lit" data-ref-filename="wwvbunit..ppsapi_lit">ppsapi_lit</a> = <var>1</var>;</td></tr>
+<tr><th id="596">596</th><td>		<b>return</b>;</td></tr>
+<tr><th id="597">597</th><td>	}</td></tr>
+<tr><th id="598">598</th><td></td></tr>
+<tr><th id="599">599</th><td>	<a class="ref fn" href="../include/ntp_stdlib.h.html#msyslog" title='msyslog' data-ref="msyslog" data-ref-filename="msyslog">msyslog</a>(<a class="macro" href="../../../../../objdir.amd64/destdir.amd64/usr/include/sys/syslog.h.html#56" title="4" data-ref="_M/LOG_WARNING">LOG_WARNING</a>, <q>"%s flag1 1 but PPSAPI fails"</q>,</td></tr>
+<tr><th id="600">600</th><td>		<a class="ref fn" href="../include/ntp_stdlib.h.html#refnumtoa" title='refnumtoa' data-ref="refnumtoa" data-ref-filename="refnumtoa">refnumtoa</a>(&amp;<a class="local col9 ref" href="#39peer" title='peer' data-ref="39peer" data-ref-filename="39peer">peer</a>-&gt;<a class="ref field" href="../include/ntp.h.html#peer::srcadr" title='peer::srcadr' data-ref="peer::srcadr" data-ref-filename="peer..srcadr">srcadr</a>));</td></tr>
+<tr><th id="601">601</th><td>}</td></tr>
+<tr><th id="602">602</th><td><u>#<span data-ppcond="559">endif</span>	/* HAVE_PPSAPI */</u></td></tr>
+<tr><th id="603">603</th><td></td></tr>
+<tr><th id="604">604</th><td><u>#<span data-ppcond="11">else</span></u></td></tr>
+<tr><th id="605">605</th><td><em>int</em> refclock_wwvb_bs;</td></tr>
+<tr><th id="606">606</th><td><u>#<span data-ppcond="11">endif</span> /* REFCLOCK */</u></td></tr>
+<tr><th id="607">607</th><td></td></tr>
+</table><hr/><p id='footer'>
+Generated on <em>2019-Jul-19</em> from project netbsd revision <em>f9da89e0d</em><br />Powered by <a href='https://woboq.com'><img alt='Woboq' src='https://code.woboq.org/woboq-16.png' width='41' height='16' /></a> <a href='https://code.woboq.org'>Code Browser</a> 2.1
+<br/>Generator usage only permitted with license.</p>
+</div></body></html>
